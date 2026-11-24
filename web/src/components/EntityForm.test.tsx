@@ -15,6 +15,7 @@ import { systemSlotsKey } from "../lib/system_slots";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeValue } from "./TreeSelect.testkit";
+import { pickInPicker, typeInPicker } from "./ui/Picker.testkit";
 import { COMPONENTS_KEY } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
 
@@ -296,51 +297,93 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     return { calls, writes, stub };
   }
 
-  it("shows the Memberships field in edit, seeded with the primary system and the others as chips", async () => {
+  const alsoServes = (form: HTMLElement) => within(form).findByRole("combobox", { name: "Also serves..." });
+
+  it("shows the memberships in edit as chips, the primary marked, with its own controls", async () => {
     const { slot } = mountComponent();
     const form = await screen.findByTestId("entity-form");
     slot().begin();
-    const primary = await within(form).findByLabelText("Memberships");
-    await waitFor(() => expect(treeValue(primary)).toBe("Alpha Room"));
-    // The other membership is a chip with its own remove control.
+    await alsoServes(form);
+    expect(within(form).getByRole("button", { name: /remove alpha room/i })).toBeTruthy();
     expect(within(form).getByRole("button", { name: /remove gamma room/i })).toBeTruthy();
+    const primary = within(form).getByRole("combobox", { name: "Primary system" }) as HTMLSelectElement;
+    await waitFor(() => expect(primary.value).toBe(alpha));
   });
 
-  it("picking another primary issues PUT then :setPrimary, addressed by uuid", async () => {
+  // The defect (#1804): choosing another system in the old single select ADDED
+  // a membership and silently made it primary. Adding is now its own control and
+  // it does not touch the primary.
+  it("Also serves... adds a membership and leaves the primary alone", async () => {
     const { writes, stub } = stubWrites();
     try {
       const { slot } = mountComponent();
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
+      await pickInPicker(await alsoServes(form), "Beta Room");
+      await slot().save();
+      expect(writes()).toEqual([{ method: "PUT", path: `/systems/${beta}/members/${comp}` }]);
+      expect(slot().editing()).toBe(false);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("a system the component is already in is not offered to Also serves...", async () => {
+    const { slot } = mountComponent();
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    const options = await typeInPicker(await alsoServes(form), "Room");
+    expect(options.map((o) => o.replace(/\s.*$/, ""))).toEqual(["Beta"]);
+  });
+
+  it("making a staged system primary is its own control: PUT then :setPrimary, addressed by uuid", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      await pickInPicker(await alsoServes(form), "Beta Room");
+      fireEvent.change(within(form).getByRole("combobox", { name: "Primary system" }), { target: { value: beta } });
       await slot().save();
       expect(writes()).toEqual([
         { method: "PUT", path: `/systems/${beta}/members/${comp}` },
         { method: "POST", path: `/systems/${beta}/members/${comp}:setPrimary` },
       ]);
-      expect(slot().editing()).toBe(false);
     } finally { stub.mockRestore(); }
   });
 
-  it("promoting a system it is already in skips the PUT and only moves the primary", async () => {
+  it("changing the primary among its memberships skips the PUT and only moves the primary", async () => {
     const { writes, stub } = stubWrites();
     try {
       const { slot } = mountComponent();
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      await pickTree(await within(form).findByLabelText("Memberships"), "Gamma Room");
+      fireEvent.change(await within(form).findByRole("combobox", { name: "Primary system" }), { target: { value: gamma } });
       await slot().save();
       expect(writes()).toEqual([{ method: "POST", path: `/systems/${gamma}/members/${comp}:setPrimary` }]);
     } finally { stub.mockRestore(); }
   });
 
-  it("clearing the primary issues DELETE on that membership", async () => {
+  it("removing a chip staged as primary removes it and promotes nothing", async () => {
+    const { writes, stub } = stubWrites();
+    try {
+      const { slot } = mountComponent();
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.change(await within(form).findByRole("combobox", { name: "Primary system" }), { target: { value: gamma } });
+      fireEvent.click(await within(form).findByRole("button", { name: /remove gamma/i }));
+      await slot().save();
+      const w = writes();
+      expect(w).toContainEqual({ method: "DELETE", path: `/systems/${gamma}/members/${comp}` });
+      expect(w.some((x) => x.path.endsWith(":setPrimary") && x.path.includes(gamma))).toBe(false);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("removing the only membership issues DELETE on it", async () => {
     const { writes, stub } = stubWrites();
     try {
       const { slot } = mountComponent(owner, [member(alpha, "alpha", true)]);
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      await pickTree(await within(form).findByLabelText("Memberships"), "None");
+      fireEvent.click(await within(form).findByRole("button", { name: /remove alpha room/i }));
       await slot().save();
       expect(writes()).toEqual([{ method: "DELETE", path: `/systems/${alpha}/members/${comp}` }]);
     } finally { stub.mockRestore(); }
@@ -360,12 +403,12 @@ describe("a component's memberships, editable from its own face (#767)", () => {
 
   // The staged memberships are drafts like the form's own fields (#854): a
   // tab switch after changing only a membership asks before dropping it.
-  it("a picked primary alone makes the face dirty", async () => {
+  it("a staged Also serves... alone makes the face dirty", async () => {
     const { slot } = mountComponent();
     const form = await screen.findByTestId("entity-form");
     slot().begin();
     expect(slot().dirty()).toBe(false);
-    await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
+    await pickInPicker(await alsoServes(form), "Beta Room");
     expect(slot().dirty()).toBe(true);
   });
 
@@ -395,7 +438,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
     slot().begin();
     await waitFor(() => expect(within(form).getByText("Alpha Room")).toBeTruthy());
     expect(within(form).getByText("Gamma Room")).toBeTruthy();
-    expect(within(form).queryByLabelText("Memberships")).toBeNull();
+    expect(within(form).queryByRole("combobox", { name: "Also serves..." })).toBeNull();
     expect(within(form).queryByRole("button", { name: /remove gamma room/i })).toBeNull();
     expect(within(form).getByText(/needs.*system:update/i)).toBeTruthy();
   });
@@ -408,7 +451,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
       const { slot } = mountComponent();
       const form = await screen.findByTestId("entity-form");
       slot().begin();
-      await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
+      await pickInPicker(await alsoServes(form), "Beta Room");
       await expect(slot().save()).rejects.toBeTruthy();
       expect(slot().saveError()).toContain("you may read system beta but not update it");
       expect(slot().editing()).toBe(true);
@@ -427,7 +470,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
         return real(filters as never);
       }) as typeof qc.invalidateQueries;
       slot().begin();
-      await pickTree(await within(form).findByLabelText("Memberships"), "Beta Room");
+      await pickInPicker(await alsoServes(form), "Beta Room");
       await slot().save();
       expect(invalidated).toContain("system-members");
       expect(invalidated).toContain("component-systems");
@@ -436,8 +479,172 @@ describe("a component's memberships, editable from its own face (#767)", () => {
   });
 });
 
+describe("Move to... on a component's and a system's edit face (#1804)", () => {
+  const comp = uuidFor("mv-mic");
+  const alpha = uuidFor("mv-alpha");
+  const beta = uuidFor("mv-beta");
+  const roomA = uuidFor("mv-room-a");
+  const roomB = uuidFor("mv-room-b");
+  const hq = uuidFor("mv-hq");
+  const mover: Me = { user: { id: "u-mv", kind: "person" }, person: { username: "mv" }, permissions: ["component:read", "component:update", "component:move", "system:read", "system:update", "system:move", "location:read", "tag:read", "product:read"], grants: [] };
+  const noMove: Me = { ...mover, permissions: mover.permissions.filter((p) => !p.endsWith(":move")) };
+
+  function mountKind(kind: "component" | "system", me: Me) {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], me);
+    qc.setQueryData([...SYSTEMS_KEY], [
+      { id: alpha, name: "alpha", label: "Alpha", location_id: roomA, actions: ["create", "update", "delete"] },
+      { id: beta, name: "beta", label: "Beta", location_id: roomB, actions: ["create", "update", "delete"] },
+    ]);
+    qc.setQueryData([...COMPONENTS_KEY], [
+      { id: comp, name: "mic", label: "Mic", product: "generic-device", system: "alpha", system_id: alpha, location_id: roomA, system_count: 1, actions: ["create", "update", "delete"] },
+    ]);
+    qc.setQueryData([...componentSystemsKey(comp)], [{ component: "mic", component_id: comp, component_health: "healthy", primary: true, system: "alpha", system_id: alpha, system_count: 1 }]);
+    qc.setQueryData([...LOCATIONS_KEY], [
+      { id: hq, name: "hq", label: "HQ", location_type: "campus", parent_id: null, actions: ["update"] },
+      { id: roomA, name: "room-a", label: "Boardroom A", location_type: "room", parent_id: hq, actions: ["update"] },
+      { id: roomB, name: "room-b", label: "Boardroom B", location_type: "room", parent_id: hq, actions: ["update"] },
+    ]);
+    qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("mv-prod"), name: "generic-device", label: "Generic Device" }]);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    qc.setQueryData([...TAGS_KEY], []);
+    qc.setQueryData([...systemSlotsKey(alpha)], []);
+    qc.setQueryData(["system-properties", alpha], []);
+    window.history.pushState({}, "", "/web/x");
+    let slot!: BladeEdit;
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/x" component={() => {
+            slot = createEditSlot();
+            return <BladesContext.Provider value={createBladeController()}><EntityForm kind={kind} id={kind === "component" ? comp : alpha} slot={slot} host="page" /></BladesContext.Provider>;
+          }} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    return { slot: () => slot, qc };
+  }
+
+  function stubFetch(refuse?: { status: number; detail: string }) {
+    const calls: { method: string; path: string; body?: unknown }[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      const path = decodeURIComponent(new URL(req.url).pathname.replace("/api/v1", ""));
+      const text = await req.clone().text();
+      calls.push({ method: req.method, path, body: text ? JSON.parse(text) : undefined });
+      if (refuse && path.endsWith(":move")) {
+        return new Response(JSON.stringify({ title: "x", status: refuse.status, detail: refuse.detail }), { status: refuse.status, headers: { "content-type": "application/problem+json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    return { moves: () => calls.filter((c) => c.path.endsWith(":move")), calls, stub };
+  }
+
+  it("a component's face moves it to another place through :move, by uuid, with the place's ancestry shown", async () => {
+    const { moves, stub } = stubFetch();
+    try {
+      const { slot } = mountKind("component", mover);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.click(await within(form).findByRole("button", { name: "Move to..." }));
+      const dest = within(form).getByRole("combobox", { name: "Destination" });
+      const offered = await typeInPicker(dest, "Boardroom B");
+      expect(offered[0]).toContain("HQ");
+      await pickInPicker(dest, "Boardroom B");
+      fireEvent.click(within(form).getByRole("button", { name: "Move" }));
+      await waitFor(() => expect(moves()).toEqual([{ method: "POST", path: `/components/${comp}:move`, body: { location: roomB } }]));
+      // The face stays in edit and on the entity.
+      expect(slot().editing()).toBe(true);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("a system's face moves it to another place through its own :move", async () => {
+    const { moves, stub } = stubFetch();
+    try {
+      const { slot } = mountKind("system", mover);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.click(await within(form).findByRole("button", { name: "Move to..." }));
+      await pickInPicker(within(form).getByRole("combobox", { name: "Destination" }), "Boardroom B");
+      fireEvent.click(within(form).getByRole("button", { name: "Move" }));
+      await waitFor(() => expect(moves()).toEqual([{ method: "POST", path: `/systems/${alpha}:move`, body: { location: roomB } }]));
+    } finally { stub.mockRestore(); }
+  });
+
+  it("a refused move reads in place and the face stays in edit", async () => {
+    const { stub } = stubFetch({ status: 422, detail: "the destination location is outside your scope" });
+    try {
+      const { slot } = mountKind("system", mover);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      fireEvent.click(await within(form).findByRole("button", { name: "Move to..." }));
+      await pickInPicker(within(form).getByRole("combobox", { name: "Destination" }), "Boardroom B");
+      fireEvent.click(within(form).getByRole("button", { name: "Move" }));
+      expect((await within(form).findByRole("alert")).textContent).toContain("outside your scope");
+      expect(slot().editing()).toBe(true);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("a move refreshes the entity, the fleet view and the memberships", async () => {
+    const { stub } = stubFetch();
+    try {
+      const { slot, qc } = mountKind("component", mover);
+      const form = await screen.findByTestId("entity-form");
+      const invalidated: string[] = [];
+      const real = qc.invalidateQueries.bind(qc);
+      qc.invalidateQueries = ((f: { queryKey?: readonly unknown[] }) => { invalidated.push(String(f?.queryKey?.[0])); return real(f as never); }) as typeof qc.invalidateQueries;
+      slot().begin();
+      fireEvent.click(await within(form).findByRole("button", { name: "Move to..." }));
+      await pickInPicker(within(form).getByRole("combobox", { name: "Destination" }), "Boardroom B");
+      fireEvent.click(within(form).getByRole("button", { name: "Move" }));
+      await waitFor(() => expect(invalidated).toContain("components"));
+      expect(invalidated).toContain("component-systems");
+    } finally { stub.mockRestore(); }
+  });
+
+  it("a move drops the staged membership drafts so Save cannot undo it", async () => {
+    const { calls, stub } = stubFetch();
+    try {
+      const { slot } = mountKind("component", mover);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      await pickInPicker(await within(form).findByRole("combobox", { name: "Also serves..." }), "Beta");
+      expect(slot().dirty()).toBe(true);
+      fireEvent.click(await within(form).findByRole("button", { name: "Move to..." }));
+      await pickInPicker(within(form).getByRole("combobox", { name: "Destination" }), "Boardroom B");
+      fireEvent.click(within(form).getByRole("button", { name: "Move" }));
+      await waitFor(() => expect(calls.some((c) => c.path.endsWith(":move"))).toBe(true));
+      await waitFor(() => expect(slot().dirty()).toBe(false));
+      await slot().save();
+      expect(calls.some((c) => c.path.includes("/members/"))).toBe(false);
+    } finally { stub.mockRestore(); }
+  });
+
+  it("is withheld without <kind>:move", async () => {
+    const { slot } = mountKind("component", noMove);
+    const form = await screen.findByTestId("entity-form");
+    slot().begin();
+    await within(form).findByRole("combobox", { name: "Also serves..." });
+    expect(within(form).queryByRole("button", { name: "Move to..." })).toBeNull();
+  });
+
+  it("Also serves... is not a move: it labels itself and calls no :move", async () => {
+    const { calls, stub } = stubFetch();
+    try {
+      const { slot } = mountKind("component", mover);
+      const form = await screen.findByTestId("entity-form");
+      slot().begin();
+      await pickInPicker(await within(form).findByRole("combobox", { name: "Also serves..." }), "Beta");
+      await slot().save();
+      expect(calls.some((c) => c.path.endsWith(":move"))).toBe(false);
+      expect(calls.filter((c) => c.path.includes("/members/"))[0]).toMatchObject({ method: "PUT", path: `/systems/${beta}/members/${comp}` });
+    } finally { stub.mockRestore(); }
+  });
+});
+
 describe("the one form, empty", () => {
-  function mountCreate(kind: "system" | "location" | "component", under?: string, onCancel: () => void = () => {}) {
+  function mountCreate(kind: "system" | "location" | "component", under?: string, onCancel: () => void = () => {}, locationTypes: unknown[] = [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]) {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...ME_KEY], owner);
     qc.setQueryData([...SYSTEMS_KEY], []);
@@ -445,7 +652,7 @@ describe("the one form, empty", () => {
       { id: uuidFor("ef-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update"] },
       { id: uuidFor("ef-west"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("ef-hq"), actions: ["update"] },
     ]);
-    qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], locationTypes);
     qc.setQueryData([...STANDARDS_KEY], []);
     qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-collab"), name: "collaboration", label: "Collaboration" }]);
     qc.setQueryData([...PRODUCTS_KEY], []);
@@ -463,7 +670,8 @@ describe("the one form, empty", () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
     const eyebrows = within(form).getAllByText(/^(Classification|Placement|Identity|Tags)$/).map((e) => e.textContent);
-    expect(eyebrows).toEqual(["Classification", "Placement", "Identity", "Tags"]);
+    // Nothing that waits for the entity to exist is drawn disabled (#2440).
+    expect(eyebrows).toEqual(["Classification", "Placement", "Identity"]);
     expect(within(form).getByRole("button", { name: /create system/i })).toBeTruthy();
   });
 
@@ -520,6 +728,52 @@ describe("the one form, empty", () => {
     } finally { stub.mockRestore(); }
   });
 
+  // #2465: every shipped location type carries no name rule, so a nameless
+  // :renderLabel for one is a guaranteed 422 the browser logs as a console
+  // error. The type list already says whether the type names rows
+  // (name_rule absent = an operator names every one), so the form does not ask.
+  it("asks no nameless draft for a location type with no name rule, and asks once a name is typed", async () => {
+    const asked: Record<string, unknown>[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/locations:renderLabel")) {
+        asked.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ name: "boardroom", label: "Boardroom", rule: "{{title (words .Name)}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("location", uuidFor("ef-west"));
+      const form = await screen.findByTestId("entity-create-form");
+      fireEvent.change(within(form).getByRole("combobox", { name: /location type/i }), { target: { value: "room" } });
+      await waitFor(() => expect(within(form).getByText(/This type carries no name rule/)).toBeTruthy());
+      expect(asked).toEqual([]);
+
+      fireEvent.input(within(form).getByPlaceholderText("boardroom"), { target: { value: "boardroom" } });
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0].name).toBe("boardroom");
+    } finally { stub.mockRestore(); }
+  });
+
+  it("asks the nameless draft for a location type that has a name rule", async () => {
+    const asked: Record<string, unknown>[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes("/locations:renderLabel")) {
+        asked.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ name: "deck-1", ordinal: 1, label: "Deck 1", rule: "r" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    try {
+      mountCreate("location", uuidFor("ef-west"), () => {}, [{ id: uuidFor("t-deck"), name: "deck", label: "Deck", allowed_parent_types: ["building"], name_rule: { stem: "deck" } }]);
+      const form = await screen.findByTestId("entity-create-form");
+      fireEvent.change(within(form).getByRole("combobox", { name: /location type/i }), { target: { value: "deck" } });
+      await waitFor(() => expect(asked.length).toBe(1));
+      expect(asked[0].name).toBeUndefined();
+    } finally { stub.mockRestore(); }
+  });
+
   it("prefills a location's parent from `under`", async () => {
     mountCreate("location", uuidFor("ef-west"));
     const form = await screen.findByTestId("entity-create-form");
@@ -541,11 +795,32 @@ describe("the one form, empty", () => {
     expect(cancel.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("keeps Create disabled until the form is ready", async () => {
+  // A form that cannot be submitted says which field is missing (#2440): the
+  // submit stays enabled, names each gap beside the actions, marks the field
+  // and focuses the first. Component, location and system faces each.
+  it.each([
+    ["system", "Name", /create the system/i],
+    ["location", "Location type and Name", /create the location/i],
+    ["component", "Product and Name", /create the component/i],
+  ] as const)("an empty %s create names what is missing and focuses the first", async (kind, names, _re) => {
+    mountCreate(kind);
+    const form = await screen.findByTestId("entity-create-form");
+    const create = within(form).getByRole("button", { name: new RegExp(`create ${kind}`, "i") }) as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    fireEvent.click(create);
+    const said = await within(form).findByTestId("form-problems");
+    expect(said.textContent).toContain(`fill in ${names}`);
+    expect(vi.mocked(createSystem)).not.toHaveBeenCalled();
+    const first = kind === "location" ? within(form).getByRole("combobox", { name: /location type/i }) : kind === "component" ? within(form).getByRole("combobox", { name: /product/i }) : within(form).getByPlaceholderText("exec-boardroom");
+    await waitFor(() => expect(document.activeElement).toBe(first));
+  });
+
+  it("draws the action bar last, with no disabled section below it", async () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
-    const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
-    expect(create.disabled).toBe(true);
+    const create = within(form).getByRole("button", { name: /create system/i });
+    expect(form.textContent!.slice(form.textContent!.indexOf("Create system"))).not.toMatch(/Available once/);
+    expect(create.closest("form")!.lastElementChild!.contains(create) || create.parentElement!.parentElement!.parentElement === form).toBe(true);
   });
 
   it("Cancel calls onCancel", async () => {
@@ -556,17 +831,18 @@ describe("the one form, empty", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("enables Create once a name is typed, disables again when cleared (penIncomplete gate)", async () => {
+  it("stops naming the name once one is typed, and names it again when cleared (penIncomplete)", async () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
     const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
-    expect(create.disabled).toBe(true); // penIncomplete: name is empty
+    fireEvent.click(create);
+    expect((await within(form).findByTestId("form-problems")).textContent).toContain("Name");
 
     fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "my-system" } });
-    await waitFor(() => expect(create.disabled).toBe(false));
+    await waitFor(() => expect(within(form).queryByTestId("form-problems")).toBeNull());
 
     fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "" } });
-    await waitFor(() => expect(create.disabled).toBe(true));
+    await waitFor(() => expect(within(form).getByTestId("form-problems")).toBeTruthy());
   });
 
   it("disables Create while the create call is in-flight (busy gate)", async () => {
@@ -579,7 +855,6 @@ describe("the one form, empty", () => {
     const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
 
     fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "my-system" } });
-    await waitFor(() => expect(create.disabled).toBe(false));
 
     fireEvent.click(create);
     await waitFor(() => expect(create.disabled).toBe(true)); // busy

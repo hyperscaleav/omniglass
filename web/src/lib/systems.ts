@@ -112,6 +112,20 @@ export async function renameSystem(name: string, to: string): Promise<System> {
   return data as System;
 }
 
+// A move is its own call, not a field on the patch body (#1804): the API gates
+// it with `system:move` rather than `system:update`, because a placement change
+// is an authorization act. Both fields are three-state: omitted is unchanged,
+// "" clears, a name (or uuid) sets. `parent` re-parents inside the system tree
+// and is cycle-guarded by the server; `location` relocates. At least one is
+// required (the server 422s neither).
+export type MoveSystem = { location?: string; parent?: string };
+
+export async function moveSystem(name: string, body: MoveSystem): Promise<System> {
+  const { data, error } = await api.POST("/systems/{name}:move", { params: { path: { name } }, body });
+  if (error) throw error;
+  return data as System;
+}
+
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
 // checkSystemName checks availability against a placement bucket (#627: name

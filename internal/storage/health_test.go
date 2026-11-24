@@ -272,7 +272,7 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 		t.Fatalf("raise alarm: %v", err)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -486,6 +486,11 @@ func pureSlots(rows []storage.HealthSlot) []health.Slot {
 				Name: fmt.Sprintf("%s-%d", r.Name, i), Value: health.Healthy,
 			})
 		}
+		// The down ones are assigned too, out of quorum: without them a slot
+		// short because its occupant failed would read as one never installed.
+		for _, d := range r.Down {
+			slot.Assigned = append(slot.Assigned, health.Component{Name: d, Value: health.Outage})
+		}
 		out = append(out, slot)
 	}
 	return out
@@ -530,7 +535,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "fresh", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "fresh", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -639,7 +644,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	if n-before != 1 {
 		t.Fatalf("recorded %d rows for the standard change, want exactly 1", n-before)
 	}
-	rep, err := f.gw.SystemHealth(ctx, "fresh", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "fresh", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -683,7 +688,7 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 	if n, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" || n != before {
 		t.Fatalf("system after a product swap = %d rows / %q, want %d / healthy (product no longer moves health)", n, v, before)
 	}
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -894,13 +899,13 @@ func TestHealthReadScope(t *testing.T) {
 	ctx := context.Background()
 
 	none := scope.Set{}
-	if _, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, none); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, none, none); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("out-of-scope system health: err = %v, want ErrSystemNotFound", err)
 	}
 	if _, err := f.gw.LocationHealth(ctx, "hq", storage.HealthRange{}, none); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("out-of-scope location health: err = %v, want ErrLocationNotFound", err)
 	}
-	if _, err := f.gw.SystemHealth(ctx, "no-such-system", storage.HealthRange{}, f.all); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := f.gw.SystemHealth(ctx, "no-such-system", storage.HealthRange{}, f.all, f.all); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("unknown system health: err = %v, want ErrSystemNotFound", err)
 	}
 }
@@ -929,7 +934,7 @@ func TestAlarmImpairsComponentImpairsSlot(t *testing.T) {
 		t.Errorf("component = %q, want outage: only a critical alarm takes it down (a degraded component still occupies)", v)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -970,7 +975,7 @@ func TestDegradedOccupantStillSatisfies(t *testing.T) {
 		t.Errorf("component = %q, want degraded (a warning alarm)", v)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -1024,7 +1029,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 		t.Errorf("component = %q, want outage (a critical alarm)", v)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -1073,7 +1078,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched by a warning", slots)
 		}
 
-		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 		if err != nil {
 			t.Fatalf("system health: %v", err)
 		}
@@ -1104,7 +1109,7 @@ func TestShortAndUnderstaffedDivergeOnCriticalAlarm(t *testing.T) {
 			t.Fatalf("understaffed = %+v, want 0: the assignment row is untouched, understaffed is health-blind", slots)
 		}
 
-		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+		rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 		if err != nil {
 			t.Fatalf("system health: %v", err)
 		}
@@ -1152,5 +1157,47 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 	// and its name, rather than the raise echoing the caller's reference.
 	if got[0].ComponentID != alarm.ComponentID || got[0].ComponentName != "bar-1" || alarm.ComponentID == "bar-1" {
 		t.Fatalf("raise said component %q (%q), the list %q (%q): want one uuid and one name", alarm.ComponentID, alarm.ComponentName, got[0].ComponentID, got[0].ComponentName)
+	}
+}
+
+// TestLocationHealthSystemsAreAddressable pins #1775: two rooms each holding a
+// system called "meeting" read as two entries that differ in an addressable
+// field, and that field opens the system.
+func TestLocationHealthSystemsAreAddressable(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	f.mustLocation(t, ctx, "hq-r2", "room", ptrStr("hq-b1"))
+	for _, room := range []string{"hq-r1", "hq-r2"} {
+		if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "meeting", LocationName: ptrStr(room)}, f.all, f.all); err != nil {
+			t.Fatalf("create meeting in %s: %v", room, err)
+		}
+	}
+	rep, err := f.gw.LocationHealth(ctx, "hq", storage.HealthRange{}, f.all)
+	if err != nil {
+		t.Fatalf("location health: %v", err)
+	}
+	seen := map[string]storage.HealthSystem{}
+	for _, s := range rep.Systems {
+		if s.Name != "meeting" {
+			continue
+		}
+		if s.Path == "" || s.ID == "" {
+			t.Fatalf("entry %+v carries no address", s)
+		}
+		if _, dup := seen[s.Path]; dup {
+			t.Fatalf("two meeting entries share path %q", s.Path)
+		}
+		seen[s.Path] = s
+		if s.Location != "hq.hq-b1.hq-r1" && s.Location != "hq.hq-b1.hq-r2" {
+			t.Errorf("location = %q, want the room's dotted path", s.Location)
+		}
+		got, err := f.gw.GetSystem(ctx, s.Path, f.all)
+		if err != nil || got.ID != s.ID {
+			t.Errorf("GetSystem(%q) = %v, %v; want system %s", s.Path, got, err, s.ID)
+		}
+	}
+	if len(seen) != 2 {
+		t.Fatalf("meeting entries = %d, want 2 distinct", len(seen))
 	}
 }

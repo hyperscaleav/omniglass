@@ -8,6 +8,7 @@ import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testsever
 import type { SeverityLevel } from "../lib/severity";
 import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
+import { tipOf } from "../test-tip";
 
 // The alarms panel is where fleet health starts: an alarm on this component
 // that impairs its own health wholesale (#626). Rows are seeded into the query
@@ -184,6 +185,14 @@ describe("AlarmsPanel", () => {
     expect(messages).toEqual(["HDMI board failed", "Lamp hours exceeded"]);
   });
 
+  // How long it lasted (#2426), the same reading the alarms page gives.
+  it("says how long a cleared alarm was raised", () => {
+    const { getByRole } = mount();
+    const group = getByRole("group", { name: /recently cleared/i });
+    expect(within(group).getByTestId("alarm-duration")).toHaveTextContent("1d");
+    expect(within(group).getByText(/lasted/)).toBeTruthy();
+  });
+
   // Clearing keeps the row: what was wrong, and when, outlives the fix.
   it("keeps a cleared alarm in its own group rather than dropping it", () => {
     const { getByRole } = mount();
@@ -276,9 +285,10 @@ describe("AlarmsPanel", () => {
   // The queue an operator actually works, at a glance: raised, and unseen. The
   // acknowledged-but-still-raised alarm is deliberately not in it, which is the
   // whole point of the two facts being independent.
-  it("counts only the raised alarms nobody has looked at", () => {
-    const { getByTitle } = mount();
-    expect(getByTitle(/nobody has recorded seeing it yet/i).textContent).toBe("1 unacknowledged");
+  it("counts only the raised alarms nobody has looked at", async () => {
+    const { getByText } = mount();
+    const chip = getByText("1 unacknowledged");
+    expect(await tipOf(chip)).toMatch(/nobody has recorded seeing it yet/i);
   });
 
   it("shows no unacknowledged counter once every raised alarm has been seen", () => {
@@ -333,7 +343,7 @@ describe("AlarmsPanel", () => {
     const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
     expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
     expect(options.map((o) => o.textContent)).toEqual([
-      "Info (degrades it, still working)",
+      "Info (does not affect health)",
       "Warning (degrades it, still working)",
       "Average (degrades it, still working)",
       "High (takes this component out)",

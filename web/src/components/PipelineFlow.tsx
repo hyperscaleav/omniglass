@@ -16,6 +16,7 @@ import {
   type PlatformPipelineFigure,
   type PlatformPipelineHop,
 } from "../lib/platformhealth";
+import Tooltip from "./ui/Tooltip";
 
 // Where work is lost (#1646): the path an item takes from its run to the store,
 // drawn as the hops the view returns, in the order an item crosses them. Each
@@ -37,7 +38,9 @@ const CLASS_TEXT: Record<string, string> = {
   server: "every server's platform component",
 };
 
-export default function PipelineFlow(props: { pipeline: PlatformPipeline }): JSX.Element {
+// bare drops the card and its title, for a caller that frames the flow in its own
+// section (Platform health's folded sections, #2446); the ratio rule's tooltip stays.
+export default function PipelineFlow(props: { pipeline: PlatformPipeline; bare?: boolean }): JSX.Element {
   const [kind, setKind] = createSignal<PipelineKindChoice>("all");
   const [selected, setSelected] = createSignal<string | undefined>();
   const hops = () => props.pipeline.hops ?? [];
@@ -46,11 +49,11 @@ export default function PipelineFlow(props: { pipeline: PlatformPipeline }): JSX
   const end = () => endToEndFigure(props.pipeline, kind());
 
   return (
-    <section class="card border border-base-300 bg-base-200" data-testid="pipeline">
-      <div class="card-body gap-4 p-5">
+    <section class={props.bare ? undefined : "card border border-base-300 bg-base-200"} data-testid="pipeline">
+      <div class={props.bare ? "flex flex-col gap-4" : "card-body gap-4 p-5"}>
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-1.5">
-            <h2 class="eyebrow">Where work is lost</h2>
+            <h2 class="eyebrow" classList={{ "sr-only": props.bare }}>Where work is lost</h2>
             <InfoTip label="the loss ratio" text={RATIO_RULE} />
           </div>
           <div role="group" aria-label="Kind" class="tabs tabs-box tabs-sm w-fit">
@@ -173,7 +176,7 @@ function HopDetail(props: { hop: PlatformPipelineHop; pipeline: PlatformPipeline
           <KeyedFor each={props.hop.by_component} by={(c) => c.component} fallback={<li class="text-xs text-base-content/50">No component has recorded this hop yet.</li>}>
             {(c) => (
               <li data-testid={`pipeline-component-${c().name}`} class="flex flex-wrap items-baseline justify-between gap-2">
-                <A href={`/components/${c().component}`} class="font-medium hover:underline" title="Open the component, where each delivery series lives">{c().name}</A>
+                <Tooltip as={A} href={`/components/${c().component}`} class="font-medium hover:underline" content="Open the component, where each delivery series lives">{c().name}</Tooltip>
                 <Figures figure={componentFigure(c(), props.kind)} />
               </li>
             )}

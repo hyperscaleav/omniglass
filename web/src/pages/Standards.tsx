@@ -5,9 +5,12 @@ import TemplateNotice from "../components/TemplateNotice";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
+import { StandardUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
@@ -27,6 +30,7 @@ import { catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Standards: the catalog of contracts a system is built to ("Meeting room",
 // "Huddle space"), on the flat FlatList surface beside Products. A standard is the
@@ -135,7 +139,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   async function removeStandard() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete standard "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "standard", name: r.name }))) return;
     setErr(null);
     try {
       await deleteStandard(r.name);
@@ -192,12 +196,14 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             label="Variant of"
             mono
             value={() => r().parent_standard ?? ""}
+            read={r().parent_standard ? <CatalogRef kind="standard" name={r().parent_standard} /> : undefined}
             hint="A standard this one specializes. Leave empty for a standalone standard."
           >
             <ParentStandardSelect value={parentId()} exclude={r().name} onChange={setParentId} />
           </BladeField>
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
+          <StandardUsedBy name={r().name} label={entityLabel(r())} />
           <SlotEditor id={r().id} official={r().official} />
         </div>
       )}
@@ -231,7 +237,8 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
   const qc = useQueryClient();
   // Label leads and the handle follows it, stopping the moment the
   // operator edits the handle by hand (lib/entities).
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [parentId, setParentId] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -267,12 +274,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Meeting room" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="meeting-room" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Meeting room" namePlaceholder="meeting-room" />
       <FieldRow label="Variant of" hint="A standard this one specializes. Optional.">
         <ParentStandardSelect value={parentId()} onChange={setParentId} />
       </FieldRow>

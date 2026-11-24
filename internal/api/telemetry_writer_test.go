@@ -62,7 +62,7 @@ func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
 		m, err := gw.LatestMetricInstance(ctx, "bar-1", "uptime", "")
 		return err == nil && m != nil && m.Value == 4242
 	})
-	evs, err := gw.ListComponentEvents(ctx, "bar-1", 0, 10)
+	evs, err := gw.ListComponentEvents(ctx, "bar-1", 0, 10, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("events: %v", err)
 	}

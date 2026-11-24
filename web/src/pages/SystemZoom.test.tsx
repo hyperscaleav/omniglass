@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/te
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemSlotsKey } from "../lib/system_slots";
@@ -26,6 +27,8 @@ import { uuidFor } from "../lib/testids";
 import { toLocalInput } from "../components/TimeRangePicker";
 import { seedSeverityLevels } from "../lib/testseverity";
 import type { EffectiveSlot } from "../lib/system_zoom";
+import { answerConfirms } from "../lib/confirm.testkit";
+import { pageHeader } from "../lib/handover";
 
 // The system zoom's chrome (#636): one card per slot with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
@@ -146,7 +149,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
 
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/systems/:id" component={Systems} />
+        <Route path="/systems/:id" component={withTopBar(Systems)} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route
@@ -248,6 +251,32 @@ describe("the system zoom", () => {
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
     // Each alarm row opens its timeline in place (#950).
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
+  });
+
+  // #2459 (ADR-2459): a member outside every slot is shown, not rolled up. Its
+  // open alarm is on the strip as "not in a slot" while the badge reads healthy,
+  // the strip carries no fault tone, no reason line speaks for a healthy system,
+  // and the notice teaches that only a slot counts toward the system's health.
+  it("shows an outside-a-slot member's alarm while the system reads healthy", () => {
+    const outside = {
+      ...health,
+      slots: (health.slots ?? []).map((r) => ({ ...r, impaired: false, down: [], alarms: [] })),
+      health: "healthy",
+      reason: "no slot is impaired",
+      members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true,
+        alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("szp-c-amp"), severity: "high", message: "Amplifier powered off", raised_at: "2026-08-15T15:00:00Z", acknowledged: false }] }],
+    } as unknown as FleetHealth;
+    mount(undefined, outside);
+    expect(within(screen.getByTestId("system-header")).getByText("healthy")).toBeTruthy();
+    const strip = screen.getByTestId("alarm-strip");
+    expect(within(strip).getByText("Amplifier powered off")).toBeTruthy();
+    expect(within(strip).getByText(/not in a slot/)).toBeTruthy();
+    expect(strip.className).not.toContain("border-error");
+    expect(strip.className).not.toContain("border-warning");
+    expect(screen.queryByTestId("health-reason")).toBeNull();
+    const notice = screen.getByTestId("outside-slot-notice").textContent ?? "";
+    expect(notice).toContain("1 component is not in a slot: amp-1.");
+    expect(notice).toContain("does not count toward this system's health");
   });
 
   // The strip is where a storm is triaged from (#990): acknowledging a causing
@@ -372,7 +401,7 @@ describe("the components-first body (#790)", () => {
   it("a no-slot member is a row saying so, not a strip of chips", () => {
     mount();
     const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
-    expect(within(row).getByText("no slot")).toBeTruthy();
+    expect(within(row).getByText("not in a slot")).toBeTruthy();
     expect(screen.queryByTestId("no-slot-strip")).toBeNull();
   });
 
@@ -389,12 +418,12 @@ describe("the components-first body (#790)", () => {
 describe("the metrics are said once (#872)", () => {
   // The KPI tiles retired into Data: two renderings of the same values was
   // the audit's finding. Data stacks every declared metric with its latest.
-  it("draws no tile row; the data section carries each metric's latest value", () => {
+  it("draws no tile row; the metrics grid carries each metric's latest value", async () => {
     mount(undefined, health, [
       { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
     ]);
     expect(screen.queryByTestId("kpi-tiles")).toBeNull();
-    const data = screen.getByTestId("data-tab");
+    const data = await screen.findByTestId("metrics-grid");
     expect(within(data).getByText("Room Temperature")).toBeTruthy();
     expect(within(data).getByText("23.5")).toBeTruthy();
     expect(screen.getAllByText("23.5").length).toBe(1);
@@ -411,11 +440,11 @@ describe("the map tab (#791)", () => {
     ] },
   }];
 
-  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays three tabs", () => {
+  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays four tabs", () => {
     mount(undefined, health, [], MAPPED);
     expect(screen.getByTestId("system-map")).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Configure"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Timeline", "Configure"]);
     cleanup();
     mount();
     expect(screen.getByTestId("tab-rail")).toBeTruthy();
@@ -599,6 +628,52 @@ describe("the history tab (#792)", () => {
     expect(figure().className).not.toContain("text-healthy");
   });
 
+  // #2435: the share is over the time the system has existed, and the card
+  // names that window. NOW is 2026-08-20T16:00Z here.
+  describe("a system recorded minutes ago (#2435)", () => {
+    const young = (over: Record<string, unknown>) =>
+      ({ ...health, health: "healthy", transitions: [], first_recorded_at: "2026-08-20T15:56:00Z", ...over }) as unknown as FleetHealth;
+    const card = () => screen.getByTestId("uptime-kpi");
+
+    it("reads 100% over a window it names, not of the last 30 days", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ transitions: [{ ts: "2026-08-20T15:56:00Z", health: "healthy" }] }));
+      expect(card().textContent).toContain("100%");
+      expect(card().textContent).toMatch(/since Aug 20/);
+      expect(card().textContent).not.toContain("of the last 30 days");
+    });
+
+    it("a first-recorded owner with no edge in the range still reads 100%", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({}));
+      expect(card().textContent).toContain("100%");
+    });
+
+    it("no health recorded says so and shows no percentage", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ first_recorded_at: undefined, health: undefined }));
+      expect(card().textContent).toContain("no health recorded yet");
+      expect(card().textContent).not.toContain("%");
+    });
+
+    it("lists no zero-length stretch", () => {
+      mount(
+        `/web/systems/${uuidFor("szp-sys")}?tab=history`,
+        young({ health: "degraded", transitions: [{ ts: "2026-08-20T15:56:00.000Z", health: "incomplete" }, { ts: "2026-08-20T15:56:00.300Z", health: "degraded" }] }),
+      );
+      const items = within(screen.getByTestId("stretch-list")).getAllByTestId(/^stretch-/);
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).not.toMatch(/Commissioning/);
+    });
+
+    it("labels the strip's ends and each segment says verdict, from, to and duration", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ health: "degraded", transitions: [{ ts: "2026-08-20T15:56:00Z", health: "healthy" }, { ts: "2026-08-20T15:58:00Z", health: "degraded" }] }));
+      const strip = screen.getByTestId("health-history-full");
+      expect(within(strip).getByTestId("strip-start").textContent).toMatch(/Aug 20/);
+      expect(within(strip).getByTestId("strip-end").textContent).toBe("now");
+      const seg = strip.querySelectorAll("[data-segment]");
+      expect(seg.length).toBe(2);
+      expect(seg[0].getAttribute("data-segment")).toMatch(/healthy.*2m/);
+    });
+  });
+
   it("renders the ongoing unhealthy stretch as the first entry, expandable to the alarms that explain it", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
@@ -627,6 +702,16 @@ describe("the history tab (#792)", () => {
     seedAlarms(r.qc);
     const tab = screen.getByTestId("history-tab");
     expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
+  });
+
+  // #2426: a cleared alarm says how long it was raised, the same words the
+  // alarms page and a component's panel use.
+  it("says how long a cleared alarm outside every stretch was raised", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    const tab = screen.getByTestId("history-tab");
+    const row = (await within(tab).findByText("Fan speed high")).closest("li")!;
+    expect(row.textContent).toContain("lasted 41m");
   });
 
   it("Activity is always on the rail, with the timeline and raise markers", async () => {
@@ -698,11 +783,11 @@ describe("the events and logs tabs (#793)", () => {
     cleanup();
     const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
     r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], { sources: [], logs: [] });
-    expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
+    expect(await screen.findByText(/No log lines in the last 24 hours/)).toBeTruthy();
   });
 });
 
-describe("the data tab (#794, stacked per the #795 review)", () => {
+describe("the metrics grid on the system page (#794, #2424)", () => {
   const METRICS = [
     { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
     { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
@@ -718,25 +803,15 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     qc.setQueryData([...metricBucketsKey("systems", uuidFor("szp-sys"), "occupancy-count", 24, 300)], { coveredFrom: null, buckets: [] });
   };
 
-  it("stacks every declared metric as a table row: label, sparkline, the latest value; no picker to hunt through", async () => {
+  it("charts every declared metric as a card over the page range: label, the latest value, a default marked (#2424)", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
     seedSeries(r.qc);
-    const tab = screen.getByTestId("data-tab");
-    const temp = within(tab).getByTestId("metric-row-room-temperature");
-    expect(await within(temp).findByTestId("sparkline")).toBeTruthy();
-    expect(within(temp).getByText("23.5")).toBeTruthy();
-    const occ = within(tab).getByTestId("metric-row-occupancy-count");
+    const grid = await screen.findByTestId("metrics-grid");
+    const temp = within(grid).getByTestId("metric-card-room-temperature");
+    expect(within(temp).getByText("Room Temperature")).toBeTruthy();
+    expect(within(temp).getByTestId("metric-current").textContent).toBe("23.5");
+    const occ = within(grid).getByTestId("metric-card-occupancy-count");
     expect(within(occ).getByText(/contract default/)).toBeTruthy();
-    expect(within(tab).queryByTestId("timeseries-chart")).toBeNull();
-  });
-
-  it("a row expands to the full chart and collapses back", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
-    seedSeries(r.qc);
-    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
-    expect(await screen.findByTestId("timeseries-chart")).toBeTruthy();
-    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
-    expect(screen.queryByTestId("timeseries-chart")).toBeNull();
   });
 
   // The page's one range (#2304): the picker on the tab rail writes the
@@ -772,7 +847,7 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
         );
       }
       expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days");
-      expect(screen.getByTestId("data-tab").textContent).toContain("Last 7d");
+      expect(screen.getByTestId("metrics-grid").textContent).toContain("Last 7 days");
     });
 
     it("a deep link's range is the one read, with no click", async () => {
@@ -844,10 +919,10 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     });
   });
 
-  it("draws no data section with nothing declared, and no Data tab ever", () => {
+  it("draws no metrics grid with nothing declared, and no Data tab ever", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, []);
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
-    expect(screen.queryByTestId("data-tab")).toBeNull();
+    expect(screen.queryByTestId("metrics-grid")).toBeNull();
   });
 });
 
@@ -867,8 +942,9 @@ describe("the system card's header says each thing once (#872)", () => {
 describe("the location is context, the system the subject (#872)", () => {
   it("titles a sole system's view by its location and ends the path at the location's parent", () => {
     mount();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A");
-    expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
+    expect(pageHeader()?.title).toBe("Boardroom A");
+    expect(screen.queryByTestId("breadcrumb")?.textContent ?? "").not.toContain("Boardroom A");
+    expect(within(screen.getByTestId("header-line-1")).getByRole("link", { name: "Systems" })).toBeTruthy();
   });
 
   it("shows the location as a card naming its type, without repeating its name", () => {
@@ -907,7 +983,7 @@ describe("the location is context, the system the subject (#872)", () => {
 
   it("gives an unplaced system its own title and no location card", () => {
     mount(`/web/systems/${uuidFor("szp-other")}`);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");
+    expect(pageHeader()?.title).toBe("Overflow Room");
     expect(screen.queryByTestId("location-card")).toBeNull();
   });
 
@@ -949,10 +1025,10 @@ describe("the configure tab (#800)", () => {
     try {
       mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
       const face = await screen.findByTestId("configure-face");
-      fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" }));
       const name = await within(face).findByDisplayValue("boardroom");
       fireEvent.input(name, { target: { value: "exec-boardroom" } });
-      fireEvent.click(within(face).getByRole("button", { name: /save/i }));
+      fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i }));
       await waitFor(() => {
         expect(within(face).queryByRole("alert")?.textContent ?? "", "save error surfaced").toBe("");
         const patch = calls.find((c) => c.method === "PATCH" && c.url.includes(`/systems/${uuidFor("szp-sys")}`));
@@ -994,8 +1070,8 @@ describe("the location configures beside its system (#872)", () => {
   it("?edit=location begins editing the location's form only", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=location`);
     const location = await screen.findByTestId("configure-face-location");
-    expect(await within(location).findByRole("button", { name: /save changes/i })).toBeTruthy();
-    expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save changes/i })).toBeNull();
+    expect(await within(location).findByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save/i })).toBeNull();
   });
 
   it("gives an unplaced system no Location section", async () => {
@@ -1016,14 +1092,14 @@ describe("leaving Configure with unsaved drafts", () => {
   async function dirtyConfigure() {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
     const face = await screen.findByTestId("configure-face");
-    fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+    fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" }));
     const name = await within(face).findByDisplayValue("boardroom");
     return { face, name };
   }
   const overview = () => screen.getByRole("tab", { name: "Overview" });
 
   it("asks first, and confirming discards the drafts and leaves", async () => {
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     const { name } = await dirtyConfigure();
     fireEvent.input(name, { target: { value: "exec-boardroom" } });
     fireEvent.click(overview());
@@ -1033,7 +1109,7 @@ describe("leaving Configure with unsaved drafts", () => {
   });
 
   it("cancelling stays on Configure with the drafts intact", async () => {
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const ask = answerConfirms(false);
     const { name } = await dirtyConfigure();
     fireEvent.input(name, { target: { value: "exec-boardroom" } });
     fireEvent.click(overview());
@@ -1044,7 +1120,7 @@ describe("leaving Configure with unsaved drafts", () => {
   });
 
   it("does not ask when editing but nothing changed, or when not editing", async () => {
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const ask = answerConfirms(false);
     await dirtyConfigure();
     fireEvent.click(overview());
     await waitFor(() => expect(screen.queryByTestId("configure-face")).toBeNull());
@@ -1057,7 +1133,7 @@ describe("?edit=1 lands on configure (#800)", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
     const face = await screen.findByTestId("configure-face");
     expect(await within(face).findByDisplayValue("boardroom")).toBeTruthy();
-    expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i })).toBeTruthy();
   });
 });
 
@@ -1095,7 +1171,7 @@ describe("the miss face (#800)", () => {
     await waitFor(() => expect(screen.queryByText(/No system answers this address/)).toBeNull());
     const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, health: "incomplete", dots: [] }] };
     answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
-    expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();
+    await waitFor(() => expect(pageHeader()?.title).toBe("Fresh Room"));
     expect(screen.queryByText(/No system answers this address/)).toBeNull();
     vi.unstubAllGlobals();
   });
@@ -1190,6 +1266,8 @@ describe("the system view refreshes (#940)", () => {
     // Before the poll: healthy, nothing in Why, the mic's light quiet.
     expect(screen.getByTestId("system-header").textContent).toContain("healthy");
     expect(screen.queryByTestId("alarm-strip")).toBeNull();
+    // The Why slot is held while it is quiet, so the strip landing moves nothing (#2006).
+    expect(screen.getByTestId("alarm-strip-clear").textContent).toContain("No active alarms");
     const micLight = () => within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByRole("img").getAttribute("aria-label");
     expect(micLight()).toBe("healthy");
 
@@ -1197,6 +1275,7 @@ describe("the system view refreshes (#940)", () => {
 
     expect(screen.getByTestId("system-header").textContent).toContain("degraded");
     expect(screen.getByTestId("alarm-strip").textContent).toContain("Reachability lost");
+    expect(screen.queryByTestId("alarm-strip-clear")).toBeNull();
     expect(micLight()).toBe("outage");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each of the system's own reads polled, as one request, not one per
@@ -1245,8 +1324,9 @@ describe("the system view refreshes (#940)", () => {
     // No member is read on its own; the members' alarms are one read.
     expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
     expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
-    // The whole poll: health, slots, members, metrics, alarms, events, logs.
-    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/metrics", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
+    // The whole poll: health, slots, members, alarms, events, logs. The
+    // metrics read belongs to Overview's metrics grid (#2424).
+    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
   it("holds the poll while the tab is hidden", async () => {

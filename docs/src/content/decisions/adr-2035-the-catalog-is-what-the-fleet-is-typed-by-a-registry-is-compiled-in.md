@@ -6,7 +6,7 @@ summary: "Catalog names the database rows the fleet is typed by, at both levels 
 refs: [2035, 2028, 2034, 2070]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [UI](/architecture/ui/), [storage](/architecture/storage/)
 - **Decision:** (#2035.) The line is where the thing lives. **Catalog** is a set of database rows
   the fleet is typed by, shipped or the operator's own: every list in the Catalog area and the

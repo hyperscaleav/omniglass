@@ -496,3 +496,50 @@ func TestAWebhookRowsReasonIsNotWithheld(t *testing.T) {
 		t.Fatalf("a webhook row's reason read by a non-admin = %+v, %v", ns, err)
 	}
 }
+
+// A person whose only component read reach is a location grant is paged for a
+// component placed under that location (#2554), and for none placed outside it.
+func TestALocationScopedReaderIsPagedForAComponentPlacedInItsLocation(t *testing.T) {
+	t.Parallel()
+	f := newPeopleFixture(t)
+	f.groupRule(t)
+	east, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "east", LocationType: "campus"}, f.all, f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "east-room", LocationType: "room", ParentName: &east.Name}, f.all, f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	west, err := f.gw.CreateLocation(f.ctx, "", storage.LocationSpec{Name: "west", LocationType: "campus"}, f.all, f.all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.human(t, "tech-east", storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: east.ID})
+	if err := f.gw.AddGroupMember(f.ctx, "", "on-call", "tech-east", f.all); err != nil {
+		t.Fatal(err)
+	}
+	for name, loc := range map[string]*string{"cam-east": &room.Name, "cam-west": &west.Name} {
+		if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: name, LocationName: loc}, f.all, f.all, f.all, f.all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	has := func(comp string) bool {
+		a, err := f.gw.RaiseAlarm(f.ctx, "", comp, storage.AlarmSpec{Severity: "high", Message: "down"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range recipients(f.rows(t, a.ID)) {
+			if r == "tech-east/inbox/sent" {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("cam-east") {
+		t.Error("a location-scoped reader was not paged for a component placed under its location")
+	}
+	if has("cam-west") {
+		t.Error("a location-scoped reader was paged for a component placed outside its location")
+	}
+}

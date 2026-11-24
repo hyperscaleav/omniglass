@@ -8,6 +8,7 @@ import { ALARM_TIMELINE_PREFIX, COMPONENT_ALARMS_PREFIX, FLEET_ALARMS_PREFIX, SN
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 type Snoozable = { id: string; message?: string; snoozed_until?: string; snoozed_by?: string };
 
@@ -52,12 +53,12 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
   return (
     <Show when={props.alarm.snoozed_until}>
       {(until) => (
-        <span
-          class="badge badge-snoozed badge-xs shrink-0"
-          title={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
+        <Tooltip as="span" tabIndex={0}
+          class="badge badge-snoozed badge-xs h-auto min-h-4 shrink-0 whitespace-nowrap"
+          content={`Its notifications are recorded, not sent, until ${fmtTime(until())}${props.alarm.snoozed_by ? `, snoozed by ${props.alarm.snoozed_by}` : ""}`}
         >
           {snoozedUntilWords(until())}
-        </span>
+        </Tooltip>
       )}
     </Show>
   );

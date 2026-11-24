@@ -1,4 +1,4 @@
-import { For, Show, createMemo, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -43,6 +43,8 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
   const me = useMe();
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // The tab rail's right end, where Configure draws its actions (#2439).
+  const [railEnd, setRailEnd] = createSignal<HTMLElement>();
   // In a blade, closing or popping it asks the same guard a tab switch does.
   if (props.host === "blade") onCleanup(blades.guard({ kind: "location", id: props.id }, leave));
 
@@ -66,7 +68,7 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
 
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
-    ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    ...(can(me.data, "location", "update") || can(me.data, "location", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs);
   const tab = tabState.active;
@@ -112,11 +114,11 @@ export default function LocationDetail(props: { id: string; host: DetailHost }) 
             </Show>
             <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
           </div>
-          <TabRail tabs={tabs()} state={tabState} guard={leave} />
+          <TabRail tabs={tabs()} state={tabState} guard={leave} endRef={setRailEnd} />
           <Show when={tab() === "configure"}>
             {/* The host keys the body on the id: another location is another
                 face (#854). */}
-            <ConfigureFace kind="location" id={id()} guard={leave} host={props.host} destructive={destructive} />
+            <ConfigureFace mount={railEnd} kind="location" id={id()} guard={leave} host={props.host} destructive={destructive} />
           </Show>
           <Show when={tab() === "overview"}>
             <div data-testid="location-overview" class="flex flex-col gap-4 p-4">

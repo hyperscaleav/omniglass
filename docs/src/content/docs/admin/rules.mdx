@@ -9,6 +9,7 @@ sidebar:
 walkthroughs:
   - id: watch-a-rule-raise-an-alarm
   - id: write-a-rule-as-an-expression
+  - id: alarm-on-what-you-are-looking-at
 ---
 
 import SeededSet from '../../../components/SeededSet.astro';
@@ -19,9 +20,9 @@ one property or metric on the components it selects. When the value meets its **
 long enough, the rule **fires** on that component: it writes an event and, when it
 has a severity, raises an alarm; when the value meets its **clear criteria** the rule clears there, with
 its own event, and the alarm clears. A rule with no severity is **informational**: it writes its
-events and pages nobody. The alarm it opens is an ordinary alarm: it takes its
-component's health down, a system slot the component fills stops counting it while it is out, and
-it can be acknowledged like any other ([alarms on a component](/operator/alarms/#alarms-on-a-component)).
+events and pages nobody. The alarm it opens is an ordinary alarm: its severity level
+declares what it does to the component's health (none, degraded or outage), a system slot the component
+fills stops counting it only while the level declares outage, and it can be acknowledged like any other ([alarms on a component](/operator/alarms/#alarms-on-a-component)).
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
 
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
@@ -42,8 +43,8 @@ These rules ship with Omniglass, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
-All of them are **official**: they update with Omniglass, so they are read-only, and the blade greys Edit
-and Delete with that reason. All but `reachability-lost` watch Omniglass itself. `ingest-lag-high` opens a warning alarm on
+All of them are **official**: they update with Omniglass, so they are read-only, and the blade footer shows one
+"Official, read-only" note in place of Edit and Delete. All but `reachability-lost` watch Omniglass itself. `ingest-lag-high` opens a warning alarm on
 the server's own component when the server lands telemetry more than 30 s behind its samples for 2
 minutes ([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a high
 alarm on an outpost's own component once the outpost has gone 90 s, three heartbeats, without checking in,
@@ -132,10 +133,16 @@ sits.
 
 - **Name**: a lowercase kebab name (`input-moved`), the address you type and a link carries. It can
   be renamed later (see [Rename](#rename-a-rule)).
-- **Label**: optional; it is also the alarm's message when **Message** is blank.
-- **Reads**: one property or metric from the catalogs. Its **lane** decides how it compares: a
-  property is text, compared only for equality; a metric is a number, compared any way. The
-  comparison list beside the value offers exactly what the chosen key's lane allows, in words.
+- **Label**: optional; it is also the alarm's message when **Message** is blank. It follows the name
+  as you type it (`catalog-cpu-hot` suggests `Catalog cpu hot`: the hyphens become spaces and the
+  first letter is capitalised, nothing else, so an acronym you wrote is left as typed) until you write one of your own, so a rule saved without a
+  second thought still reads as words in the list.
+- **Reads**: one property or metric from the catalogs, found by typing: the list filters on the
+  label and the name, groups metrics and properties under their own headings, and shows each
+  option's name and unit beside its label. When the rule watches exactly one component, that
+  component's own metrics and properties come first under **On** its name. Its **lane** decides how it
+  compares: a property is text, compared only for equality; a metric is a number, compared any way.
+  The comparison list beside the value offers exactly what the chosen key's lane allows, in words.
 - **Fires when it reads**: the comparison and the value that open an alarm. The value is used exactly
   as typed: a property value with leading or trailing spaces is refused rather than trimmed (it would
   never match), and a metric value must be a plain decimal (`40`, `-2.5`). Beneath it the form shows
@@ -167,8 +174,8 @@ sits.
   it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9. The clear criteria take a comparison or an expression the same way.
 - **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
   alarm through a noisy recovery without delaying the alarm.
-- **Severity**: the level the alarm is raised at, worst first. A level marked outage takes its
-  component out; any other degrades it. **None (informational)** makes a rule that records what happened
+- **Severity**: the level the alarm is raised at, worst first. A level declares its health effect: outage takes its
+  component out, degraded degrades it, and none leaves it healthy (the alarm is still listed). **None (informational)** makes a rule that records what happened
   as events and raises no alarm: it pages nobody and moves no health. A new rule starts at the worst
   level that does not take its component out; editing a rule never fills a level in for it.
 - **Fire event type** and **Clear event type**: the [events](/architecture/events/) the rule writes,
@@ -178,31 +185,57 @@ sits.
   the generic pair; a pair the catalog already models (`call-started` / `call-ended`) says what
   happened instead.
 - **Watches component types** and **Watches components**: the components it selects. A type
-  includes every type beneath it. Leave both empty to watch every component.
+  includes every type beneath it. Leave both empty to watch every component. Components are found by
+  typing too, and each option shows where the component sits (its location and system), since a
+  fleet repeats labels: forty panels can all be `Display 1`.
 - **Message**, **Description**, **Enabled**.
 
-Every field is checked as you type and **Create rule** stays refused until the rule is whole. When it
-is created, the rule judges the newest sample of every series it selects at once, so criteria
+Every field is checked as you type. **Create rule** is never greyed: pressed with the rule not
+whole, it says so in one sentence above the form (**To create the rule, fill in Name, Reads and Fires
+when it reads.**), puts the focus on the first field that needs fixing, and each name in the sentence
+takes you to its field, with the reason beside it. When it is created, the rule judges the newest sample of every series it selects at once, so criteria
 that already hold start their sustain then rather than waiting for the next change.
 
 **Preview**, at the foot of the drawer, runs the draft against the last day of its key's samples on
-the components you can read, without saving or writing anything: where it would be firing (**in force now**),
-each linked to its component, and the **edges** it would have written, fire and clear, newest last.
-Each sample is judged as the server judged it, but alone, so a sustain that would have held an edge
-back is not applied, which the panel says. A series with nothing deciding in the week before the window
-started unknown, and the panel counts those; on a fleet with more samples than the preview's cap it
-judges whole series up to it and says how many of how many.
+the components you can read, without saving or writing anything. It opens with a sentence in the
+words you entered: *In the last 24h, Temperature above 40 °C would have fired 3 times on 2 of 40
+series (Display 1, Display 7) and cleared twice. Right now 1 series (Display 7) would be in force.*
+Under it, where it would be firing (**in force now**) and the **edges** it would have written, fire and
+clear, newest last. Every series is named by its component and the metric, linked to the component,
+with where it sits.
+
+The preview judges each sample alone and cannot wait out a sustain. When you typed one (**For at
+least** or **Clears after at least**) it says so beside the sentence, in your words (*You asked for it to
+hold for at least 30s before firing. The preview cannot apply that...*), and the counts read as the
+most the rule would have done: a reading that passed within the sustain still shows as a firing. A
+series with nothing deciding in the week before the window started unknown, and the panel names those;
+on a fleet with more samples than the preview's cap it judges whole series up to it and says how many
+of how many.
 
 A preview refuses a [trend rule](#write-a-trend-rule)'s criteria (those that read `window` or `age`):
 it judges each sample alone, so it could only ever answer that a trend never fires.
 
-A rule's blade shows its criteria in words and, beneath, as the expressions it judges by (an absent
-clear is `!(fire)`).
+A rule's blade states its criteria in words (**Fires**, **Clears**) and keeps the expressions it
+judges by behind **Show expression** (an absent clear is `!(fire)`). Its **Open alarms** section links
+to **the alarms page** narrowed to that rule, and each alarm on that page links back to its rule (the
+rule's name beside the message, and **Raised by rule** in the alarm's drawer). The alarms page filters
+the rows it has loaded by `rule`; narrowing on the server, and showing the rule's cleared alarms too,
+follow the alarm history work.
 
 The walkthrough below writes a rule's criteria as an expression: the builder's comparison first, then
 the expression itself, an unfinished line pointed at, the fix, a preview of the last day, and the save.
 
 ::walkthrough{#write-a-rule-as-an-expression}
+
+### Alarm on this
+
+A component's page has an **Alarm on this** link beside each metric in its **Vitals** (with `rule:create`).
+It opens **New rule** with **Reads** and **Watches components** already filled in, so only the
+condition is left to write. The same form opens from any address of the shape
+`/event-rules?new=1&reads=<key>&component=<id>`; the intent is read once and then removed from the
+address, so a reload does not reopen it. Properties and the other places a component lists its keys do not have the link yet.
+
+::walkthrough{#alarm-on-what-you-are-looking-at}
 
 ### Write a trend rule
 
@@ -284,7 +317,8 @@ Two behaviors follow from acting on edges:
 ## Edit, disable, delete
 
 On a custom rule's blade, **Edit** (with `rule:update`) reopens the drawer with every field, the
-name included. Saving sends only what you changed, so a rule that still watches a component or component type
+name included. **Delete** sits on the left of the blade's footer, as on every other blade, and
+**Disable** / **Enable** under **More actions**. Saving sends only what you changed, so a rule that still watches a component or component type
 deleted since it was written stays editable: the form marks such an entry **deleted** (it matches
 nothing by it) and you can remove it or leave it. Changing what the rule judges (its key, criteria, selector or sustains) starts its pending
 streaks over and judges the newest samples again; changing its label, description, message or
@@ -313,14 +347,14 @@ name.
 ## Severity levels
 
 **Catalog, under Actions: Severity** lists the levels worst first: each one's **rank** (higher is
-worse), how it **looks** (the chip every alarm at that level wears), its **effect** (whether an
-active alarm at it puts its component in **outage** or only **degrades** it), and its origin. The
+worse), how it **looks** (the chip every alarm at that level wears), its **health effect** (what an
+open alarm at it does to its component: **none**, **degrades** or **outage**), and its origin. The
 shipped levels, rendered from the seed:
 
 <SeededSet kind="severity_levels" />
 
-They are spaced apart, so a level of your own slots between two without renumbering; whether a level
-is an outage follows from its rank, against a fixed floor the table above marks.
+They are spaced apart, so a level of your own slots between two without renumbering; what a level does to
+its component is its declared health effect, not its rank (the table above marks each shipped level's).
 
 ### Add, edit and delete a level
 
@@ -331,19 +365,20 @@ is an outage follows from its rank, against a fixed floor the table above marks.
 - **Color**: one of the console's palette. The chip beneath the field is the one every alarm at the
   level will wear.
 - **Rank**: a whole number above zero that no other level holds. As you type it, the form says where it
-  sits (**Between Average (30) and High (40).**) and what an alarm at it does: at or above the
-  outage floor it is an **outage** level (its alarms take their component out), below it a
-  **degrades** level.
+  sits (**Between Average (30) and High (40).**).
+- **Health effect**: **none** (an alarm is listed but its component stays healthy), **degraded**, or
+  **outage** (the component stops filling its slots). It starts at the effect the typed rank would have
+  had under the old floors; pick the one you mean.
 
 A name or rank another level holds is refused as you type, before anything is sent. On an operator
 level's blade, **Edit** (with `severity_level:update`) reopens the drawer with every field, the name
-included: **renaming** a level carries every alarm at it and every rule that names it; **re-ranking**
-one across the outage floor recomputes the health of every component with an open alarm at it, so a
-level moved from 35 to 45 takes those components out at once. **Delete** (with `severity_level:delete`,
+included: **renaming** a level carries every alarm at it and every rule that names it; changing a level's **health effect**
+recomputes the health of every component with an open alarm at it, so a level moved from degraded to
+outage takes those components out at once (a re-rank alone moves nothing). **Delete** (with `severity_level:delete`,
 behind a confirm) is refused while an alarm or a rule still names the level, and the blade says so.
-An official level is read-only: its blade greys Edit and Delete with that reason. Reading the levels
+An official level is read-only: its blade footer shows the same "Official, read-only" note. Reading the levels
 takes the permission on any grant, but writing one takes it on an **all-scope grant**, like a rule: a
-level's rank moves the health of every component with an alarm at it, wherever it sits. A caller whose
+level's health effect moves the health of every component with an alarm at it, wherever it sits. A caller whose
 `severity_level` permissions stop at one location sees no New severity level, and Edit and Delete greyed.
 
 The same writes from a terminal:

@@ -3,6 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { HealthGlyph, NARROW_HIDDEN, OUTLINE_FRAME, ROOMY_ONLY, WIDE_ONLY } from "./Outline";
 import { LayoutDashboard, resolveIcon } from "./icons";
 import type { MemberGroup, MemberRow } from "../lib/detail";
+import Tooltip from "./ui/Tooltip";
 
 // MemberRows (#872): a system's components in the outline's row idiom, on the
 // outline's own grid, so the room's hardware reads the way Explore drew it:
@@ -39,9 +40,9 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
           <span class="flex-none rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55">also in {r().also.join(", ")}</span>
         </Show>
       </span>
-      <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noSlot ? "no slot" : r().slot}</span>
+      <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noSlot ? "not in a slot" : r().slot}</span>
       <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{r().product}</span>
-      <span class={`truncate pr-4 ${NARROW_HIDDEN}`} classList={{ "text-error": !!r().alarm, "text-base-content/55": !r().alarm }} title={r().alarm}>{r().alarm ?? ""}</span>
+      <Tooltip as="span" class={`truncate pr-4 ${NARROW_HIDDEN}`} classList={{ "text-error": !!r().alarm, "text-base-content/55": !r().alarm }} content={r().alarm}>{r().alarm ?? ""}</Tooltip>
       <span><HealthGlyph health={r().health} /></span>
     </button>
   );

@@ -32,8 +32,35 @@ export function describeError(e: unknown): string {
   return seen.size ? `${head}: ${[...seen].join("; ")}` : head;
 }
 
+// The console's date and number formatting lives here and nowhere else:
+// src/date-guard.test.ts fails a toLocale* call in any other file, so the audit
+// trail, the file list, a drawer and a chart read an instant the same way (#2447).
+// A list shows an instant as relative time (rel) with this absolute form on hover
+// (components/Time).
+
+// fmtTime is an instant as a short absolute: "Nov 23, 01:56 PM". A value that is
+// not a date is returned as it came.
 export function fmtTime(iso: string): string {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// fmtClock is the time of day of an instant, "01:56 PM", to the second when asked.
+export function fmtClock(iso: string, opts?: { seconds?: boolean }): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleTimeString([], opts?.seconds ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+}
+
+// fmtDay is the calendar day of an instant (UTC unless local is set), "Nov 23", with the year when it
+// is asked for ("Nov 23, 2026"; a certificate outlives the calendar year).
+export function fmtDay(iso: string, opts?: { year?: boolean; local?: boolean }): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { ...(opts?.year ? { year: "numeric" } : {}), month: "short", day: "numeric", ...(opts?.local ? {} : { timeZone: "UTC" }) });
+}
+
+// fmtCount is a whole number with its thousands grouped.
+export function fmtCount(n: number): string {
+  return n.toLocaleString("en-US");
+}

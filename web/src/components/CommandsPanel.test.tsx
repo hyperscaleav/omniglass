@@ -9,6 +9,8 @@ import { componentCommandsKey, type Command } from "../lib/commands";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
 import { COMMAND_TYPES_KEY, type CommandTypeRow } from "../lib/command_types";
+import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
+import { METRICS_KEY, type MetricRow } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { clearToasts } from "../lib/toast";
 import { uuidFor } from "../lib/testids";
@@ -91,7 +93,13 @@ const endpoints = [{ id: uuidFor("cmd-ep"), name: "wss", transport: "wss", compo
 const drivers = [
   { id: uuidFor("cmd-drv"), name: "kestrel-ws", label: "Kestrel Control Socket", official: true, spec: { version: 1, transport: "wss", commands: [{ command_type: "set-volume", request: {} }] } },
 ] as Driver[];
-const catalog: CommandTypeRow[] = [{ name: "set-volume", label: "Set Volume", settle_window_seconds: 15, target_metric_type: "volume", official: true }];
+const catalog: CommandTypeRow[] = [
+  { name: "set-volume", label: "Set Volume", settle_window_seconds: 15, target_metric_type: "volume", official: true },
+  { name: "set-power", label: "Set Power", settle_window_seconds: 15, target_property_type: "power-state", official: true },
+  { name: "outlet-off", label: "Outlet Off", settle_window_seconds: 0, official: true, params_schema: { type: "object", required: ["outlet"], properties: { outlet: { type: "integer", minimum: 1, maximum: 4 } } } },
+];
+const propertyTypes = [{ name: "power-state", data_type: "string", validation: { enum: ["on", "off", "standby"] }, official: true }] as PropertyRow[];
+const metricTypes = [{ name: "volume", data_type: "float", unit: "ratio", official: true }] as MetricRow[];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -106,18 +114,20 @@ function Where() {
   return null;
 }
 
-function mount(opts: { me?: Me; rows?: Command[]; open?: number; endpoints?: Endpoint[] } = {}) {
+function mount(opts: { me?: Me; rows?: Command[]; open?: number; endpoints?: Endpoint[]; drivers?: Driver[]; productDriver?: string; onAddEndpoint?: () => void } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], opts.me ?? operator);
   if (opts.rows !== undefined || !("rows" in opts)) qc.setQueryData([...componentCommandsKey(comp)], opts.rows ?? rows);
   qc.setQueryData([...ENDPOINTS_KEY], opts.endpoints ?? endpoints);
-  qc.setQueryData([...DRIVERS_KEY], drivers);
+  qc.setQueryData([...DRIVERS_KEY], opts.drivers ?? drivers);
   qc.setQueryData([...COMMAND_TYPES_KEY], catalog);
+  qc.setQueryData([...PROPERTIES_KEY], propertyTypes);
+  qc.setQueryData([...METRICS_KEY], metricTypes);
   window.history.pushState({}, "", `/web/components/${comp}?tab=activity`);
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web" root={(p) => <>{p.children}<Where /><Toaster /></>}>
-        <Route path="/components/:id" component={() => <CommandsPanel component={comp} name="videobar-1" componentId={comp} open={opts.open} />} />
+        <Route path="/components/:id" component={() => <CommandsPanel component={comp} name="videobar-1" componentId={comp} open={opts.open} productDriver={opts.productDriver} onAddEndpoint={opts.onAddEndpoint} />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -165,7 +175,7 @@ describe("CommandsPanel", () => {
     expect(detail.textContent).toContain("dev");
   });
 
-  it("tells a redelivered command's first delivery and how many times an outpost took it", () => {
+  it("tells a redelivered command's last delivery and how many times an outpost took it", () => {
     const issued = Date.now() - 70_000;
     const iso = (ms: number) => new Date(issued + ms).toISOString();
     mount({
@@ -174,8 +184,8 @@ describe("CommandsPanel", () => {
     fireEvent.click(within(screen.getByTestId("command-5")).getByRole("button", { name: /Details of set-volume command 5/ }));
     const detail = within(screen.getByTestId("command-5")).getByTestId("command-detail");
     const delivered = within(detail).getAllByRole("listitem").find((li) => li.dataset.step === "delivered")!;
-    expect(delivered.textContent).toContain("+1m 2s");
-    expect(within(delivered).getByTestId("command-delivery-note").textContent).toBe("delivered 3 times, first +2.0s");
+    expect(delivered.textContent).toContain("+2.0s");
+    expect(within(delivered).getByTestId("command-delivery-note").textContent).toBe("delivered 3 times, last +1m 2s");
   });
 
   it("shows an observation-settled command's sample, with no wire it never rode", () => {
@@ -198,8 +208,44 @@ describe("CommandsPanel", () => {
     expect(screen.getByTestId("commands-empty").textContent).toBe("No commands issued to this component yet.");
     cleanup();
     mount({ rows: [], endpoints: [] });
-    expect(screen.getByTestId("commands-empty").textContent).toMatch(/none can reach it: no driver attached to its endpoints binds a command/);
+    expect(screen.getByTestId("commands-empty").textContent).toMatch(/none can reach it: no driver is attached to its endpoints/);
     expect(screen.queryByRole("button", { name: "Issue a command" })).toBeNull();
+  });
+
+  it("names the driver that binds nothing, the drivers that would, and offers the endpoint to add", () => {
+    const added = vi.fn();
+    const snmp = { id: uuidFor("snmp"), name: "snmp-v2c", label: "SNMP", official: true, spec: { version: 1, transport: "udp" } } as Driver;
+    const lumen = { id: uuidFor("lumen"), name: "lumen-http", label: "Lumen", official: true, spec: { version: 1, transport: "https", commands: [{ command_type: "set-power", request: {} }] } } as Driver;
+    mount({
+      rows: [],
+      endpoints: [{ id: uuidFor("e2"), name: "snmp", component_id: comp, driver: "snmp-v2c" } as Endpoint],
+      drivers: [snmp, lumen, ...drivers],
+      productDriver: "lumen-http",
+      onAddEndpoint: added,
+    });
+    const empty = screen.getByTestId("commands-empty");
+    expect(empty.textContent).toContain("its only driver (snmp-v2c) binds no command");
+    expect(empty.textContent).toContain("Its product names lumen-http, which offers set-power");
+    expect(empty.textContent).toContain("kestrel-ws (set-volume)");
+    fireEvent.click(within(empty).getByRole("button", { name: "Add an endpoint" }));
+    expect(added).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers set-power's values as a select and an outlet as a ranged number", async () => {
+    mount({ drivers: [{ ...drivers[0], spec: { version: 1, transport: "wss", commands: [{ command_type: "set-power", request: {} }, { command_type: "outlet-off", request: {} }] } } as Driver] });
+    fireEvent.click(screen.getByRole("button", { name: "Issue a command" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Command"), { target: { value: "set-power" } });
+    const value = (await within(dialog).findByLabelText("Value")) as HTMLSelectElement;
+    expect(value.tagName).toBe("SELECT");
+    expect([...value.options].map((o) => o.value).filter(Boolean)).toEqual(["on", "off", "standby"]);
+    fireEvent.change(within(dialog).getByLabelText("Command"), { target: { value: "outlet-off" } });
+    const outlet = await within(dialog).findByLabelText("Outlet");
+    fireEvent.input(outlet, { target: { value: "9" } });
+    expect(dialog.textContent).toContain("outside 1 to 4");
+    expect((within(dialog).getByRole("button", { name: "Issue" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.input(outlet, { target: { value: "3" } });
+    expect((within(dialog).getByRole("button", { name: "Issue" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("alerts a failed read and retries it", async () => {
@@ -242,10 +288,13 @@ describe("CommandsPanel", () => {
     expect((submit as HTMLButtonElement).disabled).toBe(true);
     fireEvent.input(within(dialog).getByLabelText("Value"), { target: { value: "loud" } });
     expect((submit as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.input(within(dialog).getByLabelText("Value"), { target: { value: "42" } });
+    fireEvent.input(within(dialog).getByLabelText("Value"), { target: { value: "1.5" } });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    expect(dialog.textContent).toContain("outside 0 to 1 ratio");
+    fireEvent.input(within(dialog).getByLabelText("Value"), { target: { value: "0.42" } });
     expect((submit as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(submit);
-    await waitFor(() => expect(posted).toEqual([{ command_type: "set-volume", value: 42 }]));
+    await waitFor(() => expect(posted).toEqual([{ command_type: "set-volume", value: 0.42 }]));
     const toast = await screen.findByTestId("toast");
     expect(toast.textContent).toContain("set-volume issued to videobar-1");
     await waitFor(() => expect(within(toast).getByTestId("command-toast").textContent).toContain("settled"));

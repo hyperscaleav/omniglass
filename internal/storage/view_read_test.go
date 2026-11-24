@@ -583,7 +583,7 @@ func TestInsertEventsPairsEachTailRowWithItsOwnID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read tail: %v", err)
 	}
-	stored, err := gw.ListComponentEvents(ctx, "view-a", 0, 100)
+	stored, err := gw.ListComponentEvents(ctx, "view-a", 0, 100, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}

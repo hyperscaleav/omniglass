@@ -10,6 +10,8 @@ import { uuidFor } from "../lib/testids";
 import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { PRODUCTS_KEY } from "../lib/products";
+import { answerConfirms } from "../lib/confirm.testkit";
+import { tipOf } from "../test-tip";
 
 // The panel resolves a system's slots: what its standard declares plus what the
 // system declares of its own, each with the typed-slot guard (#626) it enforces
@@ -82,7 +84,8 @@ const health: FleetHealth = {
   owner_kind: "system",
   owner: "boardroom",
   health: "degraded",
-  transitions: [],
+  members: [],
+      transitions: [],
   systems: [],
   slots: [
     {
@@ -161,7 +164,7 @@ describe("SlotsPanel", () => {
     expect(within(staffed).getByText("1 wanted, 1 assigned")).toBeTruthy();
   });
 
-  it("reads short from health, not assignment count: a down occupant still counts as assigned", () => {
+  it("reads short from health, not assignment count: a down occupant still counts as assigned", async () => {
     // main-display's sole assignee carries a high alarm: the slots read
     // would still call it fully staffed (understaffed 0), but health's
     // satisfying/short is occupancy-aware and must win on screen.
@@ -178,7 +181,8 @@ describe("SlotsPanel", () => {
     expect(within(row).getByText("short 1")).toBeTruthy();
     expect(within(row).getByText("0 of 1 satisfying")).toBeTruthy();
     // The occupant is marked down, not silently dropped from "filled by".
-    const downBadge = within(row).getByTitle("An active alarm has taken this component down");
+    const downBadge = within(row).getByText(/disp-1/, { selector: "[tabindex]" });
+    expect(await tipOf(downBadge)).toBe("An active alarm has taken this component down");
     expect(downBadge.textContent).toContain("disp-1");
     expect(downBadge.textContent).toContain("down");
   });
@@ -214,7 +218,7 @@ describe("SlotsPanel", () => {
   // suppress the down marker on its occupant chips, or the operator loses
   // the one signal that would tell them the unbuilt alternate has a real
   // fault, not just an unstaffed slot (task 9 re-review, over-correction of C5).
-  it("still marks a down occupant on a slot whose alternate lost its choice", () => {
+  it("still marks a down occupant on a slot whose alternate lost its choice", async () => {
     const inactiveWithDownOccupant: FleetHealth = {
       ...health,
       slots: health.slots!.map((r) =>
@@ -229,7 +233,8 @@ describe("SlotsPanel", () => {
     expect(within(row).queryByText("short 1")).toBeNull();
     expect(within(row).getByText("not counted")).toBeTruthy();
     // But the occupant is still marked down.
-    const downBadge = within(row).getByTitle("An active alarm has taken this component down");
+    const downBadge = within(row).getByText(/mic-1/, { selector: "[tabindex]" });
+    expect(await tipOf(downBadge)).toBe("An active alarm has taken this component down");
     expect(downBadge.textContent).toContain("mic-1");
     expect(downBadge.textContent).toContain("down");
   });
@@ -300,7 +305,7 @@ describe("SlotsPanel", () => {
     });
 
     it("withdraws an ad hoc slot after confirmation with a DELETE", async () => {
-      vi.spyOn(window, "confirm").mockReturnValue(true);
+      answerConfirms(true);
       let del: Request | undefined;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
         const req = input as Request;

@@ -5,6 +5,7 @@ import ReachabilityPanel from "./ReachabilityPanel";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { ME_KEY, type Me } from "../lib/auth";
 import * as secrets from "../lib/secrets";
+import { tipOf } from "../test-tip";
 
 // A webhook endpoint (#1024) is a push endpoint: nothing is dialed, so its row
 // carries no ladder and no health. It reads last heard, its scheme (or
@@ -43,12 +44,12 @@ describe("a webhook endpoint's row", () => {
     for (const word of ["responding", "down", "stale", "unknown"]) expect(queryByText(word)).toBeNull();
   });
 
-  it("marks an unsigned endpoint and counts its refusals", () => {
+  it("marks an unsigned endpoint and counts its refusals", async () => {
     const { getByText } = mount(hook({ scheme: "none", signed: false, refused: { count: 3, at: ago(5_000), reason: "signature mismatch", source: "203.0.113.9" } }), []);
     expect(getByText("unsigned")).toBeTruthy();
     const refused = getByText("3 refused");
-    expect(refused.getAttribute("title")).toContain("signature mismatch");
-    expect(refused.getAttribute("title")).toContain("203.0.113.9");
+    expect(await tipOf(refused)).toContain("signature mismatch");
+    expect(await tipOf(refused)).toContain("203.0.113.9");
   });
 
   it("never heard reads so, not down", () => {

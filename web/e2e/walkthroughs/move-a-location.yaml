@@ -25,7 +25,7 @@ steps:
     hold: 1500
   - click: { role: option, name: Annex }
     caption: Choose the Annex building at the airport office.
-  - click: '[data-testid="configure-face-location"] >> role=button[name="Save changes"]'
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Save"s]'
     caption: Save. The move re-scopes who can see the room and what it holds.
   - wait: { selector: '[data-testid="breadcrumb"]:has-text("Annex")' }
     caption: Saved. The room's parent now reads Annex, and its breadcrumb moved with it.

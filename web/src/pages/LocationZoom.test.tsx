@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/te
 import { A, Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { locationHealthKey, systemHealthKey, type FleetHealth } from "../lib/health";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
@@ -16,6 +17,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeChoices, treeOptions, treeValue } from "../components/TreeSelect.testkit";
+import { pageHeader } from "../lib/handover";
 
 // A location's detail view (#872): systems are the unit, locations are folders. A
 // location holding one system lands on that system; a folder (no system, or a
@@ -156,7 +158,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/locations/:id" component={Locations} />
+        <Route path="/locations/:id" component={withTopBar(Locations)} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route path="/start" component={() => <A data-testid="configure-link" href={`/locations/${uuidFor("lz-room")}?tab=configure`}>Configure location</A>} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
@@ -206,11 +208,12 @@ describe("where a location lands (#872)", () => {
 describe("a folder location (#872)", () => {
   it("is titled by the location, names its type in the catalog's words, and ends the path at its parent", () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("West Building");
+    expect(pageHeader()?.title).toBe("West Building");
     expect(within(screen.getByTestId("location-header")).getByTestId("location-type").textContent).toBe("Building");
     const crumbs = within(screen.getByTestId("breadcrumb"));
     expect(crumbs.getByText("Headquarters")).toBeTruthy();
     expect(crumbs.queryByText("West Building")).toBeNull();
+    expect(within(screen.getByTestId("header-line-1")).getByRole("link", { name: "Locations" })).toBeTruthy();
   });
 
   it("links Explore back to this location's row in the outline", async () => {
@@ -346,7 +349,7 @@ describe("the configure mover keeps the classic contract (#800)", () => {
       mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
       const face = await screen.findByTestId("configure-face");
       await pickTree(await within(face).findByLabelText("Parent"), "Lab");
-      fireEvent.click(within(face).getByRole("button", { name: /save/i }));
+      fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i }));
       await waitFor(() => {
         const move = calls.find((c) => c.method === "POST" && c.url.includes(":move"));
         expect(move, "the :move custom method").toBeTruthy();
@@ -369,7 +372,7 @@ describe("moving to another location while editing (#854)", () => {
     const face = await screen.findByTestId("configure-face");
     const name = (await within(face).findByDisplayValue("hq")) as HTMLInputElement;
     fireEvent.input(name, { target: { value: "hq-renamed" } });
-    expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i })).toBeTruthy();
 
     window.history.pushState({}, "", `/web/locations/${uuidFor("lz-b1")}?tab=configure`);
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -377,10 +380,10 @@ describe("moving to another location while editing (#854)", () => {
     await waitFor(() => expect(screen.getByTestId("configure-face")).toBeTruthy());
     const next = screen.getByTestId("configure-face");
     await within(next).findByText("west");
-    expect(within(next).queryByRole("button", { name: /save/i })).toBeNull();
-    expect(within(next).getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(within(screen.getByTestId("tab-rail")).queryByRole("button", { name: /save/i })).toBeNull();
+    expect(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" })).toBeTruthy();
 
-    fireEvent.click(within(next).getByRole("button", { name: "Edit" }));
+    fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" }));
     const field = (await within(next).findByDisplayValue("west")) as HTMLInputElement;
     expect(field.value).toBe("west");
     expect(within(next).queryByDisplayValue("hq-renamed")).toBeNull();
@@ -446,7 +449,7 @@ describe("ambiguous name addresses (#853)", () => {
     render(() => (
       <QueryClientProvider client={qc}>
         <Router base="/web">
-          <Route path="/locations/:id" component={Locations} />
+          <Route path="/locations/:id" component={withTopBar(Locations)} />
           <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         </Router>
       </QueryClientProvider>

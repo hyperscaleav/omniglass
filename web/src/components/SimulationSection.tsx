@@ -7,8 +7,8 @@ import SimComponentDrawer from "./SimComponentDrawer";
 import SimStatusBadge from "./SimStatusBadge";
 import { FlaskConical } from "./icons";
 import { can, useMe } from "../lib/auth";
-import { rel } from "../lib/format";
-import { componentSimKey, getComponentSim } from "../lib/simulation";
+import { fmtCount, rel } from "../lib/format";
+import { componentSimKey, getComponentSim, componentSimPollMs } from "../lib/simulation";
 
 // SimulationSection: a component's own page says when the component is a
 // simulated component (#890), with where it is served, what has reached it and
@@ -21,7 +21,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
     queryKey: componentSimKey(props.componentId),
     queryFn: () => getComponentSim(props.componentId),
     enabled: can(me.data, "simulation", "read"),
-    refetchInterval: 5_000,
+    refetchInterval: (q) => componentSimPollMs(q.state.data),
     retry: false,
   }));
   const [open, setOpen] = createSignal(false);
@@ -40,6 +40,10 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
           <dl class="mt-2 grid grid-cols-[6rem_1fr] items-baseline gap-x-3 gap-y-1">
             <dt class="text-base-content/50">Outpost</dt>
             <dd class="font-data text-xs">{s().outpost}</dd>
+            <Show when={s().served_by}>
+              <dt class="text-base-content/50">Served by</dt>
+              <dd class="text-xs">The simulated component <span class="font-data">{s().served_by}</span> answers at this address; this component is not a simulation of its own.</dd>
+            </Show>
             <dt class="text-base-content/50">Address</dt>
             <dd class="font-data text-xs">{s().address}</dd>
             <dt class="text-base-content/50">Status</dt>
@@ -50,13 +54,13 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
             </dd>
             <dt class="text-base-content/50">Hits</dt>
             <dd class="font-data text-xs tnum">
-              {(s().activity?.hits ?? 0).toLocaleString()}
+              {fmtCount(s().activity?.hits ?? 0)}
               <Show when={s().activity?.last_hit_at}>
                 <span class="ml-2 text-base-content/50">last {rel(s().activity!.last_hit_at!)}{s().activity?.last_protocol ? ` via ${s().activity!.last_protocol}` : ""}</span>
               </Show>
             </dd>
           </dl>
-          <SimComponentDrawer id={open() ? props.componentId : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
+          <SimComponentDrawer id={open() ? (s().served_by_id ?? props.componentId) : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
         </section>
       )}
     </Show>

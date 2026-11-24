@@ -1,13 +1,12 @@
-import { For, Show, createMemo, createUniqueId, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
 import ConfigureFace from "./ConfigureFace";
-import EventsPanel from "./EventsPanel";
-import LogsPanel from "./LogsPanel";
+import OccurrenceList from "./OccurrenceList";
 import CommandsPanel from "./CommandsPanel";
-import IdentitiesPanel from "./IdentitiesPanel";
 import DependenciesPanel from "./DependenciesPanel";
+import IdentitiesPanel from "./IdentitiesPanel";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
@@ -17,6 +16,7 @@ import { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
 import SimulationSection from "./SimulationSection";
+import { SimFaultChipFor } from "./SimFaultChip";
 import ReachLadder from "./ReachLadder";
 import SessionPill from "./SessionPill";
 import SessionNotice from "./SessionNotice";
@@ -24,6 +24,7 @@ import PollTest from "./PollTest";
 import InfoTip from "./InfoTip";
 import { ChevronRight } from "./icons";
 import { CalcRuleLink } from "./RuleLink";
+import AlarmOnThis from "./AlarmOnThis";
 import { useBlades } from "../lib/blades";
 import { createLeaveGuard } from "../lib/leave_guard";
 import { createTabState, type DetailHost } from "../lib/tabstate";
@@ -39,6 +40,11 @@ import { lifecycleRows } from "../lib/lifecycle";
 import { effectiveProperties, effectivePropertiesKey } from "../lib/component_properties";
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { durationText } from "../lib/timeline";
+import MetricsGrid from "./MetricsGrid";
+import TimelineOverlay from "./TimelineOverlay";
+import TimeRangePicker from "./TimeRangePicker";
+import { CursorProvider } from "../lib/cursor";
+import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import { getOutpost, outpostKey } from "../lib/outposts";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotHealth, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
@@ -50,6 +56,7 @@ import { SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
 import { isRoomOf, slotsOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 // ComponentDetail (#637, reoriented in #872, one body for both hosts since
 // #2423): a component's whole detail body, rendered by its page
@@ -94,6 +101,8 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   // nested open stacks on whichever host it is in.
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // The tab rail's right end, where Configure draws its actions (#2439).
+  const [railEnd, setRailEnd] = createSignal<HTMLElement>();
   // In a blade, closing or popping it asks the same guard a tab switch does.
   if (props.host === "blade") onCleanup(blades.guard({ kind: "component", id: props.id }, leave));
   // Three tabs (#826): Overview, Activity, Configure. A legacy ?tab=events
@@ -101,10 +110,20 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
-    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+    { key: "timeline", label: "Timeline" },
+    ...(can(me.data, "component", "update") || can(me.data, "component", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, leafTabs, { legacy: { events: "activity" } });
   const leafTab = tabState.active;
+  // The time range (#2304): the metrics grid and the timeline read over it. A
+  // blade opens on its page's range and keeps its own.
+  const { range: asked, setRange } = useHostTimeRange(props.host);
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads the default instead, and
+  // the host says why rather than drawing empty charts (#2304).
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
+  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
   // A command asked for by address (an issue's toast opens its row): a page's
   // fact; a blade has no address of its own.
   const openCommand = props.host === "page" ? useCommandParam() : () => undefined;
@@ -152,8 +171,10 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const snoozeSurface = createUniqueId();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
-  // catalog's flag, #917), amber when they only degrade.
+  // level's declared health effect, #2558), amber when they only degrade, and
+  // neutral when every one declares no effect.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
+  const affectsHealth = createMemo(() => activeAlarms().some((a) => scale().effect(a.severity) !== "none"));
   const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
   // The component's own health rides on its alarms read, polled; the fleet
   // view's dot (read once, for the location and the path) stands in until then.
@@ -259,39 +280,70 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             {/* State, age, identity: the header every detail view opens with.
                 A component has no transitions read, so since-when is what
                 took it down: the worst active alarm's age (#786). */}
-            <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
+            <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-2 text-sm">
               <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the slots it fills." />
               <HealthBadge health={componentHealth() ?? undefined} size="sm" />
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
+              <SimFaultChipFor componentId={component()?.id ?? id()} name={component()?.name} />
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>
             </div>
-            <TabRail tabs={leafTabs()} state={tabState} guard={leave} />
+            <TabRail
+              tabs={leafTabs()}
+              endRef={setRailEnd}
+              state={tabState}
+              guard={leave}
+              // The range governs Overview's metrics grid (#2424) and the Timeline.
+              end={leafTab() === "overview" || leafTab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
+            />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <Show when={leafTab() === "configure"}>
               {/* The host keys the body on the id, so another component is
                   another face, never this one's drafts (#854). */}
-              <ConfigureFace kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
+              <ConfigureFace mount={railEnd} kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
+            </Show>
+            {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
+            <Show when={leafTab() === "timeline"}>
+              <CursorProvider>
+                <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
+                  {/* Keyed on the id: another component is another timeline, its picks and its open detail left behind. */}
+                  <Show when={id()} keyed>{(oid) => <TimelineOverlay kind="components" id={oid} range={range()} />}</Show>
+                  <MetricsGrid kind="components" id={id()} range={range()} />
+                </div>
+              </CursorProvider>
             </Show>
             <Show when={leafTab() === "activity"}>
               <div data-testid="activity-tab" class="flex flex-col gap-5 p-4">
                 {/* What it was told and where each command stands (#1155),
                     above what it has been saying. */}
                 <Show when={can(me.data, "command", "read")}>
-                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} />
+                  <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} productDriver={product()?.driver} onAddEndpoint={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id: component()?.id ?? id() }) : undefined} />
                 </Show>
-                <EventsPanel name={id()} />
+                <OccurrenceList
+                  kind="events"
+                  scope={{ type: "component", name: id() }}
+                  hint="Discrete occurrences a component published natively (its driver maps them to their event types) or a rule derived, as opposed to the sampled metric and state values above. Newest first, last 24 hours."
+                />
                 {/* The component's own words beside its occurrences (#1145):
                     the log lines its driver read and its listeners left
                     unclaimed. */}
-                <LogsPanel name={id()} />
+                <OccurrenceList
+                  kind="logs"
+                  scope={{ type: "component", name: id() }}
+                  hint="Raw log lines the component emitted, the ingest lane, untyped, that a rule may later derive events from: what its driver read as a log line, and anything its listeners did not claim. Newest first, last 24 hours."
+                />
               </div>
             </Show>
             <Show when={leafTab() === "overview"}>
               <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
                 <Show when={activeAlarms().length > 0}>
-                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() && affectsHealth(), "border-base-300": !affectsHealth() }}>
                     <h2 class="eyebrow">Why</h2>
                     <For each={activeAlarms()}>
                       {(a) => (
@@ -301,6 +353,9 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                               line up whatever its message's width. */}
                           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                             <SeverityBadge name={a.severity} />
+                            <Show when={scale().effect(a.severity) === "none"}>
+                              <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
+                            </Show>
                             <span class="min-w-0 flex-1">{a.message}</span>
                             <Show when={a.raised_by_rule}>
                               {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
@@ -310,7 +365,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                             </span>
                             <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
                               <SnoozedBadge alarm={a} />
-                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines }} />
+                              <AlarmActions componentId={component()?.id ?? id()} alarm={a} surface={snoozeSurface} show={{ ack: true, snooze: true, troubleshoot: true, command: true, timeline: timelines }} />
                             </span>
                           </div>
                           <Show when={timelines.isOpen(a.id)}>
@@ -416,21 +471,22 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                           <>
                             <dt class="text-base-content/50">{row().label}</dt>
                             <dd data-testid={`vital-${key}`} class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-xs">
-                              <span title={vitalValueText(row().value) !== String(row().value) ? String(row().value) : undefined}>
+                              <Tooltip as="span" tabIndex={0} content={vitalValueText(row().value) !== String(row().value) ? String(row().value) : undefined}>
                                 {vitalValueText(row().value)}
                                 <Show when={row().unit}>
                                   {" "}
                                   <span data-testid="vital-unit" class="text-base-content/50">{row().unit}</span>
                                 </Show>
-                              </span>
+                              </Tooltip>
                               <Show when={row().sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
                                 {/* Centered on the value's digits, not on its line box,
                                     which rests the dot on the baseline (#1379). */}
-                                <span class="h-1.5 w-1.5 flex-none -translate-y-px self-center rounded-full bg-success" title="live series" />
+                                <Tooltip as="span" tabIndex={0} class="h-1.5 w-1.5 flex-none -translate-y-px self-center rounded-full bg-success" content="live series" />
                               </Show>
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
                               </Show>
+                              <AlarmOnThis reads={key} componentId={component()?.id ?? id()} label={row().label} />
                             </dd>
                             {/* Several endpoints collect it (#1020): the row
                                 shows the newest, says which and of how many,
@@ -466,10 +522,10 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                                       {(it) => (
                                         <li class="flex items-baseline gap-2">
                                           <span class="min-w-14 text-base-content/60" classList={{ "font-medium text-base-content/85": it.instance === sp().shown }}>{instanceName(it.instance)}</span>
-                                          <span class="font-data" title={vitalValueText(it.value) !== String(it.value) ? String(it.value) : undefined}>
+                                          <Tooltip as="span" tabIndex={0} class="font-data" content={vitalValueText(it.value) !== String(it.value) ? String(it.value) : undefined}>
                                             {vitalValueText(it.value)}
                                             <Show when={row().unit}>{" "}<span class="text-base-content/50">{row().unit}</span></Show>
-                                          </span>
+                                          </Tooltip>
                                           <span class="text-[11px] text-base-content/45">{ageWords(it.ts, pageNow())}</span>
                                         </li>
                                       )}
@@ -488,6 +544,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             </Show>
             {/* Seam: each endpoint row below is what #2436's shared
                 endpoint body takes over. */}
+            <MetricsGrid kind="components" id={id()} range={range()} />
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
               <Eyebrow label="Collection" hint="How this component is read: each endpoint, the outpost collecting it, and the ladder it climbs bottom up (a ping, informational only; the transport answering, the gate; then the login). A held session's state sits beside it. A stale sample under a healthy outpost points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
@@ -536,6 +593,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                                       "outpost-offline": "outpost offline",
                                       "no-outpost": "no outpost collecting it",
                                       down: "component reports down",
+                                      "no-answer": "no answer (silence over a datagram transport: host off, agent stopped, wrong v2c community, or filtered)",
                                       rejected: "polls stopped",
                                       "session-down": "polls failing",
                                       unknown: "no sample yet",

@@ -12,18 +12,19 @@ import (
 )
 
 type severityLevelBody struct {
-	ID       string `json:"id" doc:"The level's uuid, the stable form of name"`
-	Name     string `json:"name" doc:"The level's name; alarms and rules name it"`
-	Label    string `json:"label,omitempty"`
-	Color    string `json:"color" enum:"gray,blue,green,yellow,orange,red,darkred" doc:"The hue the console renders the level in"`
-	Rank     int    `json:"rank" doc:"Compares levels: higher is more severe"`
-	Official bool   `json:"official" doc:"Shipped with the platform and read-only"`
-	Outage   bool   `json:"outage" doc:"Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades"`
+	ID           string `json:"id" doc:"The level's uuid, the stable form of name"`
+	Name         string `json:"name" doc:"The level's name; alarms and rules name it"`
+	Label        string `json:"label,omitempty"`
+	Color        string `json:"color" enum:"gray,blue,green,yellow,orange,red,darkred" doc:"The hue the console renders the level in"`
+	Rank         int    `json:"rank" doc:"Compares levels: higher is more severe"`
+	Official     bool   `json:"official" doc:"Shipped with the platform and read-only"`
+	HealthEffect string `json:"health_effect" enum:"none,degraded,outage" doc:"What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank"`
+	Outage       bool   `json:"outage" deprecated:"true" doc:"Deprecated alias of health_effect == outage, kept so released clients do not break; read health_effect"`
 }
 
 func toSeverityLevelBody(l *storage.SeverityLevel) severityLevelBody {
 	return severityLevelBody{ID: l.ID, Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank,
-		Official: l.Official, Outage: l.Rank >= health.OutageRank}
+		Official: l.Official, HealthEffect: l.HealthEffect, Outage: l.HealthEffect == health.EffectOutage}
 }
 
 type listSeverityLevelsOutput struct {
@@ -40,20 +41,22 @@ type severityLevelNameInput struct {
 
 type createSeverityLevelInput struct {
 	Body struct {
-		Name  string `json:"name" minLength:"1" doc:"The level's name (lowercase kebab)"`
-		Label string `json:"label,omitempty" required:"false" doc:"A human label"`
-		Color string `json:"color" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
-		Rank  int    `json:"rank" doc:"Its position among the levels: higher is more severe; unique"`
+		Name         string `json:"name" minLength:"1" doc:"The level's name (lowercase kebab)"`
+		Label        string `json:"label,omitempty" required:"false" doc:"A human label"`
+		Color        string `json:"color" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
+		Rank         int    `json:"rank" doc:"Its position among the levels: higher is more severe; unique"`
+		HealthEffect string `json:"health_effect,omitempty" required:"false" enum:"none,degraded,outage" doc:"What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)"`
 	}
 }
 
 type updateSeverityLevelInput struct {
 	Name string `path:"name" doc:"The level's name"`
 	Body struct {
-		Name  *string `json:"name,omitempty" required:"false" doc:"A new name; every alarm at this level follows"`
-		Label *string `json:"label,omitempty" required:"false" doc:"A human label"`
-		Color *string `json:"color,omitempty" required:"false" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
-		Rank  *int    `json:"rank,omitempty" required:"false" doc:"Its position among the levels; unique"`
+		Name         *string `json:"name,omitempty" required:"false" doc:"A new name; every alarm at this level follows"`
+		Label        *string `json:"label,omitempty" required:"false" doc:"A human label"`
+		Color        *string `json:"color,omitempty" required:"false" doc:"One of gray, blue, green, yellow, orange, red, darkred"`
+		Rank         *int    `json:"rank,omitempty" required:"false" doc:"Its position among the levels; unique"`
+		HealthEffect *string `json:"health_effect,omitempty" required:"false" enum:"none,degraded,outage" doc:"What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level"`
 	}
 }
 
@@ -68,7 +71,7 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/severity-levels",
 		Summary:     "List severity levels",
-		Description: "Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.",
+		Description: "Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.",
 	}, "severity_level", "read"), func(ctx context.Context, _ *struct{}) (*listSeverityLevelsOutput, error) {
 		levels, err := gw.ListSeverityLevels(ctx)
 		if err != nil {
@@ -105,7 +108,7 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Description:   "Adds an operator severity level at a rank of its own, between two others without renumbering. A name or rank already taken is a 409; a color outside the palette is a 422. Audited. Gated by severity_level:create, with an all-scope grant: a level's rank moves health fleet-wide.",
 	}, "severity_level", "create"), func(ctx context.Context, in *createSeverityLevelInput) (*severityLevelOutput, error) {
 		l, err := gw.CreateSeverityLevel(ctx, actorID(ctx), storage.SeverityLevel{
-			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank}, a.scopeFor(ctx, "severity_level", "create"))
+			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank, HealthEffect: in.Body.HealthEffect}, a.scopeFor(ctx, "severity_level", "create"))
 		if err != nil {
 			return nil, mapSeverityLevelErr(err)
 		}
@@ -117,10 +120,10 @@ func registerSeverityLevelRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPatch,
 		Path:        "/severity-levels/{name}",
 		Summary:     "Update a severity level",
-		Description: "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
+		Description: "Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
 	}, "severity_level", "update"), func(ctx context.Context, in *updateSeverityLevelInput) (*severityLevelOutput, error) {
 		l, err := gw.UpdateSeverityLevel(ctx, actorID(ctx), in.Name, storage.SeverityLevelPatch{
-			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank}, a.scopeFor(ctx, "severity_level", "update"))
+			Name: in.Body.Name, Label: in.Body.Label, Color: in.Body.Color, Rank: in.Body.Rank, HealthEffect: in.Body.HealthEffect}, a.scopeFor(ctx, "severity_level", "update"))
 		if err != nil {
 			return nil, mapSeverityLevelErr(err)
 		}

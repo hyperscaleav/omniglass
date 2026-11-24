@@ -12,12 +12,13 @@ import Drawer from "./Drawer";
 import { hasLabel, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
-  ChevronDown, ChevronsDownUp, ChevronsUpDown, ListTree, Rows, Maximize, Plus, Pencil, Trash,
+  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
 import { useDrawerAddress } from "../lib/drawer_address";
 import { type BladeDef, BladesContext, createBladeController, useBladeEdit } from "../lib/blades";
+import Tooltip from "./ui/Tooltip";
 
 // TreeList: the one config-driven tree-list body (composing ListShell), which
 // Files is a config over. It owns the filter header (the faceted chip search),
@@ -101,6 +102,9 @@ export interface ListConfig<N extends ListNode> {
   loading?: Accessor<boolean>;
   error?: Accessor<unknown>;
   filterPlaceholder?: string;
+  // Draw the open chevron at the end of every row, as a flat list does (the row
+  // click opens the node). Opt-in so a page's rows change only when it asks.
+  rowChevron?: boolean;
   columns: Record<string, { label: string; width: number }>;
   columnKeys: string[];
   defaultCols: string[];
@@ -428,25 +432,17 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     const open = () => expanded().has(n.id);
     return (
       <tr
-        class="group cursor-pointer hover:bg-base-content/5 focus-visible:bg-base-content/5 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary"
-        role="button"
-        tabindex={0}
+        class="group cursor-pointer hover:bg-base-content/5 focus-within:bg-base-content/5"
         onClick={() => openNode(n)}
-        onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && e.currentTarget === e.target) {
-            e.preventDefault();
-            openNode(n);
-          }
-        }}
       >
         <td class="min-w-52">
           <span class="inline-flex w-full items-center gap-1.5" style={{ "padding-left": isTree() ? `${p.row.depth * 20}px` : "0" }}>
             <Show when={isTree()}>
               <span class="inline-flex w-4 flex-none justify-center text-base-content/40">
                 <Show when={canExpand()} fallback={<span class="font-data text-[11px]">{"·"}</span>}>
-                  <button
+                  <Tooltip
                     class="inline-flex"
-                    title={open() ? "Collapse" : "Expand"}
+                    content={open() ? "Collapse" : "Expand"}
                     style={{ transform: open() ? "none" : "rotate(-90deg)", transition: "transform .15s" }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -454,11 +450,22 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                     }}
                   >
                     <ChevronDown size={14} />
-                  </button>
+                  </Tooltip>
                 </Show>
               </span>
             </Show>
-            <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
+            {/* The row is not a button; the name cell is (axe nested-interactive:
+                a role="button" row cannot hold the expand and action controls).
+                Pointer users still click anywhere on the row (the tr onClick);
+                keyboard users tab to this one primary control, then the actions. */}
+            <button
+              type="button"
+              class="flex min-w-0 cursor-pointer flex-col items-start gap-0.5 py-0.5 text-left focus-visible:outline-2 focus-visible:outline-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                openNode(n);
+              }}
+            >
               {/* The list-mode ancestor sub-line. pathRender (the server's own
                   dotted-path dash render, #627 Task 15) wins when present: pathOf's
                   tree-local walk (p.row.path) cannot cross the component-tree-to-
@@ -510,20 +517,25 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
               <Show when={hasLabel(identityOf(n))}>
                 <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
               </Show>
-            </span>
+            </button>
           </span>
         </td>
         <For each={visible()}>
           {(k) => <td class="overflow-hidden text-ellipsis whitespace-nowrap text-sm">{cfg.cellFor(k, n, ctxFull)}</td>}
         </For>
         <td>
-          <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+          <div class="flex items-center justify-end gap-0.5">
+            <div class="flex gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
             <Button square size="xs" icon={Maximize} title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }} />
             <Show when={rowAllow(n, "update")}>
               <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }} />
             </Show>
             <Show when={rowAllow(n, "delete") && cfg.onDelete}>
               <Button square size="xs" intent="danger" icon={Trash} title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }} />
+            </Show>
+            </div>
+            <Show when={cfg.rowChevron}>
+              <span class="ml-1 text-base-content/30" data-testid="row-chevron"><ChevronRight size={15} /></span>
             </Show>
           </div>
         </td>

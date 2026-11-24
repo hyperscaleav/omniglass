@@ -164,6 +164,35 @@ describe("walkthrough setup", () => {
     expect(bad({ title: "T", steps: [{ wait: { text: "x" }, caption: "a" }], setup: { post: "/x" } })).toContain("setup must be a list");
   });
 
+  // A scene that needs a fault and its recovery (#2425: an alarm raised and
+  // cleared before the camera rolls) puts a device's state, waits until a
+  // read says the platform saw it, and pauses while time passes.
+  it("takes a put, an until and a pause beside the creates", () => {
+    const w = ok([{ wait: { text: "x" }, caption: "a" }], {
+      setup: [
+        { put: "/components/d/impairment", body: { unplugged: true } },
+        { until: { get: "/components/d/alarms", contains: "raised_at", timeout: 120000 } },
+        { pause: 60 },
+      ],
+    });
+    expect(w.setup).toEqual([
+      { method: "PUT", path: "/components/d/impairment", body: { unplugged: true } },
+      { method: "UNTIL", path: "/components/d/alarms", contains: "raised_at", timeout: 120000 },
+      { method: "PAUSE", seconds: 60 },
+    ]);
+  });
+  it("refuses an until without a read or a text, and a pause past five minutes", () => {
+    const m = bad({
+      title: "T",
+      steps: [{ wait: { text: "x" }, caption: "a" }],
+      setup: [{ until: { get: "x", contains: "" } }, { pause: 301 }, { put: "/x" }],
+    });
+    expect(m).toContain('setup 1 (until) needs get: an API path starting with "/"');
+    expect(m).toContain("setup 1 (until) needs contains: the text the read must hold");
+    expect(m).toContain("setup 2 (pause) must be 1 to 300 seconds");
+    expect(m).toContain("setup 3 (put) needs a body");
+  });
+
 });
 
 // What a walkthrough's lab runs beyond the dev fleet (#2362): a closed list,
@@ -241,6 +270,43 @@ describe("walkthrough setup requests", () => {
   it("fails naming the setup item, the request and the answer", async () => {
     const f = fake([422]);
     await expect(runSetup(setup, { base: "http://s", token: "t", fetch: f.fetch })).rejects.toThrow(/setup 1: POST \/components answered 422/);
+  });
+  it("puts a state, polls a read until it holds the text, and pauses, on an injected clock", async () => {
+    const calls: Call[] = [];
+    const answers = ["{}", '{"alarms":[]}', '{"alarms":[{"raised_at":"t"}]}'];
+    const fetch = async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(answers[calls.length - 1] ?? "{}", { status: 200 });
+    };
+    let clock = 0;
+    const slept: number[] = [];
+    const sleep = async (ms: number) => {
+      slept.push(ms);
+      clock += ms;
+    };
+    await runSetup(
+      [
+        { method: "PUT", path: "/components/d/impairment", body: { unplugged: true } },
+        { method: "UNTIL", path: "/components/d/alarms", contains: "raised_at", timeout: 60000 },
+        { method: "PAUSE", seconds: 30 },
+      ],
+      { base: "http://s", token: "t", fetch, sleep, now: () => clock },
+    );
+    expect(calls.map((c) => `${c.init.method} ${c.url}`)).toEqual(["PUT http://s/api/v1/components/d/impairment", "GET http://s/api/v1/components/d/alarms", "GET http://s/api/v1/components/d/alarms"]);
+    expect(slept).toEqual([2000, 30000]);
+  });
+  it("fails an until that never holds, naming it and how long it waited", async () => {
+    let clock = 0;
+    const fetch = async () => new Response("{}", { status: 200 });
+    await expect(
+      runSetup([{ method: "UNTIL", path: "/x", contains: "never", timeout: 10000 }], {
+        base: "http://s",
+        token: "t",
+        fetch,
+        sleep: async (ms: number) => void (clock += ms),
+        now: () => clock,
+      }),
+    ).rejects.toThrow(/setup 1: GET \/x never held "never" in 10s/);
   });
   it("needs a token only when there is something to set up", async () => {
     await expect(runSetup([], { base: "http://s", token: undefined, fetch: fake([]).fetch })).resolves.toBeUndefined();

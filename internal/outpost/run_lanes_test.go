@@ -52,7 +52,7 @@ func waitFor(t *testing.T, what string, within time.Duration, cond func() bool) 
 // eventsOf is the component's recent events of one type.
 func eventsOf(t *testing.T, gw *storage.PG, comp, key string) []storage.Event {
 	t.Helper()
-	evs, err := gw.ListComponentEvents(context.Background(), comp, time.Hour, 200)
+	evs, err := gw.ListComponentEvents(context.Background(), comp, time.Hour, 200, storage.EventFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}

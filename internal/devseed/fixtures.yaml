@@ -2081,21 +2081,102 @@ component_dependencies:
   - { component: panel-a, upstream: bar-a, kind: path }
   - { component: huddle-touch, upstream: huddle-bar, kind: host }
 
-alarms:
+# Calc rules (#2430): one operator rule, so the Calc rules page, a metric's "Written
+# by" and its drawer's "Read by" come up populated in a lab. It averages a
+# component's room-temperature into a metric of its own; the output metric is
+# created beside it because a calc rule may only write a key nothing collects.
+calc_rules:
+  - name: room-temperature-mean
+    label: Room temperature mean
+    description: The mean of a component's room-temperature readings.
+    owner_kind: component
+    inputs:
+      - { alias: t, key: room-temperature }
+    reduce: avg(t)
+    output: { name: room-temperature-mean, label: Room temperature mean, unit: degC }
+
+# What is really wrong in the fleet (#2434). The seed raises no alarm: it sets
+# up each fault's cause and lets a rule judge it, so every alarm the fleet
+# shows links to its rule, carries the event that raised it, agrees with the
+# component's own page, and clears when the cause lifts. Without one, every
+# shortfall in the seed is a commissioning gap and no surface ever renders a
+# failure. Beside the simulator (a lab) the cause is the impairment, set once
+# as the device is wired and shown on the Simulation page, where a presenter
+# lifts it and watches the alarm clear. With no simulator (the docs'
+# screenshots) nothing collects, so the cause is the reading an outpost would
+# have landed as the fault began, landed once.
+faults:
+  # An outage: the DSP in the middle of the auditorium's audio chain is dark
+  # on every protocol, so the official reachability-lost rule opens a High
+  # alarm after its sustain and the auditorium reads degraded.
   - component: aud-dsp
-    severity: high
+    why: the DSP lost its network link, so it answers on no protocol
+    impairment: { unplugged: true }
+    reading: { key: endpoint-reachable, instance: snmp, value: down, source: reachability }
+  # A warning that costs nothing structural: the display answers, slowly, so
+  # the fleet's response-slow rule opens a warning, the display reads degraded
+  # and keeps its slot, and the room above it stays healthy. Worth seeding
+  # because "this box is unhappy but the room is fine" is a state operators
+  # distrust until they have seen the platform draw it correctly. A lamp-hours
+  # story would read better, but no simulated display reports its lamp and
+  # the simulator cannot pin a value yet (#909); a slow link it can hold.
+  - component: bay-1-display
+    why: the display's link is congested, so every answer takes 400 ms
+    impairment: { latency_ms: 400 }
+    reading: { key: snmp-response-time, instance: snmp, value: 400.6, source: snmp }
+
+# The fleet's own event rules, an operator's rules beside the official ones:
+# what judges a fault no official rule reads. Seeded once by name, so an edit
+# made in the console stands.
+event_rules:
+  - name: response-slow
+    label: Response slow
+    description: A device took more than a quarter second to answer its SNMP agent's probe, held for 15 seconds.
+    sample_key: snmp-response-time
+    fire: 'value > 250'
+    fire_sustain: 15s
+    clear: 'value <= 100'
+    severity: warning
+    fire_event_type: rule-fired
+    clear_event_type: rule-cleared
+  # A display switched off (#2508's lifecycle: power one off from the
+  # Simulation page, the alarm raises, send set-power on from its Commands
+  # panel, the alarm clears). It reads the display's own power-state report:
+  # the Boreal Edge displays' driver reads it over SNMP, which keeps answering
+  # while the panel is off. Standby is a display's ordinary idle and pages no
+  # one. No display reads off on a fresh fleet, so it opens nothing until one
+  # is switched off. Displays only: a projector reports the same key, and its
+  # off is the lecture ending.
+  - name: display-powered-off
+    label: Display powered off
+    description: A display reports its power off, so its room shows nothing.
+    sample_key: power-state
+    component_types: [display]
+    fire: 'value == "off"'
+    severity: warning
+    fire_event_type: rule-fired
+    clear_event_type: rule-cleared
+
+# A lab's people subscribed to the fleet's alarms (personal action rules, the
+# Subscriptions page's rows), so a raised fault lights the bell and lands in
+# the inbox, and its clear follows it. Console inbox only: nothing leaves the
+# lab. Seeded with the simulated fleet only, and only for a person that
+# exists: dev is the lab's own owner.
+subscriptions:
+  - { user: dev, name: fleet-alarms, label: Fleet alarms, on: [raised, cleared], when: "true", channels: [inbox] }
+  - { user: operator, name: fleet-alarms, label: Fleet alarms, on: [raised, cleared], when: "true", channels: [inbox] }
+
+# The conditions the degraded scenarios hand-raise across the fleet (Degrade):
+# a scale fixture for the alarm queue, never raised on the example fleet.
+alarm_templates:
+  - severity: high
     message: No route to host on the control interface
     dedup_key: unreachable
-  # A warning that costs nothing structural: the component reads degraded and
-  # keeps its slot, so the room above it stays healthy. Worth seeding because
-  # "this box is unhappy but the room is fine" is a state operators distrust
-  # until they have seen the platform draw it correctly.
-  - component: bay-1-display
-    severity: warning
+  # Only a light-source device can raise this; the degraded scenario must not
+  # put it on a microphone.
+  - severity: warning
     message: Lamp hours approaching end of life
     dedup_key: lamp-hours
-    # Only a light-source device can raise this; the degraded scenario reuses
-    # the alarm as a template and must not put it on a microphone.
     applies_to: [projector, display]
 
 # A held session worth showing (#1059), wired only with the simulated fleet (so

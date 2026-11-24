@@ -83,6 +83,11 @@ type healthAlarmBody struct {
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
 	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name)"`
 	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
+	// The snooze, with the same names as the component alarm list (alarmBody),
+	// so a system page offers Snooze or Unsnooze beside the acknowledgement
+	// (#2448). Independent of acknowledged and cleared.
+	SnoozedUntil *time.Time `json:"snoozed_until,omitempty" doc:"Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"`
+	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)"`
 }
 
 type healthSlotBody struct {
@@ -118,9 +123,26 @@ type healthSlotBody struct {
 	Active    bool   `json:"active" doc:"True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health"`
 }
 
+// healthMemberBody is one member of a system on its health report (#2459): every
+// member, slotted or not, with its open alarms and whether it fills a slot, so
+// the console lists every alarm in the system without working out which members
+// a slot covers.
+type healthMemberBody struct {
+	Name        string            `json:"name"`
+	ID          string            `json:"id" doc:"The component's uuid"`
+	Health      string            `json:"health" doc:"The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it"`
+	OutsideSlot bool              `json:"outside_slot" doc:"True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459)"`
+	Slot        string            `json:"slot,omitempty" doc:"The name of the slot the member fills in this system (as slots[].name); absent when outside_slot"`
+	Alarms      []healthAlarmBody `json:"alarms" doc:"The member's open alarms, newest first"`
+}
+
 type healthSystemBody struct {
-	Name   string `json:"name"`
-	Health string `json:"health"`
+	ID       string `json:"id" doc:"The system's id"`
+	Name     string `json:"name" doc:"The system's short name; not unique across rooms, so address the system by path"`
+	Path     string `json:"path" doc:"The system's dotted address, unique: the handle GET /systems/{name} resolves"`
+	Label    string `json:"label" doc:"The system's display label"`
+	Location string `json:"location" doc:"The dotted path of the location the system is placed at; empty when unplaced"`
+	Health   string `json:"health"`
 }
 
 type healthTransitionBody struct {
@@ -133,7 +155,9 @@ type fleetHealthOutput struct {
 		OwnerKind       string                 `json:"owner_kind"`
 		Owner           string                 `json:"owner"`
 		Health          string                 `json:"health" doc:"healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
+		Reason          string                 `json:"reason,omitempty" doc:"A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location"`
 		Slots           []healthSlotBody       `json:"slots" doc:"The contributing slots; empty for a location"`
+		Members         []healthMemberBody     `json:"members" doc:"Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location"`
 		Systems         []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions     []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
 		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
@@ -152,9 +176,17 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	for i := range rep.Slots {
 		out.Body.Slots = append(out.Body.Slots, toHealthSlotBody(&rep.Slots[i]))
 	}
+	out.Body.Reason = rep.Reason
+	out.Body.Members = make([]healthMemberBody, 0, len(rep.Members))
+	for _, m := range rep.Members {
+		out.Body.Members = append(out.Body.Members, healthMemberBody{
+			Name: m.Name, ID: m.ID, Health: m.Health, OutsideSlot: m.OutsideSlot, Slot: m.Slot,
+			Alarms: toHealthAlarmBodies(m.Alarms),
+		})
+	}
 	out.Body.Systems = make([]healthSystemBody, 0, len(rep.Systems))
 	for _, s := range rep.Systems {
-		out.Body.Systems = append(out.Body.Systems, healthSystemBody{Name: s.Name, Health: s.Verdict})
+		out.Body.Systems = append(out.Body.Systems, healthSystemBody{ID: s.ID, Name: s.Name, Path: s.Path, Label: s.Label, Location: s.Location, Health: s.Verdict})
 	}
 	out.Body.Transitions = make([]healthTransitionBody, 0, len(rep.Transitions))
 	for _, t := range rep.Transitions {
@@ -175,14 +207,20 @@ func toHealthSlotBody(r *storage.HealthSlot) healthSlotBody {
 		Impaired:   r.Impaired,
 		AssignedTo: nonNil(r.AssignedTo),
 		Down:       nonNil(r.Down),
-		Alarms:     make([]healthAlarmBody, 0, len(r.Alarms)),
+		Alarms:     toHealthAlarmBodies(r.Alarms),
 		Choice:     r.Choice,
 		Alternate:  r.Alternate,
 		Active:     r.Active,
 	}
-	for i := range r.Alarms {
-		a := &r.Alarms[i]
-		body.Alarms = append(body.Alarms, healthAlarmBody{
+	return body
+}
+
+// toHealthAlarmBodies renders a health report's alarms, never nil.
+func toHealthAlarmBodies(alarms []storage.Alarm) []healthAlarmBody {
+	out := make([]healthAlarmBody, 0, len(alarms))
+	for i := range alarms {
+		a := &alarms[i]
+		out = append(out, healthAlarmBody{
 			ID:          a.ID,
 			Component:   a.ComponentName,
 			ComponentID: a.ComponentID,
@@ -193,9 +231,11 @@ func toHealthSlotBody(r *storage.HealthSlot) healthSlotBody {
 			AcknowledgedAt: a.AcknowledgedAt,
 			AcknowledgedBy: a.AcknowledgedBy,
 			Acknowledged:   a.Acknowledged(),
+			SnoozedUntil:   a.SnoozedUntil,
+			SnoozedBy:      a.SnoozedBy,
 		})
 	}
-	return body
+	return out
 }
 
 // nonNil keeps a nil slice out of the JSON, so a client never has to tell an
@@ -233,13 +273,13 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
-		Description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemHealthInput) (*fleetHealthOutput, error) {
 		rng, err := healthRange(in.Since, in.Until)
 		if err != nil {
 			return nil, err
 		}
-		rep, err := gw.SystemHealth(ctx, in.Name, rng, a.scopeFor(ctx, "system", "read"))
+		rep, err := gw.SystemHealth(ctx, in.Name, rng, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}

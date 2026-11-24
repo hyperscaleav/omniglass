@@ -4,11 +4,12 @@ import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import PlatformHealth from "./PlatformHealth";
-import { NOT_WIRED, PLATFORM_SIM_KEY, PLATFORM_VIEW_KEY, WARMING_UP, type PlatformServer, type PlatformSimOutpost, type PlatformSimulation, type PlatformView } from "../lib/platformhealth";
+import { PLATFORM_SIM_KEY, PLATFORM_VIEW_KEY, WARMING_UP, type PlatformServer, type PlatformSimOutpost, type PlatformSimulation, type PlatformView } from "../lib/platformhealth";
 import { SIMULATION_KEY, type SimFleet } from "../lib/simulation";
 import { OUTPOST_DOWN_AFTER_MS } from "../lib/outposts";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { tipOf } from "../test-tip";
 
 // The Platform health page (#1644): a header (the build running, its uptime,
 // the platform health linking to its system, a lab badge) over an outpost table
@@ -113,14 +114,20 @@ function emptySeries() {
 // The simulator fleet is seeded disconnected unless a test connects one, so
 // the simulation section's condition is the test's to set.
 const disconnected: SimFleet = { connected: false, outposts: [] };
-function mount(view: PlatformView | null, sim: { me?: Me; fleet?: SimFleet; body?: PlatformSimulation } = {}) {
+// Every section is open unless a test says which are: the sections fold to a
+// summary line by default (#2446) and the page holds what is open in ?open=.
+function openAll(view: PlatformView | null): string {
+  return ["pipeline", "outposts", "simulation", ...(view?.servers ?? []).map((s) => `server-${s.name}`)].join(",");
+}
+function mount(view: PlatformView | null, sim: { me?: Me; fleet?: SimFleet; body?: PlatformSimulation; open?: string } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: view ? { staleTime: Infinity, retry: false } : { staleTime: Infinity } } });
   if (view) qc.setQueryData([...PLATFORM_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], sim.me ?? viewer);
   qc.setQueryData([...SIMULATION_KEY], sim.fleet ?? disconnected);
   if (sim.body) qc.setQueryData([...PLATFORM_SIM_KEY], sim.body);
   // Under the console's own base, so an in-app link proves it routes there.
-  window.history.pushState({}, "", "/web/platform");
+  const open = sim.open ?? openAll(view);
+  window.history.pushState({}, "", open ? `/web/platform?open=${open}` : "/web/platform");
   const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
@@ -147,11 +154,11 @@ function refuse() {
 
 
 describe("PlatformHealth page", () => {
-  it("keeps a long version on one line inside its tile and carries the full text as a tooltip", () => {
+  it("keeps a long version on one line inside its tile and carries the full text as a tooltip", async () => {
     const long = "fbb3d54eb-dirty-20261117T233000Z";
     mount({ ...full, servers: [{ ...full.servers![0], version: long }] });
     const tile = screen.getByTestId("platform-version");
-    expect(tile).toHaveAttribute("title", long);
+    expect(await tipOf(tile)).toBe(long);
     for (const c of ["min-w-0", "overflow-hidden", "whitespace-nowrap", "text-ellipsis"]) expect(tile).toHaveClass(c);
   });
 
@@ -163,7 +170,9 @@ describe("PlatformHealth page", () => {
     const health = within(header).getByTestId("platform-health");
     expect(health.closest("a")).toHaveAttribute("href", `/web/systems/${uuidFor("platform")}`);
     expect(health).toHaveTextContent("degraded");
-    expect(screen.getByTestId("platform-lab")).toBeInTheDocument();
+    // The banner says "Lab instance"; the page does not say it a second time.
+    expect(screen.queryByTestId("platform-lab")).toBeNull();
+    expect(screen.queryByText("Lab instance")).toBeNull();
   });
 
   // The header teaches through a keyboard-reachable tooltip, not a title
@@ -175,7 +184,6 @@ describe("PlatformHealth page", () => {
     expect(within(table).getByText("Checkin")).toBeInTheDocument();
     expect(within(table).getByText("Commands")).toBeInTheDocument();
     const trigger = within(table).getByRole("button", { name: "Check-in Age" });
-    expect(trigger.closest("th")).not.toHaveAttribute("title");
     fireEvent.keyDown(document.body, { key: "Tab" });
     trigger.focus();
     expect(await screen.findByText("Seconds since the outpost last checked in.")).toBeInTheDocument();
@@ -261,13 +269,11 @@ describe("PlatformHealth page", () => {
     expect(screen.queryByTestId("platform-outposts")).toBeNull();
   });
 
-  it("gives each server its own panel set, the first one open, each panel the groups and ranked routes the view returns, in order", () => {
+  it("gives each server its own panel set, closed until opened, each panel the groups and ranked routes the view returns, in order", () => {
     emptySeries();
-    mount(twoServers());
+    mount(twoServers(), { open: "server-lab-server,server-lab-server-b" });
     const first = screen.getByTestId("server-panels-lab-server");
     const second = screen.getByTestId("server-panels-lab-server-b");
-    expect(first).toHaveAttribute("open");
-    expect(second).not.toHaveAttribute("open");
     for (const set of [first, second]) {
       const names = Array.from(set.querySelectorAll("[data-panel]")).map((el) => el.getAttribute("data-panel"));
       expect(names).toEqual(["requests", "ingest", "queues", "retention"]);
@@ -313,17 +319,15 @@ describe("PlatformHealth page", () => {
     expect(within(requests).queryByTestId("panel-row-bus-request-count")).toBeNull();
   });
 
-  it("marks each panel set's heading as a disclosure, its chevron turned while the set is open", () => {
+  it("marks each panel set's heading as a disclosure button, expanded only while the set is open", async () => {
     emptySeries();
-    mount(twoServers());
-    const first = screen.getByTestId("server-panels-lab-server") as HTMLDetailsElement;
-    const second = screen.getByTestId("server-panels-lab-server-b") as HTMLDetailsElement;
-    const marker = (set: HTMLElement) => set.querySelector(":scope > summary [data-disclosure]");
-    expect(marker(first)).toHaveClass("rotate-90");
-    expect(marker(second)).not.toHaveClass("rotate-90");
-    second.open = true;
-    fireEvent(second, new Event("toggle"));
-    expect(marker(second)).toHaveClass("rotate-90");
+    mount(twoServers(), { open: "server-lab-server" });
+    const trigger = (name: string) => within(screen.getByTestId(`server-panels-${name}`)).getByRole("button", { name: new RegExp(`^Server ${name}`) });
+    expect(trigger("lab-server")).toHaveAttribute("aria-expanded", "true");
+    expect(trigger("lab-server-b")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(trigger("lab-server-b"));
+    await waitFor(() => expect(trigger("lab-server-b")).toHaveAttribute("aria-expanded", "true"));
+    expect(decodeURIComponent(window.location.search)).toBe("?open=server-lab-server,server-lab-server-b");
   });
 
   it("renders a server with no samples yet as not reported on every panel, with no series read and no console error", () => {
@@ -359,7 +363,7 @@ describe("PlatformHealth page", () => {
 
   it("binds each open panel's sampled keys once, over the last hour, and streams every binding on one connection", async () => {
     const fetchSpy = emptySeries();
-    mount(twoServers());
+    mount(twoServers(), { open: "server-lab-server" });
     const requests = () => fetchSpy.mock.calls.map(([req]) => req);
     await vi.waitFor(() => expect(requests().some((r) => new URL(r.url).pathname.endsWith("/views:watch"))).toBe(true));
     const runs = await Promise.all(
@@ -384,11 +388,10 @@ describe("PlatformHealth page", () => {
   // same server, key and route in the next body, so it survives the poll.
   it("keeps an opened set, an expanded row and an open tooltip across a poll, with the poll's figures", async () => {
     emptySeries();
-    const { qc } = mount(twoServers());
+    const { qc } = mount(twoServers(), { open: "server-lab-server" });
     const first = screen.getByTestId("server-panels-lab-server");
-    const second = screen.getByTestId("server-panels-lab-server-b") as HTMLDetailsElement;
-    second.open = true;
-    fireEvent(second, new Event("toggle"));
+    const second = screen.getByTestId("server-panels-lab-server-b");
+    fireEvent.click(within(second).getByRole("button", { name: /^Server lab-server-b/ }));
     const slow = () => within(within(screen.getByTestId("server-panels-lab-server")).getByTestId("server-panel-requests")).getAllByTestId("panel-row-http-request-duration-max").find((r) => r.getAttribute("data-instance") === SLOW)!;
     const row = slow();
     fireEvent.click(row);
@@ -406,18 +409,18 @@ describe("PlatformHealth page", () => {
     expect(slow()).toBe(row);
     expect(row).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("server-panels-lab-server-b")).toBe(second);
-    expect(second.open).toBe(true);
+    expect(within(second).getByRole("button", { name: /^Server lab-server-b/ })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("server-panels-lab-server")).toBe(first);
     expect(screen.getByText("How far ingest runs behind.")).toBeInTheDocument();
   });
 
-  // The first set opens once, on mount: a server that later sorts ahead of
-  // it moves the index, not the set the operator is reading, which stays open.
+  // What is open is held by the server's name in the URL, so a server that later
+  // sorts ahead of it moves the index, not the set the operator is reading.
   it("keeps the set the operator is reading open when a new server sorts ahead of it", async () => {
     emptySeries();
-    const { qc } = mount(twoServers());
-    const first = screen.getByTestId("server-panels-lab-server") as HTMLDetailsElement;
-    expect(first.open).toBe(true);
+    const { qc } = mount(twoServers(), { open: "server-lab-server" });
+    const first = screen.getByTestId("server-panels-lab-server");
+    expect(within(first).getByRole("button", { name: /^Server lab-server/ })).toHaveAttribute("aria-expanded", "true");
     const next = twoServers();
     next.servers = [
       { component: uuidFor("server-a"), name: "aa-server", version: "v9.9.9", started_at: ago(1000), health: "healthy", groups: panels(true), alarms: [] },
@@ -426,8 +429,8 @@ describe("PlatformHealth page", () => {
     qc.setQueryData([...PLATFORM_VIEW_KEY], next);
     await waitFor(() => expect(screen.getByTestId("server-panels-aa-server")).toBeInTheDocument());
     expect(screen.getByTestId("server-panels-lab-server")).toBe(first);
-    expect(first.open).toBe(true);
-    expect(first.querySelector(":scope > summary [data-disclosure]")).toHaveClass("rotate-90");
+    expect(within(first).getByRole("button", { name: /^Server lab-server/ })).toHaveAttribute("aria-expanded", "true");
+    expect(within(screen.getByTestId("server-panels-aa-server")).getByRole("button", { name: /^Server aa-server/ })).toHaveAttribute("aria-expanded", "false");
   });
 
   // A row's chart is a disclosure, so the keyboard reaches it as the pointer
@@ -481,7 +484,7 @@ const measured: PlatformSimOutpost = {
   receipts: { landed: 42, margin: 1, backlog: 0, after_end: 0 },
   protocols: [{ protocol: "http", accepted: 9, received: 90, answered: 90, latency_ms: { p50: 1, p95: 2.5, p99: 4, n: 90 }, poll_targets: 1, in_flight_high: 2 }],
   in_flight_high: 2, queue_depth: null, busy_workers: null,
-  devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false }],
+  devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false, system: "lobby", location_path: ["hq", "level-1"] }],
 };
 const simBody = (outposts: PlatformSimOutpost[]): PlatformSimulation => ({ read_at: readAt, window_seconds: 600, bracket_seconds: 60, outposts });
 
@@ -511,7 +514,7 @@ describe("PlatformHealth with a simulator", () => {
     expect(rows[2].className).toBe("");
   });
 
-  it("links each device to its drawer on the Simulation page and names the figures not wired yet", () => {
+  it("links each device to its drawer on the Simulation page and and carries no unfinished marker", () => {
     mount(full, { fleet: connected, body: simBody([measured]) });
     const device = screen.getByTestId("platform-sim-device");
     expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/web/simulation?c=${uuidFor("display")}`);
@@ -519,7 +522,9 @@ describe("PlatformHealth with a simulator", () => {
     expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-accepted", "9");
     expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-received", "90");
     expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-poll-targets", "1");
-    expect(screen.getAllByText(NOT_WIRED)).toHaveLength(2);
+    expect(screen.queryByText(/not wired yet/i)).toBeNull();
+    expect(screen.queryByText("Queue depth")).toBeNull();
+    expect(screen.queryByText("Busy workers")).toBeNull();
   });
 
   it("while warming up says why and shows no gap and no number", () => {
@@ -530,5 +535,113 @@ describe("PlatformHealth with a simulator", () => {
     expect(within(card).queryByTestId("platform-sim-gaps")).toBeNull();
     expect(within(card).getByText("Batches landed").closest("div")!.parentElement).toHaveTextContent("-");
     expect(within(card).queryByText("42")).toBeNull();
+  });
+});
+
+
+// The page fits a screen (#2446): every section folds to one line, a verdict and
+// the one number that matters, and the open ones are held in the URL.
+describe("PlatformHealth folded sections", () => {
+  const summaries = () => screen.getAllByTestId("section-summary").map((el) => el.textContent);
+
+  it("opens with every section folded to its summary line and nothing below it mounted", () => {
+    mount({ ...twoServers(), servers: [{ ...twoServers().servers![0], alarms: [{ rule: "r", key: "ingest-lag", severity: "warning", message: "lag", raised_at: ago(1000) }] }] }, { open: "" });
+    expect(summaries()).toEqual(["3% lost end to end, worst at Outpost (3%)", "1 open alarm, Ingest flagged", "1 of 2 up, 1 not up"]);
+    expect(screen.queryByTestId("platform-outposts")).toBeNull();
+    expect(screen.queryByTestId("pipeline")).toBeNull();
+    expect(document.querySelector("[data-panel]")).toBeNull();
+    for (const b of screen.getAllByRole("button", { expanded: false })) expect(b).toBeInTheDocument();
+    expect(screen.getByTestId("platform-header")).toBeInTheDocument();
+  });
+
+  it("opens one section on demand and holds it in the URL, closing it drops the parameter", async () => {
+    mount(full, { open: "" });
+    fireEvent.click(screen.getByRole("button", { name: /^Outposts/ }));
+    await waitFor(() => expect(screen.getByTestId("platform-outposts")).toBeInTheDocument());
+    expect(window.location.search).toBe("?open=outposts");
+    fireEvent.click(screen.getByRole("button", { name: /^Where work is lost/ }));
+    await waitFor(() => expect(screen.getByTestId("pipeline")).toBeInTheDocument());
+    expect(decodeURIComponent(window.location.search)).toBe("?open=outposts,pipeline");
+    fireEvent.click(screen.getByRole("button", { name: /^Outposts/ }));
+    await waitFor(() => expect(screen.queryByTestId("platform-outposts")).toBeNull());
+    expect(window.location.search).toBe("?open=pipeline");
+    fireEvent.click(screen.getByRole("button", { name: /^Where work is lost/ }));
+    await waitFor(() => expect(screen.queryByTestId("pipeline")).toBeNull());
+    expect(window.location.search).toBe("");
+  });
+
+  it("restores the open sections from the URL on a reload", () => {
+    mount(full, { open: "outposts" });
+    expect(screen.getByTestId("platform-outposts")).toBeInTheDocument();
+    expect(screen.queryByTestId("pipeline")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Outposts/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /^Where work is lost/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("folds the simulator section too, with its own summary", () => {
+    mount(full, { open: "", fleet: connected, body: simBody([{ ...measured, gaps: [{ ...measured.gaps![0] }] }]) });
+    expect(summaries()).toContain("no loss, 1 device");
+    expect(screen.queryByTestId("platform-sim-devices")).toBeNull();
+  });
+});
+
+describe("PlatformHealth simulator device table", () => {
+  const many = (n: number): PlatformSimOutpost => ({
+    ...measured,
+    devices: Array.from({ length: n }, (_, i) => ({
+      component_id: uuidFor(`dev-${i}`), component: i % 2 === 0 ? "amp-1" : "camera-1", received: { http: i }, impaired: i === 3, unhit: i === 4,
+      system: `system-${i}`, location_path: ["hq", `room-${i}`],
+    })),
+  });
+
+  it("renders at most a page of rows and pages through the rest", async () => {
+    mount(full, { fleet: connected, body: simBody([many(60)]) });
+    const rows = () => screen.getAllByTestId("platform-sim-device");
+    expect(rows()).toHaveLength(25);
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1-25 of 60");
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await waitFor(() => expect(screen.getByTestId("pager-range")).toHaveTextContent("26-50 of 60"));
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await waitFor(() => expect(rows()).toHaveLength(10));
+  });
+
+  it("filters by name, system or place, back to the first page, and says when nothing matches", async () => {
+    mount(full, { fleet: connected, body: simBody([many(60)]) });
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    const filter = screen.getByRole("searchbox", { name: /Filter edge-alpha's devices/ });
+    fireEvent.input(filter, { target: { value: "room-17" } });
+    await waitFor(() => expect(screen.getAllByTestId("platform-sim-device")).toHaveLength(1));
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1-1 of 1");
+    expect(screen.getByTestId("platform-sim-device-place")).toHaveTextContent("system-17 · hq / room-17");
+    fireEvent.input(filter, { target: { value: "camera system-1" } });
+    await waitFor(() => expect(screen.getAllByTestId("platform-sim-device").length).toBeGreaterThan(1));
+    fireEvent.input(filter, { target: { value: "zzz" } });
+    await waitFor(() => expect(screen.getByText("No device matches the filter.")).toBeInTheDocument());
+  });
+
+  it("tells repeated names apart by place and fills every State cell, aligned in the row's own cells", () => {
+    mount(full, { fleet: connected, body: simBody([many(6)]) });
+    const rows = screen.getAllByTestId("platform-sim-device");
+    // Two amp-1 devices read apart by their system and place.
+    const amps = rows.filter((r) => r.querySelector("a")!.textContent === "amp-1").map((r) => r.querySelector("[data-testid=platform-sim-device-place]")!.textContent);
+    expect(new Set(amps).size).toBe(amps.length);
+    for (const r of rows) {
+      expect(r.querySelectorAll(":scope > td")).toHaveLength(4);
+      expect(r.querySelector("[data-testid=platform-sim-device-state]")!.textContent).not.toBe("");
+      expect(r.querySelector(":scope > td.flex")).toBeNull();
+    }
+    const states = rows.map((r) => r.querySelector("[data-testid=platform-sim-device-state]")!.textContent);
+    expect(states).toEqual(expect.arrayContaining(["answering", "impaired", "due, never seen"]));
+  });
+
+  it("keeps the filter when the window flaps to restarted and back, which unmounts the table", async () => {
+    const { qc } = mount(full, { fleet: connected, body: simBody([many(60)]) });
+    fireEvent.input(screen.getByRole("searchbox", { name: /Filter edge-alpha's devices/ }), { target: { value: "room-1" } });
+    await waitFor(() => expect(screen.getByTestId("pager-range")).toHaveTextContent("of 11"));
+    qc.setQueryData([...PLATFORM_SIM_KEY], simBody([{ ...many(60), state: "restarted" }]));
+    await waitFor(() => expect(screen.queryByTestId("platform-sim-devices")).toBeNull());
+    qc.setQueryData([...PLATFORM_SIM_KEY], simBody([many(60)]));
+    await waitFor(() => expect(screen.getByTestId("pager-range")).toHaveTextContent("1-11 of 11"));
+    expect((screen.getByRole("searchbox", { name: /Filter edge-alpha's devices/ }) as HTMLInputElement).value).toBe("room-1");
   });
 });

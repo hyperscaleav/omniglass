@@ -75,8 +75,8 @@ A word an operator or an admin reads (an entity, a nav label, a health value) is
 schema and permission noun, its nav entry, and any word it retired. `make gen` renders the
 [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec from it, and the
 guards fail a new collection, nav entry or health value that names no row, or a retired word back in
-console strings or docs prose. Internal architecture terms stay in the frozen
-[architecture glossary](/architecture/glossary/).
+console strings or docs prose. A term only the code's internals use is defined on the Architecture
+page that owns it, in bold where the page first uses it.
 
 When a feature introduces a concept an operator must understand, the teaching surface ships with it
 ([the learning-tool restriction](/contributing/learning-tool/)).
@@ -211,7 +211,7 @@ capture list and the embed cannot drift, a `#id` with no frontmatter entry (or n
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
 
 Because the images track the live UI, they are refreshed like any generated artifact: a change
-to an operator surface **re-runs `make docs-shots` and commits the new PNGs**. Each capture
+to an operator surface is followed by **main re-running `make docs-shots`** after the merge (below); a PR itself commits only a new shot for a new `id`. Each capture
 writes **two renders of the same settled page**: the clean shot under
 `docs/public/screenshots/`, every region live, which is what the docs embed (a masked history
 strip teaches nothing); and its masked twin under `docs/screenshots/baseline/`, where the
@@ -228,19 +228,35 @@ passed a surface token swap. One caveat: a real UI change that falls entirely in
 region is invisible to the gate, which is the price of masking and the reason a mask names the
 smallest box that holds still around what moves.
 
+**Main refreshes the shots, a PR does not (#2561).** A PR never re-renders an existing docs shot: git
+cannot merge binaries, and every merge used to make the other open PRs conflict on the same PNGs. After a
+merge, the `recapture` job in `docs-shots.yml` recaptures both sets on main's tree; when a masked baseline
+changed it pushes those shots and their clean twins (a clean shot alone differs on every capture, so it is
+not committed) to `claude/docs-shots-recapture` and opens (or updates) one PR titled "docs: recapture the
+docs screenshots", as the agents' App. When that PR is in the merge queue GitHub locks its branch, so the job
+pushes to `claude/docs-shots-recapture-<short sha>` and opens a new PR instead of failing main (the choice
+lives in `scripts/docs-shots-plan.sh`), which the architect approves like any other PR. Branch protection is
+untouched and nothing bypasses it. A concurrency group coalesces merges that land close together, and a run
+whose commit is no longer main's head stands down, so the latest main wins. What a PR commits: a **new** shot
+for a new `id` (a new file cannot conflict, and the docs build needs it), and its visual evidence under
+`.github/screenshots/<n>/`. A **guard** in the `verify` job (`scripts/docs-shots-guard.sh`) fails a PR whose
+diff modifies, deletes or renames an existing file under `docs/public/screenshots/` or
+`docs/screenshots/baseline/`; the recapture branch alone is exempt. `docs-shots-verify` still checks every
+PR's shots are declared and present. The `freshness` comparison (`make docs-shots-check`) does not run on
+pull requests, so a stale shot never reads red on a PR; `make docs-shots-check` stays the local proof that a
+recapture is stable.
+
 Capture on a committed tree. The console shows the build id it was built from, and a dirty
 tree stamps a long `-dirty-<time>` id where CI's clean checkout stamps a bare commit, which
 wraps and changes the height of the platform cards, so every shot of that page shifts. Commit
-the code, run `make docs-shots`, then commit the PNGs, and `make docs-shots-check` passes on
-the clean tree that follows.
+the code, run `make docs-shots`, then commit the PNGs (the recapture branch does this on main), and
+`make docs-shots-check` passes on the clean tree that follows.
 
 CI's runner is the canonical raster. The pinned browser picks its rasterizer's SIMD path from
 the host CPU, so a host without AVX2 (a generic virtual CPU) rounds some gradient pixels one
 level off from CI: repeatable on that host, and visible to an exact comparison (five pixels of
-the users page's avatar gradient, #774). When the freshness job fails only by such a residue on
-a PR that changed no UI there, adopt the job's own recapture, which it publishes to the
-`ci/docs-shots-recapture` ref (`git fetch origin ci/docs-shots-recapture`), instead of
-loosening the comparison or masking the element.
+the users page's avatar gradient, #774). When a local `make docs-shots-check` fails only by such a residue, adopt the CI
+recapture (the `claude/docs-shots-recapture` PR) instead of loosening the comparison or masking the element.
 
 ### A mask covers a box that holds still, and says that it is there
 
@@ -248,8 +264,8 @@ A mask is painted over **the element the selector resolves to**, so what a `mask
 resolves to is the whole contract. A `text=/…/` selector resolves to the innermost element
 carrying the text, the value's own `<span>`, and so does a `data-testid` hook placed on that
 span, so the painted box is the size of the value. The console does not render a
-capture-relative value at one width (the audit trail's `toLocaleString` leaves the hour bare,
-`fmtTime` prints a month name, leaves the day bare and prints AM or PM, an age reads 9s or
+capture-relative value at one width (a relative age in the audit trail reads 9m or 11h,
+`fmtTime` prints a short absolute ("Nov 23, 01:56 PM"), the `Time` component adds a relative age ("4m ago"), an age reads 9s or
 17s), which means the same unchanged page paints a box seven pixels narrower at 9 o'clock than
 at 11, and every recapture rewrites the baseline on a PR that changed no UI. So a mask over
 text whose width can change paints a **box the text cannot move**, one of two ways:

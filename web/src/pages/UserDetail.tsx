@@ -32,6 +32,8 @@ import { handleError, emailError, passwordError, isPasswordPolicyMessage } from 
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
+import { confirmAction, confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
 
 // UserDetail is a user's blade body under the read -> Edit -> Save contract.
 // Read mode shows the profile facts, the user groups the user belongs to (a drill to the
@@ -220,7 +222,7 @@ export function UserDetail(props: { id: string }) {
 
   async function doArchive() {
     const pr = p();
-    if (!pr || !confirm(`Archive "${userName(pr)}"? They will be hidden and cannot sign in, reversibly. You can then purge them.`)) return;
+    if (!pr || !(await confirmDelete({ kind: "user", name: userName(pr), verb: "Archive", consequence: "They will be hidden and cannot sign in, reversibly. You can then purge them." }))) return;
     setActErr(null);
     try {
       await archiveUser(pr.id);
@@ -247,7 +249,7 @@ export function UserDetail(props: { id: string }) {
 
   async function doPurge() {
     const pr = p();
-    if (!pr || !confirm(`Purge "${userName(pr)}"? This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept.`)) return;
+    if (!pr || !(await confirmDelete({ kind: "user", name: userName(pr), verb: "Purge", consequence: "This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept." }))) return;
     setActErr(null);
     try {
       await purgeUser(pr.id);
@@ -274,7 +276,7 @@ export function UserDetail(props: { id: string }) {
   // touches the other, then the Sessions section refetches from the invalidated query.
   async function doRevokeAll(purpose: "session" | "token") {
     const noun = purpose === "session" ? "sessions" : "API tokens";
-    if (!confirm(`Revoke all ${noun} for this user? They are signed out of every ${purpose} at once.`)) return;
+    if (!(await confirmAction({ title: `Revoke all ${noun} for this user?`, body: `They are signed out of every ${purpose} at once.`, confirmLabel: `Revoke ${noun}`, tone: "danger" }))) return;
     setActErr(null);
     const r = await revokeAllSessions(purpose);
     if (!r.ok) setActErr(r.message);
@@ -484,7 +486,7 @@ function SessionsSection(props: { id: string; revocable: boolean }) {
   const sessionRows = () => (sessions.data ?? []).filter((s) => s.kind === "session");
   const tokenRows = () => (sessions.data ?? []).filter((s) => s.kind === "token");
   async function revoke(s: Session) {
-    if (!confirm("Revoke this credential? The user is signed out of it immediately.")) return;
+    if (!(await confirmAction({ title: "Revoke this credential?", body: "The user is signed out of it immediately.", confirmLabel: "Revoke credential", tone: "danger" }))) return;
     setRevoking(s.id);
     setErr(null);
     const r = await revokeSession(s.id);
@@ -544,7 +546,7 @@ function IdentityLinksSection(props: { id: string; linkable: boolean }) {
     setBusy(false);
   }
   async function onUnlink(l: IdentityLink) {
-    if (!confirm("Unlink this identity? Every session and token signed in through it ends now.")) return;
+    if (!(await confirmAction({ title: "Unlink this identity?", body: "Every session and token signed in through it ends now.", confirmLabel: "Unlink identity", tone: "danger" }))) return;
     setUnlinking(l.id);
     setErr(null);
     const r = await unlink(l.id);
@@ -654,14 +656,14 @@ function GrantEditor(props: { user: User; editing: boolean; canGrant: boolean; c
           <div class="flex flex-wrap gap-1.5">
             <For each={inherited()}>
               {(g) => (
-                <span
+                <Tooltip as="span" tabIndex={0}
                   class="inline-flex items-center gap-1 rounded-field border border-dashed border-base-300 bg-base-100 py-[3px] pl-2.5 pr-2 text-xs"
-                  title={`Inherited from the user group "${g.group_label ?? g.group}". Edit the user group to change it.`}
+                  content={`Inherited from the user group "${g.group_label ?? g.group}". Edit the user group to change it.`}
                 >
                   <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
                   <span class="text-base-content/40">from</span>
-                  <button class="text-primary hover:underline" title="Open this user group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
-                </span>
+                  <Tooltip class="text-primary hover:underline" content="Open this user group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</Tooltip>
+                </Tooltip>
               )}
             </For>
           </div>

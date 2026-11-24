@@ -86,7 +86,7 @@ The workflows behind these gates, and which of them are automated today, are in
 ## House style
 
 - **No em dashes** in written artifacts. Use commas, colons, periods, or parentheses.
-- **Head-noun-last naming** (`<qualifier>_<genus>`), matching the architecture glossary.
+- **Head-noun-last naming** (`<qualifier>_<genus>`), matching the [glossary](https://docs.omniglass.hyperscaleav.com/reference/glossary/).
 
 ## Licensing of contributions
 

@@ -157,11 +157,13 @@ func TestIntegrationWindowAcrossDroppedPartition(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	read := func() DBCounters {
+	// Stats reach the shared stats system asynchronously and per relation, so a
+	// reading can hold some partitions' counts and not others'. Wait for the
+	// exact total the inserts and the drop leave, not for "some rows".
+	read := func(want int64) DBCounters {
 		t.Helper()
-		// Stats are flushed to the shared stats system asynchronously.
 		var c DBCounters
-		for end := time.Now().Add(10 * time.Second); ; time.Sleep(200 * time.Millisecond) {
+		for end := time.Now().Add(30 * time.Second); ; time.Sleep(200 * time.Millisecond) {
 			out, err := h.psql(ctx, DBCountersQuery)
 			if err != nil {
 				t.Fatal(err)
@@ -169,12 +171,12 @@ func TestIntegrationWindowAcrossDroppedPartition(t *testing.T) {
 			if c, err = ParseDBCounters(out); err != nil {
 				t.Fatal(err)
 			}
-			if c.MetricRows > 0 || time.Now().After(end) {
+			if c.MetricRows == want || time.Now().After(end) {
 				return c
 			}
 		}
 	}
-	db0 := read()
+	db0 := read(50 + 10)
 	for _, q := range []string{
 		`insert into metric select 250, g from generate_series(1, 7) g`,
 		`insert into metric select 150, g from generate_series(1, 3) g`,
@@ -184,13 +186,8 @@ func TestIntegrationWindowAcrossDroppedPartition(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var db1 DBCounters
-	for end := time.Now().Add(10 * time.Second); ; time.Sleep(200 * time.Millisecond) {
-		db1 = read()
-		if db1.MetricRows >= 10+10 || time.Now().After(end) {
-			break
-		}
-	}
+	// p2 holds 10+3, p3 holds 7; p1's 50 went with its partition.
+	db1 := read(10 + 3 + 7)
 	db1.At = db0.At.Add(time.Minute)
 	w, err := WindowOf(db0, db1, nil, nil)
 	if err != nil {

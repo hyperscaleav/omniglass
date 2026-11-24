@@ -178,11 +178,21 @@ export type AlarmRow = {
   component: string;
   componentId: string | null;
   slotLabel: string;
+  // Where the alarmed member sits (#2459): "impairs <slot>" when its alarm is
+  // why the slot is impaired, "in <slot>" when it sits in a slot its alarm
+  // does not impair, "not in a slot" when it fills none (shown, and moving
+  // nothing above the component, ADR-2459).
+  where: string;
+  outsideSlot: boolean;
   raisedAt: string;
   // The acknowledgement the health read carries (#990), orthogonal to cleared.
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string;
+  // The snooze the health read carries (#2448): Snooze is offered only while
+  // there is none, Unsnooze and the chip while there is.
+  snoozedUntil: string | null;
+  snoozedBy: string;
 };
 
 export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null): AlarmRow[] {
@@ -200,10 +210,42 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         component: a.component,
         componentId: a.component_id || null,
         slotLabel: entityLabel(r),
+        where: `impairs ${entityLabel(r)}`,
+        outsideSlot: false,
         raisedAt: a.raised_at,
         acknowledged: a.acknowledged ?? false,
         acknowledgedAt: a.acknowledged_at ?? null,
         acknowledgedBy: a.acknowledged_by ?? "",
+        snoozedUntil: a.snoozed_until ?? null,
+        snoozedBy: a.snoozed_by ?? "",
+      });
+    }
+  }
+  // Every member's open alarms (#2459), slotted or not, after the slots'
+  // own: a slot's row says it impairs, so it wins the dedupe below. A member
+  // that sits only in a build not in use stays out, for the reason above.
+  const activeSlots = (health.slots ?? []).filter((r) => r.active);
+  for (const m of health.members ?? []) {
+    // By the slot's name the member carries, never the member's own name:
+    // names repeat across placements (#627).
+    const slot = m.slot ? activeSlots.find((r) => r.name === m.slot) : undefined;
+    if (!m.outside_slot && !slot) continue;
+    for (const a of m.alarms ?? []) {
+      rows.push({
+        id: a.id,
+        severity: a.severity,
+        message: a.message,
+        component: a.component,
+        componentId: a.component_id || m.id || null,
+        slotLabel: slot ? entityLabel(slot) : "",
+        where: slot ? `in ${entityLabel(slot)}` : "not in a slot",
+        outsideSlot: m.outside_slot,
+        raisedAt: a.raised_at,
+        acknowledged: a.acknowledged ?? false,
+        acknowledgedAt: a.acknowledged_at ?? null,
+        acknowledgedBy: a.acknowledged_by ?? "",
+        snoozedUntil: a.snoozed_until ?? null,
+        snoozedBy: a.snoozed_by ?? "",
       });
     }
   }

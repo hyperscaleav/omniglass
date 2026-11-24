@@ -8,6 +8,7 @@ import { userName } from "../lib/users";
 import { PanelLeft, LogOut } from "./icons";
 import { BrandMark, Wordmark } from "./Brand";
 import Button from "./Button";
+import Tooltip from "./ui/Tooltip";
 
 // The navigation rail: a daisyUI `menu` with collapsible clusters, the brand
 // lockup, a collapse toggle, and an identity footer. Routing and active state go
@@ -90,13 +91,12 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
       <div class="border-t border-base-300 p-3">
         <div class="flex items-center gap-2.5" classList={{ "justify-center": props.collapsed }}>
-          <A
+          <Tooltip as={A}
             href="/profile"
             class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
-            classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
-            data-tip={props.collapsed ? "Your profile" : undefined}
+            classList={{ "flex-1 p-1 -m-1": !props.collapsed }}
             data-testid="user-chip"
-            title="Your profile"
+            content="Your profile"
           >
             <Show
               when={avatarUrl()}
@@ -120,7 +120,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
                 <div class="text-[11px] capitalize text-base-content/40">{ident().role}</div>
               </div>
             </Show>
-          </A>
+          </Tooltip>
           <Show when={!props.collapsed}>
             <Button
               square
@@ -140,16 +140,8 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   );
 }
 
-// Soon: the marker on a nav item whose backend has not landed. The item stays
-// navigable (its stub page explains what is coming); it just reads as pending.
-// Exported so subrails (the Catalog shell's) wear the same treatment.
-export function Soon() {
-  return <span class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
-}
-
 function Leaf(props: { item: NavItem; collapsed: boolean }) {
   const Icon = props.item.icon;
-  const live = () => props.item.live;
   return (
     <li>
       <A
@@ -157,13 +149,12 @@ function Leaf(props: { item: NavItem; collapsed: boolean }) {
         end={props.item.path === "/"}
         activeClass="menu-active"
         class="gap-3"
-        classList={{ "tooltip tooltip-right justify-center": props.collapsed, "opacity-45": !live() }}
-        data-tip={props.collapsed ? (live() ? props.item.label : `${props.item.label} · soon`) : undefined}
+        classList={{ "tooltip tooltip-right justify-center": props.collapsed }}
+        data-tip={props.collapsed ? props.item.label : undefined}
       >
         <Icon size={17} />
         <Show when={!props.collapsed}>
           <span class="flex-1 truncate">{props.item.label}</span>
-          <Show when={!live()}><Soon /></Show>
         </Show>
       </A>
     </li>
@@ -204,9 +195,8 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
                     <li class="menu-title px-2 pb-0.5 pt-2 text-[10.5px] uppercase tracking-wider">{c.section}</li>
                   </Show>
                   <li>
-                    <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
+                    <A href={c.path} activeClass="menu-active">
                       <span class="flex-1 truncate">{c.label}</span>
-                      <Show when={!c.live}><Soon /></Show>
                     </A>
                   </li>
                 </>

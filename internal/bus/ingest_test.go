@@ -451,7 +451,7 @@ func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp strin
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		evs, err := gw.ListComponentEvents(ctx, comp, time.Hour, 50)
+		evs, err := gw.ListComponentEvents(ctx, comp, time.Hour, 50, storage.EventFilter{})
 		if err != nil {
 			t.Fatalf("list events %s: %v", comp, err)
 		}

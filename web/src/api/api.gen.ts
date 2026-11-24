@@ -507,6 +507,8 @@ export type AlarmBody = {
   id: string;
   /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
   location?: string;
+  /** That location's uuid, the stable form of location; only on the fleet queue */
+  location_id?: string;
   /** That location's dotted ancestor path, root first (for example boi.17c) */
   location_path?: string;
   message: string;
@@ -521,6 +523,11 @@ export type AlarmBody = {
   snoozed_by?: string;
   /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
+  /**
+     * Those systems' uuids, in the same order as systems; only on the fleet queue
+     * @nullable
+     */
+  system_ids?: string[] | null;
   /**
      * The names of the systems the alarm's component is a member of; only on the fleet queue
      * @nullable
@@ -1942,6 +1949,17 @@ export type ComponentPropertyBody = {
   value_id: string;
 };
 
+export type SimFaultBody = {
+  /** What the profile defaults it to. */
+  default: string;
+  /** The state path, as the profile names it. */
+  path: string;
+  /** When the server first heard the device hold this value. */
+  since: string;
+  /** What it holds now. */
+  value: string;
+};
+
 export type ImpairmentFields = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -1993,6 +2011,11 @@ export type SimDeviceBody = {
   /** The component's name. */
   component: string;
   component_id: string;
+  /**
+     * The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.
+     * @nullable
+     */
+  faults?: SimFaultBody[] | null;
   /** Connections and requests the simulated device has answered since the server started. */
   hits: number;
   hits_by_protocol: SimDeviceBodyHitsByProtocol;
@@ -2000,6 +2023,8 @@ export type SimDeviceBody = {
   impaired: boolean;
   /** What an operator has broken on the device; absent when healthy. */
   impairment?: ImpairmentFields;
+  /** When the impairment was last set; absent when healthy. */
+  impairment_since?: string;
   last_hit_at?: string;
   last_protocol?: string;
   /** The component's product; its name selects the simulator profile. */
@@ -2008,6 +2033,19 @@ export type SimDeviceBody = {
   serving: boolean;
   /** What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running. */
   status: SimDeviceBodyStatus;
+};
+
+export type SimBehaviorBody = {
+  /** Whether it posts a webhook each time. */
+  emits?: boolean;
+  /** How often it runs, as a duration: 5s, 1m. */
+  interval: string;
+  name: string;
+  /**
+     * The state paths it changes each time.
+     * @nullable
+     */
+  writes?: string[] | null;
 };
 
 export type SimImpairmentStatus = {
@@ -2032,12 +2070,31 @@ export type SimOIDBody = {
   path: string;
 };
 
+export type SimSetBody = {
+  /** What the profile defaults the path to, when it does. */
+  default?: string;
+  /** The request body field its value comes from. */
+  field: string;
+  /** The state path the route writes. */
+  path: string;
+  /**
+     * The values the route accepts.
+     * @nullable
+     */
+  values: string[] | null;
+};
+
 export type SimRouteBody = {
   example?: string;
   method: string;
   path: string;
   /** A route the product's own web UI calls but does not advertise. */
   private?: boolean;
+  /**
+     * The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.
+     * @nullable
+     */
+  sets?: SimSetBody[] | null;
   summary?: string;
 };
 
@@ -2068,12 +2125,21 @@ export type ComponentSimOutputBody = {
   /** What the simulator reports for the component: serving, hits, and its impairment. */
   activity?: SimDeviceBody;
   address?: string;
+  /**
+     * What the profile changes on the device by itself over time.
+     * @nullable
+     */
+  behaviors?: SimBehaviorBody[] | null;
   /** The outpost's simulator pulled recently. */
   connected: boolean;
   impairments: SimImpairmentStatus;
   outpost?: string;
   product?: string;
   profile?: string;
+  /** The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's). */
+  served_by?: string;
+  /** The uuid of served_by, the address the console opens it by (names repeat across locations). */
+  served_by_id?: string;
   /** The component has an endpoint on an outpost and a product a profile simulates. */
   simulated: boolean;
   summary?: string;
@@ -3120,11 +3186,25 @@ export type CreateSecretInputBody = {
   secret_type: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)
+ */
+export type CreateSeverityLevelInputBodyHealthEffect = typeof CreateSeverityLevelInputBodyHealthEffect[keyof typeof CreateSeverityLevelInputBodyHealthEffect];
+
+
+export const CreateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type CreateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color: string;
+  /** What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage) */
+  health_effect?: CreateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /**
@@ -3454,6 +3534,66 @@ export type DatabaseSettings = {
      * @maximum 600000
      */
   slow_query_ms: number;
+};
+
+/**
+ * The blocking row's own resource, so a client can link it and offer that kind's own remove.
+ */
+export type DeleteBlockerKind = typeof DeleteBlockerKind[keyof typeof DeleteBlockerKind];
+
+
+export const DeleteBlockerKind = {
+  component: 'component',
+  endpoint: 'endpoint',
+  system: 'system',
+  location: 'location',
+} as const;
+
+export type DeleteBlocker = {
+  /** The blocking row's uuid. */
+  id: string;
+  /** The blocking row's own resource, so a client can link it and offer that kind's own remove. */
+  kind: DeleteBlockerKind;
+  /** What an operator reads for the blocking row: its label, or its name when it has none. */
+  label: string;
+  /** The blocking row's name, its operator-facing address (an endpoint's is unique within its component). */
+  name: string;
+};
+
+export type ErrorDetail = {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+};
+
+export type DeleteRefusal = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+     * @nullable
+     */
+  blockers?: DeleteBlocker[] | null;
+  /** How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap. */
+  blockers_hidden?: number;
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /**
+     * Optional list of individual error details
+     * @nullable
+     */
+  errors?: ErrorDetail[] | null;
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
 };
 
 export type DownloadFileOutputBody = {
@@ -3831,15 +3971,6 @@ export type EntityTagsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   tags: TagBindingBody[] | null;
-};
-
-export type ErrorDetail = {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
 };
 
 export type ErrorModel = {
@@ -4237,6 +4368,27 @@ export type HealthAlarmBody = {
   message: string;
   raised_at: string;
   severity: string;
+  /** Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
+  snoozed_by?: string;
+  /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
+  snoozed_until?: string;
+};
+
+export type HealthMemberBody = {
+  /**
+     * The member's open alarms, newest first
+     * @nullable
+     */
+  alarms: HealthAlarmBody[] | null;
+  /** The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it */
+  health: string;
+  /** The component's uuid */
+  id: string;
+  name: string;
+  /** True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459) */
+  outside_slot: boolean;
+  /** The name of the slot the member fills in this system (as slots[].name); absent when outside_slot */
+  slot?: string;
 };
 
 export type HealthSlotBody = {
@@ -4275,7 +4427,16 @@ export type HealthSlotBody = {
 
 export type HealthSystemBody = {
   health: string;
+  /** The system's id */
+  id: string;
+  /** The system's display label */
+  label: string;
+  /** The dotted path of the location the system is placed at; empty when unplaced */
+  location: string;
+  /** The system's short name; not unique across rooms, so address the system by path */
   name: string;
+  /** The system's dotted address, unique: the handle GET /systems/{name} resolves */
+  path: string;
 };
 
 export type HealthTransitionBody = {
@@ -4292,8 +4453,15 @@ export type FleetHealthOutputBody = {
   first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
+  /**
+     * Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location
+     * @nullable
+     */
+  members: HealthMemberBody[] | null;
   owner: string;
   owner_kind: string;
+  /** A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location */
+  reason?: string;
   /**
      * The contributing slots; empty for a location
      * @nullable
@@ -4701,6 +4869,8 @@ export type ListComponentsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: ComponentBody[] | null;
+  /** How many components matched the filters, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 export type ListDriversOutputBody = {
@@ -5519,6 +5689,18 @@ export const SeverityLevelBodyColor = {
 } as const;
 
 /**
+ * What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank
+ */
+export type SeverityLevelBodyHealthEffect = typeof SeverityLevelBodyHealthEffect[keyof typeof SeverityLevelBodyHealthEffect];
+
+
+export const SeverityLevelBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
+/**
  * How bad an alarm is, ranked, with its color and whether it takes its component out.
  */
 export type SeverityLevelBody = {
@@ -5526,6 +5708,8 @@ export type SeverityLevelBody = {
   readonly $schema?: string;
   /** The hue the console renders the level in */
   color: SeverityLevelBodyColor;
+  /** What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank */
+  health_effect: SeverityLevelBodyHealthEffect;
   /** The level's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -5533,7 +5717,10 @@ export type SeverityLevelBody = {
   name: string;
   /** Shipped with the platform and read-only */
   official: boolean;
-  /** Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
+  /**
+     * Deprecated alias of health_effect == outage, kept so released clients do not break; read health_effect
+     * @deprecated
+     */
   outage: boolean;
   /** Compares levels: higher is more severe */
   rank: number;
@@ -5720,6 +5907,8 @@ export type ListSystemsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   systems: SystemBody[] | null;
+  /** How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 /**
@@ -6434,6 +6623,38 @@ export type OwnerStruct = {
   ref: string;
 };
 
+/**
+ * The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
+ */
+export type SimPlannedEndpointBodyInputs = {[key: string]: string};
+
+export type SimPlannedEndpointBody = {
+  /** The driver the endpoint would attach; empty for a reachability probe. */
+  driver?: string;
+  /** The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value. */
+  inputs?: SimPlannedEndpointBodyInputs;
+  /** The host:port a reachability probe would reach; empty for a driver attach. */
+  target?: string;
+  /** The transport a reachability probe would speak; empty for a driver attach. */
+  transport?: string;
+};
+
+export type PlanSimComponentOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The loopback address the simulated component would answer on. */
+  address: string;
+  /**
+     * The endpoints an add would create for the collector to reach it.
+     * @nullable
+     */
+  endpoints: SimPlannedEndpointBody[] | null;
+  /** The outpost whose simulator would serve the component. */
+  outpost: string;
+  /** The simulated product planned. */
+  product: string;
+};
+
 export type PlatformAlarmBody = {
   /** The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
   key?: string;
@@ -6743,8 +6964,15 @@ export type PlatformSimulationDevice = {
   component_id: string;
   /** Whether the simulator impairs the device at the window's end. */
   impaired: boolean;
+  /**
+     * The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
+     * @nullable
+     */
+  location_path: string[] | null;
   /** Requests the device saw over the window, by protocol. */
   received: PlatformSimulationDeviceReceived;
+  /** The name of the device's primary system; empty when it has none. */
+  system: string;
   /** Whether it is a poll target due over the window that the simulator never saw. */
   unhit: boolean;
 };
@@ -7370,7 +7598,7 @@ export type RaiseAlarmInputBody = {
   /** What is wrong, for the operator reading it later */
   message?: string;
   /**
-     * How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage
+     * How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)
      * @minLength 1
      */
   severity: string;
@@ -7704,7 +7932,7 @@ export type RetentionSettings = {
      */
   log_warning_days: number;
   /**
-     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
+     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later; at least 3, the shortest window that folds into blocks
      * @minimum 1
      * @maximum 36500
      */
@@ -8337,6 +8565,18 @@ export type SetLocationTypePropertyInputBody = {
   default_value?: unknown;
   /** Whether every location of this type must set the property; defaults to false */
   required?: boolean;
+};
+
+export type SetMetricTypeRetentionBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused
+     * @minimum 3
+     * @maximum 36500
+     * @nullable
+     */
+  days: number | null;
 };
 
 export type SetProductMetricInputBody = {
@@ -9271,11 +9511,25 @@ export type UpdateSecretInputBody = {
   label?: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level
+ */
+export type UpdateSeverityLevelInputBodyHealthEffect = typeof UpdateSeverityLevelInputBodyHealthEffect[keyof typeof UpdateSeverityLevelInputBodyHealthEffect];
+
+
+export const UpdateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type UpdateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color?: string;
+  /** What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level */
+  health_effect?: UpdateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /** A new name; every alarm at this level follows */
@@ -9562,6 +9816,12 @@ export type ViewRowsEvent = {
 };
 
 export type ListAlarmsParams = {
+  /** Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all */
+  state?: ListAlarmsState;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
   /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
   unacknowledged?: boolean;
   /**
@@ -9584,6 +9844,15 @@ export type ListAlarmsParams = {
   /** The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are */
   page_token?: string;
 };
+
+export type ListAlarmsState = typeof ListAlarmsState[keyof typeof ListAlarmsState];
+
+
+export const ListAlarmsState = {
+  active: 'active',
+  cleared: 'cleared',
+  all: 'all',
+} as const;
 
 export type ListAlarmsAcknowledged = typeof ListAlarmsAcknowledged[keyof typeof ListAlarmsAcknowledged];
 
@@ -9647,11 +9916,29 @@ export type GetCalcRuleStateParams = {
   limit?: number;
 };
 
+export type ListComponentsParams = {
+  /** Only components of this product (name or uuid) */
+  product?: string;
+  /** Only components of a product this driver serves (name or uuid) */
+  driver?: string;
+  /** Only components of a product classified under exactly this component type (name or uuid) */
+  component_type?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
   /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended */
   unacknowledged?: boolean;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
 };
 
 export type ListComponentCommandsParams = {
@@ -9695,6 +9982,24 @@ export type EffectiveTagsParams = {
   system?: string;
 };
 
+export type ListComponentEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
 export type GetComponentHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
   since?: string;
@@ -9710,6 +10015,11 @@ export type ListComponentLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListComponentLogsSeverity = typeof ListComponentLogsSeverity[keyof typeof ListComponentLogsSeverity];
@@ -9814,6 +10124,21 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
+export type PlanOutpostSimulationComponentParams = {
+  /**
+   * A product a simulator profile simulates
+   * @minLength 1
+   */
+  product: string;
+};
+
+export type ListProductsParams = {
+  /** Only products whose contract declares this metric (name or uuid) */
+  declares_metric?: string;
+  /** Only products whose contract declares this property (name or uuid) */
+  declares_property?: string;
+};
+
 export type SearchParams = {
   /**
    * The text to find, matched case-insensitively anywhere in a name or label
@@ -9834,6 +10159,41 @@ export type SearchParams = {
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
 
+export type ListSystemsParams = {
+  /** Only systems built to this standard (name or uuid) */
+  standard?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
+export type ListSystemAlarmsParams = {
+  /** Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until */
+  since?: string;
+  /** The range's end, with since; defaults to now and must not be earlier than since */
+  until?: string;
+};
+
+export type ListSystemEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
 export type GetSystemHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
   since?: string;
@@ -9849,6 +10209,11 @@ export type ListSystemLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListSystemLogsSeverity = typeof ListSystemLogsSeverity[keyof typeof ListSystemLogsSeverity];
@@ -10346,8 +10711,8 @@ export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
 }
 
 /**
- * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
- * @summary List the fleet's active alarms
+ * What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's alarms
  */
 export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
 
@@ -12929,21 +13294,28 @@ export type listComponentsResponseError = (listComponentsResponseDefault) & {
 
 export type listComponentsResponse = (listComponentsResponseSuccess | listComponentsResponseError)
 
-export const getListComponentsUrl = () => {
+export const getListComponentsUrl = (params?: ListComponentsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components`
+  return stringifiedParams.length > 0 ? `/components?${stringifiedParams}` : `/components`
 }
 
 /**
- * Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+ * Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
  * @summary List components in scope
  */
-export const listComponents = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
+export const listComponents = async (params?: ListComponentsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
 
-  return ogFetch<listComponentsResponse>(getListComponentsUrl(),
+  return ogFetch<listComponentsResponse>(getListComponentsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -13003,15 +13375,20 @@ export type deleteComponentResponse204 = {
   status: 204
 }
 
+export type deleteComponentResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteComponentResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteComponentResponseSuccess = (deleteComponentResponse204) & {
   headers: Headers;
 };
-export type deleteComponentResponseError = (deleteComponentResponseDefault) & {
+export type deleteComponentResponseError = (deleteComponentResponse409 | deleteComponentResponseDefault) & {
   headers: Headers;
 };
 
@@ -13026,7 +13403,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -13167,7 +13544,7 @@ export const getListComponentAlarmsUrl = (name: string,
 }
 
 /**
- * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's alarms
  */
 export const listComponentAlarms = async (name: string,
@@ -13212,7 +13589,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -13910,21 +14287,30 @@ export type listComponentEventsResponseError = (listComponentEventsResponseDefau
 
 export type listComponentEventsResponse = (listComponentEventsResponseSuccess | listComponentEventsResponseError)
 
-export const getListComponentEventsUrl = (name: string,) => {
+export const getListComponentEventsUrl = (name: string,
+    params?: ListComponentEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components/${name}/events`
+  return stringifiedParams.length > 0 ? `/components/${name}/events?${stringifiedParams}` : `/components/${name}/events`
 }
 
 /**
- * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's recent events
  */
-export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
+export const listComponentEvents = async (name: string,
+    params?: ListComponentEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
-  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -15834,7 +16220,7 @@ export const getGetEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
+ * Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.
  * @summary Get an endpoint
  */
 export const getEndpoint = async (endpoint: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEndpointResponse> => {
@@ -17555,15 +17941,20 @@ export type deleteLocationResponse204 = {
   status: 204
 }
 
+export type deleteLocationResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteLocationResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
   headers: Headers;
 };
-export type deleteLocationResponseError = (deleteLocationResponseDefault) & {
+export type deleteLocationResponseError = (deleteLocationResponse409 | deleteLocationResponseDefault) & {
   headers: Headers;
 };
 
@@ -17578,7 +17969,7 @@ export const getDeleteLocationUrl = (name: string,) => {
 }
 
 /**
- * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a location
  */
 export const deleteLocation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationResponse> => {
@@ -18703,18 +19094,18 @@ export const getSetMetricTypeRetentionUrl = (name: string,) => {
 }
 
 /**
- * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
+ * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 3 to 36,500 days (a metric day folds into blocks 48 hours after it starts, so a shorter window folds nothing). Audited as set_retention. Gated by metric_type:update and platform:update.
  * @summary Set a metric type's retention window
  */
 export const setMetricTypeRetention = async (name: string,
-    setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
+    setMetricTypeRetentionBody: NonReadonly<SetMetricTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
 
   return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
   {
     ...options,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
-    body: JSON.stringify(setTypeRetentionBody)
+    body: JSON.stringify(setMetricTypeRetentionBody)
   }
 );}
 
@@ -19833,6 +20224,59 @@ export const addOutpostSimulationComponent = async (name: string,
 
 
 
+export type planOutpostSimulationComponentResponse200 = {
+  data: PlanSimComponentOutputBody
+  status: 200
+}
+
+export type planOutpostSimulationComponentResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type planOutpostSimulationComponentResponseSuccess = (planOutpostSimulationComponentResponse200) & {
+  headers: Headers;
+};
+export type planOutpostSimulationComponentResponseError = (planOutpostSimulationComponentResponseDefault) & {
+  headers: Headers;
+};
+
+export type planOutpostSimulationComponentResponse = (planOutpostSimulationComponentResponseSuccess | planOutpostSimulationComponentResponseError)
+
+export const getPlanOutpostSimulationComponentUrl = (name: string,
+    params: PlanOutpostSimulationComponentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/outposts/${name}/simulation/components:plan?${stringifiedParams}` : `/outposts/${name}/simulation/components:plan`
+}
+
+/**
+ * Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+ * @summary Plan a simulated component
+ */
+export const planOutpostSimulationComponent = async (name: string,
+    params: PlanOutpostSimulationComponentParams, options?: Parameters<typeof ogFetch>[1]): Promise<planOutpostSimulationComponentResponse> => {
+
+  return ogFetch<planOutpostSimulationComponentResponse>(getPlanOutpostSimulationComponentUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getOutpostSimulationObservationResponse200 = {
   data: EndpointObservation
   status: 200
@@ -20173,21 +20617,28 @@ export type listProductsResponseError = (listProductsResponseDefault) & {
 
 export type listProductsResponse = (listProductsResponseSuccess | listProductsResponseError)
 
-export const getListProductsUrl = () => {
+export const getListProductsUrl = (params?: ListProductsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/products`
+  return stringifiedParams.length > 0 ? `/products?${stringifiedParams}` : `/products`
 }
 
 /**
- * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
  * @summary List products
  */
-export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
+export const listProducts = async (params?: ListProductsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
 
-  return ogFetch<listProductsResponse>(getListProductsUrl(),
+  return ogFetch<listProductsResponse>(getListProductsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -21613,7 +22064,7 @@ export const getListSeverityLevelUrl = () => {
 }
 
 /**
- * Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+ * Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.
  * @summary List severity levels
  */
 export const listSeverityLevel = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSeverityLevelResponse> => {
@@ -21789,7 +22240,7 @@ export const getUpdateSeverityLevelUrl = (name: string,) => {
 }
 
 /**
- * Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
+ * Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
  * @summary Update a severity level
  */
 export const updateSeverityLevel = async (name: string,
@@ -22855,21 +23306,28 @@ export type listSystemsResponseError = (listSystemsResponseDefault) & {
 
 export type listSystemsResponse = (listSystemsResponseSuccess | listSystemsResponseError)
 
-export const getListSystemsUrl = () => {
+export const getListSystemsUrl = (params?: ListSystemsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems`
+  return stringifiedParams.length > 0 ? `/systems?${stringifiedParams}` : `/systems`
 }
 
 /**
- * Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+ * Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
  * @summary List systems in scope
  */
-export const listSystems = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
+export const listSystems = async (params?: ListSystemsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
 
-  return ogFetch<listSystemsResponse>(getListSystemsUrl(),
+  return ogFetch<listSystemsResponse>(getListSystemsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -22929,15 +23387,20 @@ export type deleteSystemResponse204 = {
   status: 204
 }
 
+export type deleteSystemResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteSystemResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteSystemResponseSuccess = (deleteSystemResponse204) & {
   headers: Headers;
 };
-export type deleteSystemResponseError = (deleteSystemResponseDefault) & {
+export type deleteSystemResponseError = (deleteSystemResponse409 | deleteSystemResponseDefault) & {
   headers: Headers;
 };
 
@@ -22952,7 +23415,7 @@ export const getDeleteSystemUrl = (name: string,) => {
 }
 
 /**
- * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a system
  */
 export const deleteSystem = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemResponse> => {
@@ -23076,21 +23539,30 @@ export type listSystemAlarmsResponseError = (listSystemAlarmsResponseDefault) & 
 
 export type listSystemAlarmsResponse = (listSystemAlarmsResponseSuccess | listSystemAlarmsResponseError)
 
-export const getListSystemAlarmsUrl = (name: string,) => {
+export const getListSystemAlarmsUrl = (name: string,
+    params?: ListSystemAlarmsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/alarms`
+  return stringifiedParams.length > 0 ? `/systems/${name}/alarms?${stringifiedParams}` : `/systems/${name}/alarms`
 }
 
 /**
- * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's members' alarms
  */
-export const listSystemAlarms = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
+export const listSystemAlarms = async (name: string,
+    params?: ListSystemAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
 
-  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name),
+  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -23120,21 +23592,30 @@ export type listSystemEventsResponseError = (listSystemEventsResponseDefault) & 
 
 export type listSystemEventsResponse = (listSystemEventsResponseSuccess | listSystemEventsResponseError)
 
-export const getListSystemEventsUrl = (name: string,) => {
+export const getListSystemEventsUrl = (name: string,
+    params?: ListSystemEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/events`
+  return stringifiedParams.length > 0 ? `/systems/${name}/events?${stringifiedParams}` : `/systems/${name}/events`
 }
 
 /**
- * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's recent events, members included
  */
-export const listSystemEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
+export const listSystemEvents = async (name: string,
+    params?: ListSystemEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
 
-  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name),
+  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -23181,7 +23662,7 @@ export const getGetSystemHealthUrl = (name: string,
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
 export const getSystemHealth = async (name: string,

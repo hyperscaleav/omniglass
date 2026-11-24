@@ -197,7 +197,7 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 		t.Fatalf("read systems: %v", err)
 	}
 	for i, s := range systems {
-		rep, err := f.gw.SystemHealth(ctx, s.name, storage.HealthRange{}, f.all)
+		rep, err := f.gw.SystemHealth(ctx, s.name, storage.HealthRange{}, f.all, f.all)
 		if err != nil {
 			t.Fatalf("system health %s: %v", s.name, err)
 		}

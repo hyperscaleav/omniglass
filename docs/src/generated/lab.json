@@ -66,9 +66,30 @@
   ],
   "walkthroughs": [
     {
+      "id": "add-a-component",
+      "title": "Add a component",
+      "description": "Add a display to a system from the Simulation page, with a simulated device as its address, pick its credential, test it, and land on its collected values.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "add-a-dependency",
       "title": "Add and remove a dependency",
       "description": "Read what a video bar depends on and what depends on it, try an edge that would close a cycle and read the server's refusal, then add a real upstream and remove it again.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "alarm-on-what-you-are-looking-at",
+      "title": "Alarm on what you are looking at",
+      "description": "From a component's vitals, start a rule on one metric, see the form name what is missing, preview it in plain words, and save it.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "break-a-device-in-one-click",
+      "title": "Break a device in one click",
+      "description": "Unplug a simulated panel from its row's Break menu, watch the fault chip and the reachability alarm it causes, then clear the fault from the chip.",
       "lab": [],
       "setup": []
     },
@@ -82,11 +103,33 @@
       ]
     },
     {
+      "id": "delete-what-you-made",
+      "title": "Delete what you made",
+      "description": "Delete a component that still owns an endpoint, then the location that still holds a system, clearing each one's blockers from the same confirm dialog.",
+      "lab": [],
+      "setup": [
+        "omniglass location create --label 'Pop-up site' --location-type campus --name pop-up-site",
+        "omniglass system create --label 'Pop-up kiosk' --location pop-up-site --name pop-up-kiosk",
+        "omniglass component create --label 'Pop-up display' --location pop-up-site --name pop-up-display --product generic-device",
+        "omniglass endpoint create --component pop-up-display --transport icmp"
+      ]
+    },
+    {
       "id": "derive-a-value-with-a-calc-rule",
       "title": "Derive a value with a calc rule",
       "description": "Author a calc rule and the metric it writes in one drawer, write the expression that takes each component's slowest TCP connect time, preview and save it, and find the derived value on a component, linked to its rule.",
       "lab": [],
       "setup": []
+    },
+    {
+      "id": "find-a-cleared-alarm",
+      "title": "Find a cleared alarm and how long it lasted",
+      "description": "Clear an alarm from its component, then read it in the alarm page's Cleared filter with when it cleared and how long it was raised, and open its history.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'History demo display' --location bay-2 --name history-demo-display --product boreal-edge-55",
+        "omniglass component alarm create history-demo-display --dedup-key walkthrough-history-input --message 'History demo input lost' --severity high"
+      ]
     },
     {
       "id": "find-a-device-from-the-keyboard",
@@ -140,6 +183,13 @@
       "setup": []
     },
     {
+      "id": "follow-a-product-to-its-driver",
+      "title": "Follow a product to its driver and its components",
+      "description": "Open a product, read what its driver collects, follow the driver link to the driver's own drawer, and open one of the components the driver serves.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "issue-a-command",
       "title": "Issue a command and follow it",
       "description": "Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.",
@@ -168,6 +218,15 @@
       "setup": []
     },
     {
+      "id": "move-a-device-to-another-room",
+      "title": "Move a device to another room",
+      "description": "Open a spare microphone's Configure, press Move to, choose Bay 4, and watch the breadcrumb follow the device without leaving its page.",
+      "lab": [],
+      "setup": [
+        "omniglass component create --label 'Spare Mic' --location bay-2 --name spare-mic --product lyra-arc-a2"
+      ]
+    },
+    {
       "id": "move-a-location",
       "title": "Move a location to another building",
       "description": "Open a room's Configure, pick its new parent from the location tree, and save. The tree shows the nesting, and rooms (which a room may not sit under) stay in place but cannot be picked.",
@@ -190,8 +249,8 @@
     },
     {
       "id": "open-status-under-admin",
-      "title": "Open Outposts and Status from Admin",
-      "description": "From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.",
+      "title": "Open Outposts and Platform health from Admin",
+      "description": "From Home, find Outposts and Platform health under Admin in the sidebar, open Outposts where a new outpost is set up, then open Platform health and read the build the server runs.",
       "lab": [],
       "setup": []
     },
@@ -205,7 +264,7 @@
     {
       "id": "pick-a-time-range",
       "title": "Pick the time range a system page charts",
-      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the data section redrawn over the week.",
+      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the metrics grid redrawn over the week.",
       "lab": [],
       "setup": []
     },
@@ -236,9 +295,23 @@
       ]
     },
     {
+      "id": "read-every-metric-at-one-instant",
+      "title": "Read every metric at one instant",
+      "description": "Open a boardroom's system over the last hour, rest the pointer on one metric's chart, and read the crosshair and value every other chart draws at the same instant.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "read-platform-health",
       "title": "Read the platform's health",
-      "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+      "description": "From Home, open Platform health, read each section's one-line verdict, open a hop under where work is lost, open the outposts and the simulator's gaps, then open the server's panels on the Requests panel and follow the slowest route's figure onto its series on the server's platform component.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "read-what-happened-on-the-timeline",
+      "title": "Read what happened on the timeline",
+      "description": "A display drops off the network and recovers; open its system's Timeline, rest the pointer on the alarm's span to read when it was raised, when it cleared and for how long, then on the command sent while it was down.",
       "lab": [],
       "setup": []
     },
@@ -248,6 +321,22 @@
       "description": "The Simulation page lists every component a simulator serves beside an outpost. Open one to see where it is served and what has reached it.",
       "lab": [],
       "setup": []
+    },
+    {
+      "id": "see-what-needs-attention",
+      "title": "See what needs attention",
+      "description": "Read Home's Need attention card, open it, and find Explore's chip saying the same words, with exactly that many rows beneath it.",
+      "lab": [],
+      "setup": []
+    },
+    {
+      "id": "send-a-command-from-an-alarm",
+      "title": "Send a command from an alarm",
+      "description": "A display has an alarm. Send it the power command from the alarm's own row, picking the value from the list the command accepts, and follow it until the display's reply settles it.",
+      "lab": [],
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-2.boardroom-a.$comp.display-1' --dedup-key walkthrough-send-command --message 'Display left on after hours' --severity high"
+      ]
     },
     {
       "id": "send-alarms-to-a-chat-channel",

@@ -2,6 +2,7 @@
 // lane, and replacement cost and expected life on the metric lane. Pure helpers
 // the component and product pages share; the catalog (seed YAML) owns the types.
 import { entityLabel } from "./entities";
+import { fmtDay } from "./format";
 
 export const LIFECYCLE_DATES = ["install-date", "warranty-end", "end-of-support", "end-of-life"] as const;
 export const LIFECYCLE_METRICS = ["replacement-cost", "expected-life-years"] as const;
@@ -22,7 +23,7 @@ export function isIsoDate(text: string): boolean {
 export function formatLifecycleDate(value: unknown): string {
   if (typeof value !== "string" || !isIsoDate(value)) return String(value);
   const [y, mo, d] = value.split("-").map(Number);
-  return new Date(Date.UTC(y, mo - 1, d)).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+  return fmtDay(new Date(Date.UTC(y, mo - 1, d)).toISOString(), { year: true });
 }
 
 // formatLifecycleCost reads a number in a currency unit (USD) as money.

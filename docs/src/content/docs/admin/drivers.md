@@ -25,6 +25,9 @@ this page is what an admin does with the catalog around it.
 
 ## The catalog
 
+A driver's drawer lists the products that use it and the components it serves, and links each metric,
+property and command type its spec names: see [Follow the catalog](/admin/catalog-links/).
+
 A driver is consumed by the [product](/admin/products/) catalog: a product references its driver
 through an optional `driver_id`, chosen from the driver picker on the product's create and edit forms,
 and three of the shipped official products bind a driver this way. See
@@ -41,8 +44,7 @@ and three of the shipped official products bind a driver this way. See
   (with `driver:delete`) removes the row, behind a confirm. A verb you lack greys just that
   button, its hover reason naming the permission (`Requires driver:update`, `Requires driver:delete`);
   the pair never disappears.
-- An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
-  greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+- An **official** row is always read-only: the blade footer shows one note, "Official, read-only", with the reason on hover: "Official: ships with Omniglass and updates with it."
   Omniglass ships a starter set of official drivers, each with a real spec (the set the binary
   seeds is rendered under [the declarative menu](/architecture/collection/#drivers-the-declarative-menu)),
   upserted idempotently at boot so the
@@ -94,8 +96,7 @@ An endpoint carries two kinds of data, and a driver configures only one of them:
 
   Omniglass produces it from the endpoint's transport. A driver never declares or emits it, and a
   spec that emits one is refused. A driver only tunes how some of it is gathered: its `ladder` ([the driver spec](/developer/driver-spec/))
-  picks the reachability rung and whether to ping. The cadences become per-endpoint-type defaults a
-  driver and an operator can override with #1373. The keys are the `outpost-probe` and `platform` writer
+  picks the reachability rung and whether to ping. The keys are the `outpost-probe` and `platform` writer
   classes, listed from the code on [who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class).
 - **Collected data** is what the device's own API says: a volume, a call state, an input. It is
   exactly what the driver's polls and listeners emit, each a **collected** key, and the driver

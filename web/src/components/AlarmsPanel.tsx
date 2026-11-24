@@ -17,7 +17,9 @@ import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
+import AlarmDuration from "./AlarmDuration";
 import { SnoozedBadge } from "./SnoozeButton";
+import Tooltip from "./ui/Tooltip";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
@@ -115,22 +117,16 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <div class="flex items-baseline gap-2">
           <span class="eyebrow">Alarms</span>
           <Show when={unseen()}>
-            <span class="badge badge-outline badge-warning badge-sm shrink-0" title="Raised, and nobody has recorded seeing it yet">
+            <Tooltip as="span" tabIndex={0} class="badge badge-outline badge-warning badge-sm shrink-0" content="Raised, and nobody has recorded seeing it yet">
               {unseen()} unacknowledged
-            </span>
+            </Tooltip>
           </Show>
         </div>
         <span class="shrink-0 text-[10.5px] text-base-content/40">what is wrong here, and what it takes down</span>
       </div>
       <p class="text-[11px] text-base-content/50">
-        An alarm is raised on this component when a rule fires with a severity, and takes its own health down (any active alarm degrades it,
-        one at an outage level is an outage). Any slot it fills stops counting it toward quorum while it stays down, which is
-        how a fault on a box becomes a health on a system.
-      </p>
-      <p class="text-[11px] text-base-content/50">
-        Acknowledging is separate from clearing: it records that a human has seen the alarm and changes nothing else,
-        so the component stays exactly as broken as it was. What is raised is a fact about the fault; who has
-        looked is a fact about a person.
+        An alarm is raised when a rule fires with a severity, and takes this component's health down (an outage level is an outage);
+        a slot it fills stops counting it toward quorum while it stays down. Acknowledging only records that a human has seen it.
       </p>
 
       <Show when={err()}>
@@ -157,10 +153,13 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                 <div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
                 <div class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
+                  <Show when={scale().effect(a.severity) === "none"}>
+                    <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
+                  </Show>
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
-                  <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
+                  <Tooltip as="span" tabIndex={0} class="shrink-0 text-[11px] text-base-content/45" content={a.raised_at}>
                     raised {rel(a.raised_at)}
-                  </span>
+                  </Tooltip>
                   {/* An event rule raised it, not a person: name the rule. */}
                   <Show when={a.raised_by_rule}>
                     {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
@@ -172,14 +171,14 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <Show
                     when={a.acknowledged}
                     fallback={
-                      <span class="badge badge-outline badge-warning badge-xs shrink-0" title="Nobody has recorded seeing this yet">
+                      <Tooltip as="span" tabIndex={0} class="badge badge-outline badge-warning badge-xs shrink-0" content="Nobody has recorded seeing this yet">
                         unacknowledged
-                      </span>
+                      </Tooltip>
                     }
                   >
-                    <span class="shrink-0 text-[11px] text-base-content/45" title={a.acknowledged_at}>
+                    <Tooltip as="span" tabIndex={0} class="shrink-0 text-[11px] text-base-content/45" content={a.acknowledged_at}>
                       seen by {a.acknowledged_by || "someone since removed"} {rel(a.acknowledged_at!)}
-                    </span>
+                    </Tooltip>
                   </Show>
                   <SnoozedBadge alarm={a} />
                 </div>
@@ -188,7 +187,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                     componentId={props.component}
                     alarm={a}
                     surface={surface}
-                    show={{ ack: true, snooze: true, troubleshoot: true, timeline: timelines, clear: { allowed: !!props.canUpdate, busy: busy(), onClear: () => void clear(a.id) } }}
+                    show={{ ack: true, snooze: true, troubleshoot: true, command: true, timeline: timelines, clear: { allowed: !!props.canUpdate, busy: busy(), onClear: () => void clear(a.id) } }}
                     allow={{ ack: !!props.canAcknowledge, snooze: !!props.canSnooze }}
                   />
                 </div>
@@ -213,7 +212,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
               <For each={scale().levels}>
                 {(l) => (
                   <option value={l.name} selected={l.name === severity()}>
-                    {`${entityLabel(l)} (${l.outage ? "takes this component out" : "degrades it, still working"})`}
+                    {`${entityLabel(l)} (${l.health_effect === "outage" ? "takes this component out" : l.health_effect === "none" ? "does not affect health" : "degrades it, still working"})`}
                   </option>
                 )}
               </For>
@@ -254,7 +253,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
                       <span class="shrink-0 text-[11px] text-base-content/45">
                         raised {rel(a.raised_at)}
-                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
+                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)} · lasted <AlarmDuration alarm={a} /></Show>
                         {/* An alarm that came and went with nobody looking is worth
                             seeing in the history: it is the one that got no attention. */}
                         <Show when={!a.acknowledged}> · never acknowledged</Show>

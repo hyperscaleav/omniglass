@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/health"
@@ -102,6 +103,29 @@ type HealthReport struct {
 	// FirstRecorded is when the owner's health was first recorded (nil if
 	// never): how long it has been watched, whatever the range.
 	FirstRecorded *time.Time
+	// Reason (system reports) is the verdict in words, computed by
+	// health.SystemReason from the same slots as the verdict: the slots behind
+	// it, worst first. It never names a member outside a slot (ADR-2459).
+	Reason string
+	// Members (system reports) is every component bound into the system with
+	// its own health, its open alarms, and the slot it fills, so a reader sees
+	// every alarm in the system, the ones that move nothing above their
+	// component included (#2459).
+	Members []HealthMember
+}
+
+// HealthMember is one member of a system as its health report carries it.
+// OutsideSlot is true when it fills no slot in this system: its alarms are
+// shown on the system and move nothing above the component (ADR-2459).
+type HealthMember struct {
+	Name        string
+	ID          string
+	Health      string
+	OutsideSlot bool
+	// Slot is the name of the slot the member fills here; empty when
+	// OutsideSlot.
+	Slot   string
+	Alarms []Alarm
 }
 
 // HealthSlot is one contributing slot, with the causing chain when it is
@@ -140,8 +164,15 @@ type HealthSlot struct {
 // HealthSystem is one system under a location, with its recorded verdict. It is
 // the location report's drill-down: the system health read explains the rest.
 type HealthSystem struct {
+	ID      string
 	Name    string
+	Label   string
 	Verdict string
+	// Path is the system's dotted address, the unique handle GET /systems/{name}
+	// resolves: Name alone repeats across rooms (#1775). Location is the dotted
+	// path of the location the system is placed at, empty for an unplaced one.
+	Path     string
+	Location string
 }
 
 // HealthRange bounds the transitions a health read returns. Since and Until are
@@ -265,11 +296,11 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := lockHealthOwner(ctx, q, "component", c.ID); err != nil {
 			return err
 		}
-		ranks, err := p.activeAlarmRanks(ctx, q, c.ID)
+		effects, err := p.activeAlarmEffects(ctx, q, c.ID)
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(ranks)); err != nil {
+		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(effects)); err != nil {
 			return err
 		}
 		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
@@ -628,21 +659,22 @@ func ownerArcExprN(ownerKind string, n int) string {
 	return fmt.Sprintf("$%d::text", n)
 }
 
-// activeAlarmRanks lists the severity ranks of a component's active alarms,
+// activeAlarmEffects lists the declared health effects of a component's active
+// alarms' severity levels (#2558),
 // the only input its own verdict takes. Takes the component's id directly (every
 // caller already has it, recomputeChain's ownerRef included): binding it
 // avoids re-deriving an id from a name that #627 no longer guarantees is
 // unique.
-func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID string) ([]int, error) {
-	var ranks []int
+func (p *PG) activeAlarmEffects(ctx context.Context, q txQuerier, componentID string) ([]string, error) {
+	var effects []string
 	if err := q.QueryRow(ctx, `
-		select coalesce(array_agg(l.rank), '{}')
+		select coalesce(array_agg(l.health_effect), '{}')
 		from alarm a join severity_level l on l.name = a.severity
 		where a.component_id = $1::uuid and a.cleared_at is null`,
-		componentID).Scan(&ranks); err != nil {
-		return nil, fmt.Errorf("storage: active alarm ranks %q: %w", componentID, err)
+		componentID).Scan(&effects); err != nil {
+		return nil, fmt.Errorf("storage: active alarm effects %q: %w", componentID, err)
 	}
-	return ranks, nil
+	return effects, nil
 }
 
 // ComponentHealth is one component's own current verdict, by its id, the
@@ -674,13 +706,13 @@ func (p *PG) ComponentHealth(ctx context.Context, componentID string) (string, e
 // not just run), but the same live computation the recompute makes. It is the
 // only input a slot it occupies takes now: an alarm impairs a component
 // wholesale, not by name capability, so there is nothing else to resolve.
-// Takes the component's id (see activeAlarmRanks).
+// Takes the component's id (see activeAlarmEffects).
 func (p *PG) componentHealth(ctx context.Context, q txQuerier, componentID string) (health.Value, error) {
-	ranks, err := p.activeAlarmRanks(ctx, q, componentID)
+	effects, err := p.activeAlarmEffects(ctx, q, componentID)
 	if err != nil {
 		return health.Healthy, err
 	}
-	return health.ComponentValue(ranks), nil
+	return health.ComponentValue(effects), nil
 }
 
 // systemsStaffedBy lists the systems this component fills a slot in, the systems
@@ -810,7 +842,7 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ow
 // children held this location's lock until it committed. A child with no
 // recorded row has never been unhealthy and is skipped, which is
 // health.RollUp's own reading of nothing. Takes the location's id directly
-// (see activeAlarmRanks).
+// (see activeAlarmEffects).
 func (p *PG) locationHealth(ctx context.Context, q txQuerier, locationID string) (health.Value, error) {
 	rows, err := q.Query(ctx, `
 		with health as (
@@ -1116,7 +1148,7 @@ func splitHealthSlots(rs []resolvedSlot) (unconditional []health.Slot, choices [
 // (each with Active false, HealthSlot), so the verdict can be healthy while
 // the list beside it shows impaired rows, and Active is what tells the two
 // apart rather than that being a disagreement.
-func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
+func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
 	// same lookup but discards the id): every read below, including
 	// healthTransitions, binds sys.ID, never re-derived from systemName once
@@ -1137,6 +1169,10 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 	}
 	unconditional, choices, choicesByID := splitHealthSlots(slots)
 	rep.Verdict = health.SystemValueWith(unconditional, choices).String()
+	rep.Reason = health.SystemReason(unconditional, choices)
+	if rep.Members, err = p.healthMembers(ctx, p.pool, sys.ID, compRead); err != nil {
+		return nil, err
+	}
 	// The same choices splitHealthSlots just grouped for the verdict name
 	// which alternate is active in each, so explainSlot can mark every slot
 	// with whether it is the reason the verdict reads what it does or a
@@ -1170,6 +1206,118 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 		return nil, err
 	}
 	return rep, nil
+}
+
+// systemMember is one member row of a system and the slot it fills there.
+type systemMember struct {
+	id, name string
+	slot     string // the name of the slot it fills here; empty when none
+}
+
+// systemMembersOf lists the members of a system the caller may read, ordered by
+// name, each with the slot it fills in this system (a component fills at most
+// one per system, #626). The component scope is injected into the query through
+// the same read filter every derived component read uses, never filtered in Go
+// afterwards: a member the caller cannot read is never fetched (#458).
+func systemMembersOf(ctx context.Context, q txQuerier, systemID string, read scope.Set) ([]systemMember, error) {
+	if read.Empty() {
+		return nil, nil
+	}
+	cols := `select c.id, c.name,
+		       coalesce((select r.name from system_slot_assignment ra join system_slot r on r.id = ra.slot_id
+		                 where ra.system_id = m.system_id and ra.component_id = m.component_id
+		                 order by r.name limit 1), '')
+		from system_member m join component c on c.id = m.component_id
+		where m.system_id = $1::uuid`
+	order := ` order by c.name, c.id`
+	sql, args := cols+order, []any{systemID}
+	if !read.All {
+		f := newReadFilter(componentTable, read, 2)
+		if f.With == "" {
+			return nil, nil // every scope root is malformed: nothing is in scope
+		}
+		sql = f.With + ` ` + cols + ` and ` + f.Pred("c.id") + order
+		args = append(args, f.Args...)
+	}
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: system members %q: %w", systemID, err)
+	}
+	defer rows.Close()
+	var out []systemMember
+	for rows.Next() {
+		var m systemMember
+		if err := rows.Scan(&m.id, &m.name, &m.slot); err != nil {
+			return nil, fmt.Errorf("storage: scan system member: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// healthMembers is every member of a system the caller may read, for its health report: its own
+// health (unknown for a component nothing has observed, as the members read and
+// the fleet view's dots say), the slot it fills, and its open alarms, slotted or
+// not (#2459). A read: it records nothing.
+func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, read scope.Set) ([]HealthMember, error) {
+	members, err := systemMembersOf(ctx, q, systemID, read)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]HealthMember, 0, len(members))
+	if len(members) == 0 {
+		return out, nil
+	}
+	ids := make([]string, len(members))
+	for i, m := range members {
+		ids[i] = m.id
+	}
+	// Two set-based reads keyed by the in-scope member ids, not two per member.
+	type rankObs struct {
+		effects  []string
+		observed bool
+	}
+	byID := make(map[string]rankObs, len(members))
+	rows, err := q.Query(ctx, `
+		select i.id::text,
+		       coalesce((select array_agg(l.health_effect) from alarm a join severity_level l on l.name = a.severity
+		                 where a.component_id = i.id and a.cleared_at is null), '{}'),
+		       `+componentObservedSQL("i.id")+`
+		from unnest($1::uuid[]) as i(id)`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: member health %q: %w", systemID, err)
+	}
+	for rows.Next() {
+		var id string
+		var ro rankObs
+		if err := rows.Scan(&id, &ro.effects, &ro.observed); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("storage: scan member health: %w", err)
+		}
+		byID[id] = ro
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: member health %q: %w", systemID, err)
+	}
+	alarmsByID, err := p.activeAlarmsFor(ctx, q, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range members {
+		ro := byID[m.id]
+		v := health.ComponentValue(ro.effects)
+		h := v.String()
+		if v == health.Healthy && !ro.observed {
+			h = "unknown"
+		}
+		alarms := alarmsByID[m.id]
+		if alarms == nil {
+			alarms = []Alarm{}
+		}
+		out = append(out, HealthMember{Name: m.name, ID: m.id, Health: h, OutsideSlot: m.slot == "", Slot: m.slot, Alarms: alarms})
+	}
+	return out, nil
 }
 
 // LocationHealth reports a location's current verdict, the systems beneath it
@@ -1311,7 +1459,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 			union
 			select c.id from location c join subtree s on c.parent_id = s.id
 		)
-		select s.name, coalesce((
+		select s.id, s.name, s.label, s.location_id, coalesce((
 			select sd.value #>> '{}' from property sd
 			where sd.system_id = s.id and sd.property_type_id = (select id from property_type_in_effect() property_type where name = $2) and sd.instance = ''
 			  and sd.provenance = 'calculated'
@@ -1327,14 +1475,46 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 	defer rows.Close()
 
 	out := []HealthSystem{}
+	var locIDs []*string
 	for rows.Next() {
 		var s HealthSystem
-		if err := rows.Scan(&s.Name, &s.Verdict); err != nil {
+		var loc *string
+		if err := rows.Scan(&s.ID, &s.Name, &s.Label, &loc, &s.Verdict); err != nil {
 			return nil, fmt.Errorf("storage: scan subtree system health %q: %w", locationID, err)
 		}
 		out = append(out, s)
+		locIDs = append(locIDs, loc)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if len(out) == 0 {
+		return out, nil
+	}
+	sysIDs := make([]string, 0, len(out))
+	var placeIDs []string
+	for i, s := range out {
+		sysIDs = append(sysIDs, s.ID)
+		if locIDs[i] != nil {
+			placeIDs = append(placeIDs, *locIDs[i])
+		}
+	}
+	sysPaths, err := PathsOf(ctx, q, systemTable, sysIDs)
+	if err != nil {
+		return nil, err
+	}
+	locPaths, err := PathsOf(ctx, q, locationTable, placeIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		out[i].Path = strings.Join(sysPaths[out[i].ID], ".")
+		if locIDs[i] != nil {
+			out[i].Location = strings.Join(locPaths[*locIDs[i]], ".")
+		}
+	}
+	return out, nil
 }
 
 // healthTransitions reads an owner's recorded edges inside window, oldest-first:

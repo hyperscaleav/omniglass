@@ -6,7 +6,7 @@ refs: [1114, 1113]
 summary: "An http session may declare `session.login` (#1114, slice 2 of epic #1113, its decision 3): the #1061 login dialog with request steps naming only secret fields, a capture of the last answer's values through the one extraction primitive, the headers that send them, a declared expiry, a login path and an expired match telling a lapse. The node keeps one auth state per http endpoint (a cookie jar, the captured values, a digest challenge) in memory alone, dropped when the fingerprint moves, on a terminal refusal, and on restart. A lapse logs in once and replays once; a lapse right after a fresh login, or any refusal of the login itself, is a terminal `auth` tried once per fingerprint. `digest` (RFC 7616, MD5 and SHA-256, `stale`) is a scheme on `basic-auth`. Shaped so an OAuth2 client-credentials grant (#1119) needs no new primitive"
 ---
 
-- **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/)
+- **Date:** 2026-10-25 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/reference/glossary/), [drivers](/admin/drivers/), [simulation](/architecture/simulation/)
 - **Decision:** (#1114, under the architect's approval of epic #1113, its decision 3.)
   1. **One login primitive.** An http session's `login` is the login dialog a line session runs
      (#1061), its steps requests rather than prompts. A step's references are only

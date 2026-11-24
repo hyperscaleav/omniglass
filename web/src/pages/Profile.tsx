@@ -1,4 +1,4 @@
-import { Show, For, createSignal, createEffect, createResource } from "solid-js";
+import { Show, For, createSignal, createEffect, createResource, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import InfoTip from "../components/InfoTip";
 import PasswordField from "../components/PasswordField";
@@ -14,14 +14,31 @@ import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/va
 import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
-import { kindLabel } from "../lib/users";
+import { kindLabel, getUser } from "../lib/users";
+import { scopeWords, permissionLabel } from "../lib/access";
+import { useQuery } from "@tanstack/solid-query";
+import { confirmAction } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
 // operate under, your user, its permissions, and its role grants. Every field
 // here is self-scoped; the server edits only the caller's own user.
+// One row of the Access card: the label on the left, its value on the right.
+function AccessRow(p: { label: string; value: JSX.Element }) {
+  return (
+    <div class="flex items-baseline gap-4 px-3 py-2">
+      <dt class="eyebrow w-20 shrink-0">{p.label}</dt>
+      <dd class="min-w-0 flex-1 text-sm">{p.value}</dd>
+    </div>
+  );
+}
+
 export default function Profile() {
   const me = useMe();
+  // The caller's own groups, read from their user record; a caller who may not read
+  // it simply gets no Groups row rather than a wrong "none".
+  const groups = useQuery(() => ({ queryKey: ["users", "me-groups", me.data?.user.id], queryFn: async () => (await getUser(me.data!.user.id)).groups ?? [], enabled: !!me.data?.user.id, retry: false }));
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
   const sessions = useSessions();
@@ -49,7 +66,7 @@ export default function Profile() {
   const [revokingAll, setRevokingAll] = createSignal<"session" | "token" | null>(null);
   async function revokeAll(purpose: "session" | "token") {
     const noun = purpose === "session" ? "other sessions" : "API tokens";
-    if (!window.confirm(`Revoke all your ${noun}? You stay signed in on this one.`)) return;
+    if (!(await confirmAction({ title: `Revoke all your ${noun}?`, body: "You stay signed in on this one.", confirmLabel: `Revoke ${noun}`, tone: "danger" }))) return;
     setRevokingAll(purpose);
     const r = await revokeAllSelf(purpose);
     if (!r.ok) setProfileMsg({ tone: "error", text: r.message });
@@ -119,7 +136,7 @@ export default function Profile() {
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
-  const [confirm, setConfirm] = createSignal("");
+  const [confirmation, setConfirmation] = createSignal("");
   const [pwMsg, setPwMsg] = createSignal<Note>(null);
   const [pwBusy, setPwBusy] = createSignal(false);
   // A password-policy rejection (the server denylist) renders inline under the new
@@ -129,7 +146,7 @@ export default function Profile() {
   // Profile + Access, rather than a third stacked form.
   const [pwOpen, setPwOpen] = createSignal(false);
   async function savePassword() {
-    if (next() !== confirm()) {
+    if (next() !== confirmation()) {
       setPwMsg({ tone: "error", text: "The new passwords do not match." });
       return;
     }
@@ -140,7 +157,7 @@ export default function Profile() {
     if (r.ok) {
       setCurrent("");
       setNext("");
-      setConfirm("");
+      setConfirmation("");
       setPwMsg(null);
       setPwOpen(false);
       // Feedback lands on the page (the drawer just closed).
@@ -200,7 +217,7 @@ export default function Profile() {
       submitIcon: Save,
       submit: () => void savePassword(),
       busy: pwBusy,
-      disabled: () => !current() || !next() || next() !== confirm() || !!passwordError(next(), human()?.username),
+      disabled: () => !current() || !next() || next() !== confirmation() || !!passwordError(next(), human()?.username),
       cancel: () => setPwOpen(false),
     });
     return (
@@ -230,12 +247,12 @@ export default function Profile() {
             type="password"
             autocomplete="new-password"
             class="input input-bordered w-full font-data"
-            value={confirm()}
-            onInput={(e) => setConfirm(e.currentTarget.value)}
+            value={confirmation()}
+            onInput={(e) => setConfirmation(e.currentTarget.value)}
             disabled={pwBusy()}
             aria-required="true"
           />
-          <Show when={confirm() && next() !== confirm()}>
+          <Show when={confirmation() && next() !== confirmation()}>
             <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
           </Show>
         </div>
@@ -384,19 +401,34 @@ export default function Profile() {
               permissions are the flattened union of the roles granted to you; the server enforces them on every request
               (this is a hint, not the authority).
             </p>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <div class="eyebrow mb-1.5">Role grants</div>
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={me.data?.grants ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
-                    {(g) => (
-                      <span class="badge badge-soft badge-primary font-data text-[11px]">
-                        {g.role} @ {g.scope_kind}{g.scope_id ? `:${g.scope_id}` : ""}
+            <dl class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300" data-testid="access-rows">
+              <For each={me.data?.grants ?? []} fallback={<AccessRow label="Roles" value={<span class="text-base-content/40">none</span>} />}>
+                {(g) => (
+                  <AccessRow
+                    label="Role"
+                    value={
+                      <span class="flex flex-wrap items-baseline gap-x-2">
+                        <span class="font-data text-sm">{g.role}</span>
+                        <Tooltip as="span" tabIndex={0} class="text-xs text-base-content/60" content={g.scope_id}>{scopeWords(g)}</Tooltip>
                       </span>
-                    )}
-                  </For>
-                </div>
-              </div>
+                    }
+                  />
+                )}
+              </For>
+              <Show when={groups.data}>
+                <AccessRow
+                  label="Groups"
+                  value={
+                    <Show when={groups.data!.length} fallback={<span class="text-base-content/40">none</span>}>
+                      <span class="flex flex-wrap gap-1.5">
+                        <For each={groups.data}>{(g) => <span class="badge badge-ghost badge-sm">{g.name}</span>}</For>
+                      </span>
+                    </Show>
+                  }
+                />
+              </Show>
+            </dl>
+            <div>
               {/* Closed by default: an admin holds well over a hundred, and the
                   count is the fact most visits want. */}
               <Collapsible
@@ -405,7 +437,7 @@ export default function Profile() {
               >
                 <div class="flex flex-wrap gap-1.5">
                   <For each={me.data?.permissions ?? []} fallback={<span class="text-xs text-base-content/40">none</span>}>
-                    {(p) => <span class="badge badge-ghost font-data text-[11px]">{p}</span>}
+                    {(p) => <Tooltip as="span" tabIndex={0} class="badge badge-ghost font-data text-[11px]" content={p === ">" ? "The > wildcard: every permission" : undefined}>{permissionLabel(p)}</Tooltip>}
                   </For>
                 </div>
               </Collapsible>

@@ -337,15 +337,16 @@ var nameOverride = map[string]([]string){
 	"set-component-impairment": {"component", "impairment", "set"},
 	// The simulated fleet: one group for the fleet, its catalog and adding a
 	// device; a component's own simulation beside its impairment.
-	"get-simulation":                   {"simulation", "get"},
-	"list-simulation-profiles":         {"simulation", "profiles"},
-	"add-outpost-simulation-component": {"simulation", "add-component"},
-	"plan-simulation-system":           {"simulation", "plan-system"},
-	"add-outpost-simulation-system":    {"simulation", "add-system"},
-	"get-component-simulation":         {"component", "simulation", "get"},
-	"fire-component-simulation":        {"component", "simulation", "fire"},
-	"login":                            {"auth", "login"},
-	"logout":                           {"auth", "logout"},
+	"get-simulation":                    {"simulation", "get"},
+	"list-simulation-profiles":          {"simulation", "profiles"},
+	"add-outpost-simulation-component":  {"simulation", "add-component"},
+	"plan-outpost-simulation-component": {"simulation", "plan-component"},
+	"plan-simulation-system":            {"simulation", "plan-system"},
+	"add-outpost-simulation-system":     {"simulation", "add-system"},
+	"get-component-simulation":          {"component", "simulation", "get"},
+	"fire-component-simulation":         {"component", "simulation", "fire"},
+	"login":                             {"auth", "login"},
+	"logout":                            {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {
@@ -413,7 +414,7 @@ func buildCommand(doc spec, base, path, method string, op operation) command {
 // repeatedNameHelp is the line a tree-entity argument's help carries: a name is
 // not unique, so a repeated one is refused and the operator is told how to say
 // which row they mean (#1134).
-const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead"
+const repeatedNameHelp = "a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead"
 
 // withArgHelp appends an Arguments section to a command's long help: each path
 // argument that the API addresses by a dotted address (its OpenAPI description

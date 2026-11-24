@@ -1,13 +1,14 @@
 import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import { pageHere, pendingTriage } from "./lib/handover";
+import { pageHere, pageHeader, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import CommandPalette from "./components/CommandPalette";
+import { SendCommandHost } from "./components/SendCommandButton";
 import { Toaster } from "./components/ui/Toast";
 import OmnibotPanel from "./components/OmnibotPanel";
 import { can, useMe } from "./lib/auth";
-import { sectionLabel } from "./lib/nav";
+import { sectionLabel, sectionTrail } from "./lib/nav";
 import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe } from "./lib/settings";
 
@@ -20,7 +21,10 @@ import { useSettingsMe } from "./lib/settings";
 // <html>), and the ⌘K keybinding.
 const App: ParentComponent = (props) => {
   const location = useLocation();
-  const section = createMemo(() => sectionLabel(location.pathname));
+  // The top bar is the one header row (#2575): the trail is the group and section,
+  // the title is the Page's own, else the last segment of the label.
+  const section = createMemo(() => sectionTrail(location.pathname));
+  const title = createMemo(() => pageHeader()?.title ?? sectionLabel(location.pathname).split(" · ").pop());
   const theme = useTheme();
   // The effective theme comes from the settings engine (/settings/me). Until it
   // resolves (or for a value it does not carry), the dark-only default holds.
@@ -64,7 +68,7 @@ const App: ParentComponent = (props) => {
     <div data-app-shell class="flex min-h-0 flex-1 bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
-        <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
+        <TopBar section={section()} title={title()} hint={pageHeader()?.hint} trail={pageHeader()?.trail} kind={pageHeader()?.kind} system={pageHeader()?.system} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
         <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>
@@ -74,6 +78,7 @@ const App: ParentComponent = (props) => {
     <Show when={mayAsk()}>
       <OmnibotPanel open={omnibotOpen()} onClose={() => setOmnibotOpen(false)} prompt={omnibotPrompt()} page={pageHere(location.pathname, location.search)} />
     </Show>
+    <SendCommandHost />
     <Toaster />
     </>
   );

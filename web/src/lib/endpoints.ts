@@ -30,6 +30,8 @@ export type Endpoint = {
   driver?: string;
   driver_id?: string;
   inputs?: Record<string, string>;
+  // A management path (a BMC) that answers through a reboot of its device.
+  out_of_band?: boolean;
 };
 
 export const ENDPOINTS_KEY = ["endpoints"] as const;

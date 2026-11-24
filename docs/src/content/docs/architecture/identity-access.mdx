@@ -315,7 +315,12 @@ the location as a **cross-tier root** (`scope.Set.LocationIDs`), and the Storage
 row by its placement: a system placed in the location subtree, plus its subsystems; a component
 whose own location is in it or, with none of its own, whose primary system is, plus its
 subcomponents. Every read derived from a component's scope (its alarms, notifications, dependencies,
-rule previews, the fleet view's dots) follows through the same read-filter primitive. On create, a
+rule previews, the fleet view's dots) follows through the same read-filter primitive. The
+queue-time notification recipient filter used to ignore `LocationIDs` and fail closed
+([#1981](https://github.com/hyperscaleav/omniglass/issues/1981)): a recipient whose only read came
+from a location grant was never named. It now admits by placement too (`Set.AdmitsPlacement`,
+[#2554](https://github.com/hyperscaleav/omniglass/issues/2554)), so a location-placed component's
+alarm reaches that grant's holders. On create, a
 root system or component needs either an all-scoped grant or a location inside a cross-tier root of
 its create scope, and a root with no location still needs the all-scoped grant (403). A `self`
 location grant reaches no system or component, and a `system` or `component` grant still confers no

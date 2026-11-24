@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import AlarmTimeline from "./AlarmTimeline";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { tipOf } from "../test-tip";
 
 // An alarm's timeline carries the notifications its transitions queued
 // (#618): each after the edge that caused it, reading how its delivery
@@ -125,7 +126,7 @@ describe("AlarmTimeline notifications", () => {
       expect(pillOf(li)?.textContent).toBe("sent");
       expect(bySpan(li)).toBeUndefined();
       // The rendered subject rides as the addressee's hint.
-      expect(li.querySelector('[title="[High] Lobby display: no video"]')).toBeTruthy();
+      expect(await tipOf(li.querySelector(".font-data[tabindex]"))).toContain("[High] Lobby display: no video");
     }
   });
 

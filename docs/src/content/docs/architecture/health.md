@@ -27,7 +27,7 @@ health read (`GET /systems:health`, #653), alongside the alarm write surface on 
 also raised and cleared by [event rules](/architecture/alarms-actions/#the-event_rule) (#819), the
 official `reachability-lost` among them, so an unplugged component moves its system with nobody
 writing anything. Severity is a [ranked catalog](/architecture/alarms-actions/#severity-a-catalog-of-named-levels):
-`high` and above is an outage, and every severity chip renders the level's label and color. The console
+each level declares its **health effect** (`none`, `degraded` or `outage`), and every severity chip renders the level's label and color. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
 location detail views; healthy reads green there and a muted green in the outline, so it never
 reads as the grey of an unknown health
@@ -63,10 +63,11 @@ Health is a chain, every hop a thing an operator already models:
 
 ```text
 alarm on a component
-  -> the component's own health moves (any active alarm; #626)
-    -> an alarm at or above high takes it to outage, and only then does it stop
-       occupying the slots it is assigned to (a lesser alarm still degrades
-       it, but it keeps its slot)
+  -> the component's own health moves by the effect its alarm's severity
+     level declares (none, degraded or outage; #2558)
+    -> an outage-effect alarm takes it to outage, and only then does it stop
+       occupying the slots it is assigned to (a degraded-effect alarm still
+       degrades it, but it keeps its slot; a none-effect alarm leaves it healthy)
       -> a slot falls below its quorum and is impaired
         -> the slot contributes its declared impact
           -> the system takes the worst contribution
@@ -74,11 +75,11 @@ alarm on a component
 ```
 
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
-  component **wholesale**: any active alarm degrades it, one at or above `high` is an outage. It no longer
+  component **wholesale**: its effect is the one its severity level **declares**: `none` leaves the component healthy (the alarm is still listed), `degraded` degrades it, `outage` takes it out. Nothing is implied by an alarm merely existing (#2558). It no longer
   names what it takes away (#626 retired the capability catalog that used to route it).
 - A component **occupies** a [system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
   it is assigned to unless its own health is currently **outage**: a merely **degraded** component
-  (an info or warning alarm) still counts, since severity is how loudly to page somebody, not a
+  (a warning or average alarm) still counts, since severity is how loudly to page somebody, not a
   second threshold for staffing. The typed-slot guard (accepted `component_type`s, optionally
   pinned products) is checked once, at assignment; it plays no further part in health.
 - A slot with fewer occupying components than its **quorum** is **impaired**, contributing its
@@ -303,6 +304,15 @@ alarm raised at 14:02" tells the operator where to walk. A slot impaired with **
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.
 
+The system's report also carries a `reason` line naming the slots behind its health, and `members`:
+every component bound into the system with its own health, its open alarms, the slot it fills
+(`slot`) or `outside_slot` when it fills none. A member outside every slot is **shown, not rolled up**
+([ADR-2459](/architecture/decisions/#adr-2459-an-alarm-on-a-member-outside-a-slot-is-shown-on-its-system-not-rolled-up)):
+its alarms appear on the system so nothing is hidden, and they move nothing above the component, since
+the slot and its impact are the system-level health rule. Health comes only from rules somebody
+declared, never implied from an alarm existing; a declared "any member alarm degrades this system" rule
+belongs with system-level rules over system-owned alarms (#1002).
+
 **A location's report** is the health plus every system beneath it with its own health, a map
 rather than a duplicated explanation.
 
@@ -336,8 +346,7 @@ alarm list, so a reader of the report sees which causing alarms somebody already
 annotate the alarm and never feed the health. The system page's Why strip reads them to show who
 acknowledged and when, and to offer **Acknowledge** on the rest (#990).
 
-Severity drives the **component's own** health (any active alarm makes it `degraded`, one at or above `high`
-one an `outage`) and **nothing above it**: what reaches a slot is only whether its occupant's
+A severity level **declares a health effect** (`none`, `degraded` or `outage`), and an open alarm moves the **component's own** health by that effect and **nothing above it**: what reaches a slot is only whether its occupant's
 health is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
 is how loudly to page somebody, impact is what the room lost. A component's health records on its
 own arc, so a component filling no slot still carries accurate history.

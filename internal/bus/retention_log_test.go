@@ -107,6 +107,25 @@ func TestAnIdlePassTellsNothing(t *testing.T) {
 	}
 }
 
+// TestSkippedBlockDaysAreANoteAtWarning: the fold's skipped series-days are
+// told at the canonical "warning" severity, the one tellHousekeeping maps to
+// slog.LevelWarn and a log_line row accepts.
+func TestSkippedBlockDaysAreANoteAtWarning(t *testing.T) {
+	rep := retentionReport{Blocks: storage.BlockCompaction{Skipped: 3, Through: time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)}}
+	var got *housekeepingNote
+	for _, n := range retentionNotes(rep, nil) {
+		if strings.Contains(n.Message, "without folding into blocks") {
+			got = &n
+		}
+	}
+	if got == nil {
+		t.Fatal("skipped series-days told no note")
+	}
+	if got.Severity != "warning" {
+		t.Errorf("skipped note severity = %q, want \"warning\" (tellHousekeeping maps only that to slog.LevelWarn)", got.Severity)
+	}
+}
+
 // TestPartitionNotesTellTheBootsCreations: the boot's partition check tells
 // the partitions it made, and nothing when it made none; a server with no
 // platform component maps any note to no line.

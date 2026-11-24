@@ -10,6 +10,7 @@ import {
   healthOf,
   type HealthState,
 } from "../lib/health";
+import Tooltip from "./ui/Tooltip";
 
 // HealthBadge is the console's one health chip. Four health results, four distinct
 // states, never a single accent shade of "not fine": incomplete, degraded and
@@ -71,17 +72,17 @@ export default function HealthBadge(props: {
       when={state()}
       fallback={
         <Show when={!props.quiet}>
-          <span class={`badge badge-ghost ${size()} gap-1`} title="No health has been read for this yet.">
+          <Tooltip as="span" tabIndex={0} class={`badge badge-ghost ${size()} gap-1`} content="No health has been read for this yet.">
             unknown
-          </span>
+          </Tooltip>
         </Show>
       }
     >
       {(v) => (
-        <span class={`badge badge-soft ${LOOK[v()].badge} ${size()} gap-1`} title={LOOK[v()].hint}>
+        <Tooltip as="span" tabIndex={0} class={`badge badge-soft ${LOOK[v()].badge} ${size()} gap-1`} content={LOOK[v()].hint}>
           <Dynamic component={LOOK[v()].icon} size={props.size === "md" ? 14 : 12} />
           {v()}
-        </span>
+        </Tooltip>
       )}
     </Show>
   );

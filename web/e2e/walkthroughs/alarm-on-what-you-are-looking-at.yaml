@@ -1,0 +1,38 @@
+# Alarm on what you are looking at (#2432): from a component's own page, "Alarm on
+# this" opens the new-rule form with the metric and the component already filled
+# in. A submit with gaps names each one, the label follows the name, and the
+# preview says in words what the rule would have done over the last day, the
+# series it names and plainly that it cannot hold the sustain you typed.
+title: Alarm on what you are looking at
+description: From a component's vitals, start a rule on one metric, see the form name what is missing, preview it in plain words, and save it.
+steps:
+  - goto: /components/panel-2
+    caption: Touch Panel 2, with its vitals. Each metric has a way to raise an alarm on it.
+  - click: { role: link, name: Alarm on Poll Duration }
+    caption: Alarm on this opens a new rule that already reads this metric on this component.
+  - wait: { selector: '[aria-label="Selected"]:has-text("Touch Panel 2")' }
+    caption: The component is filled in, and the picker names where it sits, so two panels with one name are not mistaken.
+  - click: { role: button, name: Create rule }
+    caption: Submit with nothing else filled in.
+  - wait: { selector: '[data-testid="form-problems"]' }
+    caption: The form says what is missing by name, puts the focus on the first, and each name is a link to its field.
+    hold: 1500
+  - type: { target: { role: textbox, name: Name, exact: true }, text: panel-slow-polls }
+    caption: Name it. The label beneath follows, in words, until you write your own.
+  - select: { target: { role: combobox, name: Fire comparison, exact: true }, value: gt }
+    caption: Poll Duration is a number, so it can be compared any way.
+  - type: { target: { role: textbox, name: Fire value, exact: true }, text: '2' }
+    caption: Fire above 2.
+  - type: { target: { role: textbox, name: For at least, exact: true }, text: 30s }
+    caption: And only when it holds for 30 seconds.
+  - click: { role: button, name: Preview, exact: true }
+    caption: Preview judges the draft against the last day of samples, writing nothing.
+  - wait: { selector: '[data-testid="preview-sentence"]', timeout: 15000 }
+    caption: A sentence in the words you entered, naming the series by its component and metric.
+  - wait: { selector: '[data-testid="preview-sustain"]' }
+    caption: The 30 seconds is named, and why the preview cannot apply it, so the counts read as the most the rule would have done.
+    poster: true
+  - click: { role: button, name: Create rule }
+    caption: Save it. The rule judges every sample from now on.
+  - wait: { selector: 'aside[data-blade] a:has-text("alarms page")', timeout: 10000 }
+    caption: Its drawer reads in words first, with a link to the alarms it raises; the expressions sit behind Show expression.

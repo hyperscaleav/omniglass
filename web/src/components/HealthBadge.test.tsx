@@ -19,6 +19,7 @@ const health = (health: string, owner: string): FleetHealth => ({
   owner_kind: "system",
   health: health,
   slots: [],
+  members: [],
   systems: [],
   transitions: [],
 });

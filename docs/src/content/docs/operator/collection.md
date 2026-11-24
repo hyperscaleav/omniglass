@@ -98,6 +98,18 @@ give it one ("Control processor") to say what the connection is FOR, since `ssh`
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
 without one reads its transport name exactly.
 
+An endpoint reads **the same whole story in two places**: the component's expanded endpoint row
+and the endpoint's own drawer (**Manage**) render one body, so neither shows less than the
+other. It holds the identity and target, the driver (a link into its drawer) and version, the
+availability strip with its uptime, the reach ladder with each rung's last result and time, the
+session and any reasons the gate is held, the parameters and inputs with where each value came
+from (set on this endpoint, the driver's default, or derived from inputs), the **names** of the
+secrets it is bound to (never a value), whether it is an out-of-band management path, and each
+poll with its interval, what it last read, and the **Test** that runs it now. The long
+sections fold under a one-line summary.
+
+- A new device gets its first endpoint in [the add-a-component flow](/operator/add-a-component/),
+  which picks the product's driver and credential and tests it before it ends.
 - With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),
@@ -232,7 +244,13 @@ until it passes) and **authenticated** (the login, shown once a
 credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
-transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
+transport answering. Over a datagram transport (udp, snmp) a silent **responsive** rung reads **no answer**,
+not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
+community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
+port (an ICMP port-unreachable, the affirmative **refused**) lands here too until the reading carries its reason (#2567). The rung's
+hint, the collection badge on the component and the row's pill all name those causes. The reachability reading and
+the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
+still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
 real reading from the outpost, and the panel is also the authoring surface: its header carries **Add
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.

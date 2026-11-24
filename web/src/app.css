@@ -355,3 +355,14 @@ tr.og-blink > td:first-child { box-shadow: inset 3px 0 0 var(--color-primary); }
 
 /* apply theme/var changes instantly during a switch. */
 .theme-switching, .theme-switching * { transition: none !important; }
+
+/* A titled Button that is off is aria-disabled, not natively disabled (#2486): it
+   must keep pointer events and focus so its tooltip can say why. daisyUI's own
+   .btn-disabled sets pointer-events:none, so the muted look is repeated here. */
+.btn[aria-disabled="true"] {
+  background-color: color-mix(in oklab, var(--color-base-content) 10%, transparent) !important;
+  color: color-mix(in oklab, var(--color-base-content) 20%, transparent) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+}

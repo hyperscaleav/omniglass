@@ -1,6 +1,8 @@
 import { type ParentComponent, Show } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import LabBanner from "./LabBanner";
 import ImpersonationBanner from "./ImpersonationBanner";
+import ConfirmHost from "./ConfirmHost";
 import { useAuthStatus } from "../lib/authStatus";
 import { useMe } from "../lib/auth";
 
@@ -10,7 +12,8 @@ import { useMe } from "../lib/auth";
 // drift between screens. It is exactly one viewport high: the strips take their
 // own thin height and the routed screen takes the rest (`min-h-0`), scrolling
 // in its own regions, so the document itself never scrolls and a strip never
-// leaves the screen (#2433).
+// leaves the screen (#2433). It also hosts the one destructive confirm
+// (#2463), under the router so a blocker's link navigates.
 //
 // The rule for overlays (drawers, the palette, omnibot): they are `fixed`
 // against the viewport and cover the whole window, the strips included, dimmed
@@ -21,6 +24,7 @@ const AppRoot: ParentComponent = (props) => {
   // The impersonation strip needs a session: with nobody signed in there is no
   // one being impersonated, and a stale flag must not show a false strip.
   const me = useMe();
+  const navigate = useNavigate();
   return (
     <div class="flex h-dvh flex-col" data-app-root>
       <LabBanner lab={authStatus.data?.lab} />
@@ -28,6 +32,7 @@ const AppRoot: ParentComponent = (props) => {
         <ImpersonationBanner />
       </Show>
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">{props.children}</div>
+      <ConfirmHost navigate={(href) => navigate(href)} />
     </div>
   );
 };

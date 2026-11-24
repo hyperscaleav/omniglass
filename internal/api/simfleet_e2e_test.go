@@ -1,8 +1,10 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,12 +78,17 @@ type fleetBody struct {
 }
 
 type componentSimBody struct {
-	Simulated bool   `json:"simulated"`
-	Outpost   string `json:"outpost"`
-	Product   string `json:"product"`
-	Profile   string `json:"profile"`
-	Address   string `json:"address"`
-	Surface   []struct {
+	Simulated  bool   `json:"simulated"`
+	Outpost    string `json:"outpost"`
+	Product    string `json:"product"`
+	Profile    string `json:"profile"`
+	Address    string `json:"address"`
+	ServedBy   string `json:"served_by"`
+	ServedByID string `json:"served_by_id"`
+	Activity   *struct {
+		Component string `json:"component"`
+	} `json:"activity"`
+	Surface []struct {
 		Name     string `json:"name"`
 		Protocol string `json:"protocol"`
 		Port     int    `json:"port"`
@@ -309,6 +316,69 @@ func TestSimulationFleetAPI(t *testing.T) {
 	hub.fireErr = collection.ErrNoSimulator
 	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": lineSurface, "command": "GET INPUT"}, http.StatusServiceUnavailable)
 
+	// Plan a simulated device before adding it: the address and endpoints the
+	// add would create, read without creating anything.
+	type plannedEndpoint struct {
+		Driver    string            `json:"driver"`
+		Inputs    map[string]string `json:"inputs"`
+		Transport string            `json:"transport"`
+		Target    string            `json:"target"`
+	}
+	var planned struct {
+		Outpost   string            `json:"outpost"`
+		Product   string            `json:"product"`
+		Address   string            `json:"address"`
+		Endpoints []plannedEndpoint `json:"endpoints"`
+	}
+	countComponents := func() int {
+		t.Helper()
+		var n int
+		if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := countComponents()
+	get(viewer, "/outposts/site-a/simulation/components:plan?product="+panel, &planned)
+	if planned.Outpost != "site-a" || planned.Product != panel || !strings.HasPrefix(planned.Address, "127.60.") ||
+		len(planned.Endpoints) != 1 || planned.Endpoints[0].Driver != "newtron-panel-nvp" || len(planned.Endpoints[0].Inputs) == 0 {
+		t.Fatalf("plan = %+v, want a newtron-panel-nvp attach at a free address in 127.60.0.0/16 on site-a", planned)
+	}
+	if got := countComponents(); got != before {
+		t.Fatalf("the plan changed the component count from %d to %d, want it to create nothing", before, got)
+	}
+	planOut := c.do(viewer, http.MethodGet, "/outposts/site-a/simulation/components:plan?product="+storagetest.MintProduct(t, ctx, gw, "").Name, nil, http.StatusUnprocessableEntity)
+	if !strings.Contains(string(planOut), "simulat") {
+		t.Fatalf("an unsimulated product's plan was refused with %s, want it to say why", planOut)
+	}
+	c.do(viewer, http.MethodGet, "/outposts/site-b/simulation/components:plan?product="+panel, nil, http.StatusConflict)
+	c.do(viewer, http.MethodGet, "/outposts/nowhere/simulation/components:plan?product="+panel, nil, http.StatusNotFound)
+	// simulation:read is the gate: an all-scope reader without it is refused.
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values ('sim-blind-reader', '{"component:read","outpost:read"}')`); err != nil {
+		t.Fatal(err)
+	}
+	blindTok, blindHash, blindPrefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blindID string
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&blindID); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`insert into machine (user_id, name) values ($1, 'simfleet-blind')`, []any{blindID}},
+		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{blindID, blindHash, blindPrefix}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-blind-reader'), 'all', null)`, []any{blindID}},
+	} {
+		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatalf("%s: %v", q.sql, err)
+		}
+	}
+	c.do(blindTok, http.MethodGet, "/outposts/site-a/simulation/components:plan?product="+panel, nil, http.StatusForbidden)
+
 	// Add a simulated device from a profile: a component of the product,
 	// at a free address in the simulated block, with the endpoint the
 	// planner picks (the NVP attach, no secret needed), on the outpost.
@@ -331,6 +401,21 @@ func TestSimulationFleetAPI(t *testing.T) {
 	}
 	if driver != "newtron-panel-nvp" || onOutpost != "site-a" {
 		t.Fatalf("panel-9's endpoint is %q on %q, want a newtron-panel-nvp attach on site-a", driver, onOutpost)
+	}
+	// The plan read before the add is what the add created: its address, its
+	// driver, and every input it sent (the stored set has the driver's
+	// defaults baked in beside them).
+	var storedInputs map[string]string
+	if err := conn.QueryRow(ctx, `select inputs from endpoint where component = (select id from component where name = 'panel-9')`).Scan(&storedInputs); err != nil {
+		t.Fatal(err)
+	}
+	if planned.Address != added.Address || planned.Endpoints[0].Driver != driver {
+		t.Fatalf("plan %+v, but the add created %s on %s", planned, driver, added.Address)
+	}
+	for k, v := range planned.Endpoints[0].Inputs {
+		if storedInputs[k] != v {
+			t.Fatalf("planned input %s=%q, the add stored %q (all: %v)", k, v, storedInputs[k], storedInputs)
+		}
 	}
 	var withNew simulationBody
 	get(ownerTok, "/outposts/site-a/simulation", &withNew)
@@ -405,4 +490,109 @@ func lineProtocolProduct(t *testing.T, ctx context.Context, gw *storage.PG) (str
 	}
 	t.Fatal("no seeded newtron-panel-nvp product is a simulator profile's own product")
 	return "", nil
+}
+
+// TestComponentAimedAtASimulatedDeviceIsServedByIt holds #2461: a hand-built
+// component whose endpoint targets the address a simulated device already
+// answers on is served by that simulation. The outpost lists one device (not a
+// second, failed one with the wrong profile), the simulator is handed one, and
+// the component's own simulation read is the device's, naming it.
+func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	panel, prof := lineProtocolProduct(t, ctx, gw)
+	outpost := "site-a"
+	for _, c := range []struct{ name, target string }{{"panel-1", "127.60.0.1:51325"}, {"aimed", "127.60.0.1:8080"}} {
+		name := c.name
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &panel}, all, all, all, all); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &name, Outpost: &outpost,
+			Params: []byte(`{"target":"` + c.target + `"}`)}, all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(&fakeHub{Registry: simhub.New()})))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	var view simulationBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &view); err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Devices) != 1 || view.Devices[0].Component != "panel-1" {
+		t.Fatalf("site-a lists %+v, want panel-1 once and no row for the component aimed at it", view.Devices)
+	}
+	var sim componentSimBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/aimed/simulation", nil, http.StatusOK), &sim); err != nil {
+		t.Fatal(err)
+	}
+	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.ServedByID == "" || sim.ServedByID != view.Devices[0].ComponentID || sim.Profile != prof.Name || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
+		t.Fatalf("aimed simulation = %+v, want panel-1's device, served by it", sim)
+	}
+
+	// A caller who may read everything but holds no simulation:update must not
+	// drive the owning device through the alias: 403, whichever component the
+	// request names. (simulation is a fleet-wide resource, so only an
+	// all-scoped grant confers an action on it; the owner re-check in resolve
+	// is defense in depth for the day a tier can contain it.)
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tok, thash, tprefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pid string
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`insert into role (name, permissions) values ('alias-reader', '{"component:read","simulation:read"}')`, nil},
+		{`insert into machine (user_id, name) values ($1, 'alias-only')`, []any{pid}},
+		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, thash, tprefix}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'alias-reader'), 'all', null)`, []any{pid}},
+	} {
+		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatalf("%s: %v", q.sql, err)
+		}
+	}
+	// A fresh server: the role index is read once per process.
+	srv2 := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(&fakeHub{Registry: simhub.New()})))
+	defer srv2.Close()
+	fireBody, _ := json.Marshal(map[string]any{"surface": "line", "command": "GET INPUT"})
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv2.URL+"/api/v1/components/aimed/simulation:fire", bytes.NewReader(fireBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("a caller with no simulation:update got status %d (%s), want 403", resp.StatusCode, rb)
+	}
 }

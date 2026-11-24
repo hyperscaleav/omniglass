@@ -7,6 +7,8 @@ import { GROUPS_KEY, type Group, type GroupMapping, type GroupMember } from "../
 import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
+import { pageHeader } from "../lib/handover";
 
 // The Groups page is a config over the shared FlatList (rooted on group): a row per
 // group opens the group blade (members drill into the member's user blade), and the
@@ -16,10 +18,10 @@ const members: GroupMember[] = [{ user_id: uuidFor("u-alice"), kind: "person", n
 const alice: User = { id: uuidFor("u-alice"), kind: "person", active: true, person: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
 const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
-function mount(opts: { members?: GroupMember[]; mappings?: GroupMapping[] } = {}) {
+function mount(opts: { members?: GroupMember[]; mappings?: GroupMapping[]; rows?: Group[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "idp-mappings"], opts.mappings ?? []);
-  qc.setQueryData([...GROUPS_KEY], [group]);
+  qc.setQueryData([...GROUPS_KEY], opts.rows ?? [group]);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd")], group);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "members"], opts.members ?? members);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "grants"], []);
@@ -64,6 +66,21 @@ describe("Groups page", () => {
     ));
     // The label IS the name, so rendering it twice would be noise.
     expect(screen.getAllByText("night-ops")).toHaveLength(1);
+  });
+
+  it("opens the group a link names by its name, so a target's group link lands on the drawer", async () => {
+    window.history.pushState({}, "", "/?open=help-desk");
+    try {
+      mount();
+      const b = await waitFor(() => {
+        const el = asides()[0];
+        if (!el) throw new Error("no blade yet");
+        return el as HTMLElement;
+      });
+      expect(within(b).getByText("Delete user group")).toBeTruthy();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
   });
 
   it("opens read-only with a footer bar; Delete is always there, Edit reveals the member controls", async () => {
@@ -112,7 +129,7 @@ describe("Groups page", () => {
     // deleted group's own detail 404s (as the real server would). The blade must
     // close, and the dead detail query must not be refetched (an orphan 404).
     let detailRefetched = false;
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -292,5 +309,23 @@ describe("edit as a URL fact", () => {
     mount();
     // The blade footer's edit pair is the witness: Save renders only in edit mode.
     await waitFor(() => expect(screen.getByText("Save")).toBeTruthy());
+  });
+});
+
+// The page wears the nav header, and an empty directory teaches what a group is for
+// and offers the create action (#2447), as Inbox and Subscriptions do.
+describe("Groups page chrome (#2447)", () => {
+  it("wears the Page header with the nav hint", () => {
+    mount();
+    expect(pageHeader()?.title).toBe("User groups");
+    expect(pageHeader()?.hint).toContain("membership and the grants members inherit");
+  });
+
+  it("an empty directory says what a group is for and offers New user group", async () => {
+    mount({ rows: [] });
+    const empty = await screen.findByTestId("list-empty");
+    expect(empty.textContent).toMatch(/grants/i);
+    fireEvent.click(within(empty).getByRole("button", { name: /New user group/ }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
   });
 });

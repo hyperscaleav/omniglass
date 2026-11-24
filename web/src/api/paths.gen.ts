@@ -601,7 +601,7 @@ export interface paths {
   "/components": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listComponents>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listComponentsResponseSuccess["data"];
@@ -801,7 +801,7 @@ export interface paths {
   "/components/{name}/events": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listComponentEvents>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listComponentEventsResponseSuccess["data"];
@@ -2044,6 +2044,16 @@ export interface paths {
       error: og.addOutpostSimulationComponentResponseError["data"];
     };
   };
+  "/outposts/{name}/simulation/components:plan": {
+    get: {
+      path: { "name": string };
+      query: NonNullable<Parameters<typeof og.planOutpostSimulationComponent>[1]>;
+      body: never;
+      bodyRequired: false;
+      data: og.planOutpostSimulationComponentResponseSuccess["data"];
+      error: og.planOutpostSimulationComponentResponseError["data"];
+    };
+  };
   "/outposts/{name}/simulation/observation": {
     get: {
       path: { "name": string };
@@ -2117,7 +2127,7 @@ export interface paths {
   "/products": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listProducts>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listProductsResponseSuccess["data"];
@@ -2673,7 +2683,7 @@ export interface paths {
   "/systems": {
     get: {
       path: never;
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystems>[0]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemsResponseSuccess["data"];
@@ -2717,7 +2727,7 @@ export interface paths {
   "/systems/{name}/alarms": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystemAlarms>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemAlarmsResponseSuccess["data"];
@@ -2727,7 +2737,7 @@ export interface paths {
   "/systems/{name}/events": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystemEvents>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemEventsResponseSuccess["data"];

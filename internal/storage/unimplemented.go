@@ -338,6 +338,9 @@ func (UnimplementedGateway) ResetComponentName(context.Context, string, string, 
 func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string, *string) (bool, error) {
 	return false, nil
 }
+func (UnimplementedGateway) DeleteBlockersOf(context.Context, string, string, func(string) scope.Set) (*DeleteBlockers, error) {
+	return &DeleteBlockers{}, nil
+}
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
@@ -482,7 +485,7 @@ func (UnimplementedGateway) ComponentHealth(context.Context, string) (string, er
 func (UnimplementedGateway) InsertEvents(context.Context, KeyWriter, []EventWrite) error {
 	return nil
 }
-func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Duration, int) ([]Event, error) {
+func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Duration, int, EventFilter) ([]Event, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
@@ -587,6 +590,9 @@ func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() erro
 func (UnimplementedGateway) OutpostSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ComponentPlaces(context.Context, []string, scope.Set, scope.Set) (map[string]ComponentPlace, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {
 	return nil, nil
 }
@@ -678,6 +684,9 @@ func (UnimplementedGateway) ResolveSystemTypeFacts(context.Context, uuid.UUID) (
 
 func (UnimplementedGateway) UpsertProduct(context.Context, Product) error    { return nil }
 func (UnimplementedGateway) ListProducts(context.Context) ([]Product, error) { return nil, nil }
+func (UnimplementedGateway) ListProductsDeclaring(context.Context, string, string) ([]Product, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) GetProduct(context.Context, string) (*Product, error) {
 	return nil, nil
 }
@@ -1048,7 +1057,7 @@ func (UnimplementedGateway) EndExpiredSnoozes(context.Context, int) (int, error)
 func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) SystemHealth(context.Context, string, HealthRange, scope.Set, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ComponentHealthReport(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
@@ -1087,11 +1096,11 @@ func (UnimplementedGateway) RecordServerIdentity(context.Context, string, string
 	return nil
 }
 
-func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int) ([]Event, error) {
+func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int, EventFilter) ([]Event, error) {
 	return nil, nil
 }
 
-func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Duration, int) ([]Alarm, error) {
+func (UnimplementedGateway) ListSystemAlarms(context.Context, string, AlarmRange, int) ([]Alarm, error) {
 	return nil, nil
 }
 

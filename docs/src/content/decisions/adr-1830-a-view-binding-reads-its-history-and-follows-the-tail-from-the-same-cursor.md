@@ -26,12 +26,12 @@ refs: [1830, 523, 1829, 1161, 2050, 2051]
      tail has none, so a row stamped ahead of the server's clock is in the history or after the cursor,
      never both and never neither.
      `/views:watch` takes each binding's cursor and carries only the rows after it.
-  3. **One stream per page.** `/views:watch` multiplexes up to 32 bindings on one SSE connection. A `rows`
+  3. **One stream per 32 bindings.** `/views:watch` multiplexes up to 32 bindings on one SSE connection (the console opens one per 32 a page holds). A `rows`
      event carries each binding's matching rows, its id the cursor after them; a `mark` advances an idle
      stream every 15 s. A reconnect's `Last-Event-ID` resumes each binding from the later of it and the
      binding's own cursor, and the client likewise only advances a binding's cursor, never back to a
      slower binding's stream position. A cursor the ring no longer holds (too old, or from before a restart) is a
-     `reset` naming the binding, and the stream ends: the client re-runs that history and reconnects.
+     `reset` naming the binding or bindings, and the stream ends: the client re-runs that history and reconnects.
   4. **The door and the fence.** Both routes are gated by `view:read`; each binding also needs its kind's
      read (`component:read`, `system:read`) and resolves inside that read's scope. A filter selector
      resolves to the visible entities; a literal ref out of scope is the same 404 as one that does not

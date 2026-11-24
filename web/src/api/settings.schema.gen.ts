@@ -191,7 +191,7 @@ export const settingsSchema = {
       "format": "int64"
     },
     "metric_days": {
-      "description": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later",
+      "description": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later; at least 3, the shortest window that folds into blocks",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,

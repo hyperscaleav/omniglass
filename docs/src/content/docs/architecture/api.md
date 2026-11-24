@@ -1,1384 +1,236 @@
 ---
 title: API
-description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How the API is built: Huma operations that generate the OpenAPI document and every client, AIP-style resources and :verb methods, one error shape, and a permission stamped on every route."
 sidebar:
-  hidden: true
+  order: 50
+  badge:
+    text: Partial
+    variant: note
 ---
 
-The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract**
-(this page) carries every operator action, integration, the SPA, the CLI, and the
-[MCP](#also-an-mcp-surface) server, and is the only caller of the
-[Storage Gateway](/architecture/storage/); the **internal and edge transport is a sibling NATS subject
-contract**, typed and versioned the same way ([messaging](/architecture/messaging/)). The doctrine and
-generation pipeline: [API first](/contributing/api-first/); this page is the conventions every HTTP
-route honors.
+The API is the one way into Omniglass. The console, the CLI, the [MCP server](#also-an-mcp-surface),
+scripts and integrations all call the same HTTP operations under `/api/v1`, and those operations are
+the only caller of the [Storage Gateway](/architecture/storage/). Outposts are the one exception: past
+their first claim they speak the NATS contract instead ([below](#the-outpost-path-is-the-nats-contract)).
 
-:::note[Partial]
-Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
-(`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error model
-([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
-on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/outposts`, `/endpoints`, `/tasks`, the
-first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body, a
-component or a system, and fenced once per batch by the `telemetry:push` scope on the owner's own tier
-with the caller's `component:read` or `system:read` deciding the refusal, a 404 or a truthful 403,
-[ADR-0752](/architecture/decisions/#adr-0752-a-telemetry-push-is-fenced-by-telemetrypush-on-the-component-it-names),
-[ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample),
-an instance naming no endpoint of the owner refused with a 422, and a system, which has no endpoints
-and owns no log line, refused a named instance or a log line with a 422, every native probe key refused by
-name, every key held to its writer class, answering `202` only once the stream has acked the batch and `503` when it will not,
-[ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool)), the per-component reachability read, the type catalogs, the
-`/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
-slot declaration, resolution, and staffing routes, and the component alarm plus system and location
-[health](#health-and-why) reads, and the [MCP surface](#also-an-mcp-surface) generated from
-the same document. The outpost `:enroll` and `:claim` custom methods are the
-first `:verb` routes in the wild. See [implementation status](/architecture/status/).
-:::
+Every route, its parameters and its body are in the [API reference](/reference/api/), rendered from
+the OpenAPI document, so this page carries none of them. It is the conventions every route follows.
+
+## One source, generated outward
+
+An operation is a Go struct registered with [Huma](https://huma.rocks/) on a chi router
+(`internal/api`). `make gen` dumps the OpenAPI 3.1 document from those registrations
+(`api/openapi.json` and `api/openapi.yaml`) and generates everything else from it: the typed console
+client (`web/src/api/api.gen.ts`), the cobra CLI (`internal/cli`), the MCP tool catalog
+(`internal/mcp`), and the reference pages. The live server and the spec dump register through the one
+function, so the routed surface and the document cannot disagree, and CI fails a PR whose generated
+files are stale. The doctrine and the generator table are [API first](/contributing/api-first/).
+
+A running server also serves its own document at `/api/v1/openapi.json` and `/api/v1/openapi.yaml`,
+so a client can discover the contract of the version it is talking to.
 
 ## Shape: resources and `:verb` methods
 
-Everything lives under `/api/v1`. The path shape is derivable, not special-cased:
+Paths are derivable, not special-cased
+([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)):
 
-- **Plural resource collections**, standard methods addressed by the entity's `name` where it has one
-  (the name-only forms are listed under [every resource answers to its
-  name](#every-operator-resource-answers-to-its-name)) and by its uuid always (AIP-style): `POST` creates (409 when the `name` is already taken
-  in its placement bucket; the uuid primary key is the server's to mint and cannot collide), `GET`
-  reads, `PATCH` partial-updates (AIP-134), `DELETE` removes. No upsert shortcuts. On `location`,
-  `system`, and `component`, the `{ref}` path parameter takes a third form beside uuid and bare name: a
-  dotted address, a positional lookup resolved structurally before any scope or ambiguity check runs
-  ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
-- **Every name-bearing body carries both handles**: a uuid **`id`** (stable identity, the target every
-  foreign key stores) and a unique, renameable **`name`** (the identifier an operator reads and
-  types). A create takes the `name`; the uuid is the database's to mint, and **every write returns
-  it**, so a client stores the id and detects a rename by diffing the id it holds
-  ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
-  A path or a reference resolves whichever form it is given, since a kebab name can never look like a
-  uuid.
-- **A rename is a custom method, never a `PATCH` field.** `POST /components/{name}:rename` (also
-  `/systems`, `/locations`, `/user-groups/{group}`) moves the `name`, gated by `<entity>:rename`
-  rather than `<entity>:update`, and the `PATCH` body of those four carries no `name` at all. Renaming
-  breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
-  integration's config), so it is an act a grant can withhold on its own instead of a side effect of
-  editing a label.
-- **A move is a custom method too**
+- **A resource is one plural kebab-case noun**, and nesting means ownership: `/components/{name}/alarms`
+  are a component's alarms. Each catalog is its own collection (`/metric-types`, `/event-types`).
+- **Standard methods** are `POST` to create, `GET` to read, `PATCH` to update part of a row, `DELETE`
+  to remove. There is no upsert.
+- **Anything else is a custom method with a colon**, `:verb` rather than `/verb`:
+  `/components/{name}/commands:issue`, `/secrets/{secret}:reveal`, `/outposts:claim`. On a member it
+  acts on that row; on the collection (`/systems:checkName`, `/components:batchCreate`) it acts on the
+  set.
+- **The verb is the permission.** `:issue` is gated by `command:issue`, so a route and its
+  [authorization](/architecture/identity-access/) share one vocabulary.
+- **A rename and a move are their own verbs**, never `PATCH` fields. `:rename` breaks every reference
+  someone stored outside Omniglass, and `:move` changes what scope a row falls under, so each is an act
+  a grant can withhold on its own
   ([ADR-0088](/architecture/decisions/#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)).
-  `POST /components/{name}:move` and `/systems/{name}:move` take `{location?, parent?}` (at least one
-  required, 422 otherwise); `/locations/{name}:move` takes `{parent}` only, with no clear-to-root
-  branch (a `location` has never had one). Both follow the house three-state convention (omitted
-  unchanged, `""` clears, a name sets), gated by `<entity>:move` rather than `<entity>:update`, and the
-  `PATCH` body of all three carries neither `parent` nor `location` any more. Clearing `parent` to
-  root under `:move` requires an all-scoped grant, the same authorization creating a root row already
-  requires: a `PATCH` used to skip that check entirely on the clear branch. `:move` writes its own
-  audit verb, `move`, and never recomputes health except where the rollup genuinely depends on the
-  placement it changes: a system's own `location` field, which keeps moving health at both ends
-  exactly as its old combined `PATCH` did, and a location's `parent`, which carries its whole
-  subtree's contribution between two ancestor chains and recomputes both
-  ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)).
-- **A type's retention window is a custom method**
-  ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). `POST /metric-types/{name}:setRetention`
-  and `/property-types/{name}:setRetention` take `{days}` (1 to 36,500) or `{days: null}` to return the
-  type to its lane's window. It works on an official type, which `PATCH` refuses as read-only: the
-  type's definition is the seed's, its retention the install's. It is gated by `<type>:update` and
-  `platform:update`, like the retention settings, and writes its own audit verb, `set_retention`.
-- **Custom methods carry a colon**, `:verb` not `/verb`, for anything that is not CRUD:
-  `/components/{name}/commands:issue`, `/auth/me/sessions/{id}:revoke`, `/outposts:claim`. The verb
-  is also the **permission**: `:issue` is gated by `command:issue`, so the route and the
-  [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
-  `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
-  id, so it carries no capability and a credential id not the caller's own is a 404; the **admin**
-  counterparts on `/users/{id}` do carry a capability and a scoped path id.
-- **Each typed catalog is its own plural collection**: `/location-types`, `/metric-types`,
-  `/property-types`,
-  `/event-types` ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
-- **Collection-level custom methods** carry the colon on the collection, not a member:
-  `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
-  precheck for a technical-name rename, returning `{ valid, available, reason }`, gated by
-  `<entity>:update` (the advisory reads a name's availability; performing the rename needs
-  `<entity>:rename`). Name uniqueness is scoped to **placement**, not the whole fleet
-  ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): the request carries the same
-  `parent`/`location` fields a create would, and availability is checked against that specific
-  placement bucket, not a single global fact. It stays **blind to the caller's own grant scope**:
-  a deploy user scoped to one subtree still gets a correct answer for a placement it cannot
-  read via `GET`, because the check queries the target bucket directly rather than reading the row.
-- **A user is addressable by uuid, username, or machine user name.** Every
-  `/users/{id}` route resolves any of them server-side (a value that parses as a uuid is used
-  directly, else a username or a machine user's name, an unknown one a 404, and a word that is
-  both a username and a service name a 404 listing both uuids). A name resolves only for a caller who
-  may list the whole directory (`user:read:admin` on an all-scope grant); anyone else gets the
-  all-scope 403 for every name, so a name cannot be probed. The uuid stays the stable identity (a
-  username is mutable, nothing keys on it).
+- **`/auth/me` is the self-service family**: it resolves its target from the session, never a path
+  id, so it needs no permission beyond being signed in. Its admin counterparts on `/users/{id}` do.
 
 ### Every operator resource answers to its name
 
-Every resource an operator types the name of accepts that name wherever its uuid is accepted, and
-every response still returns the uuid
-([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)).
-The forms, by what the name is unique within:
+A row with a name carries two handles: a uuid `id`, which every foreign key stores, and a renameable
+`name`, which an operator reads and types. A create takes the name, the database mints the uuid, and
+every write returns it, so a client that must never drift stores the uuid
+([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 
-| Resource | Path parameter | Accepts beside the uuid | Example |
-|---|---|---|---|
-| location, system, component | `{name}` | a bare name, a dotted address | `boi.17c.415a.$comp.display-1` |
-| endpoint | `{endpoint}` | `<component>/<endpoint name>`, the component in any form above | `boi.17c.415a.$comp.display-1/https` |
-| secret, variable | `{secret}`, `{variable}` | a bare name, or `<owner>/<name>`, the owner a location, system or component in any form above, or `$platform` | `demo-panel-login`, `$platform/demo-panel-login` |
-| file | `{file}` | its filename | `codec-firmware-2.1.4.txt` |
-| user group | `{group}` | its name | `night-shift` |
-| user, group member | `{id}`, `{user}` | a username, a machine user's name | `alice` |
-| a grant's scope root | `scope_id` (body) | a bare name, a dotted address | `boi.17c` |
+Wherever a uuid is accepted, so is the name
+([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)):
+
+| Resource | Accepts beside the uuid | Example |
+|---|---|---|
+| location, system, component | a bare name, or a dotted address | `boi.17c.415a.$comp.display-1` |
+| endpoint | `<component>/<endpoint name>` | `boi.17c.415a.$comp.display-1/https` |
+| secret, variable | a bare name, or `<owner>/<name>` (`$platform` for the install) | `$platform/demo-panel-login` |
+| file | its filename | `codec-firmware-2.1.4.txt` |
+| user group | its name | `night-shift` |
+| user | a username or a machine user's name | `alice` |
 
 The slash in an endpoint, secret or variable reference is one path segment, so a URL percent-encodes
-it (`/endpoints/boi.17c.415a.$comp.display-1%2Fhttps:retry`); the generated CLI does that for you
-(`omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'`).
+it; the generated CLI does that for you. A dotted address is a positional lookup resolved by structure
+([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)).
 
-**Scope decides before ambiguity does**, for every form. A name's candidates are narrowed to the rows
-the caller may read first (for a secret, also to its admin tier), so a name an out-of-scope row shares
-never makes an in-scope one ambiguous, and an absent row and an out-of-scope one give the same refusal.
-A name that no visible row answers to, or that more than one does, is a **404 naming what was looked
-up**; when more than one answers, the 404 lists each in the spelling that does resolve
-(`$platform/demo-panel-login`, `boi.17c/demo-panel-login`). Resolution runs inside the request's own
-transaction and yields the uuid; the permission check, the read-then-action scope split, and the audit
-row then run on that resolved row exactly as they do for a uuid. The tree entities answer the
-same way (#1134): a bare name that more than one visible component, system or location answers to is a
-404 naming the reference, each candidate spelled as its dotted address with its uuid beside it
-(`boi.17c.415a.$comp.display-1 (<uuid>)`), and either half resolves on the same route. A candidate the
-caller cannot read is neither listed nor counted. A write answers with
-the row it reached (a secret's or variable's `owner_kind`, `owner_id` and `owner_name`), because a
-name is a lookup: automation that must never drift addresses `<owner>/<name>` or stores the uuid.
+**Scope decides before ambiguity does.** A name is matched only against the rows the caller may read,
+so a row out of scope never makes an in-scope name ambiguous, and an absent row and a hidden one give
+the same 404. A name more than one visible row answers to is a 409 that lists each candidate in a
+spelling that does resolve. Resolution runs inside the request's transaction and yields the uuid; the
+permission check and the audit row then run on that row exactly as for a uuid.
 
-**What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
-have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not
-unique, since only a component makes it so; an outpost user on `/users` is reached by its name on
-`/outposts` instead.
+Rows without a name stay uuid-only: an alarm, an audit row, a grant, a session or token, and a task
+(whose id is its content hash).
 
 ## Lists: filter, order, page
 
-The built lists take a fixed query-param set (`kind`, `resource`, `verb`, `system`,
-`include_archived`, `include_cleared`), and the one paginated route, `GET /audit-log`, pages backward
-with `before` plus `limit`. **Every list runs through the scoped gateway**: a list never returns a row
-outside the caller's visible set, and the page count is over visible rows only.
+Every list runs through the scoped gateway, so it never returns a row outside the caller's visible
+set, and any count is over visible rows only. Lists take their own typed filters today (a severity, a
+location subtree, `include_cleared`). The two that can grow without bound page: `GET /alarms` with an
+opaque `page_token` and `next_page_token`, and `GET /audit-log` backward with `before` and `limit`.
 
-:::design[The AIP list parameters, tracked in #522]
-The target contract: a list takes `filter`, `order_by`, `page_size` (capped by a server maximum),
-`page_token`, and `fields`:
-
-- **Cursor pagination, never offset.** A list returns a `next_page_token`; the client echoes it on the
-  next call. The token is opaque and stable under concurrent inserts (an offset would skip or repeat
-  rows).
-- **`filter` is one [Omniglass expression](/architecture/expressions/)** over the resource's fields, the
-  same language as rule scopes and dynamic groups.
-- **`filter`, `order_by`, and `fields` name fields, not raw SQL.** Every field resolves through the
-  gateway's generated-column allow-list (an unknown field is a 400), and values are bound parameters, so
-  none of the three can inject SQL ([storage](/architecture/storage/)).
+:::design[The AIP list parameters and the read mask, tracked in #522 and #1011]
+Every list takes `filter`, `order_by`, `page_size` and `page_token`, and every read takes a `fields`
+mask. Pages are cursors, never offsets, so a concurrent insert neither skips nor repeats a row. The
+`filter` is one [Omniglass expression](/architecture/expressions/) over the resource's fields, and every
+field any of the three names resolves through the gateway's allow-list, with values bound as
+parameters, so none of them can inject SQL.
 :::
 
-## Partial responses: field masks
+## Writes: the update mask
 
-:::design[The fields read mask, tracked in #522]
-The `fields` read mask (a response subset, AIP-157) selects the fields a read returns; the default is
-the full resource.
-:::
+A `PATCH` writes the fields its body populated and leaves the rest alone. To clear a field that has no
+empty value of its own (an integer, a list, a nullable object), the body names it in `update_mask`,
+AIP-134 exactly ([ADR-0091](/architecture/decisions/#adr-0091-an-update_mask-says-which-fields-a-patch-writes)):
 
-Today the full resource is the only read behavior. The **write mask** is built, AIP-134 exactly
-([ADR-0091](/architecture/decisions/#adr-0091-an-update_mask-says-which-fields-a-patch-writes)):
+- **No mask**: the implied mask, the fields the body populated.
+- **A mask**: exactly the named fields change, so one the body leaves empty is cleared.
+- **`["*"]`**: full replacement, every patchable field written.
+- **A field the route does not patch**: a 422 naming it, never a silent no-op.
 
-- **Omit `update_mask`** and the mask is **implied**: the fields the body populated (a non-empty
-  value) change, and an omitted field is left alone. This is what every `PATCH` in the tree has always
-  done, so it is the behavior of all of them.
-- **Send `update_mask`** and exactly the fields it names change, **populated or not**, so a named
-  field the body leaves empty is **cleared**. This is the only way to clear a field that has no
-  empty-value sentinel of its own, an integer or a list where "empty" and "absent" look the same on
-  the wire.
-- **`update_mask: ["*"]`** is **full replacement**, the equivalent of a `PUT`: every patchable field
-  is written, so one the body omits goes back to its default. It cannot be combined with named
-  fields.
-- A mask naming a field the resource does not patch is a **422 naming the field**, never a silent
-  no-op.
+The mask rides in the body, top-level names only, resolved by one primitive (`internal/updatemask`).
+A nullable string keeps the older three-state convention instead: omitted leaves it, `""` clears it, a
+value sets it. A nullable object always clears through the mask, since `{}` is a value and a decoded
+`null` looks like an omitted key
+([ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)).
 
-The mask rides in the **request body**, not the query string: this API has no gRPC transcoding to
-force the split, Huma models a body as a typed struct, and a body field generates cleanly into both
-the typed client and a CLI flag. It is top-level field names only, spelled as the body spells them.
+## Errors: one problem+json shape
 
-The **three-state string** convention (an omitted field unchanged, an explicit `""` clears, a value
-sets: `moveComponentInput`, a system's `standard`, a product's `vendor_id`, `driver_id`,
-`parent_product_id` and `icon`) is untouched and stays the idiomatic way to clear a string. A nullable
-reference is a string on the wire, so its clear is the same `""`, and the storage write is the same
-`CASE` the inherited catalog facts below use rather than a `coalesce`, which can set a column but never
-clear it ([#260](https://github.com/hyperscaleav/omniglass/issues/260)). The mask is what
-generalizes clearing to everything that is not a string; retiring the sentinel in its favor is a
-separate ripple, not folded in here.
-
-The **inherited catalog facts** are where that pays off. A `component_type` or `system_type` stores
-`stem`, `abbrev`, `icon` and `label_rule` as nullable strings where NULL means "inherit from the
-nearest ancestor that sets one", so each of the four has a clear state, and all four spell it the
-same way ([#716](https://github.com/hyperscaleav/omniglass/issues/716)): omit the field and it is
-unchanged, send `""` and the column goes back to NULL so the walk resumes, send a value and it sets.
-Both edit blades send `""` for an empty box, which is what makes an emptied box mean what it
-displays. The instrument is the sentinel rather than the mask because a nullable string has an empty
-value to overload, the exact distinction ADR-0106 draws when it sends objects to the mask instead.
-
-Two things the clear does not do. `stem` keeps its character rule on the patch, now written
-`^([a-z0-9][a-z0-9-]*)?$` with `minLength` gone, so `""` is admitted and every malformed stem is
-still a 422; only the clear got in, not a relaxation. And a **root** type cannot clear its stem:
-there is no ancestor behind it, so the refusal that guards create guards the clear, 422 naming the
-reason.
-
-**Clearing a nullable OBJECT field is the mask, always** (`name_rule` is the first,
-[ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)).
-An object has no empty value to overload the way a string has `""`: `{}` is a rule with default
-fields, not the absence of one, and an explicit `null` is indistinguishable from an omitted key
-once the body is decoded into a typed struct. So the field goes in `update_mask` and the body
-carries no value for it:
-
-```http
-PATCH /location-types/{id}
-{ "update_mask": ["name_rule"], "name_rule": null }
-```
-
-Sending the `null` is optional and reads well; the mask is what carries the intent. This is the
-convention for every nullable object field that follows, not a `name_rule` special case. The mask
-governs the **whole write**, so a caller changing other fields in the same request names those too
-(`["label", "icon", "allowed_parent_types", "name_rule"]`) rather than the cleared field
-alone, which would silently leave the rest unwritten. The console's location type blade does exactly
-that when an operator turns naming off while editing something else.
-
-The catalog routes follow the same rule
-([#1189](https://github.com/hyperscaleav/omniglass/issues/1189)). `PATCH /metric-types/{name}` clears
-`precision`, `PATCH /event-types/{name}` clears `payload_schema`, `PATCH /property-types/{name}` clears
-`validation` and `PATCH /command-types/{name}` clears `params_schema`, each by naming the field in
-`update_mask`; omitted, each is unchanged. On these routes the mask governs every patchable field, so a
-mask that names `precision` writes only `precision`, and a populated `description` the mask leaves out
-stays as it was. A nullable reference is a string, so `PATCH /standards/{id}` clears
-`parent_standard_id` with the `""` sentinel instead, and a name or uuid sets it.
-
-A `name_rule` also reads back with **`examples`**, the first two names it mints, produced by the same
-mint a create allocates from. It is served rather than derived by a surface for the reason the
-resolved icon and the drafted name are
-([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)):
-a shape implemented twice eventually disagrees, and here the wrong answer would be a name an operator
-was promised that no create produces. It is a fact about the RULE and not the fleet, so it costs no
-read, reserves no ordinal, and needs no scope.
-
-Built on the slot declarations (`PATCH /standards/{id}/slots/{slot}`, `PATCH
-/systems/{name}/slots/{slot}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes
-accept no mask yet, and they do not need one to stay correct: an absent mask is the implied mask,
-which is exactly what they already do.
-
-:::caution[Open question]
-Field-mask depth: top-level fields only (what the write mask ships), or nested paths (`a.b.c`), and
-whether a list's `fields` and a get's `fields` share one grammar.
-:::
-
-## Errors: one problem+json envelope
-
-Every error is **RFC 9457 `application/problem+json`**, in Huma's stock shape: `title`, `status`,
-`detail`, and, for validation, an `errors` array of `{location, message, value}` details, so every
-client renders every failure uniformly; the sketched custom envelope is retired
-([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)). The
-status mapping:
+Every error is RFC 9457 `application/problem+json` in Huma's stock shape: `title`, `status`, `detail`,
+and for validation an `errors` array of `{location, message, value}`
+([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)).
 
 | Status | Meaning |
 |---|---|
-| 400 | malformed request (bad JSON, an undeclared param) |
-| 401 | unauthenticated |
-| 403 | **action denied on this target**: the user lacks the capability entirely, or can read the target but not perform this action on it (below) |
-| 404 | not found, **including out-of-read-scope** (below), and a name no single visible row answers to, which lists the rows that do |
-| 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
-| 422 | semantic validation (a driver attach missing a required input) |
-| 429 | throttled |
+| 400 | a malformed request |
+| 401 | not signed in |
+| 403 | the caller lacks the permission, or can read the target but may not do this to it |
+| 404 | not found, including out of the caller's read scope |
+| 409 | a conflict: a name already taken in its bucket, an ambiguous name, a stale or racing write |
+| 422 | well-formed but invalid, naming the field or the rule |
+| 429 | too many at once (open watches, waiting commands) |
+| 503 | a dependency is not there to take it (no telemetry stream, no assistant model) |
 
-**The 403/404 split is three-way, by where the target sits in the caller's
-[per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the user
-holds: **403**, capability missing entirely. (b) The target is in the caller's **read-scope** but outside
-`visible_set(P, action)` (the user can `GET` it but cannot `:ack` it): **403**, which leaks nothing
-because the caller can already read the row. (c) The target is **outside the caller's read-scope**
-entirely: **404**, the only 404 case, so the API never discloses that an entity exists outside the
-caller's visible set.
+The 403 and 404 split by where the target sits in the caller's
+[scope](/architecture/identity-access/): a target the caller cannot read is a 404, so the API never
+confirms a row exists outside what the caller can see; a target it can read but not act on is a 403,
+which leaks nothing it could not already read.
 
-::::design[Idempotency keys and optimistic concurrency, tracked in #522]
-## Idempotency and concurrency
+## Every route is stamped and scoped
 
-- **`Idempotency-Key`** is accepted on `POST` and on state-changing custom methods. The server records
-  the key with its **effect** for a retention window; a retry with the same key returns the original
-  outcome, not a duplicate. **Only successful (2xx) outcomes are memoized**, never an authorization
-  result (401 / 403 / 404): a replay **re-enters the authorization and gateway path** before the
-  memoized effect is returned, so a stale denial is not re-served and a success is never replayed
-  after a grant is revoked.
-- **Optimistic concurrency**: a conditional update carries the resource version (an `ETag` / `If-Match`);
-  a write against a stale version is a 409, never a silent last-writer-wins.
-
-:::caution[Open question]
-The idempotency-key retention window, and whether it is uniform or per-method.
-:::
-::::
-
-:::design[Long-running operations over the action row, tracked in #522]
-## Long-running operations: the action is the handle
-
-A non-instantaneous operation (a `command` against a device, a reconcile `:enforce`, a credential
-rotation) does **not** block the request and does **not** introduce a parallel `operations` resource:
-the custom method **returns an [`action`](/architecture/alarms-actions/) row** (its id and status),
-and the caller polls `GET /actions/{id}` through `queued -> sent -> done` / `failed`. The action **is**
-the operation handle, so "fire and follow" is one model whether the trigger was a rule or an API call;
-a fast operation may inline its result, but the handle is always returned. The action row is ABAC-owned
-by its target's exclusive-arc owner, so polling is read-scoped to whoever can see the target. The HTTP
-method is the front door; **dispatch is over NATS**: the action fans out through
-[messaging](/architecture/messaging/) and the result flows back to advance the row.
-:::
-
-## Writes are audited and scoped
-
-- Every write emits an [`audit_log`](/architecture/audit/) row in the **same transaction** as the
-  change, a gateway responsibility, so it cannot be forgotten or bypassed.
-- Every route **declares its permission** (checked before the handler runs) and every query **carries the
-  caller's scope** (injected by the gateway), both [identity and access](/architecture/identity-access/)
-  invariants; the API is the gateway's only caller, so there is no unscoped path. Each gated operation
-  carries an `x-omniglass-permission` extension (for example `role:read:admin` on `GET /roles`), making
-  `api/openapi.json` a machine-readable map of the authz contract; the set of stamps is the
-  **permission universe** the [Roles
-  view](/architecture/identity-access/#the-permission-universe-published-per-route) reports.
-
-## The collection surface: outposts, endpoints, tasks
-
-The [collection](/architecture/collection/) authoring routes are the first concrete resources that
-exercise every convention above at once: the standard family per resource (`/outposts`, `/endpoints`,
-`/tasks`) plus the `:verb` custom methods, the per-component reads (`reachability`,
-`events`), all `component:read`-gated, and the read-only `GET /transports`
-(the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
-create takes either a `transport` (a bare probe endpoint) or a `driver` plus `inputs` (an
-attach, #813: the driver's spec derives the transport, params, and tasks), and the `/drivers`
-family carries each driver's declarative `spec`, validated at write. `PATCH /endpoints/{endpoint}` edits a
-driver-attached endpoint's `inputs` in place (the host, the port, an attached secret's reference;
-#1061), validated against the driver (a refused value is a 400 naming the field), re-resolving its
-secrets under the editor's scope, audited, its tasks re-derived in the same transaction.
-`POST /endpoints/{endpoint}:retry`
-(gated `endpoint:retry`, audited, #1049) moves the endpoint's retry counter, part of its connection
-fingerprint, so a gate a terminal refusal holds lifts and the endpoint is attempted again (ADR-0158); for an ssh endpoint whose host key changed, its optional `host_key`
-body declares the new pin (#1032), and for a tls endpoint whose certificate's public key changed,
-`host_key` (the key the endpoint's transport pins) or its tls-only twin `certificate` does the same
-(#1035, ADR-0160); a key is refused (422) on a transport that pins none, as `certificate` is off a
-tls endpoint, two different keys at once, and anything not a `SHA256:` fingerprint. While the
-endpoint's gate names an offered key, the key must be that key: any other is a 409 that writes
-nothing, so a trust confirmed against a view the record has since moved past cannot pin a key nobody
-read, and the audit row carries the pin replaced (`old.host_key`, or `old.certificate` for tls), the
-pin set (`new.host_key`, `new.certificate`) and the actor (#1078,
-[ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered)). The routes live in the
-[generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
-operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
-spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
-`POST /outposts:claim` and the webhook receiver stay the deliberate public writes).
-
-**The outpost custom methods are the day-one enrollment handshake.** `POST /outposts/{name}:enroll` (gated
-`outpost:enroll`) mints or re-mints the outpost's enrollment token and returns it **once**; the server stores
-only its hash and never logs it, so a re-enroll invalidates the previous token. `POST /outposts:claim` is
-the **outpost-facing** side: an outpost presents its token and receives its NATS credential (url, username,
-password). It is unauthenticated because the token itself is the authentication, and an invalid token
-is a **401** (a claim must not disclose which outposts exist). An outpost is fleet-wide, so `outpost:read` and
-`outpost:create` require an **all-scope** grant.
-
-**The webhook receiver is the other public write** (#1024,
-[ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
-`POST /webhooks/{token}` takes a sender's post for the webhook endpoint the token names, the scheme
-its driver declares authenticating it, and answers `202` once the stream has acked the batch (`503`
-when it will not), `401` refused, one identical
-`404` for an unknown, rotated or malformed token, `413` past 1 MiB, and `429` with `Retry-After`;
-`GET` and `HEAD` on the same path answer a sender verifying its URL. `POST
-/endpoints/{endpoint}:rotateToken` (gated `endpoint:update`) mints the endpoint's token anew, and a
-webhook endpoint's read carries its masked path, its scheme, whether it is signed, the secret its
-token is revealed through and its refusals. `GET /unclaimed-sources` (gated `outpost:read`) is the inbox
-of senders posting to a token no endpoint holds.
-
-**An identity binding costs a write on both of its ends** (#1385,
-[ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
-`GET /components/{name}/identity-bindings` (gated `component:read`) lists the conduit component's
-bindings, each a value it reports under a match key (a registered property type) tied to one system
-or component; an owner is named only inside the caller's read on its tier, and the rest are counted
-in `hidden`. `PUT /components/{name}/identity-bindings/{key}/{value}` (body: `owner_kind` and
-`owner`) binds one, and `DELETE` on the same address unbinds it. Both are gated `component:update`
-on the conduit and publish the owner's `system:update` as their conditional permission: a put naming
-a system refuses a caller holding none with a 403 naming it before anything resolves. Each end then
-resolves in its own tier's read scope and must be inside its update scope (out of read the
-non-disclosing 404, readable but not writable a 403); a put naming a different owner moves the
-binding and needs update on the owner it leaves as well, a re-put to the same owner changes nothing,
-an unregistered key, an owner that is a location or an outpost, or the conduit itself as owner is a 422,
-the value rides the path as one percent-encoded segment (`room%2F1` round-trips), and every change is audited in
-its transaction, naming both ends.
-`GET /components/{name}/unbound-identities` (gated `component:read`, scope-injected on the conduit)
-reads the conduit's inbox of identities it reported that no binding places (#1388): one row per match
-key and value, its count, first and last heard and the keys its samples carried, most recently heard
-first, bounded at 1024 per conduit and aged out after seven days; binding one lets its row go.
-
-**A simulated device can be broken on purpose.** `GET` and `PUT /components/{name}/impairment`
-(gated `simulation:read` and `simulation:update`, component-scoped, the write audited) read and set
-what is broken on a simulated component: unplugged, or latency, jitter and loss toward it and a rate
-limit both ways. A set replaces the whole impairment (a field left out is zero, an empty body repairs
-the device) and returns it as stored; jitter above latency or a value out of range is a 422. The
-simulator beside the component's outpost applies it ([simulation](/architecture/simulation/)).
-
-**An outpost's simulator is a read beside it.** `GET /outposts/{name}/simulation` (gated `outpost:read`, all-scope)
-lists the components a [simulator](/architecture/simulation/) beside the outpost serves (each component with an
-endpoint placed on the outpost and inside the caller's component read scope, its product and target host),
-joined to the simulator's stated capabilities
-and the hits the server has seen per device. Hits are a live signal kept in the server's memory, not
-stored, so they start from zero when the server restarts; an outpost with no simulator reads `connected: false`.
-`GET /outposts/{name}/simulation/observation` (gated `simulation:read`, and only for a caller whose component
-read scope is all, since the totals span every component the outpost simulates; any narrower scope is a 403)
-is what the simulated endpoints beside the outpost saw arrive and how each request settled, and what the outpost
-tallied sending, read as a bracket: the simulator, then the outpost over the bus, then the simulator again, so
-a request in transit between reads is never a false gap. Totals are per protocol, with a capped sample of
-device ids, and count since each process started; a scale lab reconciles them
-([what an endpoint observed](/architecture/simulation/#what-an-endpoint-observed)). An outpost that does not
-exist is a 404, and no simulator or outpost answering a 503.
-
-**The simulated fleet has its own reads and two writes.** `GET /simulation` (gated `simulation:read`)
-is every outpost whose simulator has pulled since the server started and simulates a component in the caller's
-scope (an all-scope reader sees every one; no outpost read is needed), each
-with its capabilities, its account of impairments and its simulated components in the caller's component scope;
-`connected` is true when any of them pulled recently, which is what shows the console's Simulation page.
-`GET /simulation/profiles` is the simulator's embedded profile catalog, each profile with the products it
-simulates. `GET /components/{name}/simulation` says whether a component is simulated and, when it is,
-gives its outpost, address, live hits, impairment, the products its profile simulates, and its full API
-surface from the profile (every protocol surface, with its HTTP routes, commands and SNMP OIDs, each port as the
-simulator binds it). `POST /components/{name}/simulation:fire` (gated `simulation:update`, audited) asks
-the simulator beside the component's outpost, over the bus, to run one operation from that surface (an HTTP
-call, a command line or an SNMP get) and returns the component's answer: a component that is not simulated
-is a 409, a surface it does not serve a 422, and no simulator answering a 503.
-`POST /outposts/{name}/simulation/components` (gated `simulation:update`, and also needing `component:create`
-and `endpoint:create`, each in the caller's own scope) adds a simulated component: a component of a
-simulated product at the lowest free address in `127.60.0.0/16`, with the endpoint the collector reaches
-it through placed on the outpost; an outpost with no simulator connected is a 409, a product no profile
-simulates a 422. A whole simulated system is built to a standard: `GET /simulation/standards/{standard}:plan`
-(gated `simulation:read`) previews each of the standard's slots staffed with a simulated product that fits
-(or left short, with why), and `POST /outposts/{name}/simulation/systems` (gated `simulation:update`, and also
-needing `system:create`, `system:update`, `system:read`, `component:create`, `endpoint:create` and
-`outpost:read`, plus `location:read` when it names a location) creates the system, a
-simulated component per staffed slot at its own free address with its endpoint on the outpost, and each
-slot assignment, in one transaction: it lands whole or not at all.
-
-**Alarms are raised by rules and graded by a level catalog.** `/severity-levels` (read with
-`severity_level:read` on any grant, written with `severity_level:*` only on an all-scope grant, since a
-level's rank moves health fleet-wide) lists the severity levels least to most severe,
-each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
-(gated `rule:*`; read like a catalog, written only on an all-scope grant) authors the rules that raise alarms: a sample
-key, fire and clear criteria, sustains, a selector, the event types it writes when it fires
-(`fire_event_type`, required) and clears (`clear_event_type`, optional), and a severity level, which is
-optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
-makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
-emptied). Criteria are expressions (#957): a body gives `{expr}` or the short form `{op, value}`, which is
-lowered to its expression, and a rule always reads back as `{expr}`. An unknown key, level or event
-type, a missing fire event type, or a criterion that does not compile against its lane is a 422; for a
-criterion the problem's error is located at `body.fire_criteria.expr` (or `clear_criteria`), or at
-`body.fire_criteria` when the body gave the short form, and carries the `line` and `column` of the
-fault when it has one, and the `code` of the [diagnostic](/architecture/expressions/#diagnostics-clear-messages-and-quick-fixes)
-that refused it when one did. A stored rule whose criteria no longer compile carries `criteria_error`
-(`field`, `line`, `column`, `message`, `code`) on the list, a get and its state, and holds until rewritten;
-criteria that compile with a warning carry it in `criteria_warnings` (the same shape), a note that never
-holds the rule or refuses its save. `POST /expressions:validate` (gated `rule:read`; `omniglass expression validate`) compiles a
-`source` against a registered expression `site` (`criteria`, for which the sample `key` is required
-and types the value, a metric a number and a property its data type, which so tells a `rule:read`
-holder a key's lane and data type, as the rule list does; or `calc`, for which `key` is the rule's
-output key, typing the result, and `inputs` with `owner_kind` give the bindings, an unknown or
-misnamed input, or `health` as one, being a 422) and answers `ok`,
-the value and result types, `diagnostics` (the refusal, or the warnings and hints an expression that
-compiles carries, each with line, column, phase, `severity` and, from a registered diagnostic, its
-`code` and a quick `fix`: a range and its replacement), and the site's `bindings`,
-`builtins` and `budget`, generated from the site's declaration; it compiles without the engine's
-program cache, stores and runs nothing, and an unknown site or a missing or unknown key is a 422. `POST /event-rules:preview` (gated `rule:read`; `omniglass event-rule
-preview`) judges a candidate rule (sample key, selector, criteria) without writing anything, in a
-read-only transaction, as the ingest would with no sustains (`sustains_ignored` is always true): over
-each series it selects among the components the caller's component read scope admits, from the state
-its newest deciding sample in the 7 days before the window set (listed in `state_unknown` when there
-is none), through every sample of the last 24 hours the ingest would have judged (a late sample older
-than one before it decides nothing). It answers `edges` (fire or clear, on a component and instance,
-at the sample) and `in_force_now`. Its reads are index probes per series; the window's are capped at
-`row_cap` samples a whole series at a time, reported as `series_judged` of `series_total` with
-`truncated`. A selector naming a component the caller cannot read is the same 422 as one that does
-not exist, and a criterion that does not compile is a 422 at its line and column. A rule edit is judged on what it changes from the stored rule:
-a selector entry, key or criteria it restates unchanged is not re-resolved, so a rule whose component or
-type was deleted stays editable (it matches nothing by the stale entry), while an entry new to the rule must
-exist. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
-rename`) moves an operator rule's name (#977) and answers the rule with its `id`; every reference inside
-the platform holds that uuid (an alarm's `raised_by_rule_id` and its `dedup_key`, `rule:<uuid>[:<instance>]`,
-a firing, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
-and firings running. An event keeps the name it was written under (`derived_by_rule`). An official
-rule keeps its name (409, the seed matches it by name), a taken name is a 409, an illegal or uuid-shaped
-one a 422. The list and a get carry each rule's live state as counts (`firing`, `open_alarms`,
-`pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
-firings, the alarms and the streaks themselves.
-Both are fenced to the caller's component read scope. The list, a get and the state also carry
-`last_judged_at`, when the rule last judged an arriving sample, to within 5s (absent when it never has);
-it names no component, so it is not fenced. Because writing a rule needs an all-scope grant,
-`GET /auth/me` returns `fleet_permissions` beside `permissions`:
-the permissions held on an all-scope grant, which the console checks before offering a rule write. An alarm body names its component by name and uuid, and a
-rule-raised one its rule (`raised_by_rule`, `raised_by_rule_id`).
-
-**Calc rules derive a key from aliased inputs.** `/calc-rules` (gated `rule:*`, read like a catalog,
-written only on an all-scope grant; `omniglass calc-rule`) authors the rules that derive an output key
-on each component or system ([calculations](/architecture/calculations/)): an `owner_kind`, a
-`selector` (a component rule's `component_types` and `components`, or a system rule's `system_types` and `systems`, subtypes included), `inputs` as `{alias, key}` pairs (the key by name or uuid, held by uuid; a read answers `key`,
-`key_id` and `lane`; an optional `window_seconds`, 1 to 3600 on a component rule, reads the key over
-that window, #1142), a `reduce` that is an `expr` over the aliases, each bound as the list of its
-values (#1018; a windowed input's as its samples in the window, one record each), and an `output_key`, its lane answered as `output_lane`. A rule is addressed by name or uuid and every write answers the rule with its `id`. A
-reduce that does not compile, or yields a type other than the output key's, is a 422 located at
-`body.reduce.expr` with the fault's `line` and `column` (and `unbound`, the name, when it is one no
-alias binds); any other refusal is a 422 located at the field
-it names (`body.inputs[0].key`, `body.inputs[0].alias`, `body.inputs[0].window_seconds`, `body.output_key`,
-`body.selector`): an unknown key, an alias that is not an identifier of at most 64, is reserved or repeats, a
-window outside 1 to 3600 seconds or on a system rule, `health` as an input or
-output, an output of the reserved family (a native probe key, `health`), an output a driver's declared
-emits write or a command type targets, an output another enabled rule
-writes (the refusal names it; enabling a rule is checked too). A list or get carries `calc_error` (`field`, `line`, `column`, `message`, `code`) when a stored reduce no
-longer compiles against the catalogs, and such a rule cannot be enabled (422); a reduce that compiles
-with a warning (an input it never names) carries it in `calc_warnings`, which never refuses a save. Deleting a property
-or metric type a calc rule writes or reads is a 409 naming the rule. A metric or property type a calc
-rule writes names it on `/metric-types` and `/property-types` (list and get) as `written_by`
-(`rule`, `rule_id`): the enabled writer, else a disabled one, read with the type and scope-free as the
-catalog is (#1019). A rule that would close a cycle in the key graph is a 422 whose detail names the chain
-(`temp-twice -> avg-temp -> temp-twice`), its error carrying the `keys` and `rules` along it. A patch
-bumps the version unless it changes nothing; `POST /calc-rules/{name}:rename` moves the name, bumping no
-version (a rename to the same name writes nothing), with the same 409 and 422 refusals as an event
-rule's rename. `GET /calc-rules/{name}/state` (gated `rule:read`; `omniglass calc-rule state list`) lists
-what the rule last did on each owner the caller may read (a component by the component read scope, a
-system by the system read scope), the owner named now: `value`, `computed_at`, `rule_version`,
-`missing`, a system's `skipped` members and the `stale` instances (named when the caller may read the
-component, else counted in `skipped_hidden` and `stale_hidden`), `error`, `no_members_since`, `pending`
-and a deferred mark's `due_at`; failing owners first, then pending, missing, valued, each by name, at
-most `limit` (100 unless asked, up to 1,000), beside the `total` and `pending_depth` over every owner the
-caller may read. `POST /calc-rules:preview`
-(gated `rule:read`; `omniglass calc-rule preview`) computes a candidate rule (`owner_kind`, `selector`,
-`inputs`, `reduce`, `output_key`, and a saved rule's `name` to preview an edit of it) on each selected
-owner the caller may read, with the tick's reduce, in a read-only transaction: per owner the `value` it
-would write, the `current` output and whether it `differs`, and what was missing, skipped or stale
-(the owners holding a value first; an expression that can read one member's value over a system with
-a member the caller may not read is withheld there, its `error` counting the members out of scope, while
-one folding each list whole is previewed),
-at most `owner_cap` owners (`owners_judged` of `owners_total`, `truncated` past it). A candidate a save
-would refuse (a reduce that does not compile, a cycle, a second writer of the output, a collected
-output, health) is the same 422.
-
-**The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
-**named by its protocol**: `name` derives from `transport`, unique **within its component**
-(create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an
-endpoint **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`,
-`GET /tasks/{id}`): no task write routes or grants. A task references its endpoint by
-`endpoint_id`, its id **content-addressed** over endpoint, mode, and spec, with **no outpost column**:
-placement **projects from the endpoint**. An endpoint belongs to a component (or is server-hosted,
-needing an all-scoped grant), a task to an endpoint, so both inherit the component's
-[scope](/architecture/identity-access/): an out-of-read-scope component's endpoint or task is a
-non-disclosing **404**.
-
-**Three per-component reads stand in until the views framework (#2051) lands** (coded console pages
-keep their typed routes per ADR-1830), each a hand-written typed `GET`, gated `component:read` and
-scope-injected through the same `GetComponent` gate, so an out-of-scope component is a
-non-disclosing 404 (a deliberate early exception to
-[reads no route was written for are views](#reads-no-route-was-written-for-are-views)):
-
-- `GET /components/{name}/reachability` composes, per endpoint, its `reachability`, the latest
-  `endpoint-reachable` reading (`up`/`down`, or null with `pending` saying why), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics,
-  and for a `udp` endpoint a `request` layer: its request answered, off `endpoint-responsive`, timed
-  by `udp-response-time` only while answered, #1037),
-  the recent reachability transitions the availability strip reads, and `last_seen`, when ingest last
-  landed a batch the endpoint's task delivered, by the server's clock and to within a few seconds,
-  whatever the batch carried. A reachability reading is stored only on a transition, so its `ts` is when it last
-  changed, and a driver endpoint has no reachability at all; `last_seen` is the one freshness every
-  endpoint has. Each row also carries the endpoint's `id` (the address `:retry` takes), its held
-  `session` while it is configured to hold one (a standing listen task, or a driver declaring a
-  session: the latest `session-state`, when it changed, and the `session-reason` beside it, cut to
-  500 characters), and the `rejection` a terminal refusal holds (the rung and class of
-  `endpoint-rejection`; the connection fingerprint it carries is never served), which the console's
-  session pill and ladder render (#1059). Every other reason the gate holds (the gate is a set,
-  [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)) is served as
-  `gate_reasons`, each with its `kind`, `since` and `source`, absent when none holds (#1650). The `rejection` is served whether or not a session is
-  held, since a reachability probe's refusal gates an endpoint too, with its `reason` (the
-  `endpoint-rejection-reason` the outpost publishes beside the gate, cut to 500 characters like a
-  session's) and `ts` (when the gate was last published), so the console's refusal notice and its
-  Retry read the same for a probe's gate as for a rejected session (#1110,
-  [ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). A refusal of a changed key adds `pinned_key` and
-  `offered_key`, both or neither, read off the gate as data (#1078; a tls certificate refusal the
-  same way, #1035): the console names them and trusts the exact `offered_key` it showed, never a
-  fingerprint parsed out of the reason. A tls endpoint's row also carries `tls`: its verification
-  mode, the key it pins (pin mode alone), the latest handshake time, and the certificate's expiry and
-  days left, withheld while a certificate gate holds (#1035). Teardown publishes no state, which is
-  why a session is served only while one is held. Every key this read composes is a native probe
-  key, the outpost's own observation: the reachability and its rungs, the probe metrics and timings, a
-  session's state and reason, the gate, a tls endpoint's pin and certificate facts. `POST
-  /telemetry:push` refuses each by name on every lane, whatever instance it names (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
-  point 5), and the read serves each key's observed series only, so no other writer or provenance can
-  stand in for the outpost in any of it
-  ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)).
-- `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
-  (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
-  newest first, bounded to the last 24 hours and capped at 200 rows; each row carries `ts`, the
-  `event_type` name it is typed by (on the wire as `key`, e.g. `call-started`) with its
-  `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
-  `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
-  endpoint type. An event a rule derived also carries `derived_by_rule` (the rule's name) and, when the
-  same transaction opened or resolved an alarm, its `alarm_id` (#949); `GET /systems/{name}/events`
-  carries both the same way, and names each row's owner by uuid as well (`owner_id`), since names
-  repeat across a system's members; a system's own events, a push's caught occurrence included, read
-  there beside its members'.
-- `GET /components/{name}/logs` is the component's raw **log lines**
-  ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)), the
-  newest arrival first, bounded to those that arrived in the last 24 hours (a line kept before its
-  arrival was recorded counts by its own time) and capped at 200 rows: each row's `ts` (the time the line
-  states), its `received_at` (the server's receipt, absent on a line stored before it was kept),
-  `severity` (one of RFC 5424's eight levels), `facility`, `source`, `instance` (the endpoint that
-  collected it), `message`, and optional `attributes` and `labels`. It takes two filters (#1145):
-  `severity`, a threshold (that level and every more severe one, a line with no severity left out;
-  a word outside the eight is a 422 before any read), and `source`, an exact channel; and it
-  returns `sources`, the channels the window carries whatever the filter. `GET
-  /systems/{name}/logs` merges the members' lines the same way, each naming its component. Both are
-  `component:read` and `system:read` gated, scope cascading through the owner (out of scope, a
-  non-disclosing 404).
-- Where each property stands is not a route of its own: every row of the owner's properties read
-  (below) carries its `reconciliation`, the want/told/is pivot, a system's alike (a property a push observed on a system is one of its rows). The separate
-  component reconciliation route retired into it
-  ([ADR-1297](/architecture/decisions/#adr-1297-the-properties-read-carries-reconciliation-and-the-reconciliation-route-retires)).
-
-**Three catalogs ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
-official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:
-`GET/POST/PATCH/DELETE /metric-types[/{name}]`, gated `metric_type:read` / `:create` / `:update` /
-`:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
-`event_type` share one resolution namespace, so a create is refused when a sibling holds the name
-([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-Every type on the three ingest catalogs carries its `writer_class` (`outpost-probe`, `platform`,
-`command-lifecycle`, `calc`, `collected`: who may write the key,
-[ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)),
-read beside it and never set; a create naming a reserved key (a native probe key, `collection-failed`,
-`health`, `command-issued`) is a 422 on every lane, whether or not its type is seeded. Any write the Storage Gateway
-refuses for its writer (a declared value, a command's target, a calc rule's output, an event rule's
-event type, a driver spec's emits on a key its route may not write) is a 422 naming the key and who
-does write it.
-The **event_type catalog is the occurrence keyspace**:
-`GET/POST/PATCH/DELETE /event-types[/{name}]`, gated `event_type:read` / `:create` / `:update` /
-`:delete`; an ingested occurrence is typed by a registered `event_type` name (the log-to-event
-promotion, ADR-0063), the optional `payload_schema` a JSON Schema fragment for its payload. The
-**command_type catalog is the do catalog**:
-`GET/POST/PATCH/DELETE /command-types[/{name}]`, gated `command_type:read` / `:create` / `:update` /
-`:delete`, each type carrying a `settle_window_seconds` and an optional `target_property_type` (the
-property a settleable command sets; the metric target arm is storage-deep, its authoring surface
-deferred). `POST /components/{name}/commands:issue` (gated `command:issue`, and **fenced by that permission's
-own scope** on the component tier rather than by `component:read`,
-[ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it))
-is the write: it records the invocation, writes a caused event,
-and (for a settleable command) opens an intended value, answering with the command as the read
-returns it beside the computed settlement (none/pending/settled/failed); the invocation then
-actuates over the per-outpost command queue
-([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815). With `wait` the issue
-holds until the command is terminal or `wait_timeout` passes (1 to 120 seconds), bounded to 64 waits
-at once and 4 per user, a wait past either a 429 refused before anything is issued.
-`GET /components/{name}/commands` and `GET /components/{name}/commands/{id}` read commands back whole (#1155): one by its id under its
-component, or the history newest first, narrowed by `status`, `since`, `until` and `limit`, each
-carrying a time per transition, the derived in-flight `phase`, the settle mode, what carried it, the
-evidence (the reply, masked of credentials, or the observed sample) with a `reason`, and the issuer.
-Both are gated `command:read`, resolved on the component tier with the read and action split
-([commands](/architecture/commands/#reading-a-command-from-issue-to-settlement),
-[ADR-1155](/architecture/decisions/#adr-1155-a-command-is-read-whole-its-evidence-kept-and-masked-and-an-issue-may-wait)).
-
-:::note[Thin cuts today]
-The operationally useful slice, not the full CRUD matrix. An **outpost** carries the full set (create,
-list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its endpoints, their
-derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. An **endpoint**
-`PATCH` changes only its outpost placement and its params (target); the type (and the name it derives)
-and the owning component are fixed at creation, and a delete is refused while a task still references
-it (a **409**). The four built endpoint types are `icmp`, `tcp`, `ssh`, and `http`; there is no
-`transport` list route yet.
-:::
-## Secrets: masked reads, an audited reveal
-
-A **secret** is a typed, encrypted-at-rest operator value ([config, credentials, and
-variables](/architecture/variables/)); its routes (`GET /secret-types`, `GET` / `POST /secrets`,
-`PATCH` / `DELETE /secrets/{secret}`, `POST /secrets/{secret}:reveal`, the secret by name, by
-`<owner>/<name>`, or by uuid; shapes in the
-[reference](/reference/api/)) are a worked instance of the conventions above. Secret is a **sensitive
-resource**
-([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)),
-off the viewer `*:read` floor: the catalog and directory reads need an explicit `secret:read` grant
-(seeded to operator, deploy, admin, and owner), the writes gate on
-`secret:create` / `secret:update` / `secret:delete`, and the plaintext decrypt on **`secret:reveal`**,
-held by operator and deploy (the device secrets in their scope), admin (via `secret:>`, which alone
-reaches the admin-sensitive `:admin` tier), and owner (`>`). Every `:reveal` writes an
-[audit](/architecture/audit/) row (verb `reveal`) in the same call. The directory filters each
-secret's owner placement against the caller's read scope, admin-sensitive secrets visible only to the
-admin tier; every other read masks a secret field (`••••••`), only `:reveal` returns plaintext. A
-create names its owner (`owner_kind: platform|location|component`; the system band is retired,
-ADR-0052); a `PATCH` re-seals the given `fields`, merged over the stored value so an omitted field
-keeps its value. A `platform` secret needs an all-scope grant **and** `platform:create`
-(`platform:update` / `platform:delete` on later writes at the tier).
-
-A **variable** is the plaintext sibling of a secret ([config, secrets, and
-variables](/architecture/variables/)): the same owner arc and cascade (`owner_kind:
-platform|location|system|component`), shown in the clear (no catalog, no mask, no reveal), the value
-polymorphic JSON typed by `value_type` (`string|int|float|bool|json`) and validated against it on
-write. `GET /variables` is the **all-scope admin directory** (like the secret directory, a non-all
-scope is a 403) on `variable:read`; `POST /variables` creates (201, `variable:create`),
-`PATCH /variables/{variable}` replaces the `value` (`variable:update`), and `DELETE /variables/{variable}` removes
-(204, `variable:delete`, admin and owner), with the same `platform` tier rule as a secret.
-
-A **tag** ([tags](/architecture/tags/)) is a `key: value` label, and its routes split along the
-governance line: **minting a tag** is a tenant-wide governance action, **setting a value** is the
-owning entity's own write. The tag vocabulary and an entity's tags read on the viewer floor
-(`tag:read`, `component:read`).
-
-- `GET /tags` lists the governed tag vocabulary (`{tags: [tag]}`, `tag:read`); a `tag` body is `{id,
-  name, applies_to, propagates}`, the `name` on the ordinary entity name rule (lowercase letters,
-  digits, and hyphens, at most 100 characters, a uuid-shaped name refused), a 422 otherwise,
-  `applies_to` an entity-kind allow-list (empty = universal), `propagates` default true.
-  `POST /tags` mints a tag (201), `PATCH /tags/{name}` revises it (the name is fixed), and
-  `DELETE /tags/{name}` removes it, cascading its bindings (204): `tag:create` / `tag:update` /
-  `tag:delete`, all-scope.
-- `POST /tags/{name}:setPlatform` sets the **platform-tier** value for a key from `{value}`;
-  `POST /tags/{name}:clearPlatform` removes it (204). A platform binding has no owning entity, so it gates on
-  `tag:update` plus `platform:update` (the install-wide tier permission below).
-- `GET /{components,systems,locations,outposts}/{name}:listTags` lists the bindings set **directly** on one entity
-  (`{tags: [tagBinding]}`, each `{key, value, owner_kind, owner_id?, owner_name?}`, the entity's `:read`).
-- `POST /{components,systems,locations,outposts}/{name}:setTag` binds a value from `{key, value}`; the key
-  must exist and its `applies_to` must admit the kind (a 422 otherwise). Setting a value is the
-  entity's own write, so it gates on the entity's **`:update`** (`component:update` and friends), not a
-  tag permission; `POST /{...}/{name}:removeTag` from `{key}` removes the binding (204). Bindings are
-  custom methods on the entity rather than a nested collection, so the generated CLI stays
-  collision-free.
-- `GET /components/{name}/effective-tags` is the **cascade** for one component: each a `resolvedTag`
-  (`{key, value, owner_kind, owner_id?, owner_name?, band, depth, winner}`), keys unioning and values
-  shadowing most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
-  only from a binding on the component itself (`component:read`, read-scoped).
-- The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
-  map (`{key: winning_value}`) on every row, resolved for the whole page in one batched query. A
-  component resolves the full arc; a location resolves `platform` plus its location tree; a system
-  resolves `platform`, its system tree, and the location it is placed at. Provenance lives in the
-  per-entity effective-tags detail, not the row.
-
-The **classification catalogs** ([core entities](/architecture/core-entities/#catalog-reference-data-vendor-driver-component_type))
-are official-vs-custom catalogs the fleet entities reference, on the same pattern as the
-`*_type` catalogs; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
-([core entities](/architecture/core-entities/#catalog-reference-data-component_type)), and
-`system_type` its system-side counterpart, the taxonomy of what a system is for
-([core entities](/architecture/core-entities/#catalog-reference-data-system_type)). Each is its own
-resource with one shared CRUD shape: the list routes
-(`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`, `/system-types`) order
-alphabetically by label, and each list and per-id `GET` sits on the viewer floor
-(`vendor:read` / `driver:read` / `component_type:read` / `product:read` / `standard:read` /
-`system_type:read`, which `*:read` carries); `POST` mints a custom
-row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
-`<resource>:update` / `<resource>:delete`, all at the admin tier. An **official** row refuses the write
-(`PATCH` and `DELETE` both 422), except on a catalog that has adopted the **fork**
-([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)):
-there a `PATCH` of a shipped row succeeds without writing it, storing the caller's version over it and
-answering 200 with `forked: true` under the same id, `DELETE` is still 422 (a fork is an overlay, not
-ownership), and `POST /component-types/{id}:restore` discards the fork (409 when there is none) so later
-releases reach the row again. `component_type` is the first adopter; `official` and `forked` together
-are the row's origin (shipped, yours, or yours overriding shipped). The `{ref}` grammar is unchanged
-either way: one uuid per logical row, forked or not (a name names one row per namespace, ADR-0318), and the fork never appears in a
-URL.
-
-A **nested** catalog (`component_type`, `system_type`) returns the flat set with each row's parent
-link in both forms, so the console reconstructs the tree client-side; the row carries its **own**
-`stem` / `abbrev` / `icon`, unresolved, because inheritance is the resolver's job and a read that
-silently filled a blank from an ancestor would make the override invisible. `DELETE` on one is refused
-with a 409 while it still parents another type or still classifies a row (`system_type` counts both
-sides).
-
-A catalog body carries **both handles** like every other name-bearing resource
-([above](#shape-resources-and-verb-methods),
-[ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)):
-a create takes the `name`, the response carries the minted uuid, and a reference to one (`vendor`,
-`driver`, a parent) resolves whichever form it is given.
-
-The handle is what ADR-0062 made renameable, and five catalogs rename it: `POST
-/vendors/{id}:rename`, `/drivers/{id}:rename`, `/products/{id}:rename`, `/standards/{id}:rename`, and
-`/location-types/{id}:rename`, each with a body of `{"name": "<new>"}`, the row addressed by its
-current name or its uuid
-([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)).
-It is the fleet tiers' custom method, not a `PATCH` field, and it is gated by its own
-`<resource>:rename` (admin), because it breaks what was typed outside the platform while nothing
-inside it moves: the uuid stays, so every foreign key still resolves and reads the new name. A
-location type's name is also stored by value in `allowed_parent_types`, on every type row and in an
-operator's fork, and the rename rewrites those in the same transaction. A driver's name is baked
-into every task it derives, so a driver rename re-derives its attached endpoints' tasks in the same
-transaction, as a version change does. An official row keeps its shipped name (422), since the boot
-seed owns it by name; a standard is never official and never seeded (it is created from a template, below),
-so every standard renames. A taken name is
-a 409, an illegal or uuid-shaped one a 422, `root` is reserved for a location type (422), and the rename is audited as
-`rename` keyed on the uuid. The answer is the row as its `GET` reads it. The catalogs keyed by a
-telemetry name and the remaining type catalogs do not rename yet
-([#1188](https://github.com/hyperscaleav/omniglass/issues/1188)).
-
-The **template catalog** is read beside them but is not a catalog: a
-[template](/architecture/templates/) is never a row, so it has no uuid, no create and no write of any
-kind. `GET /templates` lists what this binary ships, ordered by kind then name, and takes an optional
-`kind` (`standard_template`, `system_template`, `location_template` or `component_template`; any other
-value is a 422); `GET /templates/{template}` reads one whole by name, a 404 when the catalog does not
-hold it. Both are gated `template:read`, which the viewer's `*:read` floor carries, with no scope to
-inject since a template has no owner. The body is the template's own: a kind, a name, a label, a
-description, and the one body its kind names (a standard template's slots, choices, contract lines and
-map; a component template's product, attach preset and declared values; a system template's standard
-and slot fills; a location template's subtree).
-
-One custom method, **`:createFromTemplate`**, creates from a template on each of the four
-collections a template creates in: a custom method names what differs from Create, and here the
-difference is the template input. Each is gated by that resource's create permission, with the other
-permissions its pieces need checked up front (a 403 naming the one missing):
-
-- **`POST /standards:createFromTemplate`** (`standard:create`): the body names the `template` and
-  optionally the `name` (the template's by default), the `label`, and for a variant the `parent` to
-  hang it off (the caller's standard named for the template's parent by default). The standard, its
-  choices, slots, contract lines and map land in one transaction, and the answer is the standard as its
-  `GET` reads it (201). A taken name is a 409, a variant whose parent the caller does not hold is a 422
-  naming the template to create from first, a template the catalog does not hold (or one of another
-  kind) is a 404, and a template naming a row the fleet's catalogs lack is a 422. The boot seed plants
-  no standard, so this is how a fresh install gets one.
-- **`POST /components:createFromTemplate`** (`component:create`; plus `component:update` for declared
-  values and `endpoint:create` to attach): a `location`, optionally `name` and `label`, and `inputs`
-  with an `outpost` to attach.
-- **`POST /systems:createFromTemplate`** (`system:create`; plus `system:read`, `system:update`,
-  `component:create`, `component:update`, `endpoint:create` to attach, and `standard:create` when the
-  template's standard is created from its template): a `location`, optionally `name`, `label`, a
-  `standard` to build to, and `attach` (driver inputs per slot, one object per component) with a
-  `outpost`.
-- **`POST /locations:createFromTemplate`** (`location:create`; plus the system permissions when the
-  subtree carries systems): a `parent`, and optionally the root's `name` and `label`.
-
-Each lands in one transaction, every piece the ordinary create in the caller's own scope with its own
-audit row, each a create whose detail carries `from_template`, and a refused piece is answered as its
-own route answers it with nothing landed. A target location outside the caller's location read scope is a
-non-disclosing 404, an unknown template (or named standard) a 404, and a request the template cannot
-satisfy a 422 naming why. The answer names what was created, by name and id, the standards it created
-from their templates (`standards_created`), and `to_attach`, the components that landed without an
-endpoint ([templates](/architecture/templates/#creating-from-a-template)).
-
-What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
-
-- A **vendor** (Boreal, Polaris, ...) names an organization, generalizing the former manufacturer-only
-  `component_make`: a `kind` of `manufacturer` / `integrator` / `developer` (default `manufacturer`, a
-  422 otherwise), and a `website` validated to an `http`/`https` scheme on write (a 422 for any other
-  scheme, for example `javascript:`).
-- A **driver** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
-  product's signals, with an optional `version`.
-- A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class type a product is
-  classified under, a **hierarchy** (a subtype falls within its ancestor's subtree): what a
-  [system slot's type guard](#system-slots-a-system-declares-one-a-component-fills-it) accepts.
-- A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
-  concrete **SKU** that ties the leaf catalogs together and the target of `component.product_id`: a
-  vendor, a driver, a `kind` of `device` / `app` / `service` / `vm` (default `device`, a 422
-  otherwise), a required `component_type`, and an optional `parent_product_id` variant, the `vendor`
-  and `driver` handles reading the referenced catalog's current name beside its uuid. An unknown
-  vendor / driver / parent / component_type reference is a 422, and a product still referenced by a
-  component is refused (409).
-- A **standard** ([core entities](/architecture/core-entities/#catalog-reference-data-standard)) is the
-  **contract a system is built to** (Huddle Room, Classroom, Auditorium), the system-side counterpart
-  of a product. Because it carries its own declared-property contract it is a **Catalog entity, not a
-  bare type catalog**: its own `standard:*` resource at `/standards`, not `/types/system`, with an
-  optional `parent_standard_id` (an unknown parent a 422); a standard still referenced by a system is
-  refused (409). The **shipped** standards are `official: false`, so unlike a seeded product they are
-  fully editable
-  ([the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)).
-
-### The install-wide tier permission
-
-The cascade's least-specific tier is **`platform`** ([cascade](/architecture/cascade/)), and a write that
-lands there needs **two** permissions: the resource's own (`secret:create`, `variable:update`,
-`tag:update`, `settings:update`, and `metric_type:update` or `property_type:update` for a type's
-`:setRetention`) **and** `platform:<action>`, because fleet **scope** and install-wide
-**authority** are different questions
-([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
-`platform:*` is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` do not hold it.
-The tier gate is **published in the spec** like every primary gate: an
-`x-omniglass-platform-permission` extension beside the route's `x-omniglass-permission` stamp, both in
-the route-derived permission universe. Where the request body names the tier (`owner_kind: platform`,
-and every settings write) the handler checks it up front; where only the stored row knows its tier (an
-update or delete by id) the resolved capability rides into the Gateway alongside the ABAC scope, so the
-404-versus-403 split stays non-disclosing.
-
-A second permission can also be **conditional on the request** rather than on a tier, and it is stamped
-the same way, as `x-omniglass-conditional-permission`. `POST /components` accepts a `system`, and what
-it does with it is insert that component's **primary membership**, the same row `PUT
-/systems/{name}/members/{component}` writes under `system:update`. Two routes writing one row must cost
-the same permission, or the cheaper one is the way around the other, so a create that names a system
-requires `system:update` and resolves it in that scope
+Each operation declares its permission at registration, and the stamp lands in the document as
+`x-omniglass-permission`. A route whose write lands on the install-wide tier carries a second,
+`x-omniglass-platform-permission`; one whose second check depends on the body (a component create that
+names a system also writes a membership) carries `x-omniglass-conditional-permission`
 ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
-The check is in the handler rather than the middleware because the condition is a body field and
-middleware cannot see the body; the stamp is what keeps the spec a faithful map of what the route
-enforces. The same row seen from its other end carries one too: the five routes that bind, unbind,
-re-default or staff a component in a system need `component:update` beside `system:update`, because
-the membership writes onto the component
-([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
-Their condition is the component the path always names, so the handler checks it on every request.
+So the document is a machine-readable map of the authorization contract, and the set of stamps is the
+[permission universe](/architecture/identity-access/#the-permission-universe-published-per-route) the
+Roles page shows.
 
-## Properties: a classifier declares, an instance sets
+Every query carries the caller's scope, injected by the gateway, and every write records its
+[audit](/architecture/audit/) row in the same transaction as the change. Both are
+[identity and access](/architecture/identity-access/) invariants, not conventions a handler opts into.
 
-A **contract** is the set of properties a classifier's instances expose
-([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)).
-Each contract is a **sub-collection of its classifier**, addressed by property name, so the line is
-idempotent: `PUT` declares it or revises it in place. Type and validation come from the
-[property catalog](/admin/properties/), not the body. Three classifiers carry a contract, on
-identical route shapes:
+## Long-running work: the command is the handle
 
-- `GET /products/{id}/properties`, `PUT` / `DELETE /products/{id}/properties/{property}`, gated
-  `product:read` / `:update` / `:delete`; `GET /standards/{id}/properties`, `PUT` /
-  `DELETE /standards/{id}/properties/{property}`, gated `standard:read` / `:update` / `:delete`.
-- `GET /location-types/{id}/properties`, `PUT` / `DELETE /location-types/{id}/properties/{property}`,
-  gated `location_type:read` / `:update` / `:delete`, the catalog's own resource.
+Issuing a command to a device does not hold the request open for the device. `:issue` answers the
+command row at once, its `phase` saying where it stands (queued, delivered, awaiting a reply or an
+observation, then settled, failed or timed out), and `GET /components/{name}/commands/{id}` follows
+it. A caller that would rather wait passes `wait` and a `wait_timeout` of at most 120 seconds, and is
+answered with the row as it stands when it settles or the wait runs out
+([commands](/architecture/commands/)).
 
-The list returns the contract ordered by property name, each line
-`{property_type_name, property_type_id, default_value, required}`: the label and type are the catalog's
-to serve, so a surface that wants them reads `/property-types` alongside. `PUT` takes
-`{default_value?, required?}`; `DELETE` withdraws the line (204), and instances **keep** any value they
-set for it, now off contract. An **official** classifier refuses the write (422), an unknown
-classifier is a 404, and a property the catalog does not know is a 422, as is a reserved key (a
-native probe key, `health`, `command-issued`) on this route or the metric contract's, naming the key
-and who writes it, since a contract default would stand in for its writer's value
-([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
+:::design[Idempotency keys, optimistic concurrency, and one handle for every long operation, tracked in #522]
+- **`Idempotency-Key`** on a `POST` or a state-changing custom method: a retry with the same key
+  returns the original success rather than doing it twice. Only a success is remembered, and a replay
+  runs authorization again first, so a revoked grant is never bypassed by a replay.
+- **Optimistic concurrency**: a conditional update carries the row's version, and a write against a
+  stale one is a 409 rather than a silent last writer wins.
+- **Every long operation returns a handle** the way a command does, so a reconcile or a rotation is
+  followed the same way.
+:::
 
-An instance's **values** are the other side of the contract, and unlike the classifier routes they are
-**ABAC-scoped through the instance**, so an out-of-read-scope instance is a non-disclosing **404** and
-every write is audited. Three owners are addressable
-(`GET /{components,systems,locations}/{name}/properties`, `PUT` / `DELETE .../{property}`), each gated
-by its own entity's permission (`component:read` / `component:update` and friends): the catalog governs
-the vocabulary, the owning entity its values, the same rule tag bindings follow.
+## Reads shaped for a surface
 
-The `GET` is the **properties read**, one row per property the owner has: every property the
-instance's classifier declares (its `product`, its `standard`, its `location_type`), resolved to
-`coalesce(the instance's own value, a calc rule's value, the contract default)`; every property set
-directly on the instance off contract; every property a calc rule writes on it (`source_rule`); and
-every property it only observes (collected or pushed, on a live instance) or was told by a command.
-Each row carries the catalog's display fields plus the value (omitted on a row nothing declares or
-calculates), the default, `is_set` (the override marker), `from_contract`, `required`, and the
-`value_id` the surface clears. Every row but a calculated one carries its **`reconciliation`**
-(#1297): the **want** (the declared value, the contract default coalesced in, `null` when nothing
-declares it), the **told** (the newest `intended` value a command set, on any instance), and the
-**is** (the `observed` value, resolved across every live instance worst-case, a deleted endpoint's
-frozen reading left out, and named by `is_instance`), all
-[latest-series-sample reads](/architecture/properties/#current-value-is-the-latest-series-sample), with
-**drift** (any observed instance disagreeing with want, so `false` with nothing declared) computed on
-read ([how an instance resolves](/architecture/properties/#the-instance-dimension-many-values-of-one-name-on-one-owner)).
-A location owns no observed sample, so a location's rows never carry `is`. An instance with **no
-classifier** returns only its off-contract, calculated, observed and told rows. `PUT .../{property}` sets the instance's value from `{value}`, idempotently; the
-property need **not** be on the contract, but must exist in the catalog (422 otherwise).
-`DELETE .../{property}` clears it (204), falling back to the contract default or leaving the effective
-read entirely when off contract; clearing a value the instance never set is a 404.
+A typed `GET` answers "what is this row". A few reads answer "what does this screen need" instead,
+where composing the row reads in the browser would be the wrong shape: `GET /views/fleet` (every
+location, system and a dot per component, for Explore), `GET /views/platform` (for Platform health),
+and `GET /search` (the command palette). Each is read-only, resolves its own scope per tier, and serves
+the values the platform already recorded, so two surfaces cannot disagree about one room.
 
-**Series reads.** `GET /{components,systems}/{name}/metrics/{metric}/samples` and
-`.../properties/{property}/samples` answer a window of one series (`hours`, up to 720). Raw, they
-return the newest rows up to `limit`. Given a `resolution` in seconds they return every regular
-bucket of the window instead, oldest first, empty ones included, with the body's `covered_from`
-naming where the data kept ends: the samples' retention, or the trends' for a read served from them. A metric read over more than 48 hours, or past retention, is raised to
-whole hours and served its closed hours from the trends; `resolution_seconds` is the width applied
-([ADR-1566](/architecture/decisions/#adr-1566-a-wide-bucketed-read-is-whole-hours-and-takes-closed-hours-from-the-trends)). A bucket is one `instance`'s measured samples: unset, the one instance
-measured in the window, or a 422 listing them when there are several ([a series chart is truthful at every zoom](/architecture/properties/#a-series-chart-is-truthful-at-every-zoom-1269)).
-
-The **metrics read** is its numeric twin, read-only since a sample is telemetry, not an override:
-`GET /{components,systems,locations}/{name}/metrics`, gated and scoped like the properties read. Each
-row is a metric the classifier declares or the series holds off contract, resolved to the newest
-`observed` or `calculated` sample across the metric's live instances, else the contract default
-(`is_sampled` marks a live series). The row names the instance its sample came from (`instance`: the
-endpoint that collected it, empty for the owner-level series), counts the live instances holding a
-sample (`instance_count`), and, when there is more than one, lists each one's latest with its time
-(`instances`, newest first, each marked `endpoint` when it names an endpoint the owner has), a deleted endpoint's frozen reading left out of all three
-([ADR-0456](/architecture/decisions/#adr-0456-an-instance-names-which-value-of-one-key-on-one-owner-a-row-is-and-an-owner-level-read-reduces-across-every-instance), #1020).
-
-## System slots: a system declares one, a component fills it
-
-A **[system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)** is a place a
-system needs filled, in three arcs: **declaration** (what a standard says every conforming system
-needs, and what one system declares ad-hoc), **resolution** (the per-system read merging both with who
-fills each slot today), and **staffing** (assign and unassign). It is **not** the
-[IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the fleet model.
-
-A slot is addressed **by name within its owner**, so every declaration is a `PATCH` that declares or
-revises in place. The body is `{update_mask?, label?, quorum?, capacity?, position_labels?,
-accepted_types?, pinned_products?, impact?, alternate?}`, patched under the
-[write mask](#partial-responses-field-masks): the fields the body populates change and the rest of
-the declaration is left alone, and `update_mask` names the fields that change whether the body
-populates them or not. `accepted_types`, `pinned_products` and `position_labels` each **replace**
-their set wholesale when written, so clearing one means naming it in `update_mask` (an empty list is
-not a populated field, so on its own it means unchanged). `capacity` is the most components the slot
-will accept (at least `quorum`), unbounded on first declare, and naming `capacity` in `update_mask`
-with no value is what clears it back to unbounded. `impact` is `outage` / `degraded` / `none`
-(`degraded` on first declare), what an impaired slot does to its system's
-[health](#health-and-why); an unknown impact is a 422. `alternate` is the
-`choice-name/alternate-name` this slot joins, an empty string detaching it; every slot read returns it
-in the same form. Gating follows the owner:
-
-- `GET /standards/{id}/slots` plus `PATCH` / `DELETE /standards/{id}/slots/{slot}`, gated `standard:read` /
-  `:update` / `:delete`. Withdrawing a slot takes every assignment conforming systems made to it (a
-  cascade); a slot the standard does not declare is a 404. A standard that does not exist is a 422 on
-  the declaration and writes nothing (`system_slot_owner_arc_check` makes an ownerless slot
-  unrepresentable), and a 404 on the read, never an empty list
-  ([#505](https://github.com/hyperscaleav/omniglass/issues/505)).
-- `PATCH` / `DELETE /systems/{name}/slots/{slot}`, gated `system:update`, for a slot declared **directly on
-  one system**. A slot the system does not declare **itself** is a 404 here: an inherited slot is
-  withdrawn on the standard.
-- A slot name means **one slot in a system**, so every write that would give a system two of one name
-  is a 409 naming the slot, the standard and the system: a system declaring a name its standard
-  declares, a standard declaring a name a conforming system declares itself, and `PATCH
-  /systems/{name}` moving a system onto a standard that declares a name it declares itself. A staffing
-  write that meets such a pair (written before the rule) is the same 409 rather than a silent pick
-  ([ADR-0503](/architecture/decisions/#adr-0503-a-role-name-addresses-one-role-per-system)).
-- `PATCH /systems/{name}` moving a system's `standard` carries its staffing in the same transaction:
-  each occupant of an inherited slot moves onto the new standard's slot of the same name when it is
-  still a typed match and the slot has room, and is released (a member with no slot) otherwise. A
-  staffing write on that system waits for the change and resolves against the new standard
-  ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)).
-- `GET /systems/{name}/slots` is the **resolved read**, gated `system:read`: the declaration
-  (including `impact`, `capacity`, `position_labels`, `alternate`) plus `from_standard`, `assigned_to` (the
-  component names filling it here, in position order), `positions` (each entry's own 1-based
-  position, index for index with `assigned_to`; not assumed dense, since an unassign leaves a gap
-  rather than compacting), `assigned`, and **`understaffed`** (how many more before quorum), the
-  counts **served, not computed by the client**. A one-off system returns only its own slots.
-- `PUT /systems/{name}/slots/{slot}/assignments/{component}` puts a component in the slot (204,
-  idempotent); `DELETE` takes it out (204; a component not filling the slot is a 404). Both gate on
-  `system:update` and also need `component:update`, since staffing a slot makes the component a
-  member and writes onto it: the component resolves in `component:read` and must be inside
-  `component:update` (an occupant being unassigned needs only the latter, refused with a 403)
-  ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
-- `POST /systems/{name}/slots/{slot}:swapPositions` exchanges two occupants' positions, from
-  `{position, with}` (204, `system:update`): the only reorder primitive the API exposes, since a
-  position is an ordering attribute of an assignment, not a second address for one, and there is no
-  "move to index N" route.
-
-Every system route resolves its owner **within the caller's scope first**, so an
-out-of-scope system is a **non-disclosing 404** on read and write alike, and every write is
-audited in the same transaction.
-
-**A refusal names both parties, and its status follows what it depends on.** A component fills a
-slot only when its product's `component_type` falls within a type the slot's `accepted_types` names
-(self or a descendant, any type if empty), and, if the slot pins products, only when its product is
-one of them:
-
-```
-component "panel-1" is a display; slot "table-mic" wants a video-bar
-```
-
-That guard, and a bad declaration (an unknown type, product, or impact), are **422**: the request is
-invalid on its own, regardless of anything else in the fleet. A component already staffing a
-**different** slot in the same system, or an assignment a slot's declared `capacity` cannot hold, are
-**409** instead:
-
-```
-component "bar-1" already fills "main-display" in "boardroom-a"; a component fills at most one slot per system
-```
-
-the request is fine in isolation, it conflicts with other rows (a component fills at most one slot
-per system; lowering a capacity below the count already assigned is refused the same way, naming
-the worst-exceeding conforming system the caller can read, or none when it can read none of them).
-Both are
-the **semantic**-refusal case in the [status table](#errors-one-problemjson-envelope), not an
-authorization one: the message tells the operator the next move. Around it: an unknown slot is a
-**404**, and an unknown (or out-of-scope) system or component the same non-disclosing **404**. The
-guard runs once, at assignment; afterward an occupant keeps its slot unless its own
-[health](#health-and-why) goes to outage (a lesser alarm degrades it but does not
-cost it the slot).
+A read nobody could write a route for in advance (a dashboard widget pointed at anything, an agent's
+question) goes through a [view binding](/architecture/views/) instead: `POST /views:run` for history
+and `GET /views:watch` for the live tail, the one scoped read of the sample store.
 
 ## Health, and why
 
-**[Health](/architecture/health/)** is two shapes on this surface: the **alarm** (what is wrong with one
-component) and the **report** (what that means for a system or a location); an alarm is
-component-local, reaching a room only through the component's own health. Only an alarm at or above `high`
-takes that health to outage and impairs every slot the component occupies while it is active; an
-`info` or `warning` alarm degrades the component but leaves it occupying its slots.
-
-An alarm hangs off its component and rides that component's gating:
-
-- `GET /components/{name}/alarms` lists them newest first (`component:read`), the **active** set by
-  default, the whole history with `include_cleared`, and the queue an operator actually works with
-  `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
-  alarms that came and went unattended).
-- `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
-  `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
-  health (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the alarm's
-  identity, defaulting to the message. A bad severity is a **422**.
-- `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
-  the record of what was wrong outlives the fix; clearing one already cleared, or another
-  component's, is a **404**.
-
-Raising and clearing both **recompute health in the same transaction**, so an alarm and the health it
-caused are never separately visible, and the recorded edge carries the time the fleet changed.
-
-**Acknowledgement is the one alarm write that does not**, and it is the one that does not ride
-`component:update` either:
-
-- `POST /components/{name}/alarms/{id}:acknowledge` records that a human has seen it (200,
-  **`alarm:acknowledge`**). It changes nothing else: `cleared_at` is untouched, no health is
-  recomputed, and the component stays exactly as broken as it was. Acknowledging is not fixing.
-
-The permission is its own because recording that somebody looked is not editing the component, and a
-role may hold one without the other. Its scope resolves on the **component tier from
-`alarm:acknowledge` itself**, so a fleet-wide read never widens what may be acknowledged and a
-narrow component write never narrows it; a component outside that scope is a non-disclosing **404**.
-Acknowledgement is **orthogonal to cleared** in both directions: an alarm can be acknowledged and
-still raised, raised and unacknowledged, or cleared having never been acknowledged, and a cleared
-alarm can still be acknowledged by whoever reviews the history. Acknowledging twice is **idempotent**:
-the first person and the first time are what the row keeps, and the no-op writes no second audit row.
-Un-acknowledging is deliberately not a verb yet
-([#728](https://github.com/hyperscaleav/omniglass/issues/728)); resolve is
-[out of scope with a reason](/architecture/alarms-actions/).
-
-**Snooze rides the same shape** (#1318): `POST /components/{name}/alarms/{id}:snooze` (a `duration`,
-`1m` to `7d`, else a 422 naming the bound) and `:unsnooze`, both gated by **`alarm:snooze`**, its scope
-resolved on the component tier from that permission. A snooze belongs to the alarm's identity
-(`component`, `dedup_key`), not to the row, so every alarm read carries `snoozed_until` and
-`snoozed_by` on each alarm of a snoozed identity; it does not acknowledge or recompute health, and
-both verbs are audited on the alarm they name
-([alarms and actions](/architecture/alarms-actions/#snooze-silencing-an-alarm-for-a-while)).
-
-An alarm's transitions also queue its **notifications** (#618): `/notification-types` (the message
-catalog, `notification_type:*`, read on the viewer floor, `:rename` and a `:preview` that renders against
-a real alarm and writes nothing), `/notification-targets` (admin-only and all-scope, the URL masked on
-every read, `:reveal` audited, `:test` one synthetic send), `/action-rules` (`rule:*`, written all-scope)
-and `GET /notifications` with `GET /notifications/{id}` (`notification:read`, scoped by the alarm's
-component exactly as the alarm reads are) and `POST /notifications/{id}:retry` (`notification:retry`, on
-the component tier). An alarm's `:timeline` carries each notification after the edge that queued it
-([alarms and actions](/architecture/alarms-actions/#notifications)).
-
-People are recipients too (#1341). A target's kind may be `email` (a shared mailbox) or name people,
-`user_group` or `user`, on the channels `inbox` and `email`; binding people takes the
-directory's admin-tier read. The caller's own inbox is `GET /auth/me/notifications` with
-`POST /auth/me/notifications/{id}:markRead` and `POST /auth/me/notifications:markAllRead`
-(`notification:read`, the caller's rows alone, scoped at read). A person's own subscriptions are
-`/auth/me/action-rules` (list, get, create, patch, delete, and `:test` against their recent alarms, on
-a saved rule or, `POST /auth/me/action-rules:testDraft`, on a draft not yet saved),
-under `notification:subscribe`, which `viewer` carries; another user's rule is a 404. A member of a
-group a rule targets opts out with `POST /action-rules/{name}:optOut` and back in with `:optIn`, where
-the rule allows it. A person-addressed row names its `recipient` only to that person and to the
-user directory's readers.
-
-- `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
-  injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
-  alarm's history oldest first: `entries` of `{at, kind (event|audit), what, actor?, rule?, instance?,
-  message?}`, the events carrying the alarm merged with its audit rows
-  ([the timeline](/architecture/alarms-actions/#the-alarms-timeline)).
-
-The reports are one shape over three owners:
-
-- `GET /systems/{name}/health` (`system:read`) returns its `health` (`healthy` / `incomplete` /
-  `degraded` / `outage`, in rank order, where `incomplete` is a slot short because its hardware was
-  never installed rather than because installed hardware is failing)
-  plus `slots`: every slot the system needs filled, where `satisfying` counts the assigned
-  components currently occupying it (their own health is not outage; a degraded one still counts),
-  `down` names the **assigned** components whose own health is outage, and `alarms` the active
-  alarms on those. An impaired slot with an **empty** `down` is **short-staffed**, not broken, a
-  different job for the operator.
-- `GET /locations/{name}/health` (`location:read`) returns the same envelope with `systems` filled
-  instead: every system placed **anywhere** beneath the location, with its health, as the drill-down.
-- `GET /components/{name}/health` (`component:read`) returns the same envelope for one component:
-  `health` is its own live health (`unknown` for a device nothing has observed), `slots` and
-  `systems` are empty, and `transitions` are its recorded edges. Out of scope is a non-disclosing 404.
-- `transitions` is the **recorded edges** inside the range, oldest first, each `{ts, health}`: one
-  entry per change, never a sample. All three reads take `since` and `until` (RFC 3339); the default
-  is the last 30 days (measured on the database's clock), an absent `since` with an `until` is the
-  30 days before it, and `since` after `until` is a **400**. A range holds only edges recorded
-  inside it. A quiet range is empty, so when the caller bounded the range's start `carried_in` names the
-  health in force when it opened (the newest edge strictly before that start, whether an explicit
-  `since` or the one derived from an `until` alone; absent when nothing was recorded before it, and
-  absent on the default window), which lets a timeline draw the stretch before the first edge.
-  `first_recorded_at` is when the owner's health was first recorded (absent if never), so a reader can
-  tell a young owner from a quiet one.
-- `GET /systems/{name}/members` (`system:read`) carries each member's own `component_health`, the
-  same recorded value a fleet view dot reads. It is the per-system read of the members' health, so a
-  system's view polls it with the system's health report rather than the whole fleet view
-  ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
-- `GET /systems:health` (`list-system-health`, `system:read`) is the bulk counterpart: one
-  `{system, health}` entry under `systems` per system in the caller's read scope, keyed by uuid, carrying
-  the one word a list's health column paints and none of the explanation.
-- `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
-  naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
-  at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
-  system has.
-
-All three resolve their owner **within the caller's scope first** (an out-of-scope system, location or component is a
-**non-disclosing 404**), and **no read writes anything**: the health served is computed from the
-very rows served beside it, so a report can never disagree with its own evidence
-([ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
-
-## Views: reads shaped for a surface
-
-Every read above answers "what is this row". A **view** answers "what does this screen need", and it
-earns its own tier only when composing the entity reads in the browser would be the wrong shape.
-
-- `GET /search?q=&limit=` (`location:read`, the floor of every fleet reader; the component group also needs
-  `component:read`) is the read behind the command palette (#2444): up to `limit` (default 8, at most 20)
-  locations, systems and components whose name or label holds `q`, best match first, and catalog entries
-  (products, drivers, calc rules, event rules, metrics) each only for a caller holding that catalog's read
-  permission. Each fleet kind is read through its own scope by the Storage Gateway's scoped list walk, with the
-  match and the limit applied in the database, so nothing outside the caller's scope is found. A hit carries
-  its `location_path` (the locations above it) so same-named components are told apart.
-- `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
-  with its `parent` and `health`, every system with its `location` and `health`, and one **dot**
-  per component in each system. A dot is `{component, name, health, primary, shared}` and nothing
-  else. A renderer draws a mark per component across the whole fleet, so a component **row** per
-  mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
-  the wire is pinned by test against being widened back into a component list.
-  Beside the tiers it carries `open_alarms`, one number: the alarms open (not cleared) on the
-  components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
-  for a caller with no component read.
-- `GET /views/platform` (`outpost:read`) is the read behind
-  [Platform health](/operator/platform-health/): the platform system's `health`, each
-  server's `health`, build and start time with its panel groups (each key's current figure, a key written
-  only for a window that saw something only while that window is current, a ranked key's
-  instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
-  the outpost table's column groups with each key's catalog facts, and one row per outpost with its current figure per key (a gauge's latest sample, a
-  window count only while its window is the newest), in a fixed number of statements however
-  many outposts there are. Its rows are `/outposts`', so an outpost read short of all-scope is a **403**, as
-  `/outposts` answers, never an empty table. The figures, the health values and the servers need an
-  all-scope `component:read` and the system an all-scope `system:read`; short of either they are
-  omitted, never zeroed, and `figures_read` says which. With the figures come `pipeline`, each
-  hop's delivery in, out and loss per kind and per component (newest window and last hour) and the
-  end to end, a newest window counted only while it is current (two report windows, as a window
-  count is), so an outpost that stopped reporting adds its last window to the hour and not the newest,
-  and each outpost's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
-  outpost with nothing in has no loss, never 0.
-- `GET /views/platform/simulation` (`simulation:read`) is the read behind Platform health's
-  [simulation section](/operator/platform-health/#with-a-simulator): one row per outpost with a
-  connected simulator, read over a sliding window the server holds in memory (`internal/closedloop`'s
-  ring, ten brackets of `bracket_seconds`). Each gap is a loss ratio (null when nothing went into the
-  hop), its masking term and its reading (`loss`, `impaired`, `restarted`); beside them each
-  protocol's counts and each simulated device's requests. An outpost reads `warming up` until the ring
-  holds a window and the bracket after it. The devices are unplaced simulator state, so a component
-  read short of all-scope is a **404**, where the outpost's observation read answers 403
-  ([ADR-1647](/architecture/decisions/#adr-1647-platform-health-closes-the-loop-over-a-server-held-sliding-window)).
-
-Two properties are worth stating because they are easy to lose:
-
-- **Flat, not nested.** Locations carry a parent id and the client assembles the tree. The server
-  says what exists and how it is placed; the client decides how the fleet is **grouped**, which is
-  what lets a grouping (by location, by standard, by vendor, by tag) be a mapper rather than a second
-  endpoint. Explore's outline of locations is one such mapper (ADR-0137).
-- **Scoped per tier.** The three tiers resolve their own read scope, so a user who may read the
-  location tree but not its components gets the shape of their fleet with no contents, and one with no
-  fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of
-  theirs to draw.
-
-A view is a read and only a read. It adds no write path and no judgement of its own: the health values it
-serves are the ones the health rollup already recorded, so Explore and the detail page cannot land
-on different answers about the same room.
-
-## Files: content-addressed bytes behind a handle
-
-A **file** is a searchable handle over a content-addressed [blob](/architecture/files/): the metadata is
-tenant-wide (no placement arc), so these routes take **no scope**, only the `file:<action>` permission
-plus the per-file `sensitive` tier. Reading rides the **viewer floor** (`file:read`, which `*:read`
-carries); a **sensitive** file is fenced to the `:admin` tier (`file:read:admin`), hidden from a lister
-and a **non-disclosing 404** to a reader without it, exactly the
-[secret sensitivity rule](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier).
-The bytes ride **base64 in JSON** on both create and download (the
-[avatar precedent](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)),
-so the whole surface stays under the authz middleware and generates a uniform client.
-
-`GET /files` is the directory (`{files: [file]}`), sensitive files omitted below the admin tier;
-`GET /files/{file}` returns one handle's metadata (the file by uuid, or by filename where exactly one
-visible file carries it); `GET /files/{file}:download` returns
-`{name, content_type, content (base64)}`, the blob read back and its hash verified (all `file:read`).
-`POST /files` creates one from `{name, content_type, content (base64), sensitive?}` (201,
-`file:create`): the server hashes the bytes, **deduplicates** the blob, and writes the handle
-(`sensitive: true` additionally needs the admin tier). `DELETE /files/{file}` removes the handle (204,
-`file:delete`); the blob is freed in the same transaction when no other handle references it. A `file`
-body is `{id, name, content_type, size, sha256, sensitive, created_at}`; the `sha256` is the content
-address.
-
-:::design[Named views and the SSE live relay, tracked in #2051]
-## Reads no route was written for are views
-
-A coded page reads through its typed routes. A read nobody can write a route for ahead of time (a
-dashboard widget, an agent's query) goes through a **[view binding](/architecture/views/)** at
-`POST /views:run`, its live tail on `GET /views:watch` (both built, ADR-1830); a named, saved view bound by
-declared params at `/views/{id}:run` is the unbuilt half, executed through the same scoped gateway, and an
-operator never gets raw SQL. A live read beyond the sample tail upgrades to a **server-relayed
-[SSE](/architecture/messaging/) stream** over the same seam: the subscribe is
-**capability fast-rejected** at open (not authorized there), then the server holds the internal
-subscription, re-runs the gateway scope per message against each message's owner, and pushes only
-visible deltas. The operator never connects to the bus, so the live path adds no second authorization
-model.
-:::
+A health read serves its reasons beside its value. `GET /systems/{name}/health` answers the system's
+health with every slot it needs, the members down in each and the alarms on them; a location's names
+each system beneath it; each carries the recorded transitions in its range. The value is computed from
+the rows served beside it and no read writes anything, so a report can never disagree with its own
+evidence. Raising or clearing an alarm recomputes health in the same transaction as the write
+([health](/architecture/health/),
+[ADR-0050](/architecture/decisions/#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)).
 
 ## Versioning and evolution
 
-The path carries the major version (`/api/v1`). Within a version, change is **additive only**: new
-fields, new optional params, new resources, never a removal or a meaning change; a breaking change is a
-new major version. Because the [OpenAPI 3.1 document is generated](/contributing/api-first/) from the Go
-structs and the clients from that, the contract cannot drift from the implementation: a drift check fails
-the PR on an unregenerated route change.
-
-The CLI holds the same line at its edge: a command group takes no arguments of its own, so an unknown
-verb under any group is a non-zero exit with `unknown command "raise" for "omniglass component alarm"`
-on stderr, never help text and a green exit.
+The path carries the major version. Within `/api/v1` change is additive only: a new field, a new
+optional parameter, a new resource, never a removal or a change of meaning. A change to a released
+route that cannot be additive is a breaking change, called out in its release notes.
 
 ## Also an MCP surface
 
-The same OpenAPI document that generates the typed SPA client and the CLI also generates the **MCP
-server**, one more [generated client](/contributing/api-first/) over the same gateway
+The same document generates the MCP server, one more client over the same routes
 ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
-An operation is exposed by a stamp at its registration in Go, and `cmd/mcpgen` turns every stamped
-operation into a tool, listed in the generated [MCP tools reference](/reference/mcp/): a **curated
-catalog**, not a raw one-method-per-tool dump, but never a hand list either. A tool call **is the route**,
-not a side channel: the server, at `/mcp` over streamable HTTP and over stdio through `omniglass mcp`,
-admits only a bearer token the API accepts and dispatches every call through the router with that
-token, so the route permission, the gateway scope and the same-transaction [audit](/architecture/audit/)
-row are exactly a direct call's, the row marked with the MCP channel. Each tool carries the MCP
-annotations one rule derives from its method and gate (read-only, destructive, idempotent, open-world),
-so any client can gate the writes behind its user's confirmation, and an error is the route's own
-problem+json. Each tool also carries an **agent class** (read, write, destructive, credential
-destination), and the listing stamps the caller's resolved policy for it into the tool's `_meta`
-(`omniglass/agent_policy`); the server refuses a class the install sets to `never` for any agent
-request, MCP or REST, before the route runs, and `GET /auth/me/agent-policy` answers the caller's
-policy ([what an agent may do](/developer/agents/#what-an-agent-may-do)). The server runs as the **authenticated person's or machine user's** token, so its
-reach is exactly that user's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
-that points it at the server's OAuth 2.1 metadata, and signs its person in for an agent token of its
-own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21));
-those protocol routes sit outside the OpenAPI document, their shapes fixed by the RFCs. Connecting one:
-[connect an agent](/developer/agents/).
+An operation becomes a tool when its registration carries the `x-omniglass-mcp` stamp; `cmd/mcpgen`
+turns every stamped operation into one, listed in the [MCP tools reference](/reference/mcp/). It is a
+chosen catalog, not one tool per route, and never a hand-kept list.
 
-omnibot's conversations are a person's own resource under `/assistant/conversations` (list, get,
-create, `{name}:append`, delete), gated by `assistant:use` and owner-only: anyone else's is a 404, and
-an append that does not name the conversation's last message is a 409 ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)).
-`{name}:run` runs omnibot on one on the server and answers `text/event-stream`, the run narrated as
-AG-UI events; it ends in an interrupt when a call waits on the person, answered by the next run's
-`resume` ([ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui)).
-Its AG-UI `context` (at most 20 entries of at most 2000 characters) is framed for the model as data
-ahead of the person's message, and `forwardedProps.skill` (`{name, arguments}`) runs an embedded
-skill's rendered prompt in place of one; an unknown skill or a missing argument is a 422
-([ADR-2122](/architecture/decisions/#adr-2122-a-console-subject-is-a-stamp-on-the-shared-primitives-gathered-by-one-modifier-click-handler)).
-It is a 503 on a server with no model, a 403 for an agent or an impersonation session, and a 409 for a
-resume that names no waiting call, a prompt while one waits, or a run while another holds the
-conversation (a run claims it before any tool runs; an append while the claim is live is a 409 too). It is not an MCP tool.
+The server is at `/mcp` over streamable HTTP, and over stdio through `omniglass mcp`. It admits only a
+bearer token the API accepts and dispatches every tool call back through the router with it, so a
+call takes the route's permission, scope and audit exactly as a direct call does, its audit row marked
+with the `mcp` channel. Each tool carries the hints its method and gate imply (read-only, destructive,
+idempotent) so a client can hold a write for its person's confirmation, and its agent class, which an
+install's [agent policy](/developer/agents/#what-an-agent-may-do) may refuse outright.
 
 The catalog is **credential-blind**
-([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)).
-An operation whose request or answer carries a credential in plaintext (a secret's values, a minted
-token, a password, a reveal) carries a second stamp, `x-omniglass-plaintext`, and the generator refuses
-to make a tool of it, or of any operation gated on a `reveal` action. A spec test fails when an
-operation with a credential-shaped body goes unstamped, so the rule does not depend on remembering it.
-The catalog's triage read is `GET /alarms` (`list-alarms`): the fleet's active alarms in the caller's
-component scope, worst first.
-
-Beside the tools, the server serves **skills** as MCP prompts: workflows such as triaging an alarm,
-each one Markdown file embedded in the binary, that tell an agent which tools to call for a whole job
-and to ask before any write. A skill runs nothing itself, so it adds no permission and no path around
-one; the permissions it needs are read from its tools' gates. They are listed in the generated
+([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)):
+an operation whose request or answer carries a credential in plaintext is stamped
+`x-omniglass-plaintext`, and the generator never makes a tool of it. Beside the tools the server serves
+embedded **skills** as MCP prompts, workflows such as triaging an alarm, listed in the
 [MCP skills reference](/reference/mcp/skills/)
-([ADR-2026](/architecture/decisions/#adr-2026-the-mcp-server-serves-embedded-skills-as-prompts)).
+([ADR-2026](/architecture/decisions/#adr-2026-the-mcp-server-serves-embedded-skills-as-prompts)). How
+an agent signs in and what it may do: [connect an agent](/developer/agents/) and [AI](/architecture/ai/).
 
 :::design[The fleet query tool over the binding, tracked in #2050]
-An agent's fleet query tool and the analytics skill over it call the [view binding](/architecture/views/)
-route, with no read path of their own; today `run-views` is the binding's generated tool.
+An agent's fleet query tool, and the analytics skill over it, call the view binding with no read path
+of their own. Today the binding's generated tool, `run-views`, is the only way in.
 :::
 
-:::design[The full outpost NATS contract, per ADR-0036]
 ## The outpost path is the NATS contract
 
-Outposts do **not** speak HTTP. The edge is a NATS client over the WAN: telemetry to a JetStream stream,
-commands from a durable server-side JetStream queue, enrollment by NATS JWT/nkey, all on the sibling
-**NATS subject contract**, not this page's routes. The old outpost HTTP custom methods are gone; the proto
-definitions survive **as the NATS message schema**. The contract lives in
-[messaging](/architecture/messaging/) and on the [outpost](/architecture/outposts/) page; the same AIP
-spirit, error envelope, and idempotency carry across.
-:::
-
-## Self-describing
-
-The running server serves `GET /api/v1/openapi.json`, `/openapi.yaml`, and a human reference page, so the
-public contract is discoverable live against any deployment; the internal NATS subject contract
-(subjects, message schemas, stream and consumer definitions) is published from the running server the
-same way, the sibling of OpenAPI for the bus.
-
-Related: [API first](/contributing/api-first/), [messaging](/architecture/messaging/),
-[identity and access](/architecture/identity-access/), [audit](/architecture/audit/),
-[UI](/architecture/ui/) (the views BFF and the renderer contract), and
-[expressions](/architecture/expressions/) (the `filter` language).
+An outpost calls the API once, to claim its enrollment (`POST /outposts:claim`), and is answered with
+where to reach the bus. Everything after that, telemetry up and commands down, rides NATS subjects on
+JetStream, typed and versioned like this document: see [messaging](/architecture/messaging/) and
+[outposts](/architecture/outposts/).

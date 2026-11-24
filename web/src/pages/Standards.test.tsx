@@ -98,11 +98,9 @@ describe("Standards page", () => {
   it("an official row is read-only: greyed pencil and delete, and a read-only contract", async () => {
     mount();
     const blade = await openBlade("Meeting room");
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
     // Both contract lanes render read-only: neither panel offers a declare picker.
     expect(within(blade).getAllByText("official, read-only")).toHaveLength(2);
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();

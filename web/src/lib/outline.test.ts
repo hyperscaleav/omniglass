@@ -118,6 +118,28 @@ describe("a location wears its system", () => {
   });
 });
 
+describe("a system with no components (#2464)", () => {
+  const view = {
+    locations: [loc("c", "Campus One", "campus"), loc("b", "Hall", "building", "c"), loc("b2", "Annex", "building", "c")],
+    systems: [sys("s-empty", "Blank", "b", "healthy"), sys("s-a", "A", "b2", "healthy"), sys("s-b", "B", "b2", "healthy", [dot("x")])],
+  };
+  it("reads 'no components yet' on the place that wears it, never Empty", () => {
+    const o = buildOutline(input(view));
+    const hall = child(o.roots[0], "Hall");
+    expect(hall.systems.map((s) => s.label)).toEqual(["Blank"]);
+    expect(hall.contents).toBe("no components yet");
+  });
+  it("keeps an empty system in a multi-system place as its own group and entry", () => {
+    const annex = child(buildOutline(input(view)).roots[0], "Annex");
+    expect(annex.groups.map((g) => g.system?.label)).toEqual(["A", "B"]);
+    expect(annex.contents).toBe("2 systems, 1 component");
+  });
+  it("lists an empty system placed nowhere", () => {
+    const o = buildOutline(input({ locations: [], systems: [sys("s-lost", "Lost", "", "healthy")] }));
+    expect(o.unplaced?.contents).toBe("1 system, no components yet");
+  });
+});
+
 describe("two systems, shared components, and components in no system", () => {
   const view = {
     locations: [loc("lab", "Media Lab", "room"), loc("b", "Boardroom B", "room")],
@@ -150,7 +172,7 @@ describe("two systems, shared components, and components in no system", () => {
   it("puts a component in no system under its location, with no system header", () => {
     const lab = buildOutline(input(view, { components: comps })).roots.find((r) => r.chain[0].label === "Media Lab")!;
     expect(lab.groups[2].components.map((c) => c.label)).toEqual(["Spare Display"]);
-    expect(lab.contents).toBe("4 components");
+    expect(lab.contents).toBe("2 systems, 4 components");
   });
 });
 
@@ -225,6 +247,15 @@ describe("filter entries and reveal", () => {
     expect(mic.path).toEqual(["Headquarters", "West", "Boardroom A"]);
     expect(mic.product).toBe("Lyra GN-12");
     expect(mic.health).toBe("outage");
+  });
+
+  it("gives a place holding several systems no health of its own, and a row per system", () => {
+    const multi = { locations: [loc("hq", "Headquarters", "campus"), loc("lab", "Lab", "room", "hq")], systems: [sys("s-a", "Lab A", "lab", "degraded", [dot("shared", "incomplete", true)]), sys("s-b", "Lab B", "lab", "healthy", [dot("shared", "incomplete", true)])] };
+    const es = entriesOf(buildOutline(input(multi)));
+    expect(es.find((e) => e.id === uuidFor("lab"))!.health).toBeNull();
+    expect(es.filter((e) => e.kind === "system").map((e) => [e.label, e.health, e.path])).toEqual([["Lab A", "degraded", ["Headquarters", "Lab"]], ["Lab B", "healthy", ["Headquarters", "Lab"]]]);
+    // A shared component is one row, however many systems serve it.
+    expect(es.filter((e) => e.kind === "component")).toHaveLength(1);
   });
 
   it("carries each entry's effective tags, so a tag filter matches locations and components alike", () => {
