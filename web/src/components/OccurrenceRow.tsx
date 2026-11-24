@@ -75,7 +75,7 @@ export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }
           onClick={() => setOpen((v) => !v)}
         >
           <span data-testid="occurrence-time" class="text-[11px] text-base-content/45"><Time iso={p.o.ts} /></span>
-          <span title={p.o.badge} class={`badge badge-sm min-w-0 max-w-full justify-self-start font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}><span class="truncate">{p.o.badge}</span></span>
+          <Tooltip as="span" data-testid="occurrence-badge" content={p.o.badge} class={`badge badge-sm min-w-0 max-w-full justify-self-start font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}><span class="truncate">{p.o.badge}</span></Tooltip>
           <Show when={p.showSource}>
             <Tooltip as="span" data-testid="occurrence-source" class="truncate font-data text-[11px] text-base-content/60" content={p.o.owner ?? p.o.source}>{p.o.owner ?? p.o.source}</Tooltip>
           </Show>

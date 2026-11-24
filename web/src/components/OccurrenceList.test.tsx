@@ -286,12 +286,11 @@ describe("OccurrenceRow columns", () => {
     expect(grid(event, false)).toBe(grid(log, false));
   });
 
-  it("a long event key is clipped inside its badge, the full key on hover (#2642)", () => {
+  it("a long event key is clipped inside its badge, the full key on hover (#2642)", async () => {
     const event: Occurrence = { ...log, kind: "event", id: "e:1", badge: "collection-failed", badgeClass: "badge-error", facility: undefined };
-    const { getByText } = mount(event, true);
-    const text = getByText("collection-failed");
-    expect(text.classList.contains("truncate")).toBe(true);
-    expect(text.parentElement!.getAttribute("title")).toBe("collection-failed");
+    const { getByText, getByTestId } = mount(event, true);
+    expect(getByText("collection-failed").classList.contains("truncate")).toBe(true);
+    expect(await tipOf(getByTestId("occurrence-badge"))).toBe("collection-failed");
   });
 
   it("mutes info and keeps warning colored", () => {
