@@ -45,6 +45,14 @@
 #                                       judged, as [{comment_id, thread_id,
 #                                       resolve, body}]: a reply on each, and
 #                                       the fixed ones resolved
+#   agent-review.sh reply-gate | reply-prompt CATALOG | reply-result
+#   agent-review.sh thread-of ID | rounds BOTS | supersede BOTS NEW | round-marker
+#                                       the reviewer on its threads (#2253): which
+#                                       comments start a reply, the one call's
+#                                       prompt and its parsed answer, a comment's
+#                                       thread, the round count read from the
+#                                       review marker, and what to minimize and
+#                                       dismiss once a new review is posted
 #   agent-review.sh context OUT DIFF [OPEN [ISSUE [LAST]]]
 #                                       in a checkout of the PR's head, write
 #                                       the one-shot reviewer's prompt (#2250):
@@ -64,7 +72,7 @@
 #                                       one-shot review as a lens result named
 #                                       oneshot: a finding verify refuted is
 #                                       dropped, one it gave no word on kept
-#   agent-review.sh gate                read {mergeable, ignore, checks} and
+#   agent-review.sh gate                read {mergeable, ignore, require, checks} and
 #                                       print whether to review this head now:
 #                                       review, wait (another check runs), or
 #                                       hold: <why> (a conflict or a red check)
@@ -349,7 +357,7 @@ case "$mode" in
         commit_id: .head_sha,
         event: (if $b > 0 and ($own | not) then "REQUEST_CHANGES" else "COMMENT" end),
         body: (
-          $verdict + "\n\n"
+          $verdict + " · head `\(.head_sha[:7])`\n\n"
           + $lens_strip
           + (if ($loose | length) > 0 then "\n\n" + $loose_lines else "" end)
           + (if ($carried | length) > 0
@@ -357,7 +365,8 @@ case "$mode" in
           + (if ($s.verified | length) > 0
              then "\n\nFixed since the last review:\n" + $verified_lines else "" end)
           + "\n\n" + $details_block
-          + "\n\n<!-- agent-review v2 loose-blocking=\($loose | map(select(blocking)) | length) -->"
+          + "\n\n<!-- agent-review round blocking=\($b) head=\(.head_sha[:12] | slug) -->"
+          + "\n<!-- agent-review v2 loose-blocking=\($loose | map(select(blocking)) | length) -->"
         ),
         comments: [$lined[] | {path, line, side: "RIGHT", body: inline_body}]
       }'
@@ -619,24 +628,28 @@ BRIEF
     ;;
 
   gate)
-    [ $# -eq 1 ] || { printf 'usage: agent-review.sh gate < {mergeable, ignore, checks}\n' >&2; exit 64; }
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh gate < {mergeable, ignore, require, checks}\n' >&2; exit 64; }
     facts=$(cat)
     if ! printf '%s' "$facts" | jq -e 'type == "object" and (.checks | type == "array")' >/dev/null 2>&1; then
-      printf 'agent-review: stdin is not {mergeable, ignore, checks}\n' >&2
+      printf 'agent-review: stdin is not {mergeable, ignore, require, checks}\n' >&2
       exit 2
     fi
     # Whether to review this head now: "hold: <why>" when it conflicts with
     # its base or another check already failed (a red PR gets no new review),
-    # "wait" while another check still runs, "review" otherwise. ignore names
-    # the checks of the agent workflows themselves (a regex on the name).
+    # "wait" while another check still runs or a required one has not
+    # registered yet (the tests gate the review, #2597), "review" otherwise.
+    # ignore names the checks of the agent workflows themselves (a regex on the
+    # name); require lists the check names that must exist.
     printf '%s' "$facts" | jq -r '
       (.ignore // "^$") as $ig
       | [.checks[] | select(type == "object") | select((.name // "") | test($ig) | not)] as $c
       | ([$c[] | select(.status == "completed"
           and ((.conclusion // "") | IN("failure", "timed_out", "cancelled", "action_required", "startup_failure")))
           | .name] | unique) as $red
+      | ((.require // []) | map(select(. as $n | any($c[]; .name == $n) | not))) as $absent
       | if (.mergeable // "") == "CONFLICTING" then "hold: the PR conflicts with its base"
         elif ($red | length) > 0 then "hold: \($red | join(", ")) failed"
+        elif ($absent | length) > 0 then "wait"
         elif ([$c[] | select(.status != "completed")] | length) > 0 then "wait"
         else "review" end'
     ;;
@@ -704,6 +717,97 @@ BRIEF
     [[ "$tree" =~ ^[0-9a-f]{40,64}$ ]] || full "the base's changes do not merge cleanly onto ${last:0:7}"
     git diff "$tree" HEAD > "$out"
     printf 'incremental %s\n' "$last"
+    ;;
+
+  # The reviewer on its threads (#2253). New subcommands, so the review and the
+  # lenses above stay as they are.
+  reply-gate)
+    # Does a review-comment event start the reply job? Yes for a person's reply
+    # on a thread whose first comment is the reviewer's.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh reply-gate < {sender, sender_type, in_reply_to_id, root_author, bots}\n' >&2; exit 64; }
+    facts=$(cat)
+    printf '%s' "$facts" | jq -e 'type == "object"' >/dev/null 2>&1 || { printf 'agent-review: stdin is not an event\n' >&2; exit 2; }
+    printf '%s' "$facts" | jq -r '
+      def login: tostring | ascii_downcase | sub("\\[bot\\]$"; "");
+      (.bots // [] | map(login) | map(select(length > 0))) as $bots
+      | if (.in_reply_to_id // null) == null then "skip: a top-level comment starts no thread reply"
+        elif (.sender_type // "") != "User" then "skip: the reply is from an App or bot"
+        elif ((.root_author // "") | login) as $a | $bots | index($a) == null then "skip: the thread is not the reviewer'"'"'s"
+        else "run" end'
+    ;;
+
+  reply-prompt)
+    # The one model call's whole prompt for a reply: the thread, the lines it
+    # points at and the finding's catalog entry. Reads {path, line, comments:
+    # [{author, body}], lines} on stdin; CATALOG-DIR holds the entries.
+    [ $# -eq 2 ] || { printf 'usage: agent-review.sh reply-prompt <catalog-dir> < thread.json\n' >&2; exit 64; }
+    facts=$(cat)
+    printf '%s' "$facts" | jq -e 'type == "object" and (.comments | type == "array") and (.comments | length > 0)' >/dev/null 2>&1 || { printf 'agent-review: stdin is not a thread\n' >&2; exit 2; }
+    rule=$(printf '%s' "$facts" | jq -r "$SLUG"'[.comments[0].body // "" | capture("rule=(?<r>[a-z0-9._-]*) -->") | .r] | first // ""')
+    entry=""
+    if [ -n "$rule" ] && [[ "$rule" =~ ^[a-z0-9._-]+$ ]] && [ -f "$2/$rule.md" ]; then entry=$(cat "$2/$rule.md"); fi
+    printf '%s' "$facts" | jq -r --arg entry "$entry" '
+      def cut($n): tostring | if length > $n then .[:$n] + " [cut]" else . end;
+      "You are the PR reviewer, answering a person who replied on a thread you opened. You see only this thread, the lines it points at and the catalog entry for the finding.\n"
+      + "Decide whether the reply settles the point: the finding was wrong, or the reason given holds. Answer in JSON only: {\"resolve\": true|false, \"reply\": \"...\"}.\n"
+      + "If it settles the point, say so briefly and set resolve true. Otherwise say what is still missing and set resolve false. No em dashes.\n\n"
+      + "## Thread on `\(.path // "?"):\(.line // "?")`\n\n"
+      + ([.comments[] | "**\(.author // "?")**: \(.body // "" | cut(3000))"] | join("\n\n---\n\n"))
+      + "\n\n## Lines\n\n```\n\(.lines // "" | cut(4000))\n```\n\n## Catalog entry\n\n"
+      + (if $entry == "" then "(none)" else $entry end)'
+    ;;
+
+  reply-result)
+    # The model's answer to a reply prompt as {body, resolve}; an unreadable
+    # answer replies with nothing and leaves the thread open.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh reply-result < model-output\n' >&2; exit 64; }
+    raw=$(cat)
+    jq -c -R -s '
+      ([try fromjson catch (try (capture("(?s)(?<j>\\{.*\\})").j | fromjson) catch empty)] | first) as $o
+      | if ($o | type) == "object" and ($o.reply | type) == "string" and ($o.reply | length) > 0
+        then {body: ($o.reply | gsub("[\u2014\u2013]"; "-") | .[:3000]), resolve: ($o.resolve == true)}
+        else {body: "", resolve: false} end' <<<"$raw"
+    ;;
+
+  thread-of)
+    # The thread id of a review comment, from every thread of the PR (GraphQL
+    # nodes with comments), so a reply resolves its thread whatever its severity.
+    [ $# -eq 2 ] || { printf 'usage: agent-review.sh thread-of <comment-id> < threads.json\n' >&2; exit 64; }
+    printf '%s' "$(cat)" | jq -r --argjson id "$2" '
+      [.threads[]? | select(type == "object") | select([.comments.nodes[]?.databaseId] | index($id) != null) | .id] | first // ""'
+    ;;
+
+  round-marker)
+    printf '<!-- agent-review round -->\n'
+    ;;
+
+  rounds)
+    # The reviewer's rounds on a PR, from the marker in each review body (a
+    # dismissed review is no longer CHANGES_REQUESTED). Reads [{user, state,
+    # body}]; counts the reviews by the bots that requested changes, marker
+    # or state.
+    [ $# -eq 2 ] || { printf 'usage: agent-review.sh rounds <bot,bot> < reviews.json\n' >&2; exit 64; }
+    jq -r --arg bots "$2" '
+      def login: tostring | ascii_downcase | sub("\\[bot\\]$"; "");
+      ($bots | split(",") | map(login) | map(select(length > 0))) as $b
+      | [.[] | select(((.user // "") | login) as $u | $b | index($u) != null)
+          | select(.state == "CHANGES_REQUESTED" or ((.body // "") | test("<!-- agent-review round blocking=[1-9]")))]
+      | length' <<<"$(cat)"
+    ;;
+
+  supersede)
+    # What to do to the reviewer's earlier reviews after posting review NEW:
+    # minimize each as OUTDATED, dismiss each that still requests changes, and
+    # for one that cannot be minimized (flag "unminimizable") edit its body to a
+    # line naming NEW. Reads [{id, node_id, user, state, body}], the bots.
+    [ $# -eq 3 ] || { printf 'usage: agent-review.sh supersede <bots> <new-review-id> < reviews.json\n' >&2; exit 64; }
+    jq -c --arg bots "$2" --argjson new "$3" '
+      def login: tostring | ascii_downcase | sub("\\[bot\\]$"; "");
+      ($bots | split(",") | map(login) | map(select(length > 0))) as $b
+      | [.[] | select(.id != $new and (((.user // "") | login) as $u | $b | index($u) != null))
+          | select(.state != "PENDING")
+          | {id, node_id, minimize: true, dismiss: (.state == "CHANGES_REQUESTED"),
+             line: "Superseded by review \($new)."}]' <<<"$(cat)"
     ;;
 
   *)

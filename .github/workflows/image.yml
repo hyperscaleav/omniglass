@@ -1,19 +1,26 @@
 name: image
 
-# Build the single container image (console embedded) and publish it to GHCR.
-# On main it tags `latest` + the commit sha; on a release branch, the commit
-# sha alone; on a PR it tags `pr-<n>` + the commit sha so the preview pipeline
-# can pin a deploy to an exact build. A
-# release's `v<version>` image is not built here: release.yml builds it inline
-# before the binaries and stamps its digest into them (#1257).
+# Publish the container image (console embedded) to GHCR, off the PR push path
+# (#2597). A push to main tags `latest` + the commit sha; a release branch, the
+# commit sha alone. Both are multi-arch, and gated by an arm64 boot under QEMU,
+# which also runs on each merge queue entry so a broken arm64 build is caught
+# before it lands. A PR push builds nothing here: the shared build in test.yml
+# serves e2e and smoke-lab. A PR gets an image only with the `run:preview`
+# label, a single amd64 image tagged `pr-<n>` + the head sha, so the preview
+# pipeline can pin a deploy to an exact build (the layers come from the same
+# BuildKit cache the shared build fills). A release's `v<version>` image is not
+# built here: release.yml builds it inline before the binaries and stamps its
+# digest into them (#1257). The lab smoke moved to test.yml with the shared
+# build; its `smoke-lab` check name is unchanged.
 
 on:
   push:
     branches: [main, "release/**"]
   pull_request:
-  # The merge queue (#2181) needs smoke-lab, a required check, on each queue
-  # entry. Only smoke-lab runs there: a queue entry's commit may never land, so
-  # nothing is published for it, and the arm64 smoke only gates the publish.
+    # labeled: adding run:preview publishes the PR's image.
+    types: [opened, synchronize, reopened, labeled]
+  # A queue entry's commit may never land, so nothing is published for it; only
+  # the arm64 smoke runs.
   merge_group:
 
 # Least privilege: read the repo, write packages (GHCR). Fork PRs get a
@@ -31,7 +38,7 @@ jobs:
   # binary under QEMU. This is the only arm64 validation, and it gates the
   # publish below so a broken arm64 build never reaches the GHCR manifest.
   smoke-arm64:
-    if: github.event_name != 'merge_group'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,37 +75,12 @@ jobs:
         # and exits 0 only if the cross-compiled arm64 binary actually runs.
         run: docker run --rm --platform linux/arm64 omniglass:arm64-smoke --help
 
-  # The lab smoke (#1194): the user's path end to end, on a runner with only
-  # Docker doing the work. `make` builds the image and the host binary from
-  # this tree with one build id; ./bin/omniglass lab run brings up Postgres,
-  # the server (which migrates and applies the boot seed) and the outpost with its
-  # simulator; the smoke waits for the ready banner, proves the console and the
-  # lab flag answer on the printed URL, stops it with Ctrl-C, and proves it
-  # left nothing behind (scripts/lab-smoke.sh). It replaces the boot smoke: the
-  # lab boots the same image against a real Postgres and serves the console.
-  smoke-lab:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Build the image and the host binary
-        run: make
-
-      - name: Bring a lab up, use it, and stop it
-        run: bash scripts/lab-smoke.sh
-
-      - name: Dump the lab's logs on failure
-        if: failure()
-        run: |
-          for c in $(docker ps -aq --filter label=omniglass.lab); do
-            echo "=== $(docker inspect -f '{{.Name}}' "$c") ==="; docker logs --tail 50 "$c" 2>&1 || true
-          done
-
   build-push:
-    # Only publish the multi-arch manifest once arm64 cross-build boots and a
-    # lab on the amd64 image actually comes up end to end.
-    needs: [smoke-arm64, smoke-lab]
-    if: github.event_name != 'merge_group'
+    # Only publish the multi-arch manifest once the arm64 cross-build boots. A
+    # push to main or a release branch landed through the merge queue, which
+    # already ran the lab smoke on it (test.yml).
+    needs: smoke-arm64
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,7 +88,6 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
@@ -116,17 +97,10 @@ jobs:
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        # On a pull_request, GITHUB_SHA is the merge commit, so type=sha would
-        # tag sha-<merge>. The preview ApplicationSet pins image.tag to the PR
-        # head_sha, so tag by the head sha instead, or the two never match and
-        # the preview ImagePullBackOffs.
-        env:
-          DOCKER_METADATA_PR_HEAD_SHA: "true"
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha,format=long
-            type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Read the Go version from go.mod
@@ -138,7 +112,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -146,3 +120,55 @@ jobs:
             GO_VERSION=${{ steps.gover.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # The PR preview image (#2597): only for a same-repo PR carrying `run:preview`,
+  # one amd64 image rather than the multi-arch manifest. On a pull_request,
+  # GITHUB_SHA is the merge commit, so type=sha would tag sha-<merge>; the
+  # preview ApplicationSet pins image.tag to the PR head_sha, so tag by the head
+  # sha instead, or the two never match and the preview ImagePullBackOffs.
+  preview:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && contains(github.event.pull_request.labels.*.name, 'run:preview')
+      && (github.event.action != 'labeled' || github.event.label.name == 'run:preview')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          DOCKER_METADATA_PR_HEAD_SHA: "true"
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=pr
+
+      - name: Read the Go version from go.mod
+        id: gover
+        run: echo "version=$(bash scripts/go-version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the amd64 preview image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.event.pull_request.head.sha }}
+            GO_VERSION=${{ steps.gover.outputs.version }}
+          cache-from: type=gha

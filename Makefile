@@ -32,11 +32,19 @@ HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/wi
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 # The Go version comes from go.mod alone (#2596); the Dockerfile has no default.
 GO_VERSION := $(shell bash scripts/go-version.sh)
+# SKIP_BUILD=1 reuses a prebuilt image and bin/omniglass (a CI job that loaded the
+# shared build, #2597) instead of building: it only checks both are there.
 all:
+ifeq ($(SKIP_BUILD),1)
+	@docker image inspect omniglass:dev >/dev/null 2>&1 || { echo "SKIP_BUILD=1 but image omniglass:dev is not loaded"; exit 1; }
+	@test -x bin/omniglass || { echo "SKIP_BUILD=1 but bin/omniglass is missing"; exit 1; }
+	@echo "SKIP_BUILD=1: reusing omniglass:dev and bin/omniglass"
+else
 	docker build -t omniglass:dev -t omniglass:dev-$(BUILD_ID) --build-arg VERSION=$(BUILD_ID) --build-arg GO_VERSION=$(GO_VERSION) .
 	docker build --target hostbin --build-arg VERSION=$(BUILD_ID) --build-arg GO_VERSION=$(GO_VERSION) \
 		--build-arg HOSTOS=$(HOST_OS) --build-arg HOSTARCH=$(HOST_ARCH) --output type=local,dest=bin .
 	@echo "built omniglass:dev-$(BUILD_ID) (also tagged omniglass:dev) and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
+endif
 
 # The lab (#1193), the short form: build, then `./bin/omniglass lab run` in
 # the foreground until Ctrl-C. LAB_ARGS passes flags (LAB_ARGS="--fresh").
