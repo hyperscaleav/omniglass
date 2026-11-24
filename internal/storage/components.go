@@ -816,6 +816,18 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 		}
 		locationPatch = &loc.ID
 	}
+	// A move INTO a location takes the label lock before it writes (#2552): the
+	// foreign key's KEY SHARE on the location does not conflict with a relabel's
+	// NO KEY UPDATE, so without it the stamp below could read the location's
+	// pre-edit label while the cascade's scan snapshot predates this row.
+	// Queued behind the cascade, the stamp reads the committed label; ahead of it,
+	// the cascade's scan sees the row. Taken before this transaction locks any
+	// row, so it closes no cycle with a cascade (see Locking in label_recompute.go).
+	if locationPatch != nil && *locationPatch != "" {
+		if err := lockLabelRecompute(ctx, tx); err != nil {
+			return nil, err
+		}
+	}
 	// The parent is a reparent within the component tree: resolve within the
 	// caller's action scope (resolveScopedRef, ruling 2), which both
 	// requires the new parent inside that scope and judges ambiguity inside

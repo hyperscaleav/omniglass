@@ -5,8 +5,8 @@ sidebar:
   label: Create and edit
   order: 3
   badge:
-    text: Partial
-    variant: note
+    text: Built
+    variant: success
 screenshots:
   - id: entity-blade
     path: /web/explore
@@ -178,12 +178,15 @@ you pressed **+** on (`← West Building`) and goes there; opened from nowhere i
   component as well as `system:update` over the system; a **Deploy** grant over both covers it.
 
   The same slot is on the component's edit face as **Memberships**, so a system you chose at create is
-  not a choice you are stuck with. **Edit** a component and the primary system is a picker you can
-  change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
-  remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
-  outside your `system:update` scope, or a slot the component still fills there), the reason shows in
-  the footer beside **Save** and the form stays in edit. Without `system:update` the field reads but does not edit. The
-  system's member list updates without a reload.
+  not a choice you are stuck with. Each system the component is in is a chip (the primary is marked)
+  with a remove control, and three controls change them, one act each. **Also serves...** adds a
+  system and keeps the others (a shared device is in several), without touching the primary.
+  **Primary system** chooses which of the component's systems is its default, and lists only systems it
+  is in. Moving the component from one system to another is not here: it is **Move to...** under
+  Placement, below. **Save** applies the memberships with the rest of the edit; if the server refuses
+  one (a system outside your `system:update` scope, or a slot the component still fills there), the
+  reason shows in the footer beside **Save** and the form stays in edit. Without `system:update` the
+  field reads but does not edit. The system's member list updates without a reload.
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
@@ -300,25 +303,36 @@ you pressed **+** on (`← West Building`) and goes there; opened from nowhere i
   narrowed to the location type's allowed parents (or, when unconstrained, every location), excluding
   the location's own subtree. Moving back to root is not offered here, and the platform has no
   clear-to-root capability for a location at all, not even from the API or CLI.
-- A **component**'s and a **system**'s Placement (System, Location, Parent, and, for a component,
-  Product) is **read-only in the console**, in view and in edit alike: you set them at create
-  and re-home an entity through the API or CLI (`omniglass component move`, `omniglass system move`).
-  Both are movable via `:move` the same way a location's Parent is (an empty location unplaces a
-  component or a system; clearing parent to lift an entity to a root needs an all-scoped grant, the
-  same authorization creating a root entity already requires, since a scope-limited operator clearing
-  parent would otherwise walk an entity out of every subtree their own grant was ever limited to; a
-  re-parent that would put an entity under itself or one of its own children is refused). From the CLI, an entity's `<name>` argument takes a uuid, a bare
+- A **component**'s and a **system**'s edit face carries **Move to...** under Placement, gated by
+  `component:move` or `system:move`. It is its own act, not a field **Save** carries: pick what to move
+  to, press **Move**, and it happens at once, so the rest of your edit is untouched. A destination
+  is a type-to-filter list whose second line says where each choice is (a location by the locations above
+  it, a system or component by the place it sits in), so two rooms named alike tell apart. What you
+  can move to:
+  - **Another location**: relocates it to another location. The current location is shown but cannot be chosen.
+  - **Another system** (a component, with `system:update`): joins the system, optionally in a slot
+    you choose (a full slot is shown and cannot be chosen), makes it the component's primary, and
+    leaves the system it was in, freeing the slot it held there first. Other systems it serves are
+    kept. To keep the old system as well, use **Also serves...** instead.
+  - **No location** (offered once it is placed) unplaces it.
+  - **Under a component** or **Under a system**: re-parents it in its own tree. **No parent (top
+    level)** lifts it to a root and needs the all-scoped grant the API requires. A cycle (under itself
+    or one of its own children) is refused.
+  The server's refusal (a cycle, a destination outside your scope, a full slot, a taken name at the
+  destination) shows under the picker and leaves the panel open to try another destination. A move
+  can rename an entity the platform named, since its name is unique within its placement; the page
+  stays on the entity, which is addressed by its uuid, and the breadcrumb and Explore show the new
+  location. The same moves are available from the API or CLI (`omniglass component move`,
+  `omniglass system move`), which follow the same three-state
+  convention: an empty location unplaces, clearing parent to lift an entity to a root needs an
+  all-scoped grant, the same authorization creating a root entity already requires, since a
+  scope-limited operator clearing parent would otherwise walk an entity out of every subtree their
+  own grant was ever limited to. From the CLI, an entity's `<name>` argument takes a uuid, a bare
   name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
   `$comp`/`$sys` accessor and the entity's own location from there. **Quote it**: an unquoted `$comp`
   disappears before the shell ever sends the request, so `omniglass component get
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
-
-:::design[Target design, tracked in #1804]
-A component's and a system's edit face carries **Location** and **Parent** pickers that issue the
-move, the way a location's Parent picker does, so a placement made at create is changeable from the
-surface that made it.
-:::
 
 ## Labels the platform writes
 

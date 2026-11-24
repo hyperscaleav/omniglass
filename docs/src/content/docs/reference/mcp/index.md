@@ -993,7 +993,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 
 Get an endpoint
 
-Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
+Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.
 
 - Route: `GET /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:read`

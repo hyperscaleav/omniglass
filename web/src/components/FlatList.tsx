@@ -52,6 +52,9 @@ export type FlatConfig<T> = {
   // action when the viewer may create) that replaces the line, as Inbox does.
   empty?: string | ((ctx: { create?: () => void }) => JSX.Element);
   rowClass?: (r: T) => string;
+  // The name a row's open control announces ("Open <name>"); absent, the entity's
+  // singular noun and the row's address (rowId) stand in, so rows still differ.
+  rowLabel?: (r: T) => string;
   // A row opens this side Drawer detail. Omit for a read-only table (the audit log).
   detail?: (r: T) => FlatDetail;
   // The primary create action: a rail button that opens a Drawer with `body`. The
@@ -114,6 +117,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   // opening pushes it, closing clears it, Back closes it, and a loaded address
   // opens the same drawer. Without a rowId (the audit log) the drawer is local.
   const blades = cfg.blades?.controller ?? createBladeController();
+  const openName = (r: T) => cfg.rowLabel?.(r) ?? (cfg.rowId ? `${cfg.entity.name} ${cfg.rowId(r)}` : cfg.entity.name);
   const rowOf = (id: string) => (cfg.rowId ? cfg.rows().find((r) => cfg.rowId!(r) === id || cfg.rowAlt?.(r) === id) : undefined);
   // The row object a click or create just handed over, so a drawer opens before
   // the refetch that will list it (a freshly created row) lands.
@@ -195,11 +199,9 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
     </>
   );
 
-  const Th = (p: { col: FlatColumn<T> }) => (
-    <th
-      class={`${p.col.headClass ?? ""} ${p.col.sortVal ? "cursor-pointer select-none" : ""}`}
-      onClick={() => toggleSort(p.col.key)}
-    >
+  const ariaSort = (key: string) => (sort()?.key !== key ? "none" : sort()!.dir === 1 ? "ascending" : "descending");
+  const Th = (p: { col: FlatColumn<T> }) => {
+    const label = (
       <span class="inline-flex items-center gap-1">
         {p.col.label}
         <Show when={sort()?.key === p.col.key}>
@@ -208,8 +210,17 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
           </span>
         </Show>
       </span>
-    </th>
-  );
+    );
+    return (
+      <th class={p.col.headClass ?? ""} aria-sort={p.col.sortVal ? ariaSort(p.col.key) : undefined}>
+        <Show when={p.col.sortVal} fallback={label}>
+          <button type="button" class="cursor-pointer select-none [font:inherit] [letter-spacing:inherit] [text-transform:inherit]" onClick={() => toggleSort(p.col.key)}>
+            {label}
+          </button>
+        </Show>
+      </th>
+    );
+  };
 
   return (
     <BladesContext.Provider value={blades}>
@@ -301,7 +312,12 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                         >
                           <For each={cfg.columns}>{(c) => <td>{c.cell(r)}</td>}</For>
                           <Show when={openable}>
-                            <td class="text-base-content/30"><ChevronRight size={15} /></td>
+                            <td class="text-base-content/30">
+                              {/* The keyboard stop for the row: Enter/Space clicks it and the click bubbles to the row's onClick, so no second handler. */}
+                              <button type="button" class="inline-flex cursor-pointer" aria-label={`Open ${openName(r)}`}>
+                                <ChevronRight size={15} />
+                              </button>
+                            </td>
                           </Show>
                         </tr>
                       )}

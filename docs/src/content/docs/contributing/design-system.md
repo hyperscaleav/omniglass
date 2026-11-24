@@ -94,6 +94,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 - **An empty list that has a create action teaches.** `FlatList`'s `empty` takes a function that
   receives the create action when the viewer may create, so an empty directory says what the thing
   is for and offers it (user groups, as the Inbox and Subscriptions do) instead of a bare line.
+- **A list's sort and open work from the keyboard.** `FlatList`'s sort and open are keyboard operable from the primitive: a sortable header renders its label in a `<button>` and the `<th>` carries `aria-sort`, and an openable row ends in a button named `Open <name>` (`rowLabel`, else the entity noun and the row address), which also gives a scrolling table its focus stop.
 - **Lists render in server order; the SQL rule is the ordering primitive.** A catalog list the
   API serves arrives ordered by `order by label nulls last, name` (a row with no label last,
   otherwise by label, then by name), and the page renders the rows as received: `FlatList` sorts
