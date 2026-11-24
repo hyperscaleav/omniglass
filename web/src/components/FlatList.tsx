@@ -51,7 +51,7 @@ export type FlatConfig<T> = {
   empty?: string; // no rows at all
   rowClass?: (r: T) => string;
   // The name a row's open control announces ("Open <name>"); absent, the entity's
-  // singular noun stands in. Supply it so a screen reader can tell rows apart.
+  // singular noun and the row's address (rowId) stand in, so rows still differ.
   rowLabel?: (r: T) => string;
   // A row opens this side Drawer detail. Omit for a read-only table (the audit log).
   detail?: (r: T) => FlatDetail;
@@ -115,6 +115,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   // opening pushes it, closing clears it, Back closes it, and a loaded address
   // opens the same drawer. Without a rowId (the audit log) the drawer is local.
   const blades = cfg.blades?.controller ?? createBladeController();
+  const openName = (r: T) => cfg.rowLabel?.(r) ?? (cfg.rowId ? `${cfg.entity.name} ${cfg.rowId(r)}` : cfg.entity.name);
   const rowOf = (id: string) => (cfg.rowId ? cfg.rows().find((r) => cfg.rowId!(r) === id || cfg.rowAlt?.(r) === id) : undefined);
   // The row object a click or create just handed over, so a drawer opens before
   // the refetch that will list it (a freshly created row) lands.
@@ -302,7 +303,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                           <Show when={openable}>
                             <td class="text-base-content/30">
                               {/* The keyboard stop for the row: Enter/Space clicks it and the click bubbles to the row's onClick, so no second handler. */}
-                              <button type="button" class="inline-flex cursor-pointer" aria-label={`Open ${cfg.rowLabel?.(r) ?? cfg.entity.name}`}>
+                              <button type="button" class="inline-flex cursor-pointer" aria-label={`Open ${openName(r)}`}>
                                 <ChevronRight size={15} />
                               </button>
                             </td>

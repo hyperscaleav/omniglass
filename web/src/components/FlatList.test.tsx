@@ -137,6 +137,23 @@ describe("FlatList keyboard operation", () => {
     expect(th).toHaveAttribute("aria-sort", "descending");
   });
 
+  it("names each open button by its row address when no rowLabel is set", () => {
+    render(() => (
+      <FlatList<{ id: string }>
+        config={{
+          entity: { name: "thing", plural: "things" },
+          rows: () => sent,
+          filterKeys: [{ key: "name", type: "string", hint: "substring", get: (r) => r.id, values: () => [] }],
+          columns: [{ key: "id", label: "Id", cell: (r) => <span>{r.id}</span> }],
+          rowId: (r) => r.id,
+          detail: (r) => ({ title: r.id, body: <div>detail-{r.id}</div> }),
+        }}
+      />
+    ));
+    expect(screen.getByRole("button", { name: "Open thing alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open thing zulu" })).toBeInTheDocument();
+  });
+
   it("opens a row from a named button", async () => {
     mountList();
     fireEvent.click(screen.getByRole("button", { name: "Open alpha" }));
