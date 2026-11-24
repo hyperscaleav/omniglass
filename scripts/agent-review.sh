@@ -761,7 +761,7 @@ BRIEF
     jq -c -R -s '
       ([try fromjson catch (try (capture("(?s)(?<j>\\{.*\\})").j | fromjson) catch empty)] | first) as $o
       | if ($o | type) == "object" and ($o.reply | type) == "string" and ($o.reply | length) > 0
-        then {body: ($o.reply | gsub("[—–]"; "-") | .[:3000]), resolve: ($o.resolve == true)}
+        then {body: ($o.reply | gsub("[\u2014\u2013]"; "-") | .[:3000]), resolve: ($o.resolve == true)}
         else {body: "", resolve: false} end' <<<"$raw"
     ;;
 
