@@ -1090,7 +1090,7 @@ goroutines, a helper a driver starts, and the collector's background workers, wh
 for. So read it as a floor on a poll's cost, with the outpost's process CPU as the ceiling, and compare
 drivers on it only within one transport: a poll over a held session reads cheaper than a direct SNMP
 or bare TCP poll that does its own I/O. The comparison across transports is the driver cost sweep,
-which reads each driver against its outpost's cgroup ([what a driver costs an outpost](/architecture/scaling/#what-a-driver-costs-a-outpost)).
+which reads each driver against its outpost's cgroup ([what a driver costs an outpost](/architecture/scaling/#what-a-driver-costs-an-outpost)).
 Reachability probes are not measured; the figure is a driver poll's. A thread locked through a run
 that blocks is parked for that run, so the outpost holds at most one extra thread per lane worker. A platform with no per-thread clock lands no
 `poll-cpu-time` rather than a false zero; every release platform but Windows has one. The sweep's

@@ -1,0 +1,22 @@
+name: Load the shared build
+description: >-
+  Download the image and host binary the build job made (#2597), load the image
+  and put the binary in bin/, so a job runs the lab targets with SKIP_BUILD=1
+  instead of building again. Needs the repo checked out first.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: omniglass-build
+        path: ${{ runner.temp }}/omniglass-build
+
+    - name: Load the image and the binary
+      shell: bash
+      run: |
+        set -euo pipefail
+        zstd -dc "${RUNNER_TEMP}/omniglass-build/image.tar.zst" | docker load
+        mkdir -p bin
+        install -m 0755 "${RUNNER_TEMP}/omniglass-build/omniglass" bin/omniglass
+        docker image inspect omniglass:dev >/dev/null

@@ -274,3 +274,58 @@ func TestAgentSyncRefusesAnUnknownBaseAndBadUsage(t *testing.T) {
 		t.Fatalf("unknown mode: exit %d, want 64", code)
 	}
 }
+
+// agent-fix no longer merges main on every run (#2597): a merge is a new head
+// commit, and a new head restarts every check. `needed` says whether this run
+// should: only for a conflict, or when the branch is behind main and a required
+// check is red (the failing check names arrive on stdin).
+func (r *syncRepo) needed(failing string) (string, int) {
+	r.t.Helper()
+	script, err := filepath.Abs("agent-sync.sh")
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	cmd := exec.Command("bash", script, "needed", "main")
+	cmd.Dir = r.root
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	cmd.Stdin = strings.NewReader(failing)
+	out, err := cmd.Output()
+	code := 0
+	if exit, ok := err.(*exec.ExitError); ok {
+		code = exit.ExitCode()
+	} else if err != nil {
+		r.t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out)), code
+}
+
+func TestAgentSyncNeededSkipsAMergeNothingAsksFor(t *testing.T) {
+	r := newSyncRepo(t)
+	if out, code := r.needed(""); code != 0 || out != "no" {
+		t.Fatalf("behind main, no conflict, no red check: %q (exit %d), want no, 0", out, code)
+	}
+}
+
+func TestAgentSyncNeededMergesForAConflict(t *testing.T) {
+	r := newSyncRepo(t)
+	r.commit("touch the same line main did", map[string]string{"other.go": "package x // branch\n"})
+	if out, code := r.needed(""); code != 0 || out != "conflict" {
+		t.Fatalf("conflicting branch: %q (exit %d), want conflict, 0", out, code)
+	}
+}
+
+func TestAgentSyncNeededMergesWhenBehindAndARequiredCheckIsRed(t *testing.T) {
+	r := newSyncRepo(t)
+	if out, code := r.needed("e2e\n"); code != 0 || out != "check" {
+		t.Fatalf("behind main with e2e red: %q (exit %d), want check, 0", out, code)
+	}
+}
+
+func TestAgentSyncNeededSaysCurrentOnceMainIsIn(t *testing.T) {
+	r := newSyncRepo(t)
+	r.sync(nil, "merge", "main")
+	// A red check on a branch that already has main is not main's doing.
+	if out, code := r.needed("e2e\n"); code != 0 || out != "current" {
+		t.Fatalf("branch has main: %q (exit %d), want current, 0", out, code)
+	}
+}
