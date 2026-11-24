@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import TreeList, { type ListConfig, type ListNode } from "./TreeList";
@@ -58,18 +58,19 @@ describe("TreeList rows", () => {
     });
   }
 
-  it("the name cell's primary control opens the node by keyboard activation and click", () => {
+  it("the name cell's primary control opens the node by keyboard activation and click", async () => {
     mount(true);
     const open = screen.getByRole("button", { name: /gamma/ });
     expect(open.tagName).toBe("BUTTON");
     // A native button turns Enter/Space into a click; assert the click path.
     fireEvent.click(open);
-    expect(document.querySelector("aside[data-blade]")).toBeTruthy();
+    // The open row is the URL's ?open= address now, so the drawer follows the router.
+    await waitFor(() => expect(document.querySelector("aside[data-blade]")).toBeTruthy());
   });
 
-  it("clicking elsewhere on the row still opens the node, once", () => {
+  it("clicking elsewhere on the row still opens the node, once", async () => {
     mount(true);
     fireEvent.click(screen.getByText("gamma").closest("tr")!.querySelectorAll("td")[1]);
-    expect(document.querySelectorAll("aside[data-blade]").length).toBe(1);
+    await waitFor(() => expect(document.querySelectorAll("aside[data-blade]").length).toBe(1));
   });
 });
