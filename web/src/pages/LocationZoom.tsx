@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import TemplateNotice from "../components/TemplateNotice";
-import Breadcrumb from "../components/Breadcrumb";
 import DetailGate from "../components/DetailGate";
 import LocationDetail from "../components/LocationDetail";
 import BladeStack from "../components/BladeStack";
@@ -66,10 +65,10 @@ export default function LocationZoom() {
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
+    // The path ends at the parent: the location itself is the page title.
     return [
       // Back up lands where you were: the outline opened down to this row.
       { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
-      // The trail ends at the parent: the location itself is the page title.
       ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
     ];
   });
@@ -81,7 +80,7 @@ export default function LocationZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} trail={crumbs()} kind={{ key: "locations", label: "Locations", href: "/locations" }}>
         {/* A create from a template lands here with ?from= (#1329). */}
         <TemplateNotice />
         <DetailGate

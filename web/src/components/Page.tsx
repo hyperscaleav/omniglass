@@ -1,11 +1,12 @@
 import type { JSX } from "solid-js";
-import { createEffect, onCleanup, Show } from "solid-js";
-import { markPageHeaded, namePage } from "../lib/handover";
+import { createEffect, createRenderEffect, onCleanup, Show } from "solid-js";
+import { namePage, setPageHeader } from "../lib/handover";
 import { navByPath } from "../lib/nav";
+import type { Crumb } from "../lib/breadcrumb";
 
-// Page scaffold: an optional breadcrumb slot, a title (string or outpost) + optional
-// subtitle and right-aligned actions, then the page body, stacked with the
-// density gap. Inventory pages built on TreeList drop the H1 (the top bar
+// Page scaffold: its title (string or element) and hint go to the top bar, the
+// page's one header row, with the trail above a detail page's title; optional
+// right-aligned actions, then the page body, stacked with the density gap. Inventory pages built on TreeList drop the H1 (the top bar
 // already labels the page) and pass their own header in children. A detail
 // page passes its entity's name or address, which omnibot is handed as the
 // page in place of the uuid its route holds (#2162).
@@ -20,7 +21,11 @@ export default function Page(props: {
   title?: string | JSX.Element;
   name?: string;
   subtitle?: string;
-  breadcrumb?: JSX.Element;
+  // A detail page's path (each crumb a link), read by the top bar before the h1.
+  trail?: Crumb[];
+  // The kind's list (a link before the h1) and the entity's primary system (a muted link after it).
+  kind?: Crumb;
+  system?: Crumb;
   actions?: JSX.Element;
   children: JSX.Element;
 }) {
@@ -29,26 +34,14 @@ export default function Page(props: {
   const subtitle = () => props.subtitle ?? meta()?.hint;
   createEffect(() => namePage(props.name));
   onCleanup(() => namePage(undefined));
-  markPageHeaded(true);
-  onCleanup(() => markPageHeaded(false));
+  // The top bar is the page header (#2575): the title and hint go there.
+  createRenderEffect(() => setPageHeader({ title: title(), hint: subtitle(), trail: props.trail, kind: props.kind, system: props.system }));
+  onCleanup(() => setPageHeader(undefined));
   return (
     <section class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
-      <div data-testid="page-header">
-        <Show when={props.breadcrumb}>
-          <div class="mb-1 min-h-[18px]">{props.breadcrumb}</div>
-        </Show>
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div class="min-w-0">
-            <h1 class="text-2xl font-semibold tracking-tight">{title()}</h1>
-            <Show when={subtitle()}>
-              <p class="mt-1 max-w-2xl text-sm text-base-content/60">{subtitle()}</p>
-            </Show>
-          </div>
-          <Show when={props.actions}>
-            <div class="flex flex-none items-center gap-2">{props.actions}</div>
-          </Show>
-        </div>
-      </div>
+      <Show when={props.actions}>
+        <div class="flex flex-wrap items-center justify-end gap-2">{props.actions}</div>
+      </Show>
       {props.children}
     </section>
   );

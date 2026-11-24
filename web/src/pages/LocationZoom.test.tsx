@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/te
 import { A, Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { locationHealthKey, systemHealthKey, type FleetHealth } from "../lib/health";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
@@ -16,6 +17,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeChoices, treeOptions, treeValue } from "../components/TreeSelect.testkit";
+import { pageHeader } from "../lib/handover";
 
 // A location's detail view (#872): systems are the unit, locations are folders. A
 // location holding one system lands on that system; a folder (no system, or a
@@ -156,7 +158,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/locations/:id" component={Locations} />
+        <Route path="/locations/:id" component={withTopBar(Locations)} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route path="/start" component={() => <A data-testid="configure-link" href={`/locations/${uuidFor("lz-room")}?tab=configure`}>Configure location</A>} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
@@ -206,11 +208,12 @@ describe("where a location lands (#872)", () => {
 describe("a folder location (#872)", () => {
   it("is titled by the location, names its type in the catalog's words, and ends the path at its parent", () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("West Building");
+    expect(pageHeader()?.title).toBe("West Building");
     expect(within(screen.getByTestId("location-header")).getByTestId("location-type").textContent).toBe("Building");
     const crumbs = within(screen.getByTestId("breadcrumb"));
     expect(crumbs.getByText("Headquarters")).toBeTruthy();
     expect(crumbs.queryByText("West Building")).toBeNull();
+    expect(within(screen.getByTestId("header-line-1")).getByRole("link", { name: "Locations" })).toBeTruthy();
   });
 
   it("links Explore back to this location's row in the outline", async () => {
@@ -446,7 +449,7 @@ describe("ambiguous name addresses (#853)", () => {
     render(() => (
       <QueryClientProvider client={qc}>
         <Router base="/web">
-          <Route path="/locations/:id" component={Locations} />
+          <Route path="/locations/:id" component={withTopBar(Locations)} />
           <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         </Router>
       </QueryClientProvider>

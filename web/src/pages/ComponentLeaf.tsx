@@ -2,7 +2,6 @@ import { Show, createEffect, createMemo } from "solid-js";
 import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import Breadcrumb from "../components/Breadcrumb";
 import BladeStack from "../components/BladeStack";
 import DetailGate from "../components/DetailGate";
 import TemplateNotice from "../components/TemplateNotice";
@@ -14,7 +13,7 @@ import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from
 import { componentSystemsKey, componentSystems } from "../lib/members";
 import { membershipRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
-import { componentCrumbs } from "../lib/detail";
+import { locationPath } from "../lib/detail";
 import { describeError } from "../lib/format";
 
 // The component's detail page (#637, reoriented in #872): the page is the
@@ -62,14 +61,11 @@ export default function ComponentLeaf() {
     const sid = primary()?.systemId;
     return component()?.location_id ?? (sid ? (view.data?.systems ?? []).find((s) => s.id === sid)?.location ?? null : null);
   };
-  const crumbs = createMemo(() => {
-    if (!view.data) return [];
-    const trail = componentCrumbs(view.data, locationId(), primary()?.systemId);
-    return [
-      // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` },
-      ...trail.map((c) => ({ key: c.id, label: c.label, href: c.kind === "system" ? `/systems/${c.id}` : `/locations/${c.id}` })),
-    ];
+  // Line 2 is the Explore back link then the location path; the primary system rides line 1 beside the label.
+  const crumbs = createMemo(() => (view.data ? [{ key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` }, ...locationPath(view.data, locationId()).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` }))] : []));
+  const primarySystem = createMemo(() => {
+    const s = (view.data?.systems ?? []).find((x) => x.id === primary()?.systemId);
+    return s ? { key: s.id, label: entityLabel(s), href: `/systems/${s.id}` } : undefined;
   });
 
   const ambiguous = () => !!(view.data && components.data) && !component() && (components.data ?? []).filter((x) => x.name === id()).length > 1;
@@ -78,7 +74,7 @@ export default function ComponentLeaf() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={component() ? entityLabel(component()!) : "Component"} name={component()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={component() ? entityLabel(component()!) : "Component"} name={component()?.name} trail={crumbs()} kind={{ key: "components", label: "Components", href: "/components" }} system={primarySystem()}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate
