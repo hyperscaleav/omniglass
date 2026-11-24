@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { arrivedApart, fromEvent, fromLog, isFiltered, messageParts } from "./occurrence";
 import { uuidFor } from "./testids";
 
+const ALARM = uuidFor("al-1");
 const HEX = "a".repeat(32) + "0123456789abcdef0123456789abcdef";
 
 describe("messageParts", () => {
@@ -31,13 +32,13 @@ describe("messageParts", () => {
 
 describe("normalizing", () => {
   it("maps an event to its key badge and the alarm it carries", () => {
-    const o = fromEvent({ ts: "2026-11-24T00:00:00Z", key: "rule-fired", event_type_id: "x", origin: "derived", message: "m", provenance: "observed", alarm_id: "al-1", derived_by_rule: "r", derived_by_rule_id: uuidFor("rid") }, 0, "comp-1");
-    expect(o).toMatchObject({ kind: "event", badge: "rule-fired", rule: { name: "r", id: uuidFor("rid") }, alarm: { id: "al-1", component: "comp-1" } });
+    const o = fromEvent({ ts: "2026-11-24T00:00:00Z", key: "rule-fired", event_type_id: "x", origin: "derived", message: "m", provenance: "observed", alarm_id: ALARM, derived_by_rule: "r", derived_by_rule_id: uuidFor("rid") }, 0, "comp-1");
+    expect(o).toMatchObject({ kind: "event", badge: "rule-fired", rule: { name: "r", id: uuidFor("rid") }, alarm: { id: ALARM, component: "comp-1" } });
   });
 
   it("takes a system event's alarm timeline from its component owner only", () => {
-    const base = { ts: "t", key: "k", event_type_id: "x", origin: "caught", message: "m", provenance: "observed", alarm_id: "al-1", owner: "o", owner_id: "oid" };
-    expect(fromEvent({ ...base, owner_kind: "component" }, 0).alarm).toEqual({ id: "al-1", component: "oid" });
+    const base = { ts: "t", key: "k", event_type_id: "x", origin: "caught", message: "m", provenance: "observed", alarm_id: ALARM, owner: "o", owner_id: "oid" };
+    expect(fromEvent({ ...base, owner_kind: "component" }, 0).alarm).toEqual({ id: ALARM, component: "oid" });
     expect(fromEvent({ ...base, owner_kind: "system" }, 0).alarm).toBeUndefined();
   });
 
