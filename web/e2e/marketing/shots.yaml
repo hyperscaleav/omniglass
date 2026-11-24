@@ -119,10 +119,26 @@ shots:
   - id: omniglass-teaser
     kind: loop
     max_seconds: 30
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, the list of them, a headquarters boardroom's Why naming the reachability alarm on its main display, the alarm snoozed, the display back online and the room healthy again, then its health history showing the stretch it was degraded."
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the display's own Video Input reading hdmi2, Set input hdmi1 sent from the alarm and settled, the display's timeline with the alarm and the command, and the room healthy again."
+    # The fault is a display switched to the wrong input, which the console
+    # fixes itself (#2649): the boardroom displays carry their web admin beside
+    # their SNMP agent, so they take Set input. The rule that names the fault
+    # is the demo's, posted here: hdmi1 is these rooms' input, not every
+    # install's.
     setup:
-      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
-        body: { unplugged: true }
+      - post: /event-rules
+        body:
+          name: display-wrong-input
+          label: Display on the wrong input
+          description: A meeting room display is showing an input other than the room's laptop input, hdmi1.
+          selector: { component_types: [display] }
+          sample_key: video-input
+          fire_criteria: { op: ne, value: hdmi1 }
+          severity: high
+          fire_event_type: rule-fired
+          clear_event_type: rule-cleared
+      - post: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/simulation:fire
+        body: { surface: web-admin, method: POST, path: /api/display/input, body: '{"input": "hdmi2"}' }
       - wait: { get: /systems/hq-mr86-1/health, field: health, equals: degraded, timeout: 180000 }
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
@@ -132,63 +148,79 @@ shots:
         focus: '[data-testid=explore-counts]'
         expect: ["systems", "need attention"]
         zoom: 2.6
-        hold: 1500
+        hold: 1300
       # Beat 2: only those rooms, the boardroom among them.
       - click: { role: button, name: need attention }
         focus: 'ul[role=list][aria-label=Matches]'
         expect: ["Hq Annex 1 05"]
         zoom: 1.6
-        hold: 1300
-      # Beat 3: the boardroom opens in the drawer, and the camera pans to its Why.
+        hold: 1000
+      # Beat 3: the boardroom opens in the drawer, and its Why names the fault
+      # and the display it is on.
       - click: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05"))'
         hold: 200
       - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip]' }
         focus: here
-        expect: ["Why", "Reachability lost", "display-1"]
+        expect: ["Why", "Display on the wrong input", "display-1"]
         zoom: 2.2
-        hold: 1800
-      # Beat 4: the alarm snoozed from its own row while someone goes to the room.
-      - click: 'aside[data-blade] [data-testid=alarm-strip] [data-testid=alarm-controls] button:has-text("Snooze")'
-        focus: 'aside[data-blade] [data-testid=alarm-strip]'
-        zoom: 2.2
-        expect: ["Reachability lost", "Snooze"]
-        hold: 500
-      # The Snooze menu opens with its first item, "15 minutes", focused. In the
-      # blade it opens behind the drawer (the menu is z-50, the blade z-61), so
-      # it is not on screen and cannot be clicked: the pick is made from the
-      # keyboard instead: the items are plain buttons, so Tab moves from "15 minutes"
-      # to "1 hour" (an arrow key does nothing here).
-      - press: Tab
-      - press: Enter
+        hold: 1600
+      # Beat 4: the display itself, its own report: Video Input hdmi2.
+      - click: 'aside[data-blade] [data-testid=alarm-strip] button:text-is("display-1")'
         hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip] :text("snoozed until")' }
-        focus: here
-        expect: ["snoozed until"]
-        zoom: 2.6
+      - wait: { selector: 'aside[data-blade] [data-testid=vital-video-input]:has-text("hdmi2")' }
+        focus: 'aside[data-blade] [data-testid=leaf-vitals]'
+        expect: ["Video Input", "hdmi2"]
+        zoom: 2.4
+        hold: 1500
+      # Beat 5: Send command from its alarm: Set input, hdmi1, Issue.
+      - click: 'aside[data-blade] [data-testid=leaf-alarms] button[aria-label="Send command"]'
+        hold: 300
+      - select: { target: { role: combobox, name: Command }, value: set-input }
+        focus: 'form:has(option[value=set-input])'
+        expect: ["Command", "set-input"]
+        zoom: 1.8
+        hold: 500
+      - select: { target: 'form:has(option[value=set-input]) select >> nth=1', value: hdmi1 }
+        hold: 600
+      - click: { role: button, name: Issue }
+        hold: 200
+      # Beat 6: the display acknowledges, and the command settles.
+      - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 30000 }
+        focus: '[data-testid=toast]:has([data-testid=command-toast])'
+        expect: ["set-input issued to display-1", "settled"]
+        zoom: 2.2
         hold: 1300
-      # Beat 5: the display is plugged back in. The console sees it at its next
-      # check, sped up under the badge: the room reads healthy, its Why clear.
-      - call: { put: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment', body: { unplugged: false } }
-      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 180000 }
-        fast: 40
+      # Its next poll reads hdmi1, sped up under the badge.
+      - wait: { selector: 'aside[data-blade] [data-testid=vital-video-input]:has-text("hdmi1")', timeout: 120000 }
+        fast: 30
+        focus: 'aside[data-blade] [data-testid=leaf-vitals]'
+        expect: ["Video Input", "hdmi1"]
+        zoom: 2.4
+        hold: 1200
+      # Beat 7: the display's timeline: the alarm, its Video Input and the
+      # command on one axis.
+      - click: 'aside[data-blade] [data-testid=component-detail] [role=tab]:text-is("Timeline")'
+        focus: out
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=timeline-overlay]' }
+        focus: here
+        expect: ["Alarms", "Commands"]
+        zoom: 1.8
+        hold: 2000
+      # Beat 8: back in the room, healthy, its Why clear.
+      - press: Escape
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 120000 }
+        fast: 30
         focus: 'aside[data-blade] [data-testid=system-header]'
         expect: ["healthy"]
         zoom: 2.4
-        hold: 1300
+        hold: 1200
       - hover: 'aside[data-blade] [data-testid=alarm-strip-clear]'
         focus: here
         expect: ["No active alarms"]
         zoom: 2.4
-        hold: 1200
-      # Beat 6: its Activity, the stretch it spent degraded on its health history.
-      - click: 'aside[data-blade] [role=tab]:text-is("Activity")'
-        focus: out
-        hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=health-history-full]' }
-        focus: 'aside[data-blade] [data-testid=history-tab] div:has(> [data-testid=uptime-kpi])'
-        expect: ["Uptime", "History"]
-        zoom: 2
-        hold: 2200
+        hold: 1400
 
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.
