@@ -5,7 +5,7 @@
 // though no assertion failed. The setup tracks every pending timeout and sweeps
 // them when a test ends, so none outlives its test, rather than silencing
 // unhandled errors.
-const pending = new Set<ReturnType<typeof setTimeout>>();
+const pending = new Map<ReturnType<typeof setTimeout>, number>();
 
 /** Wrap setTimeout so each pending timeout is known until it fires or is cleared. */
 export function trackTimeouts(): void {
@@ -15,7 +15,7 @@ export function trackTimeouts(): void {
       pending.delete(id);
       fn(...args);
     }, ms);
-    pending.add(id);
+    pending.set(id, ms ?? 0);
     return id;
   }) as typeof setTimeout;
 }
@@ -23,8 +23,11 @@ export function trackTimeouts(): void {
 /** How many timeouts are pending now. */
 export const pendingTimeouts = (): number => pending.size;
 
+/** The delay, in ms, of each pending timeout. */
+export const pendingDelays = (): number[] => [...pending.values()];
+
 /** Clear every pending timeout. */
 export function sweepTimeouts(): void {
-  for (const id of pending) clearTimeout(id);
+  for (const id of pending.keys()) clearTimeout(id);
   pending.clear();
 }
