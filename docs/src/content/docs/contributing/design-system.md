@@ -340,7 +340,7 @@ same keys and focus, and the library underneath is swappable in one directory.
 | A decision that needs reading | `ConfirmDialog` | Cancel takes the focus; the body can teach |
 | Any destructive confirm | `confirmDelete` / `confirmAction` (`lib/confirm`) | one line at the site; renders the one `ConfirmDialog`; `run` lists a refused delete's blockers |
 | A floating panel from a button | `Popover` | the column menu, Snooze, Add under |
-| Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>` |
+| Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>`. Never the native `title` attribute: it never shows on keyboard focus (a guard test bars it). `Button` and `Popover` take a `title` prop and render the tooltip; a truncated value is `Truncate` |
 | A short fixed list with drawn options | `Select` | `TreeSelect` is built on it |
 | Choose from a long list by typing | `Picker` | single or `multiple`; `detail` tells two same-named rows apart; `onCreate` adds the create row; works inside a `Drawer` |
 | Find by typing, results from the server | `Search` | grouped rows the caller already filtered; the palette's field. The list renders inside its dialog (never portalled out of it); the first row is the default and Enter takes it |

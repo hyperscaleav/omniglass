@@ -26,6 +26,7 @@ import {
   type SimSlotFill,
   type SimSystemPlan,
 } from "../lib/simulation";
+import Tooltip from "./ui/Tooltip";
 
 // AddSimSystemForm (#913): the add-simulated-system form the Drawer hosts. The
 // operator picks where it is served, the standard it is built to, its type, and
@@ -252,9 +253,9 @@ function PlanRow(props: { slot: SimSlotFill }) {
     <tr data-testid="plan-slot" data-slot={r().slot} data-short={isShort() ? "true" : undefined}>
       <td>
         <span class="flex min-w-0 flex-col">
-          <span class="truncate font-data text-xs" title={r().slot}>{r().slot}</span>
+          <Tooltip as="span" tabIndex={0} class="truncate font-data text-xs" content={r().slot}>{r().slot}</Tooltip>
           <Show when={r().alternate}>
-            <span class="truncate font-data text-[11px] text-base-content/50" title={`Alternate taken: ${r().alternate}`}>{r().alternate}</span>
+            <Tooltip as="span" tabIndex={0} class="truncate font-data text-[11px] text-base-content/50" content={`Alternate taken: ${r().alternate}`}>{r().alternate}</Tooltip>
           </Show>
         </span>
       </td>
@@ -268,7 +269,7 @@ function PlanRow(props: { slot: SimSlotFill }) {
             </span>
           }
         >
-          <span class="block truncate font-data text-xs text-base-content/70" title={r().product}>{r().product}</span>
+          <Tooltip as="span" tabIndex={0} class="block truncate font-data text-xs text-base-content/70" content={r().product}>{r().product}</Tooltip>
         </Show>
       </td>
       <td class="text-right font-data tnum text-sm" classList={{ "text-base-content/40": isShort() }}>{r().count}</td>

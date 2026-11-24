@@ -47,12 +47,12 @@ export default function StateStrip(props: {
     // strip breathing between two honest captures).
     <div class="og-statestrip flex flex-col gap-0.5">
       <div class="flex items-center gap-2">
-        <div class={`flex ${props.height ?? "h-2"} flex-1 overflow-hidden rounded-full bg-base-300`} title={props.title}>
+        <Tooltip as="div" class={`flex ${props.height ?? "h-2"} flex-1 overflow-hidden rounded-full bg-base-300`} content={props.title}>
           <For each={props.segments}>
             {(s) => (
               <Show
                 when={s.tip}
-                fallback={<div class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} title={s.title} />}
+                fallback={<Tooltip as="div" class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} content={s.title} />}
               >
                 <Tooltip as="div" content={s.tip} class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} data-segment={s.tip}>
                   {null}
@@ -60,7 +60,7 @@ export default function StateStrip(props: {
               </Show>
             )}
           </For>
-        </div>
+        </Tooltip>
         {props.children}
       </div>
       <Show when={props.startLabel || props.endLabel}>

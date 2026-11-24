@@ -4,6 +4,7 @@ import { rel } from "../lib/format";
 import { formatAttributes } from "../lib/events";
 import { LOGS_KEY, arrivedApart, getLogs, severityVariant, type ComponentLog, type ComponentLogs, type LogFilter } from "../lib/logs";
 import LogFilters from "./LogFilters";
+import Tooltip from "./ui/Tooltip";
 
 // LogsPanel: a component's recent raw log lines (ADR-0066, the ingest lane). Where
 // the events panel above shows discrete typed occurrences, this shows the untyped
@@ -32,7 +33,7 @@ function LogRow(p: { line: ComponentLog }) {
   return (
     <div class="flex flex-col gap-1 px-3 py-2.5">
       <div class="flex items-baseline gap-2">
-        <span class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" title={p.line.ts}>{rel(p.line.ts)}</span>
+        <Tooltip as="span" tabIndex={0} class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" content={p.line.ts}>{rel(p.line.ts)}</Tooltip>
         <span class={`badge badge-sm shrink-0 font-data text-[10px] ${severityVariant(p.line.severity)}`}>{p.line.severity || "log"}</span>
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.line.message}</span>
       </div>
@@ -44,16 +45,16 @@ function LogRow(p: { line: ComponentLog }) {
           <span class="font-data">{p.line.source}</span>
         </Show>
         <Show when={p.line.instance}>
-          <span title="The endpoint that collected the line">via <span class="font-data">{p.line.instance}</span></span>
+          <Tooltip as="span" tabIndex={0} content="The endpoint that collected the line">via <span class="font-data">{p.line.instance}</span></Tooltip>
         </Show>
         <Show when={arrivedApart(p.line)}>
-          <span title={`The line says ${p.line.ts}; the server received it ${p.line.received_at}`}>· arrived {rel(p.line.received_at!)}</span>
+          <Tooltip as="span" tabIndex={0} content={`The line says ${p.line.ts}; the server received it ${p.line.received_at}`}>· arrived {rel(p.line.received_at!)}</Tooltip>
         </Show>
         <Show when={p.line.facility}>
           <span>· {p.line.facility}</span>
         </Show>
         <Show when={p.line.correlation_id}>
-          <span class="font-data text-base-content/35" title="Correlation id">⤳ {p.line.correlation_id}</span>
+          <Tooltip as="span" tabIndex={0} class="font-data text-base-content/35" content="Correlation id">⤳ {p.line.correlation_id}</Tooltip>
         </Show>
         <Show when={attrs() || labels()}>
           <button

@@ -3,6 +3,7 @@ import { render, fireEvent } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import LogsPanel from "./LogsPanel";
 import { LOGS_KEY, OUTPOST_LOGS_KEY, type ComponentLogs, type OutpostLogs } from "../lib/logs";
+import { tipOf } from "../test-tip";
 
 // The panel is read-only: every row is a real API field, nothing derived. Data is
 // seeded into the query cache so no server is needed.
@@ -166,12 +167,13 @@ describe("LogsPanel filters", () => {
     expect(await findByText(/no line matches the filter/i)).toBeTruthy();
   });
 
-  it("names the endpoint that collected a line, and the source only where it differs", () => {
-    const { getAllByTitle, queryByText } = mountFiltered();
-    const via = getAllByTitle("The endpoint that collected the line");
+  it("names the endpoint that collected a line, and the source only where it differs", async () => {
+    const { getAllByText, queryByText } = mountFiltered();
+    const via = getAllByText((_, el) => el?.getAttribute("tabindex") === "0" && el.textContent === "via tcp");
     expect(via.map((e) => e.textContent)).toEqual(["via tcp", "via tcp"]);
+    expect(await tipOf(via[0])).toBe("The endpoint that collected the line");
     // Source and endpoint are both "tcp": the source is not said twice.
-    expect(queryByText("tcp", { selector: "span.font-data:not([title] *)" })).toBeNull();
+    expect(queryByText("tcp", { selector: "span.font-data:not([tabindex] *)" })).toBeNull();
   });
 
   it("shows when a line arrived where its own time differs", () => {

@@ -1,5 +1,6 @@
 import { Show, createSignal, type JSX } from "solid-js";
 import { Eye, EyeOff, Copy, Check, RefreshCw } from "./icons";
+import Tooltip from "./ui/Tooltip";
 
 // The console's one inline-action button family: the reveal / copy / generate
 // buttons that sit in a daisyUI `join` after a value or input (PasswordField,
@@ -19,16 +20,16 @@ export function RevealButton(props: {
   disabled?: boolean;
 }): JSX.Element {
   return (
-    <button
+    <Tooltip
       type="button"
       class={BTN}
       aria-label={props.revealed ? `Hide ${props.label}` : `Reveal ${props.label}`}
-      title={props.revealed ? "Hide" : "Reveal"}
+      content={props.revealed ? "Hide" : "Reveal"}
       onClick={() => props.onToggle()}
       disabled={props.disabled}
     >
       <Show when={props.revealed} fallback={<Eye size={15} />}><EyeOff size={15} /></Show>
-    </button>
+    </Tooltip>
   );
 }
 
@@ -48,16 +49,16 @@ export function CopyButton(props: {
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <button
+    <Tooltip
       type="button"
       class={BTN}
       aria-label={`Copy ${props.label}`}
-      title="Copy"
+      content="Copy"
       onClick={doCopy}
       disabled={props.disabled}
     >
       <Show when={copied()} fallback={<Copy size={15} />}><Check size={15} /></Show>
-    </button>
+    </Tooltip>
   );
 }
 
@@ -69,15 +70,15 @@ export function GenerateButton(props: {
   disabled?: boolean;
 }): JSX.Element {
   return (
-    <button
+    <Tooltip
       type="button"
       class={BTN}
       aria-label={props.label}
-      title={props.label}
+      content={props.label}
       onClick={() => props.onGenerate()}
       disabled={props.disabled}
     >
       <RefreshCw size={15} />
-    </button>
+    </Tooltip>
   );
 }

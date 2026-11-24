@@ -59,6 +59,7 @@ import { deleteSystem } from "../lib/systems";
 import { LOCATIONS_KEY, deleteLocation, listLocations } from "../lib/locations";
 
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
+import Tooltip from "./ui/Tooltip";
 
 // The system's detail view (#636, reoriented in #872). Systems are the unit
 // Omniglass monitors; locations are folders and metadata; components are the
@@ -436,12 +437,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   </Show>
                   <For each={windowAlarms()}>
                     {(inc) => (
-                      <span
+                      <Tooltip as="span" tabIndex={0}
                         data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
                         style={{ left: `${markerX(inc.raisedAt, historyNow(), Math.max(historyNow() - (healthSpans()[0]?.from ?? historyNow() - 30 * 24 * 3600_000), 1)) * 100}%` }}
-                        title={`${inc.message} · ${inc.component}`}
+                        content={`${inc.message} · ${inc.component}`}
                       />
                     )}
                   </For>

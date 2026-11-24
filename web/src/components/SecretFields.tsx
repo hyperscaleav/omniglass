@@ -69,7 +69,6 @@ export default function SecretFields(props: { secretId: string; fields: SecretFi
                 class="input input-bordered join-item w-full font-data text-sm"
                 classList={{ "text-base-content/50": f.secret && shown()[f.name] === undefined }}
                 value={display(f)}
-                title={shown()[f.name] ?? undefined}
               />
               <Show when={f.secret && props.canReveal}>
                 <RevealButton

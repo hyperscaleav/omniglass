@@ -18,6 +18,7 @@ import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
 import { pickInPicker, typeInPicker } from "../components/ui/Picker.testkit";
 import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
 import { answerConfirms } from "../lib/confirm.testkit";
+import { tipOf } from "../test-tip";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -207,7 +208,7 @@ describe("Rules page", () => {
     mount(admin, [reach, broken]);
     const row = document.querySelector('[data-criteria-error="broken"]') as HTMLElement;
     expect(row?.textContent).toContain("criteria do not compile");
-    expect(row?.getAttribute("title")).toContain("mismatched types");
+    expect(await tipOf(row)).toContain("mismatched types");
     expect(document.querySelector('[data-criteria-error="reachability-lost"]')).toBeNull();
     fireEvent.click(screen.getByText("Broken"));
     const b = await blade();

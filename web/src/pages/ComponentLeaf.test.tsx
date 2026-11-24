@@ -25,6 +25,7 @@ import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
 import { LOGS_KEY } from "../lib/logs";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { tipOf } from "../test-tip";
 
 const acked: string[] = [];
 vi.mock("../lib/alarms", async (orig) => {
@@ -385,7 +386,7 @@ describe("the leaf's dispatch facts (#786)", () => {
 
   // #1550: a metric's unit rides after its value in the muted style, and a
   // float is rounded to a sane precision with the raw value in the title.
-  it("a vitals value carries its unit, rounded, with the raw value in the title", () => {
+  it("a vitals value carries its unit, rounded, with the raw value in the title", async () => {
     mount(undefined, undefined, undefined, undefined, undefined, {
       metrics: [
         { metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false },
@@ -397,7 +398,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     const poll = screen.getByTestId("vital-poll-duration");
     expect(poll.textContent).toContain("0.15 ms");
     expect(poll.textContent).not.toContain("0.1527895");
-    expect(poll.querySelector('[title="0.1527895"]')).toBeTruthy();
+    expect(await tipOf(poll.querySelector("[tabindex]"))).toBe("0.1527895");
     // A type with no unit reads as a bare number, as before.
     expect(screen.getByTestId("vital-icmp-rtt-avg").textContent).toContain("6.1");
     expect(screen.getByTestId("vital-icmp-rtt-avg").querySelector('[data-testid="vital-unit"]')).toBeNull();

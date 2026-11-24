@@ -76,6 +76,7 @@ import {
 } from "../lib/event_rules";
 import { previewEventRule, type RulePreview } from "../lib/expressions";
 import { confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
 
 // Rules (Catalog > Actions > Rules, #921): the event rule catalog. A rule reads
 // one sample key across the components it selects and raises an alarm at its
@@ -146,7 +147,7 @@ function readsCell(r: EventRule, linked = false): JSX.Element {
   return (
     <span class="flex min-w-0 flex-col leading-snug">
       {/* The drawer opens the metric or property the rule judges; a list row stays plain text, since a row click already opens this drawer. */}
-      <Show when={linked} fallback={<span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>}>
+      <Show when={linked} fallback={<Tooltip as="span" tabIndex={0} class="truncate font-data text-[12px]" content={r.sample_key}>{r.sample_key}</Tooltip>}>
         <CatalogRef kind={r.sample_lane === "property" ? "property" : "metric"} name={r.sample_key} />
       </Show>
       <span class="text-[11px] text-base-content/40">{r.sample_lane}</span>
@@ -165,7 +166,7 @@ function alarmWords(r: EventRule): string {
 function severityCell(severity: string | undefined): JSX.Element {
   return severity
     ? <SeverityBadge name={severity} />
-    : <span class="badge badge-ghost badge-sm" title="Records its events and raises no alarm">informational</span>;
+    : <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-sm" content="Records its events and raises no alarm">informational</Tooltip>;
 }
 
 // The live state at a glance, from the counts on the list row: firings
@@ -185,13 +186,13 @@ function RuleLive(p: { rule: EventRule }): JSX.Element {
         <span class="badge badge-ghost badge-sm">disabled</span>
       </Show>
       <Show when={firing() > 0}>
-        <span class="badge badge-soft badge-info badge-sm whitespace-nowrap tabular-nums" title={`${firing()} firings`}>{firing()} firing</span>
+        <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-info badge-sm whitespace-nowrap tabular-nums" content={`${firing()} firings`}>{firing()} firing</Tooltip>
       </Show>
       <Show when={open() > 0}>
         <span class="badge badge-soft badge-error badge-sm whitespace-nowrap tabular-nums">{open()} open</span>
       </Show>
       <Show when={pending() > 0}>
-        <span class="badge badge-soft badge-warning badge-sm whitespace-nowrap tabular-nums" title={`${pending()} waiting out a sustain`}>{pending()} pending</span>
+        <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-warning badge-sm whitespace-nowrap tabular-nums" content={`${pending()} waiting out a sustain`}>{pending()} pending</Tooltip>
       </Show>
       <Show when={p.rule.enabled && firing() === 0 && open() === 0 && pending() === 0}>
         <span class="text-[12px] text-base-content/40">clear</span>
@@ -245,16 +246,16 @@ export default function Rules(): JSX.Element {
         <Show
           when={r.criteria_error}
           fallback={
-            <span class="flex min-w-0 max-w-44 flex-col text-[12px] leading-snug" title={`${fireWords(r, unit(r))}, ${clearWords(r, unit(r))}`}>
+            <Tooltip as="span" tabIndex={0} class="flex min-w-0 max-w-44 flex-col text-[12px] leading-snug" content={`${fireWords(r, unit(r))}, ${clearWords(r, unit(r))}`}>
               <span class="truncate">{fireWords(r, unit(r))}</span>
               <span class="truncate text-base-content/50">{clearWords(r, unit(r))}</span>
-            </span>
+            </Tooltip>
           }
         >
           {(e) => (
-            <span data-criteria-error={r.name} class="text-[12px] leading-snug text-error" title={`${criteriaErrorWords(e())}: ${e().message}`}>
+            <Tooltip as="span" tabIndex={0} data-criteria-error={r.name} class="text-[12px] leading-snug text-error" content={`${criteriaErrorWords(e())}: ${e().message}`}>
               criteria do not compile
-            </span>
+            </Tooltip>
           )}
         </Show>
       ),
@@ -359,7 +360,7 @@ function SelectorFacts(p: { rule: EventRule }): JSX.Element {
   return (
     <Show when={types().length + comps().length > 0} fallback={<span class="text-sm text-base-content/60">Every component</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title="Component type"><CatalogRef kind="component_type" name={t} /></span>}</For>
+        <For each={types()}>{(t) => <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-sm" content="Component type"><CatalogRef kind="component_type" name={t} /></Tooltip>}</For>
         <For each={comps()}>
           {(id) => (
             <A href={`/components/${id}`} class="badge badge-outline badge-sm hover:underline">
@@ -562,7 +563,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                     when={state.data?.last_judged_at ?? r().last_judged_at}
                     fallback={<span class="text-base-content/50" data-testid="rule-judged">never</span>}
                   >
-                    {(at) => <span class="tabular-nums" data-testid="rule-judged" title={fmtTime(at())}>{rel(at())}</span>}
+                    {(at) => <Tooltip as="span" tabIndex={0} class="tabular-nums" data-testid="rule-judged" content={fmtTime(at())}>{rel(at())}</Tooltip>}
                   </Show>
                   <InfoTip label="last judged" text={RULE_HINTS.judged} />
                 </span>
@@ -640,7 +641,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 items={state.data!.firings}
                 empty="Not firing anywhere."
                 trailing={(k) => (
-                  <span class="w-20 text-right text-[11px] text-base-content/50" title={fmtTime(k.since)}>since {rel(k.since)}</span>
+                  <Tooltip as="span" tabIndex={0} class="w-20 text-right text-[11px] text-base-content/50" content={fmtTime(k.since)}>since {rel(k.since)}</Tooltip>
                 )}
               />
             </Show>
@@ -659,7 +660,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 trailing={(a) => (
                   <>
                     <SeverityBadge name={a.severity} size="xs" />
-                    <span class="w-16 text-right text-[11px] text-base-content/50" title={fmtTime(a.raised_at)}>{rel(a.raised_at)}</span>
+                    <Tooltip as="span" tabIndex={0} class="w-16 text-right text-[11px] text-base-content/50" content={fmtTime(a.raised_at)}>{rel(a.raised_at)}</Tooltip>
                     {timelines.button(a.alarm_id, alarmWords(r()))}
                   </>
                 )}
@@ -686,7 +687,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                     <span class={`badge badge-sm ${s.pending === "fire" ? "badge-soft badge-warning" : "badge-soft badge-success"}`}>
                       {s.pending === "fire" ? "to fire" : "to clear"}
                     </span>
-                    <span class="w-24 text-right text-[11px] text-base-content/50" title={`since ${fmtTime(s.since)}`}>held {rel(s.since).replace(/ ago$/, "")}</span>
+                    <Tooltip as="span" tabIndex={0} class="w-24 text-right text-[11px] text-base-content/50" content={`since ${fmtTime(s.since)}`}>held {rel(s.since).replace(/ ago$/, "")}</Tooltip>
                   </>
                 )}
               />
@@ -1265,7 +1266,7 @@ function RulePreviewPanel(p: {
                       <li class="flex items-center gap-2 text-[12px]">
                         <SeriesName s={s} />
                         <span class="ml-auto flex-none text-[11px] text-base-content/50">
-                          {s.since ? <span title={fmtTime(s.since)}>since {rel(s.since)}</span> : "since before the window"}
+                          {s.since ? <Tooltip as="span" tabIndex={0} content={fmtTime(s.since)}>since {rel(s.since)}</Tooltip> : "since before the window"}
                         </span>
                       </li>
                     )}
@@ -1279,9 +1280,9 @@ function RulePreviewPanel(p: {
                     {(e) => (
                       <li data-testid="preview-edge" class="flex items-center gap-2 text-[12px]">
                         <span class={`badge badge-sm ${e.kind === "fire" ? "badge-soft badge-warning" : "badge-soft badge-success"}`}>{e.kind}</span>
-                        <span class="min-w-0 truncate" title={seriesLabel(e, p.reads)}>{e.component}</span>
+                        <Tooltip as="span" tabIndex={0} class="min-w-0 truncate" content={seriesLabel(e, p.reads)}>{e.component}</Tooltip>
                         <Show when={e.instance}><span class="font-data text-base-content/60">{e.instance}</span></Show>
-                        <span class="ml-auto flex-none text-[11px] text-base-content/50" title={fmtTime(e.at)}>{rel(e.at)}</span>
+                        <Tooltip as="span" tabIndex={0} class="ml-auto flex-none text-[11px] text-base-content/50" content={fmtTime(e.at)}>{rel(e.at)}</Tooltip>
                       </li>
                     )}
                   </For>

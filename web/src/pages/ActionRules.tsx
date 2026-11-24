@@ -37,6 +37,7 @@ import {
   type ActionRuleDraft,
 } from "../lib/action_rules";
 import { confirmDelete } from "../lib/confirm";
+import Truncate from "../components/ui/Truncate";
 
 // Action rules (Catalog > Actions > Action rules, #1346): when a message about
 // an alarm is sent. On an alarm's raise, clear or both, when the rule's
@@ -110,7 +111,7 @@ export default function ActionRules(): JSX.Element {
       sortVal: (r) => r.when ?? "",
       cell: (r) => (
         <Show when={r.when} fallback={<span class="text-[12px] text-base-content/40">every alarm</span>}>
-          <code class="block truncate font-data text-[12px]" title={r.when}>{r.when}</code>
+          <Truncate as="code" class="font-data text-[12px]" text={r.when} />
         </Show>
       ),
     },

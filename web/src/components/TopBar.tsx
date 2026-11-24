@@ -3,6 +3,7 @@ import { hostPlatform, shortcutModifier, shortcutHint } from "../lib/platform";
 import { Bot, Search } from "./icons";
 import Button from "./Button";
 import InboxIndicator from "./InboxIndicator";
+import Tooltip from "./ui/Tooltip";
 
 // The sticky top bar (daisyUI navbar): the current section label, the
 // command-palette trigger (a global jump, distinct from a page's own filter),
@@ -18,10 +19,10 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
         <span class="eyebrow text-base-content/70">{props.section}</span>
       </Show>
       <div class="flex-1" />
-      <button
+      <Tooltip
         class="hidden h-8 w-56 items-center gap-2 rounded-field border border-base-300 bg-base-200 px-3 text-sm text-base-content/40 sm:flex"
         onClick={props.onOpenPalette}
-        title={`Search and jump (${hint})`}
+        content={`Search and jump (${hint})`}
       >
         <Search size={15} />
         <span>Search</span>
@@ -29,7 +30,7 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
           <kbd class="kbd kbd-sm leading-none">{mod}</kbd>
           <kbd class="kbd kbd-sm leading-none">K</kbd>
         </span>
-      </button>
+      </Tooltip>
       <Button square icon={Search} onClick={props.onOpenPalette} title="Search and jump" label="Search and jump" class="sm:hidden" />
       <Show when={props.onOpenOmnibot}>
         {(open) => <Button square icon={Bot} onClick={open()} title="Ask omnibot" label="Ask omnibot" />}

@@ -1,5 +1,6 @@
 import { Show, type JSX } from "solid-js";
 import { ChevronRight } from "./icons";
+import Tooltip from "./ui/Tooltip";
 
 // KVRow is the console's one key:value ROW primitive: a label on the left, a
 // read value (or an edit input) paired with its inline actions in a daisyUI
@@ -70,13 +71,13 @@ export default function KVRow(props: {
       }}
       onClick={rowClickable() ? () => props.onDrillIn?.() : undefined}
     >
-      <span
+      <Tooltip as="span" tabIndex={0}
         class="min-w-0 truncate text-sm"
         classList={{ "grow basis-32": showInput(), "font-medium": props.emphasize, "font-data": props.labelMono }}
-        title={props.label}
+        content={props.label}
       >
         {props.label}
-      </span>
+      </Tooltip>
       <Show when={props.typeBadge && !showInput()}>
         <span class="badge badge-ghost badge-sm shrink-0">{props.typeBadge}</span>
       </Show>

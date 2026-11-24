@@ -46,6 +46,7 @@ import {
   type SimSurface,
 } from "../lib/simulation";
 import { confirmDelete } from "../lib/confirm";
+import Tooltip from "./ui/Tooltip";
 
 // SimComponentDrawer: one simulated component, opened from its Simulation row or
 // its component's page (#890). Status first (where it is served and what has reached
@@ -684,8 +685,8 @@ function OperationLine(props: { lead: string; detail: string; summary?: string }
   return (
     <span class="grid grid-cols-[6rem_minmax(0,14rem)_minmax(0,1fr)] items-baseline gap-2 px-3 py-1.5 text-xs">
       <span class="truncate font-data font-medium uppercase text-base-content/70">{props.lead}</span>
-      <span class="truncate font-data" title={props.detail}>{props.detail}</span>
-      <span class="truncate text-base-content/55" title={props.summary}>{props.summary}</span>
+      <Tooltip as="span" tabIndex={0} class="truncate font-data" content={props.detail}>{props.detail}</Tooltip>
+      <Tooltip as="span" tabIndex={0} class="truncate text-base-content/55" content={props.summary}>{props.summary}</Tooltip>
     </span>
   );
 }

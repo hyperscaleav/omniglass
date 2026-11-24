@@ -19,6 +19,7 @@ import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
 import AlarmDuration from "./AlarmDuration";
 import { SnoozedBadge } from "./SnoozeButton";
+import Tooltip from "./ui/Tooltip";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
@@ -116,9 +117,9 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <div class="flex items-baseline gap-2">
           <span class="eyebrow">Alarms</span>
           <Show when={unseen()}>
-            <span class="badge badge-outline badge-warning badge-sm shrink-0" title="Raised, and nobody has recorded seeing it yet">
+            <Tooltip as="span" tabIndex={0} class="badge badge-outline badge-warning badge-sm shrink-0" content="Raised, and nobody has recorded seeing it yet">
               {unseen()} unacknowledged
-            </span>
+            </Tooltip>
           </Show>
         </div>
         <span class="shrink-0 text-[10.5px] text-base-content/40">what is wrong here, and what it takes down</span>
@@ -159,9 +160,9 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                 <div class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
-                  <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
+                  <Tooltip as="span" tabIndex={0} class="shrink-0 text-[11px] text-base-content/45" content={a.raised_at}>
                     raised {rel(a.raised_at)}
-                  </span>
+                  </Tooltip>
                   {/* An event rule raised it, not a person: name the rule. */}
                   <Show when={a.raised_by_rule}>
                     {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
@@ -173,14 +174,14 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <Show
                     when={a.acknowledged}
                     fallback={
-                      <span class="badge badge-outline badge-warning badge-xs shrink-0" title="Nobody has recorded seeing this yet">
+                      <Tooltip as="span" tabIndex={0} class="badge badge-outline badge-warning badge-xs shrink-0" content="Nobody has recorded seeing this yet">
                         unacknowledged
-                      </span>
+                      </Tooltip>
                     }
                   >
-                    <span class="shrink-0 text-[11px] text-base-content/45" title={a.acknowledged_at}>
+                    <Tooltip as="span" tabIndex={0} class="shrink-0 text-[11px] text-base-content/45" content={a.acknowledged_at}>
                       seen by {a.acknowledged_by || "someone since removed"} {rel(a.acknowledged_at!)}
-                    </span>
+                    </Tooltip>
                   </Show>
                   <SnoozedBadge alarm={a} />
                 </div>

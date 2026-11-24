@@ -29,6 +29,7 @@ import {
   type Dependent,
   type DependencyKind,
 } from "../lib/dependencies";
+import Tooltip from "./ui/Tooltip";
 
 // DependenciesPanel is a component's dependency edges (#2428, #1648), both
 // ways: UPSTREAM is what this component needs (power from an outlet, a host,
@@ -133,10 +134,10 @@ export default function DependenciesPanel(props: { component: string; canUpdate:
   const shown = () => !!failure() || props.canUpdate || upstreams().length + dependents().length + hidden() > 0;
 
   const KindBadge = (p: { kind: DependencyKind; outlet?: string }) => (
-    <span class="badge badge-ghost badge-sm font-data" title={DEPENDENCY_KINDS.find((k) => k.kind === p.kind)?.hint}>
+    <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-sm font-data" content={DEPENDENCY_KINDS.find((k) => k.kind === p.kind)?.hint}>
       {kindLabel(p.kind)}
       <Show when={p.outlet}> · outlet {p.outlet}</Show>
-    </span>
+    </Tooltip>
   );
 
   const UpstreamRow = (p: { d: Dependency }) => (
@@ -144,7 +145,7 @@ export default function DependenciesPanel(props: { component: string; canUpdate:
       <A href={`/components/${p.d.upstream_id}`} class="min-w-0 flex-1 truncate hover:underline">{labelOf(p.d.upstream_id, p.d.upstream)}</A>
       <KindBadge kind={p.d.kind} outlet={p.d.outlet} />
       <Show when={holds().has(p.d.upstream_id)}>
-        <span data-testid="dep-holding" class="badge badge-error badge-sm badge-outline" title="This upstream's gate is closed on this component's endpoints, so they are held until it opens.">holding this</span>
+        <Tooltip as="span" tabIndex={0} data-testid="dep-holding" class="badge badge-error badge-sm badge-outline" content="This upstream's gate is closed on this component's endpoints, so they are held until it opens.">holding this</Tooltip>
       </Show>
       <HealthBadge health={healthOf(p.d.upstream_id)} size="sm" />
       <Show when={props.canUpdate}>

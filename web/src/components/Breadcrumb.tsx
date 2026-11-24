@@ -1,6 +1,7 @@
 import { A } from "@solidjs/router";
 import { For, Show } from "solid-js";
 import { crumbLayout, type Crumb } from "../lib/breadcrumb";
+import Tooltip from "./ui/Tooltip";
 
 // The breadcrumb primitive (#633), filling Page.tsx's breadcrumb slot: a
 // trail whose last two crumbs never shrink while every earlier one may
@@ -20,10 +21,10 @@ export default function Breadcrumb(props: { crumbs: Crumb[] }) {
             <Show when={i() > 0}>
               <span class="flex-none text-base-content/30">/</span>
             </Show>
-            <span
+            <Tooltip as="span" tabIndex={0}
               class="truncate"
               style={styles()[i()]}
-              title={crumb.title ?? crumb.label}
+              content={crumb.title ?? crumb.label}
             >
               <Show when={crumb.href} fallback={<span aria-current="page">{crumb.label}</span>}>
                 {(href) => (
@@ -32,7 +33,7 @@ export default function Breadcrumb(props: { crumbs: Crumb[] }) {
                   </A>
                 )}
               </Show>
-            </span>
+            </Tooltip>
           </>
         )}
       </For>

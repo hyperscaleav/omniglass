@@ -50,6 +50,7 @@ import {
   type TargetTest,
 } from "../lib/notification_targets";
 import { confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
 
 // Notification targets (Catalog > Actions > Targets, #1346): where a message
 // about an alarm goes. A webhook (its URL masked on every read, revealed whole
@@ -112,7 +113,7 @@ export default function NotificationTargets(): JSX.Element {
       label: "Destination",
       width: "280px",
       sortVal: destination,
-      cell: (t) => <span class="block truncate font-data text-[12px] text-base-content/70" title={destination(t)}>{destination(t)}</span>,
+      cell: (t) => <Tooltip as="span" tabIndex={0} class="block truncate font-data text-[12px] text-base-content/70" content={destination(t)}>{destination(t)}</Tooltip>,
     },
     { key: "enabled", label: "Status", width: "96px", sortVal: (t) => String(t.enabled), cell: (t) => statusPill(t.enabled) },
   ];
@@ -329,7 +330,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
               <Eyebrow label={`Used by${rules.data ? ` (${senders().length})` : ""}`} hint={TARGET_HINTS.usedBy} />
               <Show when={senders().length > 0} fallback={<span class="text-[12px] text-base-content/40">No action rule sends here.</span>}>
                 <span class="flex flex-wrap gap-1.5" data-testid="target-used-by">
-                  <For each={senders()}>{(r) => <span class="badge badge-ghost badge-sm" title={r.name}><EntityLink kind="action_rule" entity={r} /></span>}</For>
+                  <For each={senders()}>{(r) => <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-sm" content={r.name}><EntityLink kind="action_rule" entity={r} /></Tooltip>}</For>
                 </span>
               </Show>
             </section>

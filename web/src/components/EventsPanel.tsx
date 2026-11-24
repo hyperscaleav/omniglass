@@ -4,6 +4,7 @@ import { rel } from "../lib/format";
 import { EVENTS_KEY, getEvents, formatAttributes, type ComponentEvent } from "../lib/events";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import RuleLink from "./RuleLink";
+import Tooltip from "./ui/Tooltip";
 
 // EventsPanel: a component's recent events. Where the reachability strip above
 // renders sampled values (a metric or a state read on a cadence), the event sink
@@ -30,7 +31,7 @@ function EventRow(p: { ev: ComponentEvent; component: string }) {
   return (
     <div class="flex flex-col gap-1 px-3 py-2.5">
       <div class="flex items-baseline gap-2">
-        <span class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" title={p.ev.ts}>{rel(p.ev.ts)}</span>
+        <Tooltip as="span" tabIndex={0} class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" content={p.ev.ts}>{rel(p.ev.ts)}</Tooltip>
         <span class="badge badge-ghost badge-sm shrink-0 font-data text-[10px]">{p.ev.key}</span>
         <span class="min-w-0 flex-1 text-sm text-base-content/80">{p.ev.message}</span>
         <Show when={p.ev.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={p.ev.derived_by_rule_id} />}</Show>
@@ -45,7 +46,7 @@ function EventRow(p: { ev: ComponentEvent; component: string }) {
         </Show>
         <span class="uppercase tracking-wide text-[10px] text-base-content/35">{p.ev.provenance}</span>
         <Show when={p.ev.origin}>
-          <span class="badge badge-ghost badge-xs" title="How the occurrence arrived">{p.ev.origin}</span>
+          <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-xs" content="How the occurrence arrived">{p.ev.origin}</Tooltip>
         </Show>
         <Show when={attrs()}>
           <button

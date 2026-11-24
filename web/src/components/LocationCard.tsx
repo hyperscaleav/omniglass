@@ -13,6 +13,7 @@ import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
 import { systemsAtLocation } from "../lib/detail";
+import Tooltip from "./ui/Tooltip";
 
 // LocationCard (#872): a location as context. Systems are what Omniglass monitors;
 // locations are folders and metadata about where, so a detail view shows its
@@ -59,7 +60,7 @@ export default function LocationCard(props: {
             <span data-testid="location-type" class="text-base-content/60">{type() ? entityLabel(type()!) : p().location_type}</span>
           </span>
           <Show when={props.path && above().length > 0}>
-            <span data-testid="location-path" class="min-w-0 truncate text-base-content/50" title={above().join(" / ")}>{above().join(" / ")}</span>
+            <Tooltip as="span" tabIndex={0} data-testid="location-path" class="min-w-0 truncate text-base-content/50" content={above().join(" / ")}>{above().join(" / ")}</Tooltip>
           </Show>
           <Show when={props.contents}>
             <span class="text-base-content/30">{"·"}</span>

@@ -60,6 +60,7 @@ import {
   type TimeWindow,
   type ValueSpan,
 } from "../lib/timeline_lanes";
+import Tooltip from "./ui/Tooltip";
 
 // TimelineOverlay (#2425): one component's or one system's history on one time
 // axis. Lanes stack top down: health (a system adds a row per member), every
@@ -368,9 +369,9 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
   // A lane row: its label, and a plot strip that carries the crosshair.
   const Row = (p: { label: JSX.Element; height: number; testid?: string; children?: JSX.Element; title?: string }) => (
     <div class="flex items-stretch" data-testid={p.testid}>
-      <div class="flex w-24 shrink-0 @lg:w-36 items-center gap-1 truncate pr-2 text-[11px] text-base-content/70" title={p.title} style={{ height: `${p.height}px` }}>
+      <Tooltip as="div" class="flex w-24 shrink-0 @lg:w-36 items-center gap-1 truncate pr-2 text-[11px] text-base-content/70" content={p.title} style={{ height: `${p.height}px` }}>
         {p.label}
-      </div>
+      </Tooltip>
       <svg class="block min-w-0 flex-1 overflow-visible" height={p.height} viewBox={`0 0 ${width()} ${p.height}`} preserveAspectRatio="none" onMouseMove={onMove}>
         {p.children}
         <Show when={cursorX() !== undefined}>
@@ -382,12 +383,12 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
 
   const Header = (p: { group: Group; label: string; count?: number; right?: JSX.Element; hint: string }) => (
     <div class="mt-2 flex items-center gap-1 border-b border-base-300 pb-0.5">
-      <button
+      <Tooltip
         type="button"
         class="flex cursor-pointer items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-base-content/60 hover:text-base-content"
         aria-expanded={isOpen(p.group)}
         data-testid={`timeline-lane-${p.group}`}
-        title={p.hint}
+        content={p.hint}
         onClick={() => toggle(p.group)}
       >
         <Show when={isOpen(p.group)} fallback={<ChevronRight size={12} />}>
@@ -397,7 +398,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
         <Show when={p.count !== undefined}>
           <span class="font-normal normal-case tabular-nums text-base-content/45">{p.count}</span>
         </Show>
-      </button>
+      </Tooltip>
       <span class="ml-auto flex items-center gap-1">{p.right}</span>
     </div>
   );
@@ -498,9 +499,9 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
         hint="Everything this recorded over the page's time range on one axis: health, each alarm from raise to clear, the properties and metrics you pick, events, log lines and commands. Hover a lane, or focus the lanes and use the arrow keys, to read every lane at one instant; click a mark to open it."
         right={<span class="hidden text-xs text-base-content/50 @lg:inline">{rangeLabel(props.range)}</span>}
       />
-      <p data-testid="timeline-readout" data-at={cursorX() === undefined ? undefined : "cursor"} class="min-h-[1.25rem] truncate text-[11.5px] tabular-nums text-base-content/75" aria-live="polite" title={hovered() ?? readout()}>
+      <Tooltip as="p" data-testid="timeline-readout" data-at={cursorX() === undefined ? undefined : "cursor"} class="min-h-[1.25rem] truncate text-[11.5px] tabular-nums text-base-content/75" aria-live="polite" content={hovered() ?? readout()}>
         {hovered() ?? readout() ?? <span class="text-base-content/45">Hover the lanes to read them at one instant.</span>}
-      </p>
+      </Tooltip>
       <Show when={failed()}>
         <div role="alert" class="alert alert-warning alert-soft py-1 text-xs">
           <span>Some lanes could not be read.</span>
@@ -812,7 +813,7 @@ function Detail(props: { sel: Selected; onClose: () => void; fmt: (iso: string) 
                 <li class="flex gap-2">
                   <span class="shrink-0 tabular-nums text-base-content/50">{props.fmt(l.ts)}</span>
                   <span class="shrink-0 font-data" style={{ color: logFill(l.severity) }}>{l.severity ?? "-"}</span>
-                  <span class="min-w-0 truncate text-base-content/70" title={l.message}>{l.message}</span>
+                  <Tooltip as="span" tabIndex={0} class="min-w-0 truncate text-base-content/70" content={l.message}>{l.message}</Tooltip>
                 </li>
               )}
             </For>

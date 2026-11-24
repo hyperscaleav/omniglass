@@ -4,6 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import EventsPanel from "./EventsPanel";
 import { EVENTS_KEY, type ComponentEvents } from "../lib/events";
+import { tipOf } from "../test-tip";
 
 // The panel is read-only: every row is a real API field, nothing derived. Data is
 // seeded into the query cache so no server is needed.
@@ -94,7 +95,7 @@ describe("EventsPanel", () => {
     expect(within(row).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 
-  it("names a deleted rule as recorded, as plain text that says it is gone, never as a dead link", () => {
+  it("names a deleted rule as recorded, as plain text that says it is gone, never as a dead link", async () => {
     const { getByText } = mount({
       component: "disp-1",
       events: [
@@ -112,6 +113,6 @@ describe("EventsPanel", () => {
     });
     const name = getByText("old-watch");
     expect(name.closest("a")).toBeNull();
-    expect(name.closest("[title]")?.getAttribute("title")).toMatch(/deleted/);
+    expect(await tipOf(name.closest("[tabindex]"))).toMatch(/deleted/);
   });
 });

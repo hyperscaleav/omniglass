@@ -9,6 +9,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { REACHABILITY_KEY, STALENESS_WINDOW_MS, type ReachEndpoint } from "../lib/reachability";
 import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
+import { isOff, tipOf } from "../test-tip";
 
 // The held session's surfaces (#1059): the pill (state, glyph, hue, age),
 // the ladder (the layered gate, taught one rung at a time), and the notice
@@ -64,13 +65,13 @@ describe("SessionPill", () => {
     expect(getByTestId("session-age").textContent).toMatch(/30s/);
   });
 
-  it("goes grey and says what it last read once nothing has arrived for the window", () => {
+  it("goes grey and says what it last read once nothing has arrived for the window", async () => {
     const stale = rejected({ session: { state: "up", ts: ago(86_400_000) }, last_seen: ago(STALENESS_WINDOW_MS + 5_000) });
     const { getByTestId } = render(() => <SessionPill iface={stale} now={now} />);
     const pill = getByTestId("session-pill");
     expect(pill.dataset.state).toBe("stale");
     expect(pill.className).toContain("badge-ghost");
-    expect(pill.getAttribute("title")).toMatch(/last read up/i);
+    expect(await tipOf(pill)).toMatch(/last read up/i);
   });
 
   it("renders nothing for an endpoint that never held a session", () => {
@@ -139,7 +140,7 @@ describe("SessionNotice", () => {
     const { getByTestId, getByRole, invalidate } = mountNotice(rejected());
     expect(getByTestId("session-reason").textContent).toBe("auth: auth rejected");
     const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
-    expect(retry.disabled).toBe(false);
+    expect(isOff(retry)).toBe(false);
     fireEvent.click(retry);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     const req = fetchMock.mock.calls[0][0] as Request;
@@ -148,14 +149,14 @@ describe("SessionNotice", () => {
     // The pill updates through the polled read: the retry invalidates it.
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
     // Until the session moves, the button says the retry is in hand.
-    await waitFor(() => expect((getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true));
+    await waitFor(() => expect(isOff(getByRole("button", { name: /retry/i }))).toBe(true));
   });
 
   it("greys Retry with its reason for a caller without endpoint:retry, and never calls it", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const { getByRole, getByLabelText } = mountNotice(rejected(), viewer);
     const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
-    expect(retry.disabled).toBe(true);
+    expect(isOff(retry)).toBe(true);
     expect(getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
     fireEvent.click(retry);
     // The client sends from an async hook, so give a call time to land.
@@ -179,7 +180,7 @@ describe("SessionNotice", () => {
     ));
     const [first, second] = screen.getAllByRole("button", { name: /retry/i }) as HTMLButtonElement[];
     fireEvent.click(first);
-    await waitFor(() => expect(second.disabled).toBe(true));
+    await waitFor(() => expect(second.getAttribute("aria-disabled")).toBe("true"));
   });
 
   it("says why a retry was refused", async () => {
@@ -248,7 +249,7 @@ describe("SessionNotice for a probe's gate, no session held", () => {
     fireEvent.click(getByRole("button", { name: "Edit credential" }));
     expect(onFix).toHaveBeenCalledOnce();
     const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
-    expect(retry.disabled).toBe(false);
+    expect(isOff(retry)).toBe(false);
     fireEvent.click(retry);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     const req = fetchMock.mock.calls[0][0] as Request;
@@ -256,7 +257,7 @@ describe("SessionNotice for a probe's gate, no session held", () => {
     expect(req.url).toContain(`/endpoints/${epId}:retry`);
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
     // Until the gate moves, the button says the retry is in hand.
-    await waitFor(() => expect((getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true));
+    await waitFor(() => expect(isOff(getByRole("button", { name: /retry/i }))).toBe(true));
   });
 
   it("names the class when the gate carries no reason", () => {
@@ -270,7 +271,7 @@ describe("SessionNotice for a probe's gate, no session held", () => {
     // The refusal still reads, so a viewer can tell an operator what is wrong.
     expect(getByTestId("session-reason").textContent).toMatch(/authorizationError/);
     const retry = getByRole("button", { name: /retry/i }) as HTMLButtonElement;
-    expect(retry.disabled).toBe(true);
+    expect(isOff(retry)).toBe(true);
     expect(getByLabelText(/needs the endpoint:retry permission/i)).toBeTruthy();
     fireEvent.click(retry);
     await new Promise((r) => setTimeout(r, 20));
@@ -295,9 +296,9 @@ describe("SessionNotice for a probe's gate, no session held", () => {
     // The retry landed, and while the gate has not moved it is in hand.
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: [...REACHABILITY_KEY(compId)] }));
     await new Promise((r) => setTimeout(r, 10));
-    expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(isOff(screen.getByRole("button", { name: /retry/i }))).toBe(true);
     setIface(probeGated("snmp", "authenticated", "auth", "auth: the agent answered authorizationError for the community", { rejection: { rung: "authenticated", class: "auth", ts: ago(1_000), reason: "auth: the agent answered authorizationError for the community" } }));
-    await waitFor(() => expect((screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect(isOff(screen.getByRole("button", { name: /retry/i }))).toBe(false));
   });
 
   it("renders nothing for a probe endpoint with no gate", () => {
