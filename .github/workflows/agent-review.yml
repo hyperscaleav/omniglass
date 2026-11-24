@@ -267,7 +267,7 @@ jobs:
           # This workflow's own checks, and agent-fix's; and docs-shots freshness,
           # which the reviewer does not wait on while main recaptures the docs
           # shots after merges (#2561), so a PR need not re-render them.
-          IGNORE: '^(plan|agent-review|oneshot|fix|lens \(.*\)|freshness)$'
+          IGNORE: '^(plan|agent-review|oneshot|fix|agent-fix|lens \(.*\)|freshness)$'
           # The checks that must exist, and finish, before a review starts:
           # each one reports on every push (a skip passes), so none is waited
           # on forever.
@@ -284,7 +284,7 @@ jobs:
           while :; do
             mergeable=$(gh pr view "$NUMBER" --repo "$REPO" --json mergeable --jq .mergeable)
             checks=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100" --paginate \
-              --jq '.check_runs[] | {name, status, conclusion}' | jq -s -c .)
+              --jq '.check_runs[] | {id, name, status, conclusion}' | jq -s -c .)
             said=$(jq -cn --arg m "$mergeable" --arg ig "$IGNORE" --argjson rq "$REQUIRE" --argjson c "$checks" \
               '{mergeable: $m, ignore: $ig, require: $rq, checks: $c}' | bash "$script" gate)
             case "$said" in
