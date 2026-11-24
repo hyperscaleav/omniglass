@@ -1335,3 +1335,61 @@ func TestAgentReviewGateIgnoresAgentFixWithTheWorkflowsPattern(t *testing.T) {
 		t.Fatalf("an agent-fix failure held the review: %q (exit %d), want review", out, code)
 	}
 }
+
+// The Supersede step probes whether the default branch's agent-review.sh knows
+// `supersede` (#2634). Actions runs a step's script with bash -e, and the probe's
+// usage exit (64, by design) used to abort the step before it was read, so every
+// review ended red. This runs the step's own probe lines under bash -e against a
+// script that has supersede and one that does not.
+func TestAgentReviewSupersedeProbeSurvivesErrexit(t *testing.T) {
+	wf, err := os.ReadFile("../.github/workflows/agent-review.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(wf)
+	start := strings.Index(text, "          set -uo pipefail\n          script=trusted/scripts/agent-review.sh\n")
+	end := strings.Index(text[start+1:], "          reviews=$(gh api")
+	if start < 0 || end < 0 {
+		t.Fatal("cannot find the Supersede step's probe in agent-review.yml")
+	}
+	var probe strings.Builder
+	for line := range strings.SplitSeq(text[start:start+1+end], "\n") {
+		probe.WriteString(strings.TrimPrefix(line, "          ") + "\n")
+	}
+	probe.WriteString("echo PAST-THE-PROBE\n")
+
+	run := func(t *testing.T, script string) (string, int) {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "trusted", "scripts"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "trusted", "scripts", "agent-review.sh"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("bash", "-e", "-c", probe.String())
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if exit, ok := err.(*exec.ExitError); ok {
+			code = exit.ExitCode()
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		return string(out), code
+	}
+
+	real, err := os.ReadFile("agent-review.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, code := run(t, string(real)); code != 0 || !strings.Contains(out, "PAST-THE-PROBE") || strings.Contains(out, "cannot supersede") {
+		t.Errorf("a script with supersede: exit %d, output %q; want the step to go on past the probe", code, out)
+	}
+	// A default branch's script from before supersede existed: usage exit 64.
+	old := "#!/usr/bin/env bash\nprintf 'usage\\n' >&2\nexit 64\n"
+	out, code := run(t, old)
+	if code != 0 || !strings.Contains(out, "cannot supersede yet") || strings.Contains(out, "PAST-THE-PROBE") {
+		t.Errorf("a script without supersede: exit %d, output %q; want the warning and a clean exit before the step goes on", code, out)
+	}
+}
