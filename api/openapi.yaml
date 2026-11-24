@@ -19865,7 +19865,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: endpoint:delete
     get:
-      description: Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
+      description: Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.
       operationId: get-endpoint
       parameters:
         - description: The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does
