@@ -24,7 +24,7 @@ source. To read it, see [the admin Audit page](/admin/audit/).
   `writeAuditRes` argument that is not primary-key shaped.
 - **A row outlives its subject.** `resource_id` is text and never a foreign key. An update carries the
   moved fields in both images and enough of the subject to name it; a delete carries the whole subject
-  in `old`. Images are read under the row's lock, so they are the state the write replaced. A secret's
+  in `old`. Images are read under the row's lock, so they are the state the write replaced. Where there is no row to lock, an advisory lock stands in: an append-only series (property values) has no single row, and a create-or-update path (settings) may not have its row yet. A secret's
   image is its metadata and a digest of the sealed value, never the plaintext, and the password verbs
   carry no field images ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is a person, machine user or outpost, resolved by the [Storage Gateway](/architecture/storage/#the-storage-gateway-and-tiering), the one layer every database read and write passes through, to its identifier and

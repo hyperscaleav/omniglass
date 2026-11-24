@@ -1,0 +1,62 @@
+{
+  "id": "find-a-cleared-alarm",
+  "title": "Find a cleared alarm and how long it lasted",
+  "description": "Clear an alarm from its component, then read it in the alarm page's Cleared filter with when it cleared and how long it was raised, and open its history.",
+  "steps": [
+    {
+      "n": 1,
+      "kind": "goto",
+      "caption": "The display has a High alarm, History demo input lost. Fix the fault, then clear it.",
+      "still": "step-01.png"
+    },
+    {
+      "n": 2,
+      "kind": "click",
+      "caption": "Clearing is a write, so the page goes into edit mode first.",
+      "still": "step-02.png"
+    },
+    {
+      "n": 3,
+      "kind": "click",
+      "caption": "Clear the alarm. The row is kept rather than deleted, under Recently cleared.",
+      "still": "step-03.png"
+    },
+    {
+      "n": 4,
+      "kind": "wait",
+      "caption": "The component's own panel says how long it was raised.",
+      "still": "step-04.png"
+    },
+    {
+      "n": 5,
+      "kind": "goto",
+      "caption": "The alarm page's Cleared filter is the fleet's history. The address carries the filter, so a link to it shows the same list.",
+      "still": "step-05.png"
+    },
+    {
+      "n": 6,
+      "kind": "wait",
+      "caption": "Raised, when it cleared and how long it lasted, one row each. Sort by Duration to find the long ones.",
+      "still": "step-06.png"
+    },
+    {
+      "n": 7,
+      "kind": "click",
+      "caption": "Open the row for the same drawer the queue uses, with the alarm's history.",
+      "still": "step-07.png"
+    },
+    {
+      "n": 8,
+      "kind": "wait",
+      "caption": "Its raise and its clear, with the time between them as Lasted.",
+      "still": "step-08.png"
+    }
+  ],
+  "poster": "step-06.png",
+  "preview": "preview.webp",
+  "budget": {
+    "seconds": 26.3,
+    "bytes": 526716,
+    "previewBytes": 371796
+  }
+}

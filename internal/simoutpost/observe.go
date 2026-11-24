@@ -17,6 +17,11 @@ import (
 func observationWire(outpost string, snap sim.ObservationSnapshot, impaired int) collection.SimObservation {
 	w := collection.SimObservation{Outpost: outpost, At: snap.At, Started: snap.Started,
 		FleetGeneration: snap.FleetGeneration, FleetChanging: snap.FleetChanging, Devices: len(snap.Devices), Impaired: impaired}
+	if len(snap.ServedIDs) > collection.SimObservationServedCap {
+		w.ServedTruncated = true
+	} else {
+		w.ServedIDs = snap.ServedIDs
+	}
 	index := map[string]int{}
 	for _, p := range snap.Protocols {
 		index[p.Protocol] = len(w.Protocols)

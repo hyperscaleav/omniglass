@@ -7,6 +7,7 @@ import { GROUPS_KEY, type Group, type GroupMember } from "../lib/groups";
 import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Groups page is a config over the shared FlatList (rooted on group): a row per
 // group opens the group blade (members drill into the member's user blade), and the
@@ -65,6 +66,21 @@ describe("Groups page", () => {
     expect(screen.getAllByText("night-ops")).toHaveLength(1);
   });
 
+  it("opens the group a link names by its name, so a target's group link lands on the drawer", async () => {
+    window.history.pushState({}, "", "/?open=help-desk");
+    try {
+      mount();
+      const b = await waitFor(() => {
+        const el = asides()[0];
+        if (!el) throw new Error("no blade yet");
+        return el as HTMLElement;
+      });
+      expect(within(b).getByText("Delete user group")).toBeTruthy();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("opens read-only with a footer bar; Delete is always there, Edit reveals the member controls", async () => {
     mount();
     fireEvent.click(screen.getByText("Help Desk"));
@@ -111,7 +127,7 @@ describe("Groups page", () => {
     // deleted group's own detail 404s (as the real server would). The blade must
     // close, and the dead detail query must not be refetched (an orphan 404).
     let detailRefetched = false;
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;

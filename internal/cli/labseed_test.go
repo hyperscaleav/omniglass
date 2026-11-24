@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -35,7 +36,7 @@ func TestLabSeedWithNoOutpostWiresNothingAndEnrollsNoOutpost(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, tokenHash, noOutpost, nil, 0, false); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, tokenHash, noOutpost, nil, 0, false, false); err != nil {
 			t.Fatalf("lab seed (no outpost %v): %v", noOutpost, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -91,7 +92,7 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 		}
 		var out bytes.Buffer
 		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(outpostHash), false,
-			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0, false); err != nil {
+			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0, false, false); err != nil {
 			t.Fatalf("lab seed: %v", err)
 		}
 		return hash
@@ -128,7 +129,7 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds, false); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds, false, false); err != nil {
 			t.Fatalf("lab seed (report seconds %d): %v", seconds, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -161,7 +162,7 @@ func TestLabSeedLandsPlatformHistoryOnlyWhenAsked(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, platformHistory); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, platformHistory, false); err != nil {
 			t.Fatalf("lab seed (platform history %v): %v", platformHistory, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -192,6 +193,81 @@ func TestLabSeedLandsPlatformHistoryOnlyWhenAsked(t *testing.T) {
 	}
 	if got, _ := seeded(false); got != 0 {
 		t.Errorf("seeded without platform history: %d samples on the server, want none", got)
+	}
+}
+
+// A walkthrough lab's seed with --sso (#2362) configures single sign-on
+// against the lab's Dex: the platform client secret Dex knows the server by,
+// the issuer and offline_access, Dex's host on the egress allow list, and the
+// demo person, a viewer, linked to the identity Dex vouches for them by. A
+// second run keeps it all, once; a seed without --sso configures none of it.
+func TestLabSeedConfiguresSingleSignOnOnlyWhenAsked(t *testing.T) {
+	seed := func(t *testing.T, dsn string, sso bool) *storage.PG {
+		t.Helper()
+		t.Setenv("OMNIGLASS_DSN", dsn)
+		var out bytes.Buffer
+		if err := runLabSeed(context.Background(), &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, false, sso); err != nil {
+			t.Fatalf("lab seed (sso %v): %v", sso, err)
+		}
+		// Opened as the seed opens it, so the client secret unseals.
+		gw, _, err := openLabDB(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(gw.Close)
+		return gw
+	}
+	ctx := context.Background()
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+
+	off := seed(t, storagetest.NewDSN(t), false)
+	if p, err := off.SSOProvider(ctx, storage.SSOProviderDefault); err != nil || p != nil {
+		t.Fatalf("seeded without --sso: provider %+v, %v; want single sign-on off", p, err)
+	}
+	if _, err := off.ResolveUsername(ctx, lab.SSODemoUser); err == nil {
+		t.Fatalf("seeded without --sso: %s exists", lab.SSODemoUser)
+	}
+
+	dsn := storagetest.NewDSN(t)
+	seed(t, dsn, true)
+	gw := seed(t, dsn, true)
+	p, err := gw.SSOProvider(ctx, storage.SSOProviderDefault)
+	if err != nil || p == nil {
+		t.Fatalf("seeded with --sso: provider %+v, %v", p, err)
+	}
+	if p.Issuer != lab.DexIssuer || p.ClientID != lab.DexClientID || p.ClientSecret != lab.DexClientSecret || !slices.Contains(p.Scopes, "offline_access") {
+		t.Fatalf("seeded with --sso: provider %+v, want the lab's Dex client with offline_access", p)
+	}
+	bindings, err := gw.GetSettingBindings(ctx, "platform")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var allow []any
+	for _, b := range bindings {
+		if b.Namespace == "notification" {
+			allow, _ = b.Doc["egress_allow"].([]any)
+		}
+	}
+	if !reflect.DeepEqual(allow, []any{lab.DexService}) {
+		t.Fatalf("seeded twice with --sso: egress_allow = %v, want Dex's host once", allow)
+	}
+	id, err := gw.ResolveUsername(ctx, lab.SSODemoUser)
+	if err != nil {
+		t.Fatalf("seeded with --sso: %s: %v", lab.SSODemoUser, err)
+	}
+	u, err := gw.GetUser(ctx, id, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(u.Grants) != 1 || u.Grants[0].Role != lab.SSODemoRole || u.Grants[0].ScopeKind != "all" {
+		t.Fatalf("the demo person's grants = %+v, want one %s grant at all", u.Grants, lab.SSODemoRole)
+	}
+	links, err := gw.ListIdentityLinks(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 || links[0].Identifier != lab.SSODemoIdentity() {
+		t.Fatalf("the demo person's links = %+v, want %s", links, lab.SSODemoIdentity())
 	}
 }
 
@@ -555,7 +631,7 @@ func TestLabSeedDropsTheStoredLabKey(t *testing.T) {
 	seed := func() {
 		t.Helper()
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, false); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, false, false); err != nil {
 			t.Fatalf("lab seed: %v", err)
 		}
 	}

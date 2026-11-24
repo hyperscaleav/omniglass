@@ -1,6 +1,7 @@
 package api
 
 import (
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/docslint"
+	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -103,5 +106,85 @@ func TestSimulationBodyStates(t *testing.T) {
 		if d.Status != "offline" {
 			t.Fatalf("%s with no live simulator reads %q, want offline", d.ComponentID, d.Status)
 		}
+	}
+}
+
+// The simulator's own account of what a device holds off its defaults reaches
+// the device's row with when it began, and an impairment carries when it was
+// set, so the console's fault chip shows both from the server (#2462).
+func TestSimulationBodyCarriesFaultsAndImpairmentAge(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1_800_000_000, 0)
+	began := now.Add(-90 * time.Second)
+	set := now.Add(-time.Hour)
+	devs := []storage.SimDevice{
+		{ComponentID: "dark", Name: "a", Impairment: &impair.Impairment{Unplugged: true}, ImpairedSince: &set},
+		{ComponentID: "off", Name: "b"},
+		{ComponentID: "fine", Name: "c"},
+	}
+	st := simhub.Status{LastSeen: now, Listed: map[string]bool{"dark": true, "off": true, "fine": true},
+		Faults: map[string][]simhub.DeviceFault{"off": {{SimFault: collection.SimFault{Path: "status.device.power", Value: "off", Default: "on"}, Since: began}}}}
+	got := map[string]simDeviceBody{}
+	for _, d := range simulationBody(devs, st, true, now).Body.Devices {
+		got[d.ComponentID] = d
+	}
+	if f := got["off"].Faults; len(f) != 1 || f[0].Path != "status.device.power" || f[0].Value != "off" || f[0].Default != "on" || !f[0].Since.Equal(began) {
+		t.Fatalf("off faults = %+v", f)
+	}
+	if len(got["fine"].Faults) != 0 || got["fine"].ImpairmentSince != nil {
+		t.Fatalf("a healthy device carries %+v", got["fine"])
+	}
+	if s := got["dark"].ImpairmentSince; s == nil || !s.Equal(set) {
+		t.Fatalf("dark impairment since = %v, want %v", s, set)
+	}
+}
+
+// A route's quick sets are what its profile declares: the state path, the
+// body field and the values it accepts, with the profile's default for that
+// path, so the console offers each value without parsing a template (#2462).
+func TestSimSurfaceCarriesTheRoutesQuickSets(t *testing.T) {
+	t.Parallel()
+	p := &profile.DeviceProfile{
+		Defaults: map[string]any{"status": map[string]any{"device": map[string]any{"power": "on"}}},
+		Interfaces: []profile.Interface{{Name: "web", Protocol: "http", Port: 80, Routes: []profile.Route{{
+			Match:     "POST /api/display/power",
+			Mutations: []profile.Mutation{{Path: "status.device.power", Value: "{{ .Request.Body.power }}", Enum: []string{"on", "off", "standby"}}},
+		}}}},
+	}
+	var power *simRouteBody
+	for _, s := range simSurface(p, 0) {
+		for i, r := range s.Routes {
+			if r.Method == "POST" && r.Path == "/api/display/power" {
+				power = &s.Routes[i]
+			}
+		}
+	}
+	if power == nil || len(power.Sets) != 1 {
+		t.Fatalf("power route sets = %+v", power)
+	}
+	got := power.Sets[0]
+	if got.Path != "status.device.power" || got.Field != "power" || !reflect.DeepEqual(got.Values, []string{"on", "off", "standby"}) || got.Default != "on" {
+		t.Fatalf("power set = %+v", got)
+	}
+}
+
+// A profile's behaviors (what changes on its own over time) reach the console
+// as read-only facts: the name, how often, which state paths it writes, and
+// whether it posts a webhook.
+func TestSimBehaviorsListWhatTheProfileDeclares(t *testing.T) {
+	t.Parallel()
+	p := &profile.DeviceProfile{Behaviors: []profile.Behavior{
+		{Name: "temperature_drift", Schedule: profile.Schedule{Interval: "5s"}, Mutations: []profile.Mutation{{Path: "status.display.temperature"}, {Path: "status.display.temperature"}, {Path: "status.fan"}}},
+		{Name: "heartbeat", Schedule: profile.Schedule{Interval: "30s"}, Emit: &profile.Emit{URL: "x"}},
+	}}
+	got := simBehaviors(p)
+	if len(got) != 2 || got[0].Name != "temperature_drift" || got[0].Interval != "5s" || !reflect.DeepEqual(got[0].Writes, []string{"status.display.temperature", "status.fan"}) || got[0].Emits {
+		t.Fatalf("behaviors = %+v", got)
+	}
+	if !got[1].Emits || len(got[1].Writes) != 0 {
+		t.Fatalf("heartbeat = %+v", got[1])
+	}
+	if simBehaviors(&profile.DeviceProfile{}) != nil {
+		t.Fatal("a profile with no behaviors lists some")
 	}
 }

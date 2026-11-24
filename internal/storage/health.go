@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -93,6 +94,37 @@ type HealthReport struct {
 	Slots       []HealthSlot   // system reports: the slots that contributed
 	Systems     []HealthSystem // location reports: the systems beneath it
 	Transitions []HealthTransition
+	// CarriedIn is the verdict in force when the range opened (#2425): the
+	// last recorded edge before an explicit Since, empty when the range has no
+	// Since or nothing was recorded before it. A timeline draws the stretch
+	// before the first edge in range from it.
+	CarriedIn string
+	// FirstRecorded is when the owner's health was first recorded (nil if
+	// never): how long it has been watched, whatever the range.
+	FirstRecorded *time.Time
+	// Reason (system reports) is the verdict in words, computed by
+	// health.SystemReason from the same slots as the verdict: the slots behind
+	// it, worst first. It never names a member outside a slot (ADR-2459).
+	Reason string
+	// Members (system reports) is every component bound into the system with
+	// its own health, its open alarms, and the slot it fills, so a reader sees
+	// every alarm in the system, the ones that move nothing above their
+	// component included (#2459).
+	Members []HealthMember
+}
+
+// HealthMember is one member of a system as its health report carries it.
+// OutsideSlot is true when it fills no slot in this system: its alarms are
+// shown on the system and move nothing above the component (ADR-2459).
+type HealthMember struct {
+	Name        string
+	ID          string
+	Health      string
+	OutsideSlot bool
+	// Slot is the name of the slot the member fills here; empty when
+	// OutsideSlot.
+	Slot   string
+	Alarms []Alarm
 }
 
 // HealthSlot is one contributing slot, with the causing chain when it is
@@ -133,6 +165,35 @@ type HealthSlot struct {
 type HealthSystem struct {
 	Name    string
 	Verdict string
+}
+
+// HealthRange bounds the transitions a health read returns. Since and Until are
+// instants the caller named (a request's own query parameters); a zero value
+// is no bound on that side. With Since zero, Window is the trailing window
+// measured on the database's clock (tsSince, #719), so the default boundary is
+// never an instant the server process computed. The zero HealthRange is the
+// whole history.
+type HealthRange struct {
+	Since  time.Time
+	Until  time.Time
+	Window time.Duration
+}
+
+// predicate renders the range as a where fragment on col, appending its
+// arguments after args (the fragment's first placeholder follows them).
+func (r HealthRange) predicate(col string, args ...any) (string, []any) {
+	var bound string
+	if r.Since.IsZero() {
+		bound, args = tsSince(col, r.Window, args...)
+	} else {
+		args = append(args, r.Since)
+		bound = fmt.Sprintf("%s >= $%d", col, len(args))
+	}
+	if !r.Until.IsZero() {
+		args = append(args, r.Until)
+		bound += fmt.Sprintf(" and %s <= $%d", col, len(args))
+	}
+	return bound, args
 }
 
 // HealthTransition is one recorded edge: the moment the verdict changed and what
@@ -1078,7 +1139,7 @@ func splitHealthSlots(rs []resolvedSlot) (unconditional []health.Slot, choices [
 // (each with Active false, HealthSlot), so the verdict can be healthy while
 // the list beside it shows impaired rows, and Active is what tells the two
 // apart rather than that being a disagreement.
-func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error) {
+func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
 	// same lookup but discards the id): every read below, including
 	// healthTransitions, binds sys.ID, never re-derived from systemName once
@@ -1099,6 +1160,10 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 	}
 	unconditional, choices, choicesByID := splitHealthSlots(slots)
 	rep.Verdict = health.SystemValueWith(unconditional, choices).String()
+	rep.Reason = health.SystemReason(unconditional, choices)
+	if rep.Members, err = p.healthMembers(ctx, p.pool, sys.ID, compRead); err != nil {
+		return nil, err
+	}
 	// The same choices splitHealthSlots just grouped for the verdict name
 	// which alternate is active in each, so explainSlot can mark every slot
 	// with whether it is the reason the verdict reads what it does or a
@@ -1122,10 +1187,128 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 		}
 		rep.Slots = append(rep.Slots, row)
 	}
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, window); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "system", sys.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "system", sys.ID); err != nil {
 		return nil, err
 	}
 	return rep, nil
+}
+
+// systemMember is one member row of a system and the slot it fills there.
+type systemMember struct {
+	id, name string
+	slot     string // the name of the slot it fills here; empty when none
+}
+
+// systemMembersOf lists the members of a system the caller may read, ordered by
+// name, each with the slot it fills in this system (a component fills at most
+// one per system, #626). The component scope is injected into the query through
+// the same read filter every derived component read uses, never filtered in Go
+// afterwards: a member the caller cannot read is never fetched (#458).
+func systemMembersOf(ctx context.Context, q txQuerier, systemID string, read scope.Set) ([]systemMember, error) {
+	if read.Empty() {
+		return nil, nil
+	}
+	cols := `select c.id, c.name,
+		       coalesce((select r.name from system_slot_assignment ra join system_slot r on r.id = ra.slot_id
+		                 where ra.system_id = m.system_id and ra.component_id = m.component_id
+		                 order by r.name limit 1), '')
+		from system_member m join component c on c.id = m.component_id
+		where m.system_id = $1::uuid`
+	order := ` order by c.name, c.id`
+	sql, args := cols+order, []any{systemID}
+	if !read.All {
+		f := newReadFilter(componentTable, read, 2)
+		if f.With == "" {
+			return nil, nil // every scope root is malformed: nothing is in scope
+		}
+		sql = f.With + ` ` + cols + ` and ` + f.Pred("c.id") + order
+		args = append(args, f.Args...)
+	}
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: system members %q: %w", systemID, err)
+	}
+	defer rows.Close()
+	var out []systemMember
+	for rows.Next() {
+		var m systemMember
+		if err := rows.Scan(&m.id, &m.name, &m.slot); err != nil {
+			return nil, fmt.Errorf("storage: scan system member: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// healthMembers is every member of a system the caller may read, for its health report: its own
+// health (unknown for a component nothing has observed, as the members read and
+// the fleet view's dots say), the slot it fills, and its open alarms, slotted or
+// not (#2459). A read: it records nothing.
+func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, read scope.Set) ([]HealthMember, error) {
+	members, err := systemMembersOf(ctx, q, systemID, read)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]HealthMember, 0, len(members))
+	if len(members) == 0 {
+		return out, nil
+	}
+	ids := make([]string, len(members))
+	for i, m := range members {
+		ids[i] = m.id
+	}
+	// Two set-based reads keyed by the in-scope member ids, not two per member.
+	type rankObs struct {
+		ranks    []int
+		observed bool
+	}
+	byID := make(map[string]rankObs, len(members))
+	rows, err := q.Query(ctx, `
+		select i.id::text,
+		       coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
+		                 where a.component_id = i.id and a.cleared_at is null), '{}'),
+		       `+componentObservedSQL("i.id")+`
+		from unnest($1::uuid[]) as i(id)`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("storage: member health %q: %w", systemID, err)
+	}
+	for rows.Next() {
+		var id string
+		var ro rankObs
+		if err := rows.Scan(&id, &ro.ranks, &ro.observed); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("storage: scan member health: %w", err)
+		}
+		byID[id] = ro
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: member health %q: %w", systemID, err)
+	}
+	alarmsByID, err := p.activeAlarmsFor(ctx, q, ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range members {
+		ro := byID[m.id]
+		v := health.ComponentValue(ro.ranks)
+		h := v.String()
+		if v == health.Healthy && !ro.observed {
+			h = "unknown"
+		}
+		alarms := alarmsByID[m.id]
+		if alarms == nil {
+			alarms = []Alarm{}
+		}
+		out = append(out, HealthMember{Name: m.name, ID: m.id, Health: h, OutsideSlot: m.slot == "", Slot: m.slot, Alarms: alarms})
+	}
+	return out, nil
 }
 
 // LocationHealth reports a location's current verdict, the systems beneath it
@@ -1136,7 +1319,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 // The verdict is the rollup of exactly those systems, so the headline and the
 // drill-down can never disagree: a location cannot read healthy over a system it
 // itself lists as an outage.
-func (p *PG) LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error) {
+func (p *PG) LocationHealth(ctx context.Context, locationName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
 	// Resolved once via scopedByNameInScope, not scopedByName-then-
 	// inScopeTree (see SystemHealth's comment; ruling 2, #627); rep.OwnerID
 	// keeps echoing the caller's own reference, unchanged.
@@ -1151,7 +1334,39 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, window tim
 	}
 	rep.Systems = systems
 	rep.Verdict = health.RollUp(systemHealthValues(systems)).String()
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, window); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "location", loc.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "location", loc.ID); err != nil {
+		return nil, err
+	}
+	return rep, nil
+}
+
+// ComponentHealthReport reports one component's own current verdict (the live
+// read ComponentHealth makes, "unknown" for a device nothing has observed) and
+// its recorded transitions inside rng. Resolved once through
+// scopedByNameInScope, as SystemHealth does: an out-of-scope or absent name is
+// the same non-disclosing ErrComponentNotFound.
+func (p *PG) ComponentHealthReport(ctx context.Context, componentName string, rng HealthRange, read scope.Set) (*HealthReport, error) {
+	c, err := scopedByNameInScope(ctx, p.pool, componentConfig, componentName, "component", read)
+	if err != nil {
+		return nil, err
+	}
+	rep := &HealthReport{OwnerKind: "component", OwnerID: componentName, Slots: []HealthSlot{}, Systems: []HealthSystem{}}
+	if rep.Verdict, err = p.ComponentHealth(ctx, c.ID); err != nil {
+		return nil, err
+	}
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "component", c.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "component", c.ID, rng); err != nil {
+		return nil, err
+	}
+	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "component", c.ID); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -1266,12 +1481,12 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 // rather than the component-and-instance one. ownerID follows recordHealth's
 // contract (see ownerArcExprN): an id for component/system/location, a name for
 // outpost. The window's boundary is the database's own (tsSince, #719).
-func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, window time.Duration) ([]HealthTransition, error) {
+func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
-	bound, args := tsSince("ts", window, ownerID, healthKey)
+	bound, args := rng.predicate("ts", ownerID, healthKey)
 	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
 		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
 		  and provenance = 'calculated' and %s
@@ -1291,6 +1506,49 @@ func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID stri
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// healthFirstRecorded is the timestamp of the owner's first recorded edge, nil
+// when none exists: one aggregate on the same index the transitions read.
+func healthFirstRecorded(ctx context.Context, q txQuerier, ownerKind, ownerID string) (*time.Time, error) {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
+	sql := fmt.Sprintf(`select min(ts) from property
+		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
+		  and provenance = 'calculated'`, col, ownerArcExprN(ownerKind, 1))
+	var first *time.Time
+	if err := q.QueryRow(ctx, sql, ownerID, healthKey).Scan(&first); err != nil {
+		return nil, fmt.Errorf("storage: first health %s/%s: %w", ownerKind, ownerID, err)
+	}
+	return first, nil
+}
+
+// healthCarriedIn is the verdict in force at rng.Since (#2425): the newest
+// recorded edge strictly before it, or "" when the range has no explicit
+// Since or nothing was recorded before it. One indexed row, however long ago.
+func healthCarriedIn(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) (string, error) {
+	if rng.Since.IsZero() {
+		return "", nil
+	}
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return "", err
+	}
+	sql := fmt.Sprintf(`select value #>> '{}' from property
+		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
+		  and provenance = 'calculated' and ts < $3
+		order by ts desc, id desc limit 1`, col, ownerArcExprN(ownerKind, 1))
+	var v string
+	err = q.QueryRow(ctx, sql, ownerID, healthKey, rng.Since).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("storage: health carried in %s/%s: %w", ownerKind, ownerID, err)
+	}
+	return v, nil
 }
 
 // refSet is the small dedupe-and-order helper the recompute leans on: the

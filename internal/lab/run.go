@@ -241,7 +241,11 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	lab := &Lab{Spec: spec, ids: map[string]string{}, guarded: []string{"db", "server"}}
 	*stage = "pulling the images"
 	imageID := cfg.Image.ID
-	for _, ref := range []string{cfg.Image.Ref, PostgresImage} {
+	refs := []string{cfg.Image.Ref, PostgresImage}
+	if spec.IdP.Name != "" {
+		refs = append(refs, spec.IdP.Image)
+	}
+	for _, ref := range refs {
 		if ref == cfg.Image.Ref && imageID != "" {
 			// Preflight found it and pinned its ID; the tag is not read again.
 			continue
@@ -318,6 +322,29 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 		return nil, err
 	}
 	r.step("database", "Postgres is ready")
+
+	if spec.IdP.Name != "" {
+		*stage = "waiting for the identity provider"
+		id, err := r.Engine.RunContainer(ctx, spec.IdP, spec.Network)
+		lab.ids[spec.IdP.Name] = id
+		if err != nil {
+			return nil, fmt.Errorf("start the identity provider: %w", err)
+		}
+		if err := r.waitFor(ctx, "the identity provider to serve its discovery", func() (bool, error) {
+			st, err := r.Engine.Inspect(ctx, id)
+			if err != nil {
+				return false, err
+			}
+			if !st.Running && !st.Restarting {
+				return false, r.stopped(ctx, spec.IdP.Name, id, st)
+			}
+			return st.Health == "healthy", nil
+		}); err != nil {
+			return nil, r.withLogs(ctx, err, spec.IdP.Name, id)
+		}
+		lab.guarded = append(lab.guarded, spec.IdP.Name)
+		r.step("sso", "Dex at "+DexIssuer+", signing in the demo person "+SSODemoUser+" (lab network only)")
+	}
 
 	*stage = "seeding the fleet"
 	seedID, err := r.Engine.RunContainer(ctx, run.Seed, run.Network)

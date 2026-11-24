@@ -37,9 +37,18 @@ type assistantConversationSummaryOutput struct {
 	Body storage.AssistantConversation
 }
 
+// assistantOmnibotFacts is what a client may know of the model behind omnibot
+// (#2443): whether a run plays a recording or talks to a model, and the
+// questions the recording answers. Nothing of a configured model is told.
+type assistantOmnibotFacts struct {
+	Mode    string   `json:"mode" enum:"live,replay,none" doc:"live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here"`
+	Prompts []string `json:"prompts" doc:"The questions a recording answers, in recorded order; empty unless mode is replay"`
+}
+
 type listAssistantConversationsOutput struct {
 	Body struct {
 		Conversations []storage.AssistantConversation `json:"conversations"`
+		Omnibot       assistantOmnibotFacts           `json:"omnibot" doc:"What omnibot is answering from, so a client can say so before the first question"`
 	}
 }
 
@@ -75,7 +84,7 @@ func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Method:      http.MethodGet,
 		Path:        "/assistant/conversations",
 		Summary:     "List your omnibot conversations",
-		Description: "Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.",
+		Description: "Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, _ *struct{}) (*listAssistantConversationsOutput, error) {
 		cs, err := gw.ListAssistantConversations(ctx, callerID(ctx))
 		if err != nil {
@@ -85,6 +94,9 @@ func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		out.Body.Conversations = cs
 		if out.Body.Conversations == nil {
 			out.Body.Conversations = []storage.AssistantConversation{}
+		}
+		if out.Body.Omnibot, err = omnibotFacts(ctx, gw, o); err != nil {
+			return nil, err
 		}
 		return out, nil
 	})

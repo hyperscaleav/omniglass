@@ -45,7 +45,7 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
-		Name: "site", LocationType: "campus"}, all); err != nil {
+		Name: "site", LocationType: "campus"}, all, all); err != nil {
 		t.Fatalf("campus: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -103,7 +103,7 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 	// SystemHealth is deliberately not used here: it recomputes the verdict live
 	// and would report `healthy` no matter how the rows are ordered, so it cannot
 	// witness this defect.
-	rep, err := gw.LocationHealth(ctx, "site", 0, all)
+	rep, err := gw.LocationHealth(ctx, "site", storage.HealthRange{}, all)
 	if err != nil {
 		t.Fatalf("location health: %v", err)
 	}

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { answer, ask, closed, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState, type Step } from "./assistant";
+import { answer, ask, closed, initialRun, omnibotFacts, readEvents, reduce, runOmnibot, RunRefused, RunUnmatched, unmatched, type RunState, type Step } from "./assistant";
 
 // The panel's data layer (#1167): the reader turns a :run stream into AG-UI
 // events, and the reducer folds them into what the panel shows. The fixtures
@@ -169,6 +169,45 @@ describe("running omnibot", () => {
   it("names the server's reason for any other refusal to start", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "omnibot has no model on this server" }), { status: 503 }));
     await expect(runOmnibot("lobby", { prompt: "x" }, () => {})).rejects.toThrow("omnibot has no model on this server");
+  });
+});
+
+describe("a recording that has no answer (#2443)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  const refusal = {
+    type: "urn:omniglass:omnibot-replay-unmatched",
+    title: "Unrecorded question",
+    status: 422,
+    detail: "This lab plays a recording; connect a model to ask your own question",
+  };
+
+  it("is told apart from any other refusal by the server's type", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(refusal), { status: 422 }));
+    await expect(runOmnibot("lobby", { prompt: "Which alarm is worst?" }, () => {})).rejects.toBeInstanceOf(RunUnmatched);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "a run needs a user message or a resume" }), { status: 422 }));
+    await expect(runOmnibot("lobby", { prompt: "x" }, () => {})).rejects.not.toBeInstanceOf(RunUnmatched);
+  });
+
+  it("settles the run as unmatched, keeping the question and showing no run", () => {
+    const s = unmatched(ask(initialRun, "Which alarm is worst?"), refusal.detail);
+    expect(s.status).toBe("unmatched");
+    expect(s.error).toBe(refusal.detail);
+    expect(s.items).toEqual([{ kind: "user", text: "Which alarm is worst?" }]);
+  });
+
+  it("reads the mode and prompts the server reports, and never guesses a recording", async () => {
+    const reply = (body: unknown) => vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(body)));
+    reply({ conversations: [], omnibot: { mode: "replay", prompts: ["Tag it"] } });
+    expect(await omnibotFacts()).toEqual({ mode: "replay", prompts: ["Tag it"] });
+    reply({ conversations: [], omnibot: { mode: "live", prompts: null } });
+    expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
+    reply({ conversations: [] });
+    expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 500 }));
+    expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network down"));
+    expect(await omnibotFacts()).toEqual({ mode: "live", prompts: [] });
   });
 });
 

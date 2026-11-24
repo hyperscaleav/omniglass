@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createSignal } from "solid-js";
 import { render, screen, fireEvent, waitFor } from "@solidjs/testing-library";
 import { createBladeController, useBladeEdit, type BladeDef } from "../lib/blades";
+import { OFFICIAL_LOCK } from "../lib/catalog";
 import BladeStack from "./BladeStack";
 
 // A fake two-kind registry: enough to prove the stack renders, drills, offsets,
@@ -57,6 +58,23 @@ describe("BladeStack", () => {
     expect(asides(container).length).toBe(0);
   });
 
+  // A covered blade is out of reach until it is returned to (#2423): its body
+  // leaves the accessibility tree, so two stacked detail bodies never offer
+  // two "Configure" tabs, and only the covered blade's click-to-return stays.
+  it("takes a covered blade's body out of the accessibility tree, and gives it back on return", () => {
+    const ctl = createBladeController();
+    const reg: Record<string, BladeDef> = {
+      a: { Title: () => <>A</>, Body: () => <button type="button">Go</button> },
+      b: { Title: () => <>B</>, Body: () => <button type="button">Go</button> },
+    };
+    render(() => <BladeStack controller={ctl} registry={reg} />);
+    ctl.push({ kind: "a", id: "1" });
+    ctl.push({ kind: "b", id: "2" });
+    expect(screen.getAllByRole("button", { name: "Go" }).length).toBe(1);
+    ctl.pop();
+    expect(screen.getAllByRole("button", { name: "Go" }).length).toBe(1);
+  });
+
   it("ignores a ref whose kind is not in the registry", () => {
     const ctl = createBladeController();
     const { container } = render(() => <BladeStack controller={ctl} registry={registry} />);
@@ -104,12 +122,11 @@ describe("BladeStack", () => {
   });
 
   // The locked state, string form: a body that binds `locked` with one reason
-  // string (the official row) gets BOTH footer buttons in their usual spots,
-  // greyed, each wrapped in a tooltip carrying the reason. The live slots it
-  // may also have bound are overridden, so neither button can act. The wrapper
-  // span is the tab stop (a disabled button cannot take focus), so it carries
-  // the reason as aria-label too: the AT path the CSS tooltip cannot provide.
-  it("renders greyed Delete and Edit carrying the lock reason, overriding the live slots", () => {
+  // string (the official row) gets ONE note in the footer's place of the pair of
+  // greyed buttons (#2431): "Official, read-only", the full sentence riding the
+  // tooltip and the accessible name on a focusable wrapper. The live slots it may
+  // also have bound are overridden, so nothing in the footer can act.
+  it("renders a single Official, read-only note in place of greyed buttons", () => {
     const save = vi.fn(async () => {});
     const del = vi.fn();
     const lockedRegistry: Record<string, BladeDef> = {
@@ -119,7 +136,7 @@ describe("BladeStack", () => {
           useBladeEdit().bind({
             save,
             destructive: () => ({ label: "Delete", tone: "danger", onClick: del }),
-            locked: () => "Official: ships with Omniglass and updates with it.",
+            locked: () => OFFICIAL_LOCK,
           });
           return <div>body</div>;
         },
@@ -129,22 +146,67 @@ describe("BladeStack", () => {
     render(() => <BladeStack controller={ctl} registry={lockedRegistry} />);
     ctl.push({ kind: "thing", id: "a" });
 
-    const editBtn = screen.getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = screen.getByText("Delete").closest("button") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    for (const wrap of [editBtn.closest(".tooltip"), deleteBtn.closest(".tooltip")]) {
-      expect(wrap?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
-      // The keyboard/AT path: the focusable wrapper announces the reason.
-      expect(wrap?.getAttribute("aria-label")).toBe("Official: ships with Omniglass and updates with it.");
-      expect(wrap?.getAttribute("tabindex")).toBe("0");
-    }
-    // Neither button acts: no edit mode, no destructive call.
-    fireEvent.click(editBtn);
-    expect(screen.queryByText("Save")).toBeNull();
-    fireEvent.click(deleteBtn);
-    expect(del).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    const note = screen.getByTestId("footer-note");
+    expect(note.textContent).toBe("Official, read-only");
+    expect(note.getAttribute("data-tip")).toBe(OFFICIAL_LOCK);
+    expect(note.getAttribute("aria-label")).toBe(OFFICIAL_LOCK);
+    expect(note.getAttribute("tabindex")).toBe("0");
+    expect(screen.queryByLabelText("Edit")).toBeNull();
+    expect(screen.queryByText("Delete")).toBeNull();
+    expect(document.querySelectorAll("aside[data-blade] footer button")).toHaveLength(0);
+  });
+
+  // The footer's one shape (#2431 item 5), pinned for every catalog blade: the
+  // PanelFooter rail, the destructive action first at the left, the primary
+  // (Edit) last in the right-aligned cluster, nothing between them but that
+  // cluster. A catalog page that binds a live row cannot reorder it.
+  it("draws destructive at the left and the primary at the right, through PanelFooter", () => {
+    const reg: Record<string, BladeDef> = {
+      thing: {
+        Title: () => <>T</>,
+        Body: () => {
+          useBladeEdit().bind({ save: async () => {}, destructive: () => ({ label: "Delete", tone: "danger", onClick: () => {} }) });
+          return <div>body</div>;
+        },
+      },
+    };
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={reg} />);
+    ctl.push({ kind: "thing", id: "a" });
+    const footer = document.querySelector("aside[data-blade] footer")!;
+    expect(footer.className).toContain("border-t");
+    const row = footer.querySelector(":scope > div")!;
+    const kids = [...row.children];
+    expect(kids[0].textContent).toContain("Delete");
+    expect(kids[kids.length - 1].className).toContain("ml-auto");
+    expect(kids[kids.length - 1].lastElementChild!.textContent).toContain("Edit");
+  });
+
+  // A read-only kind (no write route at all) names its own reason, in the same
+  // note, and draws no button of any kind.
+  it("a custom lock reason reads as the note itself", () => {
+    const reg: Record<string, BladeDef> = {
+      thing: { Title: () => <>T</>, Body: () => { useBladeEdit().bind({ locked: () => "Read-only: shipped with Omniglass." }); return <div>body</div>; } },
+    };
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={reg} />);
+    ctl.push({ kind: "thing", id: "a" });
+    expect(screen.getByTestId("footer-note").textContent).toBe("Read-only: shipped with Omniglass.");
+    expect(document.querySelectorAll("aside[data-blade] footer button")).toHaveLength(0);
+  });
+
+  // A forkable official row keeps its live Edit (it forks) and swaps the greyed
+  // Delete for the note.
+  it("an official delete lock beside a live Edit shows the note, not a dead Delete", () => {
+    const reg: Record<string, BladeDef> = {
+      thing: { Title: () => <>T</>, Body: () => { useBladeEdit().bind({ save: async () => {}, locked: () => ({ edit: null, delete: OFFICIAL_LOCK }) }); return <div>body</div>; } },
+    };
+    const ctl = createBladeController();
+    render(() => <BladeStack controller={ctl} registry={reg} />);
+    ctl.push({ kind: "thing", id: "a" });
+    expect(screen.getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(screen.queryByText("Delete")).toBeNull();
+    expect((screen.getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(false);
   });
 
   // The locked state, object form: each side locks independently. An edit-only

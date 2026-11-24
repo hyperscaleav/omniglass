@@ -1,6 +1,8 @@
 import { Show, For, createSignal, createEffect } from "solid-js";
 import Button from "../components/Button";
+import PageGate from "../components/PageGate";
 import KVRow from "../components/KVRow";
+import { toast } from "../components/ui/Toast";
 import { RotateCcw, Save, Pencil, Check } from "../components/icons";
 import { useMe, can } from "../lib/auth";
 import {
@@ -11,6 +13,7 @@ import {
   useRestoreAllDefaults,
 } from "../lib/settings";
 import { constraintFor, isList, isMap, listText, objectText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
+import { confirmAction } from "../lib/confirm";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -87,7 +90,7 @@ export default function Settings() {
   const [pageErr, setPageErr] = createSignal<string | null>(null);
 
   async function onRestoreAll() {
-    if (!window.confirm("Restore every platform setting to its default? This clears every console binding.")) return;
+    if (!(await confirmAction({ title: "Restore every platform setting to its default?", body: "This clears every console binding.", confirmLabel: "Restore defaults", tone: "danger" }))) return;
     setRestoringAll(true);
     setPageErr(null);
     const r = await restoreAll();
@@ -96,7 +99,7 @@ export default function Settings() {
   }
 
   async function onRestoreNamespace(namespace: string) {
-    if (!window.confirm(`Restore all "${namespace}" settings to their defaults?`)) return;
+    if (!(await confirmAction({ title: `Restore all "${namespace}" settings to their defaults?`, confirmLabel: "Restore defaults", tone: "danger" }))) return;
     setPageErr(null);
     const r = await restoreNamespace(namespace);
     if (!r.ok) setPageErr(r.message);
@@ -137,18 +140,7 @@ export default function Settings() {
         <div class="alert alert-error text-sm" role="alert">{pageErr()}</div>
       </Show>
 
-      <Show when={settings.isPending}>
-        <div class="flex items-center gap-2 text-sm text-base-content/60">
-          <span class="loading loading-spinner loading-sm" /> Loading settings.
-        </div>
-      </Show>
-
-      <Show when={settings.isError}>
-        <div class="alert alert-warning text-sm" role="alert">
-          You do not have access to the platform settings, or they could not be loaded.
-        </div>
-      </Show>
-
+      <PageGate query={settings} section="Settings" needs={["settings:read"]} loading="Loading settings.">
       <Show when={settings.data}>
         {(data) => (
           <For each={Object.keys(data().values).sort()}>
@@ -185,6 +177,7 @@ export default function Settings() {
           </For>
         )}
       </Show>
+      </PageGate>
     </section>
   );
 }
@@ -254,7 +247,10 @@ function SettingRow(props: {
     setBusy(true);
     setRowErr(null);
     const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft(), props.value) });
-    if (!r.ok) setRowErr(r.message);
+    // The row shows the new value; the toast says the save landed, and a
+    // refusal stays on the row, beside the field it is about.
+    if (r.ok) toast.success(`${props.namespace}.${props.settingKey} saved`);
+    else setRowErr(r.message);
     setBusy(false);
   }
 
