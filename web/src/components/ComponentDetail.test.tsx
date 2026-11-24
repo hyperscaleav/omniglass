@@ -253,7 +253,7 @@ describe("one edit model", () => {
 });
 
 describe("Delete, by the host's way out", () => {
-  // Delete sits in the Configure face's footer, so a caller who may delete
+  // Delete sits in the Configure face's rail, so a caller who may delete
   // but not update still gets the tab, read-only, with its Delete (#2463).
   it("a caller with delete but not update still reaches Delete", async () => {
     const qc = seed(["delete"]);

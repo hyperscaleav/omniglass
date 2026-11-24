@@ -136,7 +136,7 @@ a location holding none or several renders its own subject card,
   title and Expand. The host holds the active tab (`lib/tabstate`: the page's `?tab=`, a blade's
   own signal, so a blade never rewrites the page beneath it; `OutlineWorkspace` takes the same
   `host` for its filter), whether Edit answers `?edit=`, and where Delete leaves to. Editing is
-  the Configure tab's `ConfigureFace` in both hosts, Delete in its footer. A body lays its
+  the Configure tab's `ConfigureFace` in both hosts, Delete in its top rail. A body lays its
   sections out by container query (the body root is `@container`; use `@3xl:` and the like,
   never `md:`), so the wide fleet blade (`BladeDef.width: "wide"`, about 720 px) reads one
   column and the page two. A body opens related entities on the ambient stack (`useBlades`),

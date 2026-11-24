@@ -116,11 +116,14 @@ describe("ResolutionPanel", () => {
   it("keeps platform secrets behind Show platform values", () => {
     const secrets = [
       { name: "sim-snmp", owner_kind: "platform", owner_name: "", band: 0, depth: 0, winner: true },
+      { name: "platform-ntp", owner_kind: "platform", owner_name: "", band: 0, depth: 0, winner: true },
       { name: "device-login", owner_kind: "component", owner_name: "solo-bar", band: 3, depth: 0, winner: true },
     ] as ResolvedSecret[];
     const { queryByText, getByText, getByTestId } = mount({ members: solo, name: "solo-bar", secrets });
     expect(queryByText("sim-snmp")).toBeNull();
     expect(getByText("device-login")).toBeTruthy();
+    // A platform secret that is not the simulator's stays listed.
+    expect(getByText("platform-ntp")).toBeTruthy();
     fireEvent.click(getByTestId("platform-values-toggle"));
     expect(getByText("sim-snmp")).toBeTruthy();
   });

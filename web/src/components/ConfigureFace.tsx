@@ -10,7 +10,7 @@ import { can, useMe } from "../lib/auth";
 import type { LeaveGuard } from "../lib/leave_guard";
 
 // ConfigureFace: the workspace's Configure tab, which is the page host of the
-// ONE form (EntityForm, #826). The page owns the edit slot and the footer;
+// ONE form (EntityForm, #826). The page owns the edit slot and the rail;
 // ?edit=1 lands here through the same useEditParam hook the classic face used
 // (ADR-0120's rule, ADR-0132's destination), so a deep link opens the form
 // already editing. Everything else, the fields, their gates, and the save
@@ -67,7 +67,7 @@ export default function ConfigureFace(props: {
   // intent (?edit=1); a blade's has no address of its own, so it never reads
   // or writes the page's query, and Edit simply begins.
   host?: DetailHost;
-  // The entity's Delete, folded into the form's bind and drawn in the footer.
+  // The entity's Delete, folded into the form's bind and drawn in the rail.
   destructive?: () => BladeDestructive | undefined;
 }) {
   const me = useMe();

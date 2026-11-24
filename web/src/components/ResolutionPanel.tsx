@@ -65,11 +65,12 @@ export default function ResolutionPanel(props: { component: string }): JSX.Eleme
   const all = createMemo(() =>
     byName(mergeResolved(tags.data ?? [], variables.data ?? [], secrets.data ?? [])),
   );
-  // A platform-band secret reaches every component (the simulator's among
-  // them), so listing it on each one buries what applies to this component.
-  // They sit behind a toggle, closed by default (#2439).
-  const isPlatformSecret = (g: { kind: ValueKind; winner?: { owner_kind: string } }) =>
-    g.kind === "secret" && !["component", "system", "location"].includes(g.winner?.owner_kind ?? "platform");
+  // The simulator's platform-band secrets (`sim-*`) reach every component
+  // whether or not it binds them, so listing them buries what applies. They sit
+  // behind a toggle, closed by default; any other platform value stays listed
+  // (#2439).
+  const isPlatformSecret = (g: { kind: ValueKind; name: string; winner?: { owner_kind: string } }) =>
+    g.kind === "secret" && g.name.startsWith("sim-") && !["component", "system", "location"].includes(g.winner?.owner_kind ?? "platform");
   const [showPlatform, setShowPlatform] = createSignal(false);
   const platformCount = createMemo(() => all().filter(isPlatformSecret).length);
   const groups = createMemo(() => (showPlatform() ? all() : all().filter((g) => !isPlatformSecret(g))));
