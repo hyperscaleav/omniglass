@@ -467,7 +467,7 @@ the label (with the platform's pen) and the name with its advisory precheck; ren
 breaks bookmarks and integrations by design, so the check and the consequence line sit
 beside the field. **Classification** is the standard and type selects (a component's
 product is fixed at creation). **Placement** moves a location under a new parent, its own
-permission and its own audit verb; systems and components read where they sit.
+permission and its own audit verb; a component's and a system's edit face carries **Move to...** (see [Work with an entity](/operator/entities/)).
 **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
