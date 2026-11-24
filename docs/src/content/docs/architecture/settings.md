@@ -1,348 +1,142 @@
 ---
 title: Settings
-description: "A cascade-resolved, lockable settings engine: ordered layers merged into an effective document, with per-key provenance, top-down locks, and a platform-versus-profile domain split."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How settings are built: one typed Go struct declares every setting, layers merge into an effective document with per-key provenance, and only the console's binding is stored."
 sidebar:
-  hidden: true
+  order: 62
+  badge:
+    text: Partial
+    variant: note
 ---
 
-:::note[Partial]
-Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_binding` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The deferred fast-follow list is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
-:::
+A **setting** configures the install itself (how long telemetry is kept, the console theme, the
+identity provider), not the fleet. Fleet values, which resolve down locations, systems and
+components, are [variables](/architecture/variables/). A setting resolves the same way a variable
+does, most specific wins with provenance, along its own axis
+([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)).
+To change one, see [the admin Settings page](/admin/settings/).
 
-Omniglass resolves a **setting** the same way it resolves a secret or a variable: down a cascade,
-most-specific-wins, with provenance, but on the **user** axis (platform to group to user)
-rather than the [fleet cascade](/architecture/cascade/)'s location to system to component. Same
-primitive (doctrine 5) pointed at identity; the least-specific level is `platform`, an admin's
-**install-wide** value
-([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
-It generalizes the "platform settings store" the [scaling](/architecture/scaling/) page sketched
+## Declared once, as a typed struct
+
+Every setting is a tagged field on one Go struct, `Settings` in `internal/settings/schema.go`, one
+field per **namespace**
+([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation)):
+
+```go
+type Settings struct {
+	UI        UISettings        `json:"ui" settings:"profile,client"`
+	Retention RetentionSettings `json:"retention" settings:"platform,client"`
+	SSO       SSOSettings       `json:"sso" settings:"platform"`
+	// ...one field per namespace
+}
+
+type UISettings struct {
+	Theme string `json:"theme" enum:"omniglass-dark,omniglass-light" default:"omniglass-dark" doc:"Console color theme"`
+}
+```
+
+Reflection over the struct builds everything else, so there is no second place to drift:
+
+- **the declared defaults**, from each field's `default` tag;
+- **the namespace registry**, from the top-level fields and their `settings` tag;
+- **the OpenAPI schema**, which Huma reflects, and from it the typed console client and the
+  console's inline validation (`make gen` writes the field constraints to a committed artifact);
+- **the server's write validation**, which reflects the same field: an unknown namespace is a 404,
+  an unknown key, a wrong type or a value outside an `enum` or `pattern` a 422 naming the key.
+
+A field with no `default` is optional: absent from the effective document until a level sets it, and
+read in Go as "unset". A list field takes its default comma-separated and is replaced whole by a
+write; a map field merges by key. A malformed tag is a boot panic, never a runtime branch. Adding a
+setting is one field and `make gen`.
+
+The layers merge as generic maps, since a Go struct cannot tell "unset" from a zero value, and the
+effective document unmarshals into `Settings` at the edge, so Go code reads `s.Retention.MetricDays`
+typed.
+
+## Layers and provenance
+
+An effective value resolves from ordered layers, the more specific winning:
+
+1. **The declared default**: the struct's `default` tag, the fall-through, never a row.
+2. **The settings file**: an optional JSON or YAML file at `OMNIGLASS_SETTINGS_FILE`, read at boot.
+   The GitOps layer, a Kubernetes ConfigMap for instance.
+3. **The environment**: `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value`, one key a variable, coerced
+   through the same declaration. A `profile` namespace is refused at boot, since per-user values do
+   not live in a process's environment.
+4. **The platform binding**: what an admin sets in the console or the API, stored in Postgres.
+
+The merge is a deep merge in map space, so a key's **presence** decides: a key set to `false`
+shadows, an absent key inherits. Every resolved key reports where it came from: the admin read
+returns the effective document beside a `sources` map (each `namespace.key` to the winning layer, or
+`default`) and a `locks` map, and the console badges each set key with its layer.
+
+Only the binding is stored
 ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)):
-platform settings become one **domain** within the engine, user preferences the other.
+the defaults, the file and the environment are recomputed every boot, so restoring a namespace is
+deleting its row and the file never drifts into a second authoritative copy. The one table is
+`setting_binding`, unique on `(scope, user_id, namespace)`, with `scope` held by a CHECK to the
+levels the resolver reads, today `platform` alone. It is never boot-seeded.
 
-## Layers and levels
+## Two domains: platform and profile
 
-An effective value resolves from ordered contributions, plus one thing that is not a level.
+Each namespace's `settings` tag names its **domain** and whether the console may read it:
 
-**`default` is off the axis.** It is the value reflected from the canonical `Settings` struct's
-`default:` tags (see [the single-source struct](#the-single-source-struct)): the setting's own
-**declaration**, never a row, shadowing nothing; every settable key has one, so the effective
-document is complete, except for an [optional setting](#the-single-source-struct), which declares
-none and is absent until a level sets it. It is the **fall-through**, not the bottom rung
-([cascade](/architecture/cascade/#bindings-cascade-declarations-do-not)).
+- **`platform`** namespaces are set only at the platform level and never cascade further:
+  `retention`, `collection`, `label`, `notification`, `database`, `agent`, `assistant`, `heartbeat`
+  and `sso`.
+- **`profile`** namespaces describe how one person's console behaves and are shaped to cascade to
+  user groups and users: `ui` and `keybindings`.
 
-**The base layers** are recomputed into memory on every boot and never stored in the binding table:
+**Who writes and who reads are two questions.** The domain says how far a namespace cascades; the
+`client` token says whether `GET /settings/me`, which any signed-in user reads, carries it.
+`retention` and `label` are platform namespaces any user reads, since a chart says how far back its
+history reaches and the console renders a label from the same acronym list the server did. `sso`,
+`notification` and `agent` are admin-only to read. A caller learns how the agent policy applies to
+them from `GET /auth/me/agent-policy`
+([ADR-2063](/architecture/decisions/#adr-2063-an-install-sets-always-ask-or-never-per-class-of-operation-for-every-agent)).
 
-1. **`file`**: an operator settings file (`settings.json` or YAML) at a bootstrap-configured path,
-   optional. The GitOps / Kubernetes ConfigMap layer; a change lands on pod restart.
-2. **`env`**: variables of the form `OMNIGLASS_SETTING__<NAMESPACE>__<KEY>=value` (double-underscore
-   separators), parsed at boot and feeding one key each. Values are coerced to the key's Go kind
-   (ints, bools, scalars, and comma-separated lists) through the same declaration the file validates
-   against, so the single-source struct is still the only shape. A `profile`-domain namespace is
-   refused at boot (naming the variable), since per-user values do not live in the process
-   environment. The twelve-factor rung between the committed file and the DB admin override: a
-   container's secret, a CI's temporary nudge, a per-environment flip without an edit to the file
-   image (#2223). A setting that names a secret (the assistant's `key_secret`, the notification settings' `mail_secret`)
-   may name one the environment declares too, as `OMNIGLASS_SECRET__<NAME>`
-   ([env-backed secrets](/architecture/variables/)), so a deployment configures a credential and the
-   setting naming it from the environment alone.
+## The API
 
-**Binding levels** are rows in Postgres, the identity cascade: a value set at a level is that level's **binding**, and a more-specific binding **shadows** a broader one.
+- **`GET /settings`** (`settings:read`): every namespace, with `sources` and `locks`.
+- **`GET /settings/me`** (any signed-in user): the client-visible namespaces, resolved, with no
+  provenance. Apart from `/auth/me`, so a settings change never disturbs identity.
+- **`PATCH /settings/{namespace}`**: an RFC 7386 JSON Merge Patch onto the namespace's platform
+  binding, where `null` on a key restores it.
+- **`DELETE /settings/{namespace}`** and **`POST /settings:restoreDefaults`**: drop one binding, or
+  all of them.
 
-3. **`platform`**: the install-wide admin binding. **Slice-0.**
+Every write lands at the platform level by definition, so each takes `settings:update` **and**
+`platform:update`, the install-wide authority a platform-tier variable needs
+([install-wide authority is not fleet scope](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
+A patch that names a secret (the mail relay, the assistant's key, the identity provider's client
+secret) also takes `secret:bind` on it. Every write records an audit row in the same transaction.
 
-:::design[The group and user binding rungs, tracked in #270]
-4. **`group`**: per user-group binding. **Fast-follow.**
-5. **`user`**: per-user binding. **Fast-follow.**
-:::
+The settings gateway methods take no fleet scope: settings describe the install, so the permission
+alone gates them, a recorded carve-out from the scope invariant, not a missed one
+([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)).
 
-### Most-specific wins
-
-Absent any lock, a more-specific level wins: `user > group > platform > env > file`. Where no level set
-the key, the value is the setting's `default`, which provenance reports as a **declaration**, not a
-level. Merge is a **deep merge in JSON map-space**, so key **presence** decides a binding, not a
-Go zero-value: a key set to `false` shadows, an absent key inherits. A write is an RFC 7386 JSON
-Merge Patch, so `null` on a key deletes it from that level's binding, restoring the layer below or
-the declared default.
-
-## Locking: enforced from above
-
-An admin **locks** a key at a level. A lock at level L pins L's contributed value and forbids any
-more-specific level from shadowing it: lock `ui.theme` at `platform` and no group or user can
-change it.
-
-**Lock conflict: broader wins.** A `platform` lock supersedes a `group` lock. The editability rule
-falls out: a user may edit a key at level L if and only if no broader level has locked it.
-
-## Provenance
-
-Every resolved key reports **where it came from** and its **lock state**: the admin read returns the
-effective document plus a sibling `sources` map (`namespace.key` to the winning level, or `default`)
-and a `locks` map (`namespace.key` to the locking level). The Admin page badges a set key
-(`From settings file` / `From environment` / `Set in console`) and badges nothing for a declared default ("Declared
-default" in the layer stack); a row expands to teach the full layer stack (doctrine 4).
-
-## Domains: platform versus profile
-
-Each namespace carries a `domain` classifier. The `platform` domain is **named after the level**:
-set only at the `platform` level, never further down.
-
-- **`profile`**: cascades platform to group to user, **client-visible**, lockable, settable per user
-  in the fast-follow. `ui` and `keybindings` are the two seeded `profile` namespaces (`ui.theme` and
-  `ui.default_landing`; the default keymap as data).
-- **`platform`**: platform-level only, does not cascade (for example `retention`, `integrations`).
-  `label` is the first, holding the acronym dictionary the [label rule](/architecture/core-entities/)
-  engine's `title` consults.
-
-**The domain and client-visibility are two questions, not one.** The domain says how far a setting
-cascades and therefore who WRITES it; `client` says who may READ the effective value. A
-platform-domain namespace is admin-write by definition, and `label` is `platform,client` because the
-console renders a label from the same dictionary the server did, which an ordinary viewer has to be
-able to read. `retention` is `platform,client` too: a window is no secret, and a chart of a series'
-history can say how far back it reaches ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). Omitting `client` on a platform namespace
-makes it admin-only-read as well (`integrations`; `assistant`, whose `conversation_days` is how long a
-stored omnibot conversation outlives its last change ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)) and whose `provider`, `model`, `base_url` and `key_secret` name omnibot's model, the key by the name of a `$platform` secret only ([omnibot's model](/architecture/ai/)); `agent`, the install's policy for what an agent
-may do in each class of operation, which a caller reads only as it applies to them through
-`GET /auth/me/agent-policy` ([ADR-2063](/architecture/decisions/#adr-2063-an-install-sets-always-ask-or-never-per-class-of-operation-for-every-agent)); and `database`, whose `slow_query_ms` is the
-threshold past which the server logs and counts a query as slow, re-read each report window:
-[the server's account of itself](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
-
-## Storage: one binding table, unscoped
-
-The declared defaults, the file layer and the env layer live in memory, so Postgres holds **only
-the binding levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
-`unique nulls not distinct (scope, user_id, namespace)` identity (a surrogate `id` primary
-key; `user_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
-CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
-never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
-model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the
-scope, and the env layer, the file layer and the declared defaults re-supply the values. The table is **never
-boot-seeded** (operator data). Persisting only the bindings is a recorded call
-([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
-diverging from the scaling page's "materialized in Postgres" sketch.
-
-### The unscoped-Gateway carve-out
-
-The two-layer authorization model has one exception here: Settings Gateway methods are
-**unscoped**. Settings describe the platform and its users, not the fleet, so the ABAC
-storage-scope invariant is **not applicable** (as with the catalog-type reads, `GET /property-types` and its catalog siblings);
-only the `settings:<action>` permission gates them, a recorded carve-out
-([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
-not a missed invariant. The group and user levels will constrain binding reads and writes by the
-acting user (a user edits only their own `user` row), a per-user ownership check distinct
-from fleet ABAC. Every binding write and delete writes an `audit_log` row in the same transaction
-(the existing `writeAuditRes` pattern).
-
-## The single-source struct
-
-A setting is declared **once**, as a tagged field on a canonical Go struct in
-`internal/settings/schema.go`. Reflection over the struct builds the `default` layer and the
-namespace registry, Huma reflects it into the OpenAPI schema, and the schema generates the typed SPA
-client and the write validator. There is no second place to drift.
-
-```go
-// Settings is the canonical settings document: one field per namespace.
-type Settings struct {
-	UI          UISettings    `json:"ui"          settings:"profile,client"`
-	Keybindings Keybindings   `json:"keybindings" settings:"profile,client"`
-	Label       LabelSettings `json:"label"       settings:"platform,client"`
-}
-
-// UISettings is the ui namespace. Adding a setting is one tagged field.
-type UISettings struct {
-	Theme          string `json:"theme" enum:"omniglass-dark,omniglass-light" default:"omniglass-dark" doc:"Console color theme"`
-	DefaultLanding string `json:"default_landing" default:"/" doc:"Route the console opens to"`
-}
-```
-
-Each namespace is a struct, a closed set of developer-defined keys. The
-`settings:"<domain>,<visibility>"` tag carries the metadata: `domain` is `profile` or `platform`
-([above](#domains-platform-versus-profile)), and `client` marks a namespace fed to `/settings/me`
-(omit for admin-only-read). A reflect pass in the pure `settings`
-package produces both artifacts from the tags: **`Defaults()`** walks each leaf's `default:` tag,
-coerced to the field's Go type (replacing the retired embedded `defaults.yaml`; no tag, no default),
-and **`Namespaces()`** reflects the top-level fields (replacing the hand-kept slice). Reflection
-walks a compile-time type, so a malformed tag is a boot panic, never a runtime branch.
-
-### Typed at the edges, maps in the middle
-
-The cascade merges **partial** layers, and a Go struct cannot express "unset" versus a zero value,
-so the layers stay generic maps and the merge engine is unchanged; typing lives at the edges. The
-effective (fully-merged) document unmarshals into `Settings`, so the API `values` field is the
-typed struct (the generated client reads `values.ui.theme` as the enum union) and Go code calls
-`settingsSvc.EffectiveTyped(ctx)` and reads `s.UI.Theme` typed; `sources` and `locks` stay flat
-maps keyed by `namespace.key`, since provenance is dynamic.
-
-## Adding a setting
-
-Everything about a setting lives on its struct field in `internal/settings/schema.go`: add the
-field, run `make gen`, and it is discovered everywhere.
-
-**Add a key to an existing namespace.** Add one tagged field to the namespace's sub-struct:
-
-```go
-type UISettings struct {
-	Theme          string `json:"theme" enum:"omniglass-dark,omniglass-light" default:"omniglass-dark" doc:"Console color theme"`
-	DefaultLanding string `json:"default_landing" pattern:"^/" default:"/" doc:"Route the console opens to (an absolute path)"`
-	// add a field here.
-}
-```
-
-- `json:"<key>"` (**required**): the setting's key in the merge-patch, the API, and the client
-  (snake_case); the key is the `json` tag, not the Go field name.
-- `default:"<value>"`: the **declared default**, coerced to the field's Go kind; omit for none.
-- `enum:"a,b,c"`: constrains the value to a set (a console select, rejected inline and 422 on the
-  server otherwise); `pattern:"^regex$"` likewise for a free string.
-- `doc:"..."`: the human description, carried into the schema and the client.
-
-**A list-valued setting** is a `[]string` (or any slice) field, and its `default` tag is the
-**comma-separated** form, `default:"AV,DSP,HDMI"`. That spelling is not a local convention: Huma
-reflects the same tag into the JSON Schema and splits a string array on commas, so following it
-exactly is what keeps one tag from producing two disagreeing defaults. The JSON-array spelling Huma
-also accepts (`default:"[\"AV\"]"`) is refused here rather than parsed a second way, and a bad tag is
-a boot panic like any other. Three consequences worth knowing before declaring one:
-
-- **A write replaces the whole list**, since merge is a deep merge of maps and a non-map value
-  overrides wholesale. There is no "add one entry" patch, which is also the only way an entry the
-  platform ships can be removed.
-- **The console edits it as one comma-separated line** and sends an array, translating both ways from
-  the generated `"type": "array"` constraint; a blank line is an empty list and a doubled comma is an
-  inline error, since a blank entry would be stored and match nothing.
-- **Declare it `nullable:"false"`.** Huma makes arrays nullable by default, and `null` is the merge
-  patch's delete sentinel, so a nullable list invites a write that means something else entirely.
-
-**A map-valued setting** is a `map[string]T` field with `omitempty` and no default: the agent
-policy's `roles` and `tools` overrides are the first ([ADR-2088](/architecture/decisions/#adr-2088-role-and-per-tool-overrides-narrow-the-agent-policy-strictest-wins)).
-Unlike a list it merges by key, so a patch adds or replaces one entry and a nested `null` deletes
-one, without restating the rest. Its entries are checked by a value check rather than a tag, since a
-tag cannot reach a map's values. The console edits it as its JSON text, from the generated
-`"type": "object"` constraint, and refuses inline anything that does not parse to a JSON object.
-
-**An optional setting** declares no `default` tag and a `json:"<key>,omitempty"`: the effective
-document leaves it out until a level sets it, the published schema does not list it as required, and
-its Go reader treats the zero value as "unset" and falls back to whatever the setting replaces. The
-outpost log windows are the first (`retention.outpost_log_debug_days` and its three siblings, #1350): unset,
-an outpost's own logs follow the shared band. A merge-patch `null` restores one to unset. The Admin page
-lists every key the generated schema declares, not only the keys the effective document resolved, so
-an optional setting shows as `not set` and is still settable from the console
-([ADR-1350](/architecture/decisions/#adr-1350-a-node-log-window-is-an-optional-setting-unset-follows-the-shared-band)).
-
-**Add a namespace.** Define the sub-struct, then add it as a field on `Settings`:
-
-```go
-type Settings struct {
-	UI          UISettings         `json:"ui"          settings:"profile,client"`
-	Keybindings Keybindings        `json:"keybindings" settings:"profile,client"`
-	Retention   RetentionSettings  `json:"retention"   settings:"platform,client"` // platform-level, any caller reads (#417)
-}
-```
-
-**Then run `make gen`** and commit the drift: that one field now drives every artifact above, plus
-the inline form validation and the typed Go accessor (`values.<namespace>.<key>`), with no further
-edits.
-
-**Rules and gotchas.** No operator-open namespace; prefer `enum` or `pattern` over a bare string,
-since one tag buys the console picker, the inline validation, and the server 422 together; and never
-seed a default outside the tag (no `defaults.yaml`, no boot-seed `ON CONFLICT`), a second source
-being exactly the drift the single-source struct prevents.
-
-## Generated validation, one rule set from the struct
-
-A write is validated against the **same reflected schema** on both sides, no hand-authored second
-copy.
-
-- **Server (the backstop).** `PATCH /settings/{namespace}` validates the merge-patch before storing:
-  an unknown namespace in the path is a **404**; an unknown key, wrong type, or `enum` / `pattern`
-  violation is a **422** naming the offending `namespace.key`; a `null` value is a delete, always
-  allowed. The validator reflects the namespace's sub-struct into a Huma schema (closing the slice-0
-  thin cut).
-- **Client (caught before submit).** `make gen` slices the settings field constraints out of the
-  generated `api/openapi.json` into a committed artifact, `web/src/api/settings.schema.gen.ts`,
-  diff-checked like the other generated artifacts. Each row validates its draft inline, an `enum`
-  field renders as a select of the generated options (retiring the hard-coded theme list), and Save
-  is blocked while a field is invalid; the server 422 remains the backstop and maps back to the same
-  field.
-
-## API surface
-
-Two read audiences, two read endpoints, and merge-patch writes:
-
-- **`GET /settings`** (admin, `settings:read`): the full effective document, all namespaces, **with
-  provenance** (`sources` and `locks`). Feeds the Admin settings page.
-- **`GET /settings/me`** (any authenticated user): the caller's resolved settings, **client-visible
-  namespaces only, no provenance**. Feeds the SPA at boot; dedicated (not folded into `/auth/me`) so
-  a settings change never disturbs the identity cache, and correct as the cascade grows.
-- **`PATCH /settings/{namespace}`** (`settings:update` **and** `platform:update`): an RFC 7386 JSON
-  Merge Patch onto the namespace's binding at the acting scope (`platform` in slice-0); `null`
-  restores a key.
-- **`DELETE /settings/{namespace}`** (same gates): drop the binding, restoring the namespace to
-  its env layer, file layer and defaults.
-- **`POST /settings:restoreDefaults`** (same gates): an AIP custom method, a factory reset of the
-  acting scope.
-
-Every settings write lands at the **platform** tier by definition, so all three writes carry
-`platform:update` on top of `settings:update`, the same install-wide authority a platform-tier
-variable, secret, or tag binding needs. The console gates Edit and Restore on **both**; a user
-holding only `settings:update` reads a note naming the missing capability rather than a 403 on
-Save.
-
-Per doctrine 1 the effective document is a Huma struct, so the OpenAPI, the typed SPA client, the
-CLI command, and the JSONSchema all generate from it (`make gen`); only the binding **storage** is
-raw JSONB partials.
-
-From the CLI the merge patch is the whole body: `setting update <namespace>` takes it as `--body`
-(a JSON object) or `--body-file` (a path, or `-` for stdin), because a namespace's keys are its own
-and the OpenAPI body declares no properties for the generator to turn into flags. The generator
-treats any object body with no declared properties this way (#1333), so the next free-form body gets
-the same pair of flags. A malformed or non-object document is refused before any request is made.
+From the CLI the merge patch is the whole body, since a namespace's keys are its own rather than
+fields the OpenAPI declares:
 
 ```bash
-omniglass setting update notification --body '{"egress_allow":["smtp.example.com"]}'   # bind a key
-omniglass setting update notification --body '{"egress_allow":null}'                   # restore it
-omniglass setting list                                                                  # value, source, lock
+omniglass setting update retention --body '{"metric_days": 30}'
+omniglass setting update retention --body '{"metric_days": null}'
+omniglass setting list
 ```
 
-Per-key flags for each namespace are a follow-up ([#1914](https://github.com/hyperscaleav/omniglass/issues/1914)): the keys come from the reflected settings struct,
-not from the OpenAPI document the CLI generates from, so the generator cannot derive them today.
-
-`settings:read` and `settings:update` (write, restore, lock and unlock) live on the admin role. The
-store is a singleton, so there is no create or delete-of-resource permission.
-
-## The cascade-over-users model
-
-Reusing the [cascade](/architecture/cascade/) primitive on the principal axis is the deliberate call
-([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)):
-resolution, provenance, and the broader-wins lock are one shared mechanism. The engine is a **pure
-`settings` package** (no I/O beyond reading the operator file): the deep merge, merge-patch,
-resolution, and lock enforcement are the primary unit-test target, the DB layer supplied by the
-caller (the Storage Gateway) through a narrow function seam.
-
-## Slice-0 boundary
-
-**In:** the platform level (file, env and DB), the full cascade-shaped payload, and the platform lock
-stored, shown, and enforced, end to end through the pure engine, the binding table, the Gateway,
-the API, the two permissions, the two seeded `profile` namespaces, and the Admin settings page.
-
-:::design[The fast-follow rungs and platform-domain namespaces, tracked in #270]
-**Fast-follow (not this slice):** the group and user binding rungs and the Profile preferences tab
-(editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins, the
-remaining `platform`-domain namespaces (`integrations`) with their features (`label` has since
-landed with the acronym dictionary, `retention` with sample retention, #417, and `collection` with
-each endpoint's report window, #1369), a GitOps read-only mode, and live file reload (SIGHUP)
-instead of restart-to-reload.
+:::design[Per-key CLI flags, tracked in #1914]
+`omniglass setting update` takes one flag per key, generated from the settings struct rather than the
+OpenAPI document.
 :::
 
-## Slice-1 boundary
-
-Slice-1 makes settings a reflected typed struct without touching the merge engine, the cascade
-precedence, the permissions, or the routes
-([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation)):
-the single-source struct, the typed effective read, and the generated validation described above.
-
-:::design[The declarative operator-file machinery and the cascade rungs, tracked in #270]
-**Deferred (future slices, tracked on [#270](https://github.com/hyperscaleav/omniglass/issues/270)):**
-the declarative operator-file machinery (a generated JSONSchema for the operator `settings.json`,
-boot validation of the **file** layer, and the file-wins / read-only GitOps lever); operator-open
-namespaces (a typed map with a `Default()` method); and the group and user cascade rungs, all
-unchanged by slice-1.
+:::design[The group and user levels, locks and the read-only file, tracked in #270]
+- **Group and user levels.** A `profile` namespace takes a binding per user group and per user, so
+  `user > group > platform > environment > file` and a person sets their own preferences on their
+  profile, each user editing only their own row.
+- **Locks.** An admin locks a key at a level, which pins its value and forbids any more specific level
+  from shadowing it; a broader lock wins over a narrower one, so a user may edit a key only where no
+  broader level locked it. The resolver already honors a stored lock and reports it; nothing writes one
+  yet, and with one level there is nothing beneath it to lock.
+- **The file as authority.** A generated JSONSchema validates the settings file at boot, a read-only
+  mode makes the file win over the console for GitOps installs, and a signal reloads it without a
+  restart.
 :::
