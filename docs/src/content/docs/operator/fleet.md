@@ -462,14 +462,14 @@ dropping rows silently.
 
 ## Configure
 
-Editing lives on the detail view (#800): the **Configure** tab renders for anyone holding an
+Editing lives on the detail view (#800): the **Configure** tab carries its actions at the right end of the tab rail (**Edit** and a **⋯** menu holding **Delete**, or **Cancel** and **Save** while editing), so the action is reachable without scrolling past the sections. It renders for anyone holding an
 edit verb on the entity, and inside it the sections gate one by one. **Identity** carries
 the label (with the platform's pen) and the name with its advisory precheck; renaming
 breaks bookmarks and integrations by design, so the check and the consequence line sit
 beside the field. **Classification** is the standard and type selects (a component's
 product is fixed at creation). **Placement** moves a location under a new parent, its own
 permission and its own audit verb; a component's and a system's edit face carries **Move to...** (see [Work with an entity](/operator/entities/)).
-**Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
+A component's **Effective values** list what applies to it; secrets that win from the platform band sit behind **Show platform values**, closed by default. **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
 form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a

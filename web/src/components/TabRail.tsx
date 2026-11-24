@@ -13,8 +13,10 @@ import type { TabDef, TabState } from "../lib/tabstate";
 //
 // `end` is a page-wide control the rail carries at its far end, outside the
 // tablist (the page's time range, #2304): it governs every facet's content,
-// so it sits on the rail rather than inside one facet.
-export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?: LeaveGuard; end?: JSX.Element }) {
+// so it sits on the rail rather than inside one facet. `endRef` hands the host
+// that slot's element, where the Configure facet draws its Edit and ⋯ menu
+// (#2439) so the actions sit inline with the tabs, not in a row of their own.
+export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?: LeaveGuard; end?: JSX.Element; endRef?: (el: HTMLElement) => void }) {
   // Resolved once: reading props.end twice would build the control twice.
   const end = children(() => props.end);
   return (
@@ -43,8 +45,8 @@ export default function TabRail(props: { tabs: TabDef[]; state: TabState; guard?
           )}
         </For>
       </div>
-      <Show when={end()}>
-        <div class="ml-auto pb-1">{end()}</div>
+      <Show when={end() || props.endRef}>
+        <div ref={(el) => props.endRef?.(el)} class="ml-auto flex items-center gap-2 pb-1">{end()}</div>
       </Show>
       </div>
     </Show>

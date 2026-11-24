@@ -349,7 +349,7 @@ describe("the configure mover keeps the classic contract (#800)", () => {
       mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
       const face = await screen.findByTestId("configure-face");
       await pickTree(await within(face).findByLabelText("Parent"), "Lab");
-      fireEvent.click(within(face).getByRole("button", { name: /save/i }));
+      fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i }));
       await waitFor(() => {
         const move = calls.find((c) => c.method === "POST" && c.url.includes(":move"));
         expect(move, "the :move custom method").toBeTruthy();
@@ -372,7 +372,7 @@ describe("moving to another location while editing (#854)", () => {
     const face = await screen.findByTestId("configure-face");
     const name = (await within(face).findByDisplayValue("hq")) as HTMLInputElement;
     fireEvent.input(name, { target: { value: "hq-renamed" } });
-    expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+    expect(within(screen.getByTestId("tab-rail")).getByRole("button", { name: /save/i })).toBeTruthy();
 
     window.history.pushState({}, "", `/web/locations/${uuidFor("lz-b1")}?tab=configure`);
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -380,10 +380,10 @@ describe("moving to another location while editing (#854)", () => {
     await waitFor(() => expect(screen.getByTestId("configure-face")).toBeTruthy());
     const next = screen.getByTestId("configure-face");
     await within(next).findByText("west");
-    expect(within(next).queryByRole("button", { name: /save/i })).toBeNull();
-    expect(within(next).getByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(within(screen.getByTestId("tab-rail")).queryByRole("button", { name: /save/i })).toBeNull();
+    expect(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" })).toBeTruthy();
 
-    fireEvent.click(within(next).getByRole("button", { name: "Edit" }));
+    fireEvent.click(within(screen.getByTestId("tab-rail")).getByRole("button", { name: "Edit" }));
     const field = (await within(next).findByDisplayValue("west")) as HTMLInputElement;
     expect(field.value).toBe("west");
     expect(within(next).queryByDisplayValue("hq-renamed")).toBeNull();

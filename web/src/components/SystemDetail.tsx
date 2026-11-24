@@ -280,6 +280,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // Unsaved Configure drafts (the system's and its sole location's) the tab
   // rail asks about; in a blade, closing or popping it asks too.
   const leave = createLeaveGuard();
+  // The tab rail's right end, where Configure draws its actions (#2439).
+  const [railEnd, setRailEnd] = createSignal<HTMLElement>();
   if (props.host === "blade") onCleanup(blades.guard({ kind: "system", id: props.id }, leave));
   const openComponent = (cid: string) => blades.push({ kind: "component", id: cid });
   const { destructive, err } = useEntityDelete({
@@ -353,6 +355,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             </div>
             <TabRail
               tabs={tabs()}
+              endRef={setRailEnd}
               state={tabState}
               guard={leave}
               // The range governs Overview's metrics and the Timeline; Activity
@@ -384,7 +387,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
               </Show>
               {/* The host keys the body on the id: another system is another
                   face, so the edit slot and drafts never carry over (#854). */}
-              <ConfigureFace kind="system" id={id()} guard={leave} host={props.host} destructive={destructive} />
+              <ConfigureFace mount={railEnd} kind="system" id={id()} guard={leave} host={props.host} destructive={destructive} />
             </Show>
         {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
         <Show when={tab() === "timeline"}>

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createUniqueId, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
@@ -100,6 +100,8 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   // nested open stacks on whichever host it is in.
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // The tab rail's right end, where Configure draws its actions (#2439).
+  const [railEnd, setRailEnd] = createSignal<HTMLElement>();
   // In a blade, closing or popping it asks the same guard a tab switch does.
   if (props.host === "blade") onCleanup(blades.guard({ kind: "component", id: props.id }, leave));
   // Three tabs (#826): Overview, Activity, Configure. A legacy ?tab=events
@@ -289,6 +291,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             </div>
             <TabRail
               tabs={leafTabs()}
+              endRef={setRailEnd}
               state={tabState}
               guard={leave}
               // The range governs Overview's metrics grid (#2424) and the Timeline.
@@ -302,7 +305,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             <Show when={leafTab() === "configure"}>
               {/* The host keys the body on the id, so another component is
                   another face, never this one's drafts (#854). */}
-              <ConfigureFace kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
+              <ConfigureFace mount={railEnd} kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
             </Show>
             {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
             <Show when={leafTab() === "timeline"}>
