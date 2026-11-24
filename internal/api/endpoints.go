@@ -215,7 +215,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Get an endpoint",
-		Description: "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.",
+		Description: "Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up, and a name more than one answers to is a 409 listing each match. Gated by endpoint:read.",
 	}, "endpoint", "read"), func(ctx context.Context, in *endpointPathInput) (*endpointOutput, error) {
 		it, err := gw.GetEndpoint(ctx, in.Endpoint, a.scopeFor(ctx, "endpoint", "read"))
 		if err != nil {

@@ -1,4 +1,5 @@
 import { Show, createMemo } from "solid-js";
+import Page from "../components/Page";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
@@ -44,19 +45,25 @@ export default function Roles() {
   const ordered = createMemo(() => [...(roles.data ?? [])].sort((a, b) => tierRank(a.name) - tierRank(b.name) || a.name.localeCompare(b.name)));
 
   return (
-    <FlatList<Role>
-      config={{
-        entity: { name: "role", plural: "roles" },
-        rows: ordered,
-        loading: () => roles.isPending,
-        error: () => roles.error,
-        filterKeys: roleFilterKeys,
-        filterPlaceholder: "filter roles by name or permission",
-        columns,
-        empty: "No roles yet.",
-        rowId: (r) => r.id,
-        blades: { registry: identityRegistry, rootKind: "role" },
-      }}
-    />
+    <Page route="/roles">
+      <FlatList<Role>
+        config={{
+          entity: { name: "role", plural: "roles" },
+          rows: ordered,
+          loading: () => roles.isPending,
+          error: () => roles.error,
+          filterKeys: roleFilterKeys,
+          filterPlaceholder: "filter roles by name or permission",
+          columns,
+          empty: "No roles yet.",
+          // Roles are built in only (no New), but the bar keeps the height every
+          // other list's create button gives it, so the tables line up (#2447).
+          railExtra: () => <span class="h-8" aria-hidden="true" data-testid="bar-height" />,
+          rowId: (r) => r.id,
+          rowAlt: (r) => r.name,
+          blades: { registry: identityRegistry, rootKind: "role" },
+        }}
+      />
+    </Page>
   );
 }

@@ -208,6 +208,11 @@ the two in one migration. Three buckets, never conflated:
   assignment that binds a non-member) takes the label lock, then the component's membership lock, and
   only then inserts, because the insert's foreign key shares the system's row. Holding that row while
   waiting for the label lock deadlocks against every cascade (#1214).
+  A move into a location takes the same lock before it writes (#2552): the move's foreign key takes
+  only KEY SHARE on the location, which a relabel's NO KEY UPDATE does not conflict with, so without
+  the lock the stamp read the pre-edit label while the cascade's scan snapshot predated the mover and
+  neither restamped it. Queued on the label lock, the move either lands before the cascade's scan or
+  reads the committed label (`MoveComponent` and `MoveSystem`).
 
 - **One-time data backfills** (dbmate, data-only): transforming existing operator rows to match a new
   constraint, run once, and idempotent on a second run (a repeat changes nothing, proven by a test that
@@ -463,6 +468,18 @@ where b.series_id = $1 order by b.span_start, b.span;
   with no timeout, so a late batch is never dropped for it. An on-time batch never takes it and
   still costs 18 statements. A dirtied trend hour of a folded day recomputes from its block while
   the day is intact (the merge's own test), else from its raw rows.
+  A day folds only once its own close and the trend horizon (24 hours) have passed, 48 hours after
+  it starts, and is folded only while intact, so a metric window (or a type's `retention_days`) of N
+  days leaves the fold N - 2 days wide: **the shortest window that folds is 3 days**, and a window of 1
+  or 2 days folds nothing, so a write of the install's metric window (`retention.metric_days`) or a
+  metric type's own `retention_days` under 3 days is refused (the settings file, the environment, a
+  console write or `:setRetention`), naming the window and the 3-day minimum. A value stored before the
+  minimum is raised to it: a metric type's own window by a migration, the lane's window where the
+  settings load (a stored 1 or 2 reads as 3). A property type's window is not bound by it, as the
+  property lane does not fold. A series-day with at least `BlockDayMin` samples that the fold passes after
+  it left its window is counted on `BlockCompaction.Skipped` and logged at warn (`metric series-days
+  passed without folding into blocks`), never silently marked done
+  ([#2144](https://github.com/hyperscaleav/omniglass/issues/2144)).
 - **Too old is dropped.** An observed sample older than its series' window is dropped before it lands,
   with one warning line a series naming the series, the count and the oldest's age, and the rest of
   its batch lands and is acknowledged. The warning goes out when the batch commits, so a batch
@@ -683,6 +700,11 @@ code). One pass writes one sample per key and instance, at the pass's end:
 - **`retention-behind`** for `metric_trend compaction` and `metric_block compaction`, and
   **`retention-window-days`** (instance `metric`), when the pass ran the compactions (it skips them on
   a metric window out of range).
+- **A lane that stops reporting is written 0.** A lane drops out of a pass when a type override is
+  removed, the override read fails for a pass, a lane's stored window is out of range, or the metric
+  window is out of range (no compactions run). The loop remembers the lanes the last pass flagged
+  behind (seeded at start from the newest stored flags) and writes `retention-behind` = 0 for any of them the pass does not report, so the lane's
+  warning clears instead of firing on its last 1 with no fresh sample to end it (#1673).
 - **`retention-pass-duration`** (seconds), **`retention-pass-failure-count`**, and
   **`metric-partition-created-count`** and **`metric-partition-dropped-count`**, the days the pass
   created ahead and dropped whole.
@@ -717,7 +739,7 @@ behind, since it did not reach its window. So a failure count above zero is a fa
 server log, and a behind flag that holds is a lane the budget cannot keep up with. The seeded
 **`retention-behind`** rule reads the second: a lane flagged 1 for five minutes, several catch-up
 passes, opens a warning alarm on the server's component naming the lane, and the first pass that
-reads it 0 clears it (a lane that leaves the report while flagged keeps its alarm open, #1673). The
+reads it 0 clears it (a lane that leaves the report while flagged is written 0, so its alarm clears too; the loop seeds the flagged set from the stored flags at start, so a restart keeps that, #1673). The
 four INFO lines a pass logs stay. Only the behind flag and the failure count are loss readings, 0
 healthy. The rest are counts and levels with no zero to aim at: the deleted counts, the duration and
 the partition roll measure the work a pass did, the mark lags sit at their healthy trail (above)

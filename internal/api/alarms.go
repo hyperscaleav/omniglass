@@ -62,6 +62,8 @@ type alarmBody struct {
 	Location     string   `json:"location,omitempty" doc:"The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue"`
 	LocationPath string   `json:"location_path,omitempty" doc:"That location's dotted ancestor path, root first (for example boi.17c)"`
 	Systems      []string `json:"systems,omitempty" doc:"The names of the systems the alarm's component is a member of; only on the fleet queue"`
+	LocationID   string   `json:"location_id,omitempty" doc:"That location's uuid, the stable form of location; only on the fleet queue"`
+	SystemIDs    []string `json:"system_ids,omitempty" doc:"Those systems' uuids, in the same order as systems; only on the fleet queue"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -85,6 +87,8 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		Location:       a.LocationName,
 		LocationPath:   strings.Join(a.LocationPath, "."),
 		Systems:        a.Systems,
+		SystemIDs:      a.SystemIDs,
+		LocationID:     a.LocationID,
 	}
 }
 
@@ -118,9 +122,37 @@ func parseSnoozeDuration(s string) (time.Duration, error) {
 }
 
 type listAlarmsInput struct {
-	Name           string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
-	IncludeCleared bool   `query:"include_cleared" doc:"Include cleared alarms, so the list is the history rather than what is wrong now"`
-	Unacknowledged bool   `query:"unacknowledged" doc:"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended"`
+	Name           string    `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	IncludeCleared bool      `query:"include_cleared" doc:"Include cleared alarms, so the list is the history rather than what is wrong now"`
+	Unacknowledged bool      `query:"unacknowledged" doc:"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended"`
+	Since          time.Time `query:"since" doc:"Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range" example:"2026-11-23T00:00:00Z"`
+	Until          time.Time `query:"until" doc:"Only the alarms raised at or before this RFC 3339 time; must not be earlier than since" example:"2026-11-23T12:00:00Z"`
+}
+
+// systemAlarmsInput is the system's alarms read, with the optional range a
+// timeline reads it over (#2425).
+type systemAlarmsInput struct {
+	Name  string    `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
+	Since time.Time `query:"since" doc:"Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until" example:"2026-11-23T00:00:00Z"`
+	Until time.Time `query:"until" doc:"The range's end, with since; defaults to now and must not be earlier than since" example:"2026-11-23T12:00:00Z"`
+}
+
+// componentRangeLimit caps a component's ranged read at the system read's
+// 500 (#2425): a flapping alarm over a long range could otherwise answer
+// tens of thousands of rows. The unranged read stays uncapped, as it was.
+func componentRangeLimit(since, until time.Time) int {
+	if since.IsZero() && until.IsZero() {
+		return 0
+	}
+	return systemAlarmLimit
+}
+
+// alarmRangeErr refuses an inverted range.
+func alarmRangeErr(since, until time.Time) error {
+	if !since.IsZero() && !until.IsZero() && since.After(until) {
+		return huma.Error400BadRequest("since must not be after until")
+	}
+	return nil
 }
 
 type listAlarmsOutput struct {
@@ -134,7 +166,7 @@ type listAlarmsOutput struct {
 type raiseAlarmInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
-		Severity string `json:"severity" minLength:"1" doc:"How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage"`
+		Severity string `json:"severity" minLength:"1" doc:"How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)"`
 		Message  string `json:"message,omitempty" doc:"What is wrong, for the operator reading it later"`
 		DedupKey string `json:"dedup_key,omitempty" doc:"What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing"`
 	}
@@ -172,13 +204,16 @@ const (
 )
 
 type listFleetAlarmsInput struct {
-	Unacknowledged bool     `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
-	Limit          int      `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
-	Severity       []string `query:"severity,explode" doc:"Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several"`
-	Location       string   `query:"location" doc:"Only alarms whose component sits in this location or any location below it, by name"`
-	Acknowledged   string   `query:"acknowledged" enum:"true,false" doc:"true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both"`
-	Snoozed        string   `query:"snoozed" enum:"true,false" doc:"true keeps the snoozed alarms, false the ones not snoozed; absent keeps both"`
-	PageToken      string   `query:"page_token" doc:"The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"`
+	State          string    `query:"state" enum:"active,cleared,all" default:"active" doc:"Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all"`
+	Since          time.Time `query:"since" doc:"Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it" example:"2026-11-23T00:00:00Z"`
+	Until          time.Time `query:"until" doc:"Only the alarms raised at or before this RFC 3339 time; must not be earlier than since" example:"2026-11-23T12:00:00Z"`
+	Unacknowledged bool      `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
+	Limit          int       `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
+	Severity       []string  `query:"severity,explode" doc:"Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several"`
+	Location       string    `query:"location" doc:"Only alarms whose component sits in this location or any location below it, by name"`
+	Acknowledged   string    `query:"acknowledged" enum:"true,false" doc:"true keeps the acknowledged alarms, false the unacknowledged ones; absent keeps both"`
+	Snoozed        string    `query:"snoozed" enum:"true,false" doc:"true keeps the snoozed alarms, false the ones not snoozed; absent keeps both"`
+	PageToken      string    `query:"page_token" doc:"The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are"`
 }
 
 type listFleetAlarmsOutput struct {
@@ -204,14 +239,18 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/alarms",
-		Summary:     "List the fleet's active alarms",
-		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+		Summary:     "List the fleet's alarms",
+		Description: "What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 	}, "component", "read"), func(ctx context.Context, in *listFleetAlarmsInput) (*listFleetAlarmsOutput, error) {
 		limit := in.Limit
 		if limit <= 0 {
 			limit = fleetAlarmDefault
 		}
+		if !in.Since.IsZero() && !in.Until.IsZero() && in.Since.After(in.Until) {
+			return nil, huma.Error400BadRequest("since must not be after until")
+		}
 		alarms, next, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "system", "read"), storage.AlarmFilter{
+			State: in.State, Since: in.Since, Until: in.Until,
 			Unacknowledged: in.Unacknowledged, Severities: in.Severity, Location: in.Location,
 			Acknowledged: optBool(in.Acknowledged), Snoozed: optBool(in.Snoozed), PageToken: in.PageToken,
 		}, min(limit, fleetAlarmMax))
@@ -236,13 +275,20 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/alarms",
 		Summary:     "List a system's members' alarms",
-		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemAlarmsOutput, error) {
+		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemAlarmsInput) (*systemAlarmsOutput, error) {
+		if err := alarmRangeErr(in.Since, in.Until); err != nil {
+			return nil, err
+		}
 		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
-		alarms, err := gw.ListSystemAlarms(ctx, sys.ID, systemAlarmWindow, systemAlarmLimit)
+		rng := storage.AlarmRange{Window: systemAlarmWindow}
+		if !in.Since.IsZero() {
+			rng = storage.AlarmRange{Since: in.Since, Until: in.Until}
+		}
+		alarms, err := gw.ListSystemAlarms(ctx, sys.ID, rng, systemAlarmLimit)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read system alarms")
 		}
@@ -261,8 +307,11 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms",
 		Summary:     "List a component's alarms",
-		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *listAlarmsInput) (*listAlarmsOutput, error) {
+		if err := alarmRangeErr(in.Since, in.Until); err != nil {
+			return nil, err
+		}
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "read")
 		if err != nil {
 			return nil, err
@@ -270,6 +319,9 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		alarms, err := gw.ListAlarms(ctx, compID, storage.AlarmFilter{
 			IncludeCleared: in.IncludeCleared,
 			Unacknowledged: in.Unacknowledged,
+			Since:          in.Since,
+			Until:          in.Until,
+			Limit:          componentRangeLimit(in.Since, in.Until),
 		})
 		if err != nil {
 			return nil, mapAlarmErr(err)
@@ -294,7 +346,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description:   "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
 		if err != nil {

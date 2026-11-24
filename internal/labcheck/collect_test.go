@@ -21,6 +21,7 @@ type fakeLab struct {
 	profile      bool // a simulator profile serves it: the device answers and lands class signals
 	dropBuiltIn  string
 	systemPushed bool
+	impaired     bool // someone broke the device on purpose in the simulator
 }
 
 func newFakeLab() *fakeLab { return &fakeLab{endpoint: true, profile: true, systemPushed: true} }
@@ -58,6 +59,11 @@ func (l *fakeLab) routes() map[string]any {
 		}
 		return map[string]any{"samples": []any{map[string]any{"instance": "ssh", "value": "up"}}}
 	}
+	device := map[string]any{"component_id": "c1", "status": "running"}
+	if l.impaired {
+		device["impairment"] = map[string]any{"unplugged": true}
+	}
+	devices := []any{device}
 	sysMetrics := []any{}
 	if l.systemPushed {
 		sysMetrics = append(sysMetrics, map[string]any{"metric_type_name": "booking-count", "is_sampled": true})
@@ -89,9 +95,11 @@ func (l *fakeLab) routes() map[string]any {
 		"/components/c1/properties/tcp-open/samples":            sample("tcp-open"),
 		"/components/c1/properties/endpoint-responsive/samples": sample("endpoint-responsive"),
 		"/components/c1/properties/session-state/samples":       sample("session-state"),
-		"/systems":               map[string]any{"systems": []any{map[string]any{"id": "s1", "name": "Boardroom"}}},
-		"/systems/s1/metrics":    map[string]any{"metrics": sysMetrics},
-		"/systems/s1/properties": map[string]any{"properties": []any{}},
+		"/outposts":                 map[string]any{"outposts": []any{map[string]any{"name": "edge"}}},
+		"/outposts/edge/simulation": map[string]any{"devices": devices},
+		"/systems":                  map[string]any{"systems": []any{map[string]any{"id": "s1", "name": "Boardroom"}}},
+		"/systems/s1/metrics":       map[string]any{"metrics": sysMetrics},
+		"/systems/s1/properties":    map[string]any{"properties": []any{}},
 	}
 }
 
@@ -192,5 +200,20 @@ func TestCheckReturnsAnErrorWhenTheAPIFails(t *testing.T) {
 	defer srv.Close()
 	if _, err := labcheck.Check(context.Background(), http.DefaultClient, srv.URL, nil, nil); err == nil {
 		t.Fatal("Check on a failing API returned no error")
+	}
+}
+
+// A device someone impaired in the simulator (a seeded fault, #2434, or a
+// presenter's unplug) is broken on purpose: it owes nothing while it is, so an
+// unplugged display that lands no class signal is no finding.
+func TestAnImpairedComponentOwesNothing(t *testing.T) {
+	l := newFakeLab()
+	l.profile = false
+	if fs := check(t, l, nil); len(fs) == 0 {
+		t.Fatal("a dark display that is not impaired passed; the lever proves nothing")
+	}
+	l.impaired = true
+	if fs := check(t, l, nil); len(fs) != 0 {
+		t.Fatalf("an impaired display failed:\n%s", render(fs))
 	}
 }

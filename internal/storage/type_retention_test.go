@@ -39,7 +39,7 @@ func TestATypesRetentionOverrideIsSetOnAnOfficialType(t *testing.T) {
 	if err := f.conn.QueryRow(f.ctx, `select count(*) from audit_log where verb = 'set_retention'`).Scan(&audited); err != nil || audited != 2 {
 		t.Fatalf("audit rows for set_retention = %d (err %v), want 2", audited, err)
 	}
-	for _, bad := range []int{0, 36501} {
+	for _, bad := range []int{0, 1, 2, 36501} {
 		if _, err := f.gw.SetMetricTypeRetention(f.ctx, "", "tcp-connect-time", days(bad)); !errors.Is(err, storage.ErrMetricTypeInvalid) {
 			t.Errorf("an override of %d days = %v, want ErrMetricTypeInvalid", bad, err)
 		}

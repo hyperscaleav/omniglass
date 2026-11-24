@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bucketLayout, chartLayout, nearestPoint } from "./chart";
+import { bucketLayout, chartLayout, nearestByTime, timeAtX, xAtTime } from "./chart";
 
 // The timeseries chart's pure core (#794): samples to plot geometry, no DOM.
 // X is time against the window's right-edge-now axis; Y is a padded nice
@@ -65,14 +65,6 @@ describe("the x axis and the crosshair (#795 review)", () => {
     expect(l.xTicks[0].x).toBeCloseTo(40, 3);
     expect(l.xTicks[3].x).toBeCloseTo(628, 3);
     expect(Date.parse(l.xTicks[3].ts) - Date.parse(l.xTicks[0].ts)).toBe(24 * 3600_000);
-  });
-
-  it("nearestPoint resolves a plot x to the closest SAMPLE, never an interpolation", () => {
-    const l = chartLayout([at(24, 5), at(12, 6), at(0, 7)], opts);
-    const mid = l.points[1];
-    expect(nearestPoint(l, mid.x + 3)).toBe(mid);
-    expect(nearestPoint(l, 0)).toBe(l.points[0]);
-    expect(nearestPoint(chartLayout([], opts), 100)).toBeNull();
   });
 });
 
@@ -224,5 +216,67 @@ describe("bucketLayout", () => {
     const l = bucketLayout([bucket(2, 7, 7), bucket(1, 7, 7)], opts);
     const h = Number(l.bandPath.split("M")[1].match(/V([\d.]+)/)![1]) - Number(l.bandPath.split("M")[1].split(" ")[0].split(",")[1]);
     expect(h).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// The shared cursor's pure lookups (#2424): an instant to the sample a chart
+// shows there, and the chart's x axis both ways.
+describe("nearestByTime", () => {
+  const pt = (t: number) => ({ t, x: 0, y: 0, ts: new Date(t).toISOString(), value: t });
+
+  it("finds nothing in an empty series", () => {
+    expect(nearestByTime([], now)).toBeNull();
+  });
+
+  it("a single point is the nearest at any instant", () => {
+    expect(nearestByTime([pt(now - 1000)], now - 9_000_000)?.t).toBe(now - 1000);
+  });
+
+  it("an instant before the first point snaps to it, after the last to the last", () => {
+    const pts = [pt(1000), pt(2000), pt(3000)];
+    expect(nearestByTime(pts, 0)?.t).toBe(1000);
+    expect(nearestByTime(pts, 99_000)?.t).toBe(3000);
+  });
+
+  it("uneven sampling snaps to the nearer neighbor, the earlier on a tie", () => {
+    const pts = [pt(1000), pt(1100), pt(5000), pt(9000)];
+    expect(nearestByTime(pts, 3000)?.t).toBe(1100);
+    expect(nearestByTime(pts, 3200)?.t).toBe(5000);
+    expect(nearestByTime(pts, 7000)?.t).toBe(5000);
+    expect(nearestByTime(pts, 1050)?.t).toBe(1000);
+  });
+
+  it("a point further than maxDistanceMs is no point: a gap reads as a gap", () => {
+    const pts = [pt(1000), pt(9000)];
+    expect(nearestByTime(pts, 5000, 1000)).toBeNull();
+    expect(nearestByTime(pts, 8500, 1000)?.t).toBe(9000);
+  });
+});
+
+describe("timeAtX and xAtTime", () => {
+  const frame = { width: 640, padLeft: 40, padRight: 20, now, windowMs: 6 * 3600_000 };
+
+  it("map the plot's left edge to the window's start and its right edge to now", () => {
+    expect(timeAtX(40, frame)).toBe(now - 6 * 3600_000);
+    expect(timeAtX(620, frame)).toBe(now);
+    expect(xAtTime(now - 3 * 3600_000, frame)).toBeCloseTo(330, 6);
+  });
+
+  it("clamp outside the plot, and round-trip inside it", () => {
+    expect(timeAtX(0, frame)).toBe(now - 6 * 3600_000);
+    expect(timeAtX(9999, frame)).toBe(now);
+    expect(xAtTime(timeAtX(123, frame), frame)).toBeCloseTo(123, 6);
+  });
+});
+
+describe("a point's instant", () => {
+  it("a raw point carries its sample time; a bucket point its bucket's middle, where it is drawn", () => {
+    const l = chartLayout([at(2, 5)], { width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 6 * 3600_000 });
+    expect(l.points[0].t).toBe(now - 2 * 3600_000);
+    const ts = new Date(now - 2 * 3600_000).toISOString();
+    const b = bucketLayout([{ ts, count: 1, min: 1, max: 1, avg: 1, last: 1 }], {
+      width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 6 * 3600_000, resolutionMs: 600_000,
+    });
+    expect(b.points[0].t).toBe(now - 2 * 3600_000 + 300_000);
   });
 });

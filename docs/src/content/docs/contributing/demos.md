@@ -162,6 +162,13 @@ Write it the way an operator would work:
   in Bay 2 that nothing collects from yet), a `setup` list makes it through the API before the
   title card, with the lab's owner token; one that already exists counts as made, so a replay on a
   lab the walkthrough already ran on works. Keep it to the scene: the flow itself stays on camera.
+- **Stage a moment, not only a thing.** A scene that needs something to have happened (an alarm
+  raised and cleared, as read-what-happened-on-the-timeline needs) puts a state with `put` (a
+  simulated device's impairment), waits with `until: { get, contains, timeout }` until a read
+  holds a text (the alarm list holding `raised_at`), and lets time pass with `pause: <seconds>`
+  (1 to 300), all off camera before the title card. Leave the lab as you found it (unplug, then
+  replug), since the probe replays every walkthrough on one stack. The lab facts list only the
+  creates; a learner trips the same fault on the Simulation page.
 - **Give your setup a component and alarms of its own.** The recorder plays each walkthrough on a lab
   of its own, but [the probe](/contributing/synthetic-user/#the-probe-and-its-digest) replays all of
   them, in alphabetical order, on one shared stack, where that "already exists counts as made" rule

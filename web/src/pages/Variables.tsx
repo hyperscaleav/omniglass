@@ -1,4 +1,5 @@
 import { createIdentity, entityLabel } from "../lib/entities";
+import Page from "../components/Page";
 import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -30,6 +31,7 @@ import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Variables: the macro directory on the FlatList surface. A variable is a typed,
 // plaintext free value owned at one scope (platform, or a location / system /
@@ -61,27 +63,29 @@ export default function Variables() {
   const rows = createMemo(() => variables.data ?? []);
 
   return (
-    <FlatList<Variable>
-      config={{
-        entity: { name: "variable", plural: "variables" },
-        rows,
-        loading: () => variables.isPending,
-        error: () => variables.error,
-        filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (v) => `${entityLabel(v)} ${v.name} ${v.value_type}`, values: () => [] },
-          { key: "scope", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
-          { key: "type", type: "string", hint: "exact", get: (v) => v.value_type, values: (rs) => [...new Set(rs.map((r) => r.value_type))].sort() },
-        ],
-        filterPlaceholder: "filter variables by name, type, scope…",
-        columns,
-        empty: "No variables yet.",
-        rowId: (v) => v.id,
-        blades: { registry: { variable: variableBlade }, rootKind: "variable" },
-        create: can(me.data, "variable", "create")
-          ? { label: "New variable", can: () => can(me.data, "variable", "create"), body: (ctx) => <CreateVariableForm onCreated={ctx.select} /> }
-          : undefined,
-      }}
-    />
+    <Page route="/variables">
+      <FlatList<Variable>
+        config={{
+          entity: { name: "variable", plural: "variables" },
+          rows,
+          loading: () => variables.isPending,
+          error: () => variables.error,
+          filterKeys: [
+            { key: "name", type: "string", hint: "substring", get: (v) => `${entityLabel(v)} ${v.name} ${v.value_type}`, values: () => [] },
+            { key: "scope", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
+            { key: "type", type: "string", hint: "exact", get: (v) => v.value_type, values: (rs) => [...new Set(rs.map((r) => r.value_type))].sort() },
+          ],
+          filterPlaceholder: "filter variables by name, type, scope…",
+          columns,
+          empty: "No variables yet.",
+          rowId: (v) => v.id,
+          blades: { registry: { variable: variableBlade }, rootKind: "variable" },
+          create: can(me.data, "variable", "create")
+            ? { label: "New variable", can: () => can(me.data, "variable", "create"), body: (ctx) => <CreateVariableForm onCreated={ctx.select} /> }
+            : undefined,
+        }}
+      />
+    </Page>
   );
 }
 
@@ -128,7 +132,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
   async function removeVariable() {
     const v = variable();
     if (!v) return;
-    if (!confirm(`Delete variable "${v.name}" (${ownerLabel(v)})?`)) return;
+    if (!(await confirmDelete({ kind: "variable", name: `${v.name} (${ownerLabel(v)})` }))) return;
     setErr(null);
     try {
       await deleteVariable(v.id);

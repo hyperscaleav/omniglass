@@ -2,7 +2,7 @@
 title: "The omnibot panel shows each call through a renderer registry over a generic card"
 date: 2026-11-17
 status: "Accepted"
-summary: "The console's omnibot panel reads the :run AG-UI stream with a small reducer of its own, renders every tool call as a generic card unless a per-tool renderer reads its result, pauses an ask on a confirm card the next run resumes, and hands omnibot a credential by name, created through the secrets route with the person's token"
+summary: "The console's omnibot panel reads the :run AG-UI stream with a small reducer of its own, folds reasoning and calls into one collapsed thought block whose rows show a generic card unless a per-tool renderer reads its result, pauses an ask on a confirm card the next run resumes, and hands omnibot a credential by name, created through the secrets route with the person's token"
 refs: [1167, 2121, 2134, 2135, 2111, 1168]
 ---
 
@@ -11,8 +11,9 @@ refs: [1167, 2121, 2134, 2135, 2111, 1168]
   1. **One panel, two doors.** A drawer opened from the top bar or the command palette's last row,
      shown only to a person who may use the assistant. The palette's query arrives as a draft, sent
      only when the person sends it.
-  2. **A generic card first, renderers over it.** Every tool call is a card naming the tool and its
-     arguments, with the raw result one click away. A registry keyed by tool name may render the
+  2. **A generic card first, renderers over it.** Every tool call is a slim row in the turn's one collapsed thought
+     block, naming the tool and its arguments and expanding to a generic card with the raw result
+     one click away. A registry keyed by tool name may render the
      result the way the console shows that thing elsewhere (a component as a link, reachability as
      the endpoint ladder); a tool with no renderer, or a result the renderer cannot read, keeps the
      generic card, so a tool added to the catalog is never a blank.

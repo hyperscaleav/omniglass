@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useSearchParams } from "@solidjs/router";
 import TabRail from "./TabRail";
+import { createTabState } from "../lib/tabstate";
 
 // The workspace tab rail (#790): a facet of one page is a URL fact (`?tab=`),
 // so every view is an address (#763's rule). One tab is no workspace: the
@@ -16,9 +17,10 @@ function mount(tabs: { key: string; label: string }[], path = "/x") {
         path="/x"
         component={() => {
           const [params] = useSearchParams();
+          const state = createTabState("page", () => tabs);
           return (
             <div>
-              <TabRail tabs={tabs} />
+              <TabRail tabs={tabs} state={state} />
               <div data-testid="active">{(Array.isArray(params.tab) ? params.tab[0] : params.tab) ?? "(none)"}</div>
               <div data-testid="edit">{(Array.isArray(params.edit) ? params.edit[0] : params.edit) ?? "(none)"}</div>
             </div>
@@ -50,6 +52,18 @@ describe("TabRail", () => {
     await waitFor(() => expect(screen.getByTestId("active").textContent).toBe("history"));
     fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
     await waitFor(() => expect(screen.getByTestId("active").textContent).toBe("(none)"));
+  });
+
+  it("carries a page control at its end, outside the tablist (#2304)", () => {
+    window.history.pushState({}, "", "/x");
+    render(() => (
+      <Router>
+        <Route path="/x" component={() => <TabRail tabs={TABS} state={createTabState("page", () => TABS)} end={<button data-testid="end-control">Range</button>} />} />
+      </Router>
+    ));
+    const rail = screen.getByTestId("tab-rail");
+    const end = within(rail).getByTestId("end-control");
+    expect(screen.getByRole("tablist").contains(end)).toBe(false);
   });
 
   it("a deep link lands on its tab", () => {

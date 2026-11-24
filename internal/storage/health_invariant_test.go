@@ -278,7 +278,7 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	// slots' OWN active flags instead, which is the tie-break decision
 	// stated directly rather than through its verdict.
 	for i := 0; i < 8; i++ {
-		rep, err := f.gw.SystemHealth(ctx, "tie-room", 0, f.all)
+		rep, err := f.gw.SystemHealth(ctx, "tie-room", storage.HealthRange{}, f.all, f.all)
 		if err != nil {
 			t.Fatalf("system health read %d: %v", i, err)
 		}
@@ -648,7 +648,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		}},
 		{"open a second building for the room to move into", func() error {
 			_, err := f.gw.CreateLocation(ctx, "", storage.LocationSpec{
-				Name: "hq-b2", LocationType: "building", ParentName: ptrStr("hq")}, f.all)
+				Name: "hq-b2", LocationType: "building", ParentName: ptrStr("hq")}, f.all, f.all)
 			return err
 		}},
 		{"move the room holding both systems, which recomputes both ancestor chains", func() error {
@@ -709,7 +709,7 @@ func TestHealthRecordsDeleteRipple(t *testing.T) {
 // recorded value stopped tracking the verdict.
 func (f *healthFixture) mustAgreeWithRecord(t *testing.T, ctx context.Context, systemName, want string) {
 	t.Helper()
-	rep, err := f.gw.SystemHealth(ctx, systemName, 0, f.all)
+	rep, err := f.gw.SystemHealth(ctx, systemName, storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health %s: %v", systemName, err)
 	}

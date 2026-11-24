@@ -1,6 +1,7 @@
 import { type JSX, Show } from "solid-js";
 import { Trash, X } from "./icons";
 import Button from "./Button";
+import FormProblems from "./FormProblems";
 import PanelFooter from "./PanelFooter";
 import { type FormActions, type FormBinding } from "../lib/formactions";
 
@@ -14,15 +15,27 @@ export default function FormActionBar(props: { actions: FormActions; inline?: bo
   return (
     <Show when={props.actions.binding()}>
       {(b) => (
-        <Show when={props.inline} fallback={<PanelFooter><Buttons b={b()} /></PanelFooter>}>
-          <div class="flex items-center gap-2 border-t border-base-300 pt-4"><Buttons b={b()} /></div>
+        <Show when={props.inline} fallback={<PanelFooter notice={<Missing actions={props.actions} b={b()} />}><Buttons actions={props.actions} b={b()} /></PanelFooter>}>
+          <div class="flex flex-col gap-3">
+            <Missing actions={props.actions} b={b()} />
+            <div class="flex items-center gap-2 border-t border-base-300 pt-4"><Buttons actions={props.actions} b={b()} /></div>
+          </div>
         </Show>
       )}
     </Show>
   );
 }
 
-function Buttons(props: { b: FormBinding }): JSX.Element {
+// What a submit attempt found missing, named beside the actions (#2440).
+function Missing(props: { actions: FormActions; b: FormBinding }): JSX.Element {
+  return (
+    <Show when={props.b.problems && props.actions.attempted()}>
+      <FormProblems action={props.b.problemsAction ?? "submit"} problems={props.b.problems!()} onFocus={(k) => props.b.focusField?.(k)} />
+    </Show>
+  );
+}
+
+function Buttons(props: { actions: FormActions; b: FormBinding }): JSX.Element {
   const b = () => props.b;
   return (
     <>
@@ -49,8 +62,8 @@ function Buttons(props: { b: FormBinding }): JSX.Element {
           )}
         </Show>
         <Show when={b().submit}>
-          {(submit) => (
-            <Button intent="action" icon={b().submitIcon} onClick={() => submit()()} loading={b().busy?.()} disabled={b().disabled?.()}>
+          {(_submit) => (
+            <Button intent="action" icon={b().submitIcon} onClick={() => props.actions.trigger()} loading={b().busy?.()} disabled={b().disabled?.()}>
               {b().submitLabel}
             </Button>
           )}

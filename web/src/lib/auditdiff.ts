@@ -49,3 +49,31 @@ export function diffFields(oldV: unknown, newV: unknown): DiffRow[] {
     return { key: k, before, after, state };
   });
 }
+
+const ACRONYMS = new Set(["id", "uuid", "url", "uri", "ip", "api", "tls", "dns", "mcp", "http", "https", "ssh", "snmp"]);
+
+// humanizeField reads a recorded field name as words: the Go struct names the
+// older writers record ("LastOrphanedAt", "PlatformComponentID") and the
+// snake_case column names the newer ones do ("owner_kind"). Words split at case
+// changes and underscores; an acronym keeps its capitals ("Component ID"). The
+// first word takes a capital, the rest stay lower, so the label wraps at spaces
+// instead of mid-word in a narrow column. A name with no letters is returned
+// as it came.
+export function humanizeField(key: string): string {
+  const words = key.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+/g);
+  if (!words || !/[A-Za-z]/.test(key)) return key;
+  return words
+    .map((w, i) => {
+      if (ACRONYMS.has(w.toLowerCase())) return w.toUpperCase();
+      const lower = w.toLowerCase();
+      return i === 0 ? lower[0].toUpperCase() + lower.slice(1) : lower;
+    })
+    .join(" ");
+}
+
+// isTimestamp is true for an RFC 3339 instant, the shape every created_at,
+// updated_at and *_at column serializes to; the change table shows one as a date
+// in the console's own format, not the raw string.
+export function isTimestamp(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(v);
+}

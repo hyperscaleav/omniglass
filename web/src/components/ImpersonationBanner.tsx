@@ -11,8 +11,8 @@ export default function ImpersonationBanner() {
   return (
     <Show when={actingAs()}>
       {(a) => (
-        <div class="flex items-center gap-3 border-b border-warning/40 bg-warning/15 px-8 py-2 text-sm" role="status">
-          <span class="badge badge-warning badge-sm font-semibold uppercase tracking-wide">
+        <div class="flex h-6 flex-none items-center gap-2 border-b border-warning/40 bg-warning/15 px-4 text-xs leading-none" role="status" data-testid="impersonation-banner">
+          <span class="badge badge-warning badge-xs font-semibold uppercase tracking-wide">
             {a().mode === "view_as" ? "Viewing as" : "Acting as"}
           </span>
           <span class="font-medium">{a().target}</span>
@@ -20,7 +20,7 @@ export default function ImpersonationBanner() {
             {a().mode === "view_as" ? "read-only" : "changes are attributed to both you and them"}
           </span>
           <span class="flex-1" />
-          <Button intent="warn" size="xs" onClick={() => stopImpersonating(qc)}>Stop</Button>
+          <Button intent="warn" size="xs" class="h-5 min-h-0" onClick={() => stopImpersonating(qc)}>Stop</Button>
         </div>
       )}
     </Show>

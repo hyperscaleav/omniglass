@@ -211,13 +211,41 @@ func (p *PG) writeEventSets(ctx context.Context, tx pgx.Tx, sets []eventSet) err
 	return nil
 }
 
+// EventFilter narrows an event read (#2437): by the event_type name, the
+// rendered source, and a case-insensitive substring of the message. Empty fields
+// filter nothing.
+type EventFilter struct {
+	Key    string
+	Source string
+	Text   string
+}
+
+// where renders the filter as SQL conditions over the event table, appending its
+// arguments after args (the query's own).
+func (f EventFilter) where(args []any) (string, []any) {
+	cond := ""
+	if f.Key != "" {
+		args = append(args, f.Key)
+		cond += fmt.Sprintf(" and event.event_type_id = (select et.id from "+catalogRows("event_type", "")+" et where et.name = $%d)", len(args))
+	}
+	if f.Source != "" {
+		args = append(args, f.Source)
+		cond += fmt.Sprintf(" and (%s) = $%d", sourceRendered("event"), len(args))
+	}
+	if f.Text != "" {
+		args = append(args, f.Text)
+		cond += fmt.Sprintf(" and strpos(lower(event.message), lower($%d)) > 0", len(args))
+	}
+	return cond, args
+}
+
 // ListComponentEvents returns a component's recent occurrences, newest first,
 // bounded by window and limit. The window is counted back from the DATABASE's
 // clock (tsSince, #719); a zero window is every occurrence there is. Read helper for the component event log panel.
 // componentRef is resolved once (name or uuid, ADR-0062); an unknown
 // component folds into the same nil-no-error empty result the old inline
 // subquery's silent no-match gave (see ListComponentLogs).
-func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, window time.Duration, limit int) ([]Event, error) {
+func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, window time.Duration, limit int, filter EventFilter) ([]Event, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {
 		return nil, nil
@@ -225,14 +253,15 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, windo
 		return nil, err
 	}
 	bound, args := tsSince("ts", window, c.ID, limit)
+	fcond, args := filter.where(args)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select id, ts, owner_kind,
 			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id, instance, origin, message, attributes, provenance, `+sourceRendered("event")+`,
 			`+eventLineageCols+`
 		from event
-		where component_id = $1::uuid and %s
+		where component_id = $1::uuid and %s%s
 		order by ts desc
-		limit $2`, bound), args...)
+		limit $2`, bound, fcond), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list events %s: %w", componentRef, err)
 	}
@@ -262,8 +291,9 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, windo
 // system in scope first (the non-disclosing-404 pattern every lane read
 // shares); membership is the system_member join, so a component shared with
 // another system appears in both systems' lists, which is what sharing means.
-func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error) {
+func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int, filter EventFilter) ([]Event, error) {
 	bound, args := tsSince("ts", window, systemID, limit)
+	fcond, args := filter.where(args)
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select event.id, ts, owner_kind,
 			coalesce(
@@ -275,9 +305,9 @@ func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.
 		from event
 		where (event.system_id = $1::uuid
 		   or event.component_id in (select m.component_id from system_member m where m.system_id = $1::uuid))
-		  and %s
+		  and %s%s
 		order by ts desc
-		limit $2`, bound), args...)
+		limit $2`, bound, fcond), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system events %s: %w", systemID, err)
 	}

@@ -3,8 +3,10 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -103,7 +105,52 @@ func runAPICommand(cmd *cobra.Command, method, path string, body any) error {
 		}
 	}
 	if !res.OK() {
+		if err := ambiguousNameError(res.Status, res.Body); err != nil {
+			return err
+		}
 		return fmt.Errorf("server returned status %d", res.Status)
+	}
+	return nil
+}
+
+// ambiguousRefLocation mirrors api.AmbiguousRefLocation (a test pins them equal;
+// the CLI stays free of the API package).
+const ambiguousRefLocation = "path.name"
+
+// ambiguousNameError reads a 409 the API stamps as an ambiguous name (#2334) and
+// restates it as the instruction the operator needs: the name matches N rows, use
+// the id (or dotted address) of one of these. It is nil for any other response,
+// which keeps the generic status error.
+func ambiguousNameError(status int, body []byte) error {
+	if status != http.StatusConflict {
+		return nil
+	}
+	var p struct {
+		Detail string `json:"detail"`
+		Errors []struct {
+			Location string `json:"location"`
+			Value    struct {
+				Count      int      `json:"count"`
+				Candidates []string `json:"candidates"`
+			} `json:"value"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(body, &p) != nil {
+		return nil
+	}
+	for _, e := range p.Errors {
+		if e.Location != ambiguousRefLocation {
+			continue
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "the name matches %d rows you can see; address one by its id or dotted address instead:", e.Value.Count)
+		for _, c := range e.Value.Candidates {
+			b.WriteString("\n  " + c)
+		}
+		if more := e.Value.Count - len(e.Value.Candidates); more > 0 {
+			fmt.Fprintf(&b, "\n  (and %d more)", more)
+		}
+		return errors.New(b.String())
 	}
 	return nil
 }

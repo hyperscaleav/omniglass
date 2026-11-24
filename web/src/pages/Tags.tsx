@@ -2,10 +2,12 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import BladeTitle from "../components/BladeTitle";
 import Button from "../components/Button";
+import Switch from "../components/ui/Switch";
 import { useFormActions } from "../lib/formactions";
 import { Plus, X } from "../components/icons";
 import {
@@ -24,6 +26,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Tags: the governed vocabulary on the FlatList surface. A tag is a
 // tenant-wide, normalized label name; this page is the admin directory (mint,
@@ -138,7 +141,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   async function removeTag() {
     const t = tag();
     if (!t) return;
-    if (!confirm(`Delete tag "${t.name}"? Its bindings across the fleet are removed too.`)) return;
+    if (!(await confirmDelete({ kind: "tag", name: t.name, consequence: "Its bindings across the fleet are removed too." }))) return;
     setErr(null);
     try {
       await deleteTag(t.name);
@@ -223,10 +226,12 @@ function AppliesToPicker(p: { value: EntityKind[]; onChange: (v: EntityKind[]) =
 
 function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void }): JSX.Element {
   return (
-    <label class="flex items-center gap-2">
-      <input type="checkbox" class="toggle toggle-sm" checked={p.value} onChange={(e) => p.onChange(e.currentTarget.checked)} />
-      <span class="font-data text-sm">{p.value ? "cascades to descendants" : "flat (own entity only)"}</span>
-    </label>
+    <Switch
+      label="Cascades to descendants"
+      description={p.value ? "Every descendant of a tagged entity carries it too." : "Flat: only the tagged entity carries it."}
+      checked={p.value}
+      onChange={p.onChange}
+    />
   );
 }
 
@@ -234,7 +239,8 @@ function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void })
 // entity kinds it applies to and whether it cascades, then mint it.
 export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: string }): JSX.Element {
   const qc = useQueryClient();
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity({ name: p.initialName });
+  const identity = createIdentity({ name: p.initialName });
+  const { display, name } = identity;
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
   const [isEnum, setIsEnum] = createSignal(false);
@@ -275,12 +281,7 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads in lists and pickers. Optional: a key with none reads as its name.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Cost Center" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A lowercase identifier, unique tenant-wide (e.g. environment, cost-center)."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="cost-center" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Cost Center" namePlaceholder="cost-center" />
       <FieldRow label="Applies to">
         <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />
       </FieldRow>

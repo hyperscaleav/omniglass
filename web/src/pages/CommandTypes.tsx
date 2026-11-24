@@ -1,12 +1,15 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
+import { CommandTypeUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { Plus } from "../components/icons";
@@ -26,6 +29,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Command Types: the "do" catalog (Catalog > Command Types), the twin of the
 // Properties and Event Types catalogs. A command type names what a component can be
@@ -44,12 +48,15 @@ function originBadge(official: boolean): JSX.Element {
 // different stores and must be distinguishable at a glance.
 type TargetArms = { target_property_type?: string; target_metric_type?: string };
 
-function targetCell(arms: TargetArms): JSX.Element {
+function targetCell(arms: TargetArms, linked = false): JSX.Element {
   const name = arms.target_property_type || arms.target_metric_type;
   if (!name) return <span class="text-base-content/30">fire-and-forget</span>;
   return (
     <span class="inline-flex items-baseline gap-1.5">
-      <span class="font-data text-[12px]">{name}</span>
+      {/* The drawer opens the property or metric the command sets; a list row stays plain text, since a row click already opens this drawer. */}
+      {linked
+        ? <CatalogRef kind={arms.target_property_type ? "property" : "metric"} name={name} />
+        : <span class="font-data text-[12px]">{name}</span>}
       <span class="text-[10px] text-base-content/40">{arms.target_property_type ? "property" : "metric"}</span>
     </span>
   );
@@ -242,7 +249,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
   async function removeCommandType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete command type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "command type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteCommandType(r.name);
@@ -303,7 +310,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked bind="name" value={<span class="font-data">{r().name}</span>} />
-            <KVStacked label="Target" value={targetCell(r())} />
+            <KVStacked label="Target" value={targetCell(r(), true)} />
             <KVStacked label="Settle window" value={<span class="tabular-nums">{r().settle_window_seconds}s</span>} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
@@ -326,6 +333,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             </FieldRow>
             <SettleWindowField value={settle()} onInput={setSettle} targeted={targeted()} draft={settleDraft()} eyebrow />
           </Show>
+          <CommandTypeUsedBy name={r().name} />
         </div>
       )}
     </Show>
@@ -340,8 +348,8 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
 // settleable one cannot be created until its window is stated.
 export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
-  const [label, setLabel] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [description, setDescription] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [settle, setSettle] = createSignal("");
@@ -368,7 +376,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       const arms = splitTarget(target());
       const created = await createCommandType({
         name: name().trim(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
         target_property_type: arms.target_property_type || undefined,
         target_metric_type: arms.target_metric_type || undefined,
@@ -388,12 +396,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. set-input or reboot.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="Set input" onInput={(e) => setLabel(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Set input" namePlaceholder="set-input" />
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
       </FieldRow>

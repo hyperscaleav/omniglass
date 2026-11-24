@@ -1,12 +1,11 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { Check, Eye, Siren } from "./icons";
+import { Siren } from "./icons";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import { describeError, rel } from "../lib/format";
 import {
   ALARM_TIMELINE_PREFIX,
-  acknowledgeAlarm,
   clearAlarm,
   componentAlarms,
   componentAlarmsKey,
@@ -17,8 +16,9 @@ import {
 import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
-import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
-import TroubleshootButton from "./TroubleshootButton";
+import AlarmActions from "./AlarmActions";
+import AlarmDuration from "./AlarmDuration";
+import { SnoozedBadge } from "./SnoozeButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
@@ -110,8 +110,6 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const clear = (id: string) => run(() => clearAlarm(props.component, id));
 
-  const acknowledge = (id: string) => run(() => acknowledgeAlarm(props.component, id).then(() => undefined));
-
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
@@ -153,13 +151,16 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
           </Show>
         }
       >
-        <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
+        <div class="divide-y divide-base-300 rounded-box border border-base-300">
           <For each={active()}>
             {(a) => (
               <div class="flex flex-col gap-1.5 px-3 py-2.5">
                 <div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
                 <div class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
+                  <Show when={scale().effect(a.severity) === "none"}>
+                    <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
+                  </Show>
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
                   <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
                     raised {rel(a.raised_at)}
@@ -187,33 +188,13 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <SnoozedBadge alarm={a} />
                 </div>
                 {/* What you can do: one group that wraps as a unit and centers its own controls. */}
-                <div data-alarm-actions class="flex shrink-0 items-center gap-1">
-                  <Show when={props.canAcknowledge && !a.acknowledged}>
-                    <Button
-                      square
-                      size="xs"
-                      icon={Eye}
-                      label={`Acknowledge alarm ${a.id}`}
-                      title="Record that you have seen this alarm. It stays raised."
-                      disabled={busy()}
-                      onClick={() => void acknowledge(a.id)}
-                    />
-                  </Show>
-                  <Show when={props.canUpdate}>
-                    <Button
-                      square
-                      size="xs"
-                      icon={Check}
-                      label={`Clear alarm ${a.id}`}
-                      title="Clear this alarm"
-                      disabled={busy()}
-                      onClick={() => void clear(a.id)}
-                    />
-                  </Show>
-                  <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
-                  <TroubleshootButton alarm={a} />
-                  {timelines.button(a.id, a.message)}
-                </div>
+                <AlarmActions
+                    componentId={props.component}
+                    alarm={a}
+                    surface={surface}
+                    show={{ ack: true, snooze: true, troubleshoot: true, command: true, timeline: timelines, clear: { allowed: !!props.canUpdate, busy: busy(), onClear: () => void clear(a.id) } }}
+                    allow={{ ack: !!props.canAcknowledge, snooze: !!props.canSnooze }}
+                  />
                 </div>
                 <Show when={timelines.isOpen(a.id)}>
                   <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />
@@ -236,7 +217,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
               <For each={scale().levels}>
                 {(l) => (
                   <option value={l.name} selected={l.name === severity()}>
-                    {`${entityLabel(l)} (${l.outage ? "takes this component out" : "degrades it, still working"})`}
+                    {`${entityLabel(l)} (${l.health_effect === "outage" ? "takes this component out" : l.health_effect === "none" ? "does not affect health" : "degrades it, still working"})`}
                   </option>
                 )}
               </For>
@@ -267,7 +248,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
             <span class="text-[10.5px] font-semibold uppercase tracking-wide text-base-content/50">Recently cleared</span>
             <span class="text-[10.5px] text-base-content/40">kept on purpose: the fix does not erase the fault</span>
           </div>
-          <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-dashed border-base-300">
+          <div class="divide-y divide-base-300 rounded-box border border-dashed border-base-300">
             <For each={cleared()}>
               {(a) => (
                 <div class="flex flex-col gap-1.5 px-3 py-2">
@@ -277,7 +258,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
                       <span class="shrink-0 text-[11px] text-base-content/45">
                         raised {rel(a.raised_at)}
-                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
+                        <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)} · lasted <AlarmDuration alarm={a} /></Show>
                         {/* An alarm that came and went with nobody looking is worth
                             seeing in the history: it is the one that got no attention. */}
                         <Show when={!a.acknowledged}> · never acknowledged</Show>
@@ -287,10 +268,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                     {/* A snooze is stored on the component and dedup key, so a
                         cleared alarm can carry one: snoozing an alarm that just
                         cleared is how a flapping one is quieted. */}
-                    <div data-alarm-actions class="flex shrink-0 items-center gap-1">
-                      <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
-                      {timelines.button(a.id, a.message)}
-                    </div>
+                    <AlarmActions componentId={props.component} alarm={a} surface={surface} show={{ snooze: true, timeline: timelines }} allow={{ snooze: !!props.canSnooze }} />
                   </div>
                   <Show when={timelines.isOpen(a.id)}>
                     <AlarmTimeline component={props.component} alarmId={a.id} id={timelines.panelId(a.id)} label={timelines.label(a.message)} />

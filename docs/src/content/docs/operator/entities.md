@@ -5,37 +5,42 @@ sidebar:
   label: Create and edit
   order: 3
   badge:
-    text: Partial
-    variant: note
+    text: Built
+    variant: success
 screenshots:
   - id: entity-blade
     path: /web/explore
-    alt: "A location's blade slides in from the right with its details and a footer action bar."
+    alt: "A location's blade slides in from the right with its detail page's card: type, health, since-when, tags, its tabs and what it holds."
     # Harbor Point holds two buildings and no system, so its row opens the
     # location's own blade (a location holding one system opens that system).
     steps:
       - action: click
         selector: "[role=treeitem]:has-text('Harbor Point')"
-    # The blade renders one region no clock can pin: the since line's age
+    # The blade renders one region no clock can pin: the header's since line's age
     # counts from the capture's own seed-to-shoot latency.
     #
     # The mask DECLARES its box (`width`): painted at the since span's
     # top-left, as tall as the span and 184px wide, whatever the line reads.
     # A mask on the span alone is the size of its text, and the text moves
-    # with the clock (`fmtTime` prints the month, a bare day and AM or PM; the
-    # age reads 9s or 17s), so the box repainted a pixel narrower or wider on
+    # with the clock (`fmtTime` prints a short absolute, "Nov 23, 01:56 PM", whose
+    # width follows the month name and the day's digits; the age reads 9s or
+    # 17s; the Time component's relative "4m ago" counts the same way), so the
+    # box repainted a pixel narrower or wider on
     # an unchanged blade (#1081). The row around it holds still but also holds
     # the health, the one region on the page a baseline must keep gating. The
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
     # in the console's face; a line wider than 184px fails the capture by name.
     mask:
-      - selector: "[data-testid=blade-since]"
+      - selector: "[data-testid=since-line]"
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
-    # No mask: the Configure tab replaces the overview (and its since-line
-    # clock), and the form renders from the seed deterministically.
+    # The location header's since line ages with the capture on every tab
+    # (#2423); the form below renders from the seed deterministically.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
 ---
 
 Once you have [found an entity](/operator/fleet/), you open it, read it, and change
@@ -47,28 +52,23 @@ Click a row to open its **blade**, a panel that slides in from the right with th
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
 its [detail view](/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
-shareable and bookmarkable; a blade opened by a click is a quick look that does not change
-the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
-create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
+shareable and bookmarkable. A row opened on a list page (any catalog page, users, roles,
+secrets, variables, outposts, files, alarms) is addressed too: its drawer puts
+`?open=<the row's name or id>` in the URL, so you can [link a colleague to it](#link-a-colleague-to-an-open-drawer).
+Rows are keyboard-operable: Tab to a row and press
 Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
-from a row. It leads with the health and since-when and the active alarms that say why, each
-with its severity, then the context you came for: a system's location (as a card saying where it
-sits, the path above it, since a blade has no breadcrumb) and its size;
-the systems a component serves, with the slot it fills in each, and its location when that is
-somewhere else; a location's systems, each with its health, one click from its own blade. Then
-the entity's **form**: its name, classification, a location's parent, and tags, read or edited
-in place. Each fact is said once: the blade's title is the label (the Label field appears only
-while editing), a location's only system is the location (its card names no location and offers no second
-blade for it, only **Configure location**), and the standard is in Classification, not repeated
-above it. Configuration (a
-system's slots, the properties and their cascade, the reconciliation, a component's
-endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
-components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
-permissions on that row.
+A fleet entity's blade (a location, a system, a component) is its detail page in a side
+panel: the same card, the same tabs (Overview, Activity, Configure) and the same actions,
+reflowed to the narrower panel, so you never leave Explore to answer a question about an
+entity. Switching a tab inside the blade changes only the blade; the page behind it keeps its
+own address. A blade has no breadcrumb, so where the entity sits is said by a location card
+with the path above it. Opening something from inside a blade (a system a component serves, a
+component on a system's Why) stacks another blade over it. Edit and Delete sit in the
+**Configure** tab's footer, as on the page; Delete asks first and is gated by your permissions
+on that row. **Expand** still opens the page, for its breadcrumb and its shareable address.
 
 The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
@@ -76,30 +76,67 @@ trace where access comes from without leaving the page. Each page roots one enti
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
 read-only reference.
 
+## Link a colleague to an open drawer
+
+An open drawer has an address. Open a rule on **Event rules**, and the address bar reads
+`/event-rules?open=disk-nearly-full`: the row's name, the same one its API route and the CLI take
+(a user, role or secret is addressed by its id). Copy the address and send it, and your colleague
+lands on the list with the same drawer already open. A reload keeps your place, and **Back** closes
+the drawer and leaves you on the list, since opening is a step in your history. Closing the drawer
+clears the address. The address composes with the page's other state, so a filter or a sort in the
+address survives opening and closing. A blade you drill into from the drawer is a quick look and is
+not in the address.
+
+An address that names nothing (a rule that was deleted, or one you may not see) shows the list with a
+notice, not a blank drawer. The notice reads the same either way, so it does not reveal which.
+
 ## Edit through the footer action bar
 
-A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
-chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
-and identity blades alike: a fleet blade's form (the identity, classification and tags of the
-same form the detail view's [Configure tab](/operator/fleet/) renders) and an identity blade's profile, members,
-and grants.
+A blade opens **read-only**, and the header is chrome only (back, full-page, close). A fleet
+blade (a location, a system, a component) is its detail view, so it edits as the page does: on its
+**Configure** tab, whose footer carries **Edit** and, on the left, **Delete** behind a confirm (see
+[Configure](/operator/fleet/) and [what is in the way](#delete-and-what-is-in-the-way)). The rest of this section is the identity and catalog blades, whose
+actions live in the blade's own **footer action bar**: **Edit** turns the whole blade live in place,
+its profile, members and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
 available, with no need to enter edit mode: a red **Delete** for a group (a user instead has the escalating
 [lifecycle](/admin/users/) of **Disable**, then **Archive**, then **Purge**, so its left slot is
 **Disable / Enable** and the stronger steps sit in the kebab), each behind a confirm. Secondary actions like **Impersonate** fold into a
-**⋯** menu. A blade you may not write keeps the Edit and Delete pair in place, **greyed**, with the
-reason on hover (or on keyboard focus): an **official** catalog row reads "Official: ships with
-Omniglass and updates with it." on both buttons, while a missing permission greys **just that
+**⋯** menu. A blade you may not write keeps its buttons in place, **greyed**, with the
+reason on hover (or on keyboard focus), except an **official** catalog row, whose footer shows one "Official, read-only"
+note ("Official: ships with Omniglass and updates with it." on hover) in place of both buttons. A missing permission greys **just that
 button** and names the permission that would unlock it (`Requires <resource>:update` on Edit,
 `Requires <resource>:delete` on Delete), so a verb you do hold stays live beside the one you lack.
 A blade with no actions at all (a role) shows no bar.
 
 The same bar carries **create**. A form that opens in a slide-over (New user, New tag, Upload
 file) or as its own blade (New endpoint) puts its **Create** button in the bar at the foot of the
-panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
+panel, never floating after the last field. On the create faces and the event rule form it stays enabled and, pressed with a gap, names what is missing; the older slide-over forms still grey it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
+
+## Delete, and what is in the way
+
+Every delete in the console asks first in the same dialog: its title names the thing (**Delete
+component "display-1"?**), its body says what goes with it, and the red button carries the verb
+(**Delete component**, **Remove simulated component**, **Withdraw slot**). Cancel holds the focus
+when it opens, so Enter never deletes by accident; Escape and the overlay close it too.
+
+A location, a system or a component cannot be deleted while something still depends on it: a
+child, an endpoint it owns, a system or component placed in it, a slot it staffs. The server
+refuses, and the dialog stays open and lists **In the way**, each row naming its kind and linking
+to its own page (an endpoint has no page, so it is named, not linked). Each row has its own
+**Delete**, which asks once more on the row and then deletes that row by its own kind's delete,
+under its own permission; a row that is itself refused says why on the row. Once nothing is left,
+press the dialog's **Delete** again: the retry happens in place, and nothing needs the API. Where a
+blocker should move rather than go (a system that belongs in another room), follow its link and
+move it there.
+
+The list names only what you may read. A blocker outside your scope is counted (**1 more you
+cannot see from here**), never named, so a refusal tells you no more about the fleet than your
+grants already do; someone who can see it has to clear it. Nothing here deletes in cascade: each
+row goes by its own delete. (Decommissioning a whole location, with what it holds, is a separate verb.)
 
 ## Deep-link the edit
 
@@ -110,14 +147,24 @@ link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so 
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. A location holding one system is configured on its system's view, so `?edit=1` on that
 location's address lands on the system's Configure with the location's own form editing
-(`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
-`/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
-identity pages.
+(`?edit=location`). The console uses these links for its handoffs, for example a user's
+`?open=<id>&edit=1` deep link on the identity pages (the older `?u=<id>` still opens). Creating a
+location, system or component does not: it lands on the new row's **Overview** with a "created" notice
+(#2465), since what you want next is to see it. The **back** link above a create form names the location
+you pressed **+** on (`← West Building`) and goes there; opened from nowhere in particular it is
+`← Explore`.
 
 ::screenshot{#entity-edit-face}
 
 ## Create, edit, delete
 
+The **Create** button is never greyed. Pressing it on a form with a gap does not submit: a line beside the
+buttons reads "To create the component, fill in Product and Name", each name a link that focuses its
+field, the fields are marked, and the first one takes the focus. The create faces end at that action
+row; anything that waits for the entity to exist (its tags) appears on the detail after you create it.
+
+- A **component** is added through its own flow, from its product to an endpoint that has answered
+  ([add a component](/operator/add-a-component/)); the plain form below is its **advanced** link.
 - **New** opens a **draft** at the entity's own `/create` address, **From scratch** by default; **From a
   template** instead starts from one of the examples Omniglass ships
   ([starting from a template](/operator/templates/)). From scratch, it asks **what** and **where**
@@ -138,12 +185,15 @@ identity pages.
   component as well as `system:update` over the system; a **Deploy** grant over both covers it.
 
   The same slot is on the component's edit face as **Memberships**, so a system you chose at create is
-  not a choice you are stuck with. **Edit** a component and the primary system is a picker you can
-  change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
-  remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
-  outside your `system:update` scope, or a slot the component still fills there), the reason shows in
-  the footer beside **Save** and the form stays in edit. Without `system:update` the field reads but does not edit. The
-  system's member list updates without a reload.
+  not a choice you are stuck with. Each system the component is in is a chip (the primary is marked)
+  with a remove control, and three controls change them, one act each. **Also serves...** adds a
+  system and keeps the others (a shared device is in several), without touching the primary.
+  **Primary system** chooses which of the component's systems is its default, and lists only systems it
+  is in. Moving the component from one system to another is not here: it is **Move to...** under
+  Placement, below. **Save** applies the memberships with the rest of the edit; if the server refuses
+  one (a system outside your `system:update` scope, or a slot the component still fills there), the
+  reason shows in the footer beside **Save** and the form stays in edit. Without `system:update` the
+  field reads but does not edit. The system's member list updates without a reload.
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
@@ -181,8 +231,9 @@ identity pages.
   field that arrives filled in.
 
   The locked **label** is the real label, rendered by the same rule engine that will stamp it,
-  against the classification and placement you have just chosen, and against that same number. The form
-  also names the **rule** that produced it, so the value is traceable rather than arriving from nowhere.
+  against the classification and placement you have just chosen, and against that same number. The
+  field's **(i)** carries the **rule** that produced it, so the value is traceable rather than arriving from
+  nowhere; the hint under the field says the label is rendered, not the template itself.
   Nothing is created to work either of them out: it is a render, not a draft row
   ([ADR-0104](/architecture/decisions/)).
 
@@ -259,25 +310,36 @@ identity pages.
   narrowed to the location type's allowed parents (or, when unconstrained, every location), excluding
   the location's own subtree. Moving back to root is not offered here, and the platform has no
   clear-to-root capability for a location at all, not even from the API or CLI.
-- A **component**'s and a **system**'s Placement (System, Location, Parent, and, for a component,
-  Product) is **read-only in the console**, in view and in edit alike: you set them at create
-  and re-home an entity through the API or CLI (`omniglass component move`, `omniglass system move`).
-  Both are movable via `:move` the same way a location's Parent is (an empty location unplaces a
-  component or a system; clearing parent to lift an entity to a root needs an all-scoped grant, the
-  same authorization creating a root entity already requires, since a scope-limited operator clearing
-  parent would otherwise walk an entity out of every subtree their own grant was ever limited to; a
-  re-parent that would put an entity under itself or one of its own children is refused). From the CLI, an entity's `<name>` argument takes a uuid, a bare
+- A **component**'s and a **system**'s edit face carries **Move to...** under Placement, gated by
+  `component:move` or `system:move`. It is its own act, not a field **Save** carries: pick what to move
+  to, press **Move**, and it happens at once, so the rest of your edit is untouched. A destination
+  is a type-to-filter list whose second line says where each choice is (a location by the locations above
+  it, a system or component by the place it sits in), so two rooms named alike tell apart. What you
+  can move to:
+  - **Another location**: relocates it to another location. The current location is shown but cannot be chosen.
+  - **Another system** (a component, with `system:update`): joins the system, optionally in a slot
+    you choose (a full slot is shown and cannot be chosen), makes it the component's primary, and
+    leaves the system it was in, freeing the slot it held there first. Other systems it serves are
+    kept. To keep the old system as well, use **Also serves...** instead.
+  - **No location** (offered once it is placed) unplaces it.
+  - **Under a component** or **Under a system**: re-parents it in its own tree. **No parent (top
+    level)** lifts it to a root and needs the all-scoped grant the API requires. A cycle (under itself
+    or one of its own children) is refused.
+  The server's refusal (a cycle, a destination outside your scope, a full slot, a taken name at the
+  destination) shows under the picker and leaves the panel open to try another destination. A move
+  can rename an entity the platform named, since its name is unique within its placement; the page
+  stays on the entity, which is addressed by its uuid, and the breadcrumb and Explore show the new
+  location. The same moves are available from the API or CLI (`omniglass component move`,
+  `omniglass system move`), which follow the same three-state
+  convention: an empty location unplaces, clearing parent to lift an entity to a root needs an
+  all-scoped grant, the same authorization creating a root entity already requires, since a
+  scope-limited operator clearing parent would otherwise walk an entity out of every subtree their
+  own grant was ever limited to. From the CLI, an entity's `<name>` argument takes a uuid, a bare
   name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
   `$comp`/`$sys` accessor and the entity's own location from there. **Quote it**: an unquoted `$comp`
   disappears before the shell ever sends the request, so `omniglass component get
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
-
-:::design[Target design, tracked in #1804]
-A component's and a system's edit face carries **Location** and **Parent** pickers that issue the
-move, the way a location's Parent picker does, so a placement made at create is changeable from the
-surface that made it.
-:::
 
 ## Labels the platform writes
 
@@ -352,3 +414,19 @@ sign you picked the wrong component or that the slot needs widening.
 Declaring the slots is on the [Standards guide](/admin/standards/#slots-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
+
+## Read what a system or component has been saying
+
+A system's **Activity** tab and a component's both list their **events** and **log lines**, and both
+list them the same way, so what you learn on one carries to the other. A row is the **time** (relative,
+with the exact time on hover), a **badge** (an event's key, or a log's severity in its level's color), the
+**member** that wrote it when the list spans several (a system's), and the **message** on one line, however
+long. Click a row to open its detail in place: the whole message wrapped, its source, correlation id, structured
+attributes, the rule that derived it and the alarm it moved (the clock opens that alarm's timeline). An
+internal id in a message (a task's 64-character id) shows as a short labelled reference such as
+`task 9f2c4e7a`; hover it for the full id.
+
+One filter bar narrows either list, and each filter narrows what the server reads, so the capped
+24-hour window holds only matching rows: **message contains** on both; **at least** (a severity
+threshold) and **from** (a source the window carries) on logs; **key** and **source** on events. The same
+filters are the `key`, `source`, `severity` and `q` parameters on the events and logs reads.

@@ -85,7 +85,7 @@ if (nested && tree.length !== rows.length) {
             <td><code>{l.name}</code> ({l.label})</td>
             <td>{l.color}</td>
             <td>{l.rank}</td>
-            <td>{l.outage ? 'puts its component in outage' : 'degrades its component'}</td>
+            <td>{l.health_effect === 'outage' ? 'puts its component in outage' : l.health_effect === 'none' ? 'does not affect its component\'s health' : 'degrades its component'}</td>
           </tr>
         ))}
       </tbody>

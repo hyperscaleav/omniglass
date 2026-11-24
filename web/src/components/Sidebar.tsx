@@ -59,7 +59,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
 
   return (
     <aside
-      class="sticky top-0 flex h-screen flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200"
+      class="flex flex-none flex-col border-r border-base-300 bg-base-200 transition-[width] duration-200"
       classList={{ "w-16": props.collapsed, "w-60": !props.collapsed }}
     >
       {/* The brand mark stays in this h-14 row in both states (vertically centered,
@@ -95,6 +95,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
             class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
             classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
             data-tip={props.collapsed ? "Your profile" : undefined}
+            data-testid="user-chip"
             title="Your profile"
           >
             <Show
@@ -139,16 +140,8 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   );
 }
 
-// Soon: the marker on a nav item whose backend has not landed. The item stays
-// navigable (its stub page explains what is coming); it just reads as pending.
-// Exported so subrails (the Catalog shell's) wear the same treatment.
-export function Soon() {
-  return <span class="ml-auto flex-none rounded bg-base-content/5 px-1 py-px text-[9px] font-semibold uppercase tracking-wider text-base-content/40">soon</span>;
-}
-
 function Leaf(props: { item: NavItem; collapsed: boolean }) {
   const Icon = props.item.icon;
-  const live = () => props.item.live;
   return (
     <li>
       <A
@@ -156,13 +149,12 @@ function Leaf(props: { item: NavItem; collapsed: boolean }) {
         end={props.item.path === "/"}
         activeClass="menu-active"
         class="gap-3"
-        classList={{ "tooltip tooltip-right justify-center": props.collapsed, "opacity-45": !live() }}
-        data-tip={props.collapsed ? (live() ? props.item.label : `${props.item.label} · soon`) : undefined}
+        classList={{ "tooltip tooltip-right justify-center": props.collapsed }}
+        data-tip={props.collapsed ? props.item.label : undefined}
       >
         <Icon size={17} />
         <Show when={!props.collapsed}>
           <span class="flex-1 truncate">{props.item.label}</span>
-          <Show when={!live()}><Soon /></Show>
         </Show>
       </A>
     </li>
@@ -203,9 +195,8 @@ function Group(props: { item: NavItem; rel: string; collapsed: boolean }) {
                     <li class="menu-title px-2 pb-0.5 pt-2 text-[10.5px] uppercase tracking-wider">{c.section}</li>
                   </Show>
                   <li>
-                    <A href={c.path} activeClass="menu-active" classList={{ "opacity-45": !c.live }}>
+                    <A href={c.path} activeClass="menu-active">
                       <span class="flex-1 truncate">{c.label}</span>
-                      <Show when={!c.live}><Soon /></Show>
                     </A>
                   </li>
                 </>

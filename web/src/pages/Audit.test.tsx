@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import Audit from "./Audit";
 import { AUDIT_PAGE, AUDIT_LOADING_ROWS, type AuditEvent } from "../lib/audit";
 import { uuidFor } from "../lib/testids";
@@ -78,10 +78,13 @@ describe("Audit page", () => {
     const region = table.parentElement!;
     expect(region.classList.contains("overflow-y-auto")).toBe(true);
     expect(region.contains(screen.getByText("No older events"))).toBe(false);
-    // The document scrolls, not the shell, so the list only fills a box with a
-    // definite height: without one it grows with its rows and the footer moves.
-    const shell = table.closest(".og-stack")!;
-    expect(shell.parentElement!.className).toMatch(/\bh-\[calc\(100dvh/);
+    // The list fills the box <main> gives the page (h-full), never a viewport
+    // height minus a guessed header: without a sized box it would grow with its rows.
+    // Under the Page header, the page section is that h-full box and the list takes the rest.
+    const page = table.closest("section")!;
+    expect(page.className).toMatch(/\bh-full\b/);
+    expect(page.className).not.toMatch(/vh/);
+    expect(page.querySelector(":scope > .flex-1")).toBeTruthy();
   });
 
   it("renders events with actor, verb, and resource", async () => {
@@ -150,7 +153,7 @@ describe("Audit drawer (#473)", () => {
     // The drawer portals to document.body, so the assertions use screen.
     fireEvent.click(await findByText("update"));
     expect(await screen.findByText("Change")).toBeTruthy();
-    expect(screen.getByText("label")).toBeTruthy();
+    expect(screen.getByText("Label")).toBeTruthy();
     expect(screen.getByText("Alice")).toBeTruthy();
     expect(screen.getByText("Alice Cooper")).toBeTruthy();
   });
@@ -170,15 +173,15 @@ describe("Audit drawer (#473)", () => {
     fireEvent.click(await findByText("core-snmp"));
     const dialog = await screen.findByRole("dialog");
     expect([...dialog.querySelectorAll("th")].map((th) => th.textContent)).toEqual(["Field", "After"]);
-    const row = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "secret_type")!;
-    expect([...row.children].map((td) => td.textContent)).toEqual(["secret_type", "snmp-community"]);
+    const row = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "Secret type")!;
+    expect([...row.children].map((td) => td.textContent)).toEqual(["Secret type", "snmp-community"]);
   });
 
   it("an update with a field only one side carries still reads (none) on the other", async () => {
     const { findByText } = render(() => <Audit />);
     fireEvent.click(await findByText("retry"));
     const dialog = await screen.findByRole("dialog");
-    const row = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "host_key")!;
+    const row = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "Host key")!;
     expect(row.children[1].textContent).toBe("(none)");
   });
 
@@ -262,7 +265,7 @@ describe("Audit drawer fits a jsonb change (#1088)", () => {
     expect(table.className).toContain("table-fixed");
     expect(table.className).toContain("w-full");
     expect([...dialog.querySelectorAll("th")].map((th) => th.textContent)).toEqual(["Field", "Before", "After"]);
-    const added = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "host_key")!;
+    const added = [...dialog.querySelectorAll("tr")].find((tr) => tr.firstElementChild?.textContent === "Host key")!;
     for (const cell of [...added.children].slice(1)) {
       expect(cell.className).toContain("whitespace-pre-wrap");
       expect(cell.className).toContain("wrap-break-word");
@@ -345,5 +348,26 @@ describe("Audit channel and client (#1178)", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog.textContent).toContain("direct");
     expect(dialog.textContent).not.toContain("as the agent reported it");
+  });
+});
+
+// The change table reads as words and dates, not as the recorded identifiers
+// (#2447): "LastOrphanedAt" is "Last orphaned at" and an RFC 3339 instant is a date
+// in the console's own format with the exact string on hover.
+describe("Audit change table, humanized (#2447)", () => {
+  it("humanizes the field names and keeps the recorded key as the hover title", async () => {
+    const one: AuditEvent[] = [
+      { id: "9", ts: "2026-07-07T10:00:00Z", actor: "u-root", actor_name: "root", verb: "update", resource: "outpost", resource_id: "edge-hq", old: { LastOrphanedAt: null, PlatformComponentID: "a", CreatedAt: "2026-11-23T16:27:54.419556Z" }, new: { LastOrphanedAt: "2026-11-24T01:02:03Z", PlatformComponentID: "a", CreatedAt: "2026-11-23T16:27:54.419556Z" } },
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ events: one }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const { findByText } = render(() => <Audit />);
+    fireEvent.click(await findByText("update"));
+    const dialog = await screen.findByRole("dialog");
+    const field = within(dialog).getByText("Last orphaned at");
+    expect(field.getAttribute("title")).toBe("LastOrphanedAt");
+    expect(within(dialog).getByText("Platform component ID")).toBeTruthy();
+    // No raw ISO string is printed as text anywhere in the table.
+    expect(dialog.querySelector("table")!.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+    expect(dialog.querySelector("table")!.textContent).toMatch(/Nov 23, \d\d:\d\d [AP]M/);
   });
 });

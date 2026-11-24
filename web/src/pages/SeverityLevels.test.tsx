@@ -3,13 +3,13 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SeverityLevels from "./SeverityLevels";
 import { ME_KEY, type Me } from "../lib/auth";
-import { OFFICIAL_LOCK } from "../lib/catalog";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import { componentAlarmsKey } from "../lib/alarms";
 import { SYSTEM_HEALTHS_KEY, locationHealthKey, systemHealthKey } from "../lib/health";
 import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { COMPONENTS_KEY } from "../lib/components";
 import { EVENT_RULES_KEY } from "../lib/event_rules";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The severity levels page (#921, authored since #930): the catalog an event
 // rule raises at, beside the rules. Each level shows its rank, its label in its
@@ -105,6 +105,7 @@ describe("Severity levels page", () => {
     const high = bodyRows().find((r) => r.querySelector('[data-severity="high"]'))!;
     expect(within(high).getByText("40")).toBeTruthy();
     expect(within(high).getByText("outage")).toBeTruthy();
+    expect(within(bodyRows().find((r) => r.querySelector('[data-severity="info"]'))!).getByText("no effect")).toBeTruthy();
     const major = bodyRows().find((r) => r.querySelector('[data-severity="major"]'))!;
     expect(within(major).getByText("35")).toBeTruthy();
     expect(within(major).getByText("degrades")).toBeTruthy();
@@ -147,16 +148,17 @@ describe("Severity levels page", () => {
     const rank = screen.getByLabelText("Rank");
     fireEvent.input(rank, { target: { value: "33" } });
     expect(screen.getByTestId("level-place").textContent).toBe("Between Average (30) and Major (35).");
-    expect(screen.getByTestId("level-effect").textContent).toMatch(/only degrade a component/);
+    // The picker starts at the effect the server would derive from the rank.
+    expect((screen.getByTestId("level-effect") as HTMLSelectElement).value).toBe("degraded");
     fireEvent.input(rank, { target: { value: "45" } });
     expect(screen.getByTestId("level-place").textContent).toBe("Between High (40) and Disaster (50).");
-    expect(screen.getByTestId("level-effect").textContent).toMatch(/take their component out \(rank 40\+\)/);
+    expect((screen.getByTestId("level-effect") as HTMLSelectElement).value).toBe("outage");
     const submit = screen.getByText("Create level").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(submit.disabled).toBe(false));
     fireEvent.click(submit);
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0].method).toBe("POST");
-    expect(writes[0].body).toEqual({ name: "p2", label: "P2", color: "orange", rank: 45 });
+    expect(writes[0].body).toEqual({ name: "p2", label: "P2", color: "orange", rank: 45, health_effect: "outage" });
   });
 
   it("refuses a rank another level holds before it sends anything", async () => {
@@ -221,9 +223,9 @@ describe("Severity levels page", () => {
     mount();
     openLevel("high");
     const b = await blade();
-    const editBtn = within(b).getByLabelText("Edit") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe(OFFICIAL_LOCK);
+    expect(within(b).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(b).queryByLabelText("Edit")).toBeNull();
+    expect(within(b).queryByText("Delete")).toBeNull();
   });
 
   it("greys an operator level's Edit for a reader with what it needs", async () => {
@@ -237,7 +239,7 @@ describe("Severity levels page", () => {
 
   it("deletes an operator level after a confirmation", async () => {
     const writes = catchWrites();
-    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ask = answerConfirms(true);
     mount();
     openLevel("major");
     const b = await blade();
@@ -250,7 +252,7 @@ describe("Severity levels page", () => {
 
   it("says why the server refused a delete: a level in use stays", async () => {
     catchWrites({ status: 409, detail: "an alarm or an event rule still names this severity level" });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     mount();
     openLevel("major");
     const b = await blade();

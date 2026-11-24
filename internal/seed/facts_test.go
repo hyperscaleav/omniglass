@@ -190,7 +190,7 @@ func TestSeedFactsMatchesCommitted(t *testing.T) {
 // TestSeedFactsSeverityAndRules pins the severity catalog and the official
 // event rules into the facts artifact (#921), so the alarms page and the rules
 // guide render the shipped levels and rules instead of restating them: each
-// level with its outage flag computed by the health rule's own floor.
+// level with the health effect it declares.
 func TestSeedFactsSeverityAndRules(t *testing.T) {
 	raw, err := FactsJSON()
 	if err != nil {
@@ -207,8 +207,8 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 	for _, l := range doc.SeverityLevels {
 		got[l.Name] = l
 	}
-	if len(got) != 5 || got["high"].Rank != 40 || !got["high"].Outage || got["average"].Outage || got["disaster"].Color != "darkred" {
-		t.Errorf("severity_levels = %+v, want the five shipped levels with high and above an outage", doc.SeverityLevels)
+	if len(got) != 5 || got["high"].Rank != 40 || got["high"].HealthEffect != "outage" || got["average"].HealthEffect != "degraded" || got["info"].HealthEffect != "none" || got["disaster"].Color != "darkred" {
+		t.Errorf("severity_levels = %+v, want the five shipped levels with each level's declared health effect", doc.SeverityLevels)
 	}
 	var names []string
 	rules := map[string]factsEventRule{}

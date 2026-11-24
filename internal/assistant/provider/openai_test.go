@@ -210,11 +210,37 @@ func TestSplitReasoning(t *testing.T) {
 		{"<reasoning>a</reasoning>b", "a", "b"},
 		{"  <reasoning>a</reasoning>\n<reasoning>c</reasoning> b ", "a\n\nc", "b"},
 		{"<reasoning>never closed", "never closed", ""},
-		{"answer <reasoning>not leading</reasoning>", "", "answer <reasoning>not leading</reasoning>"},
+		{"answer <reasoning>not leading</reasoning>", "not leading", "answer"},
+		// An unclosed tag is reasoning only where a reply leads with it; a literal
+		// mention mid-text stays in the answer, with everything after it.
+		{"one <reasoning>a</reasoning> two <reasoning>never closed", "a", "one\n\ntwo <reasoning>never closed"},
+		{"wrap it in <reasoning> tags, then answer", "", "wrap it in <reasoning> tags, then answer"},
+		{"<reasoning>a</reasoning>use <reasoning> in prose", "a", "use <reasoning> in prose"},
 	} {
 		r, a := splitReasoning(c.in)
 		if r != c.reasoning || a != c.answer {
 			t.Errorf("splitReasoning(%q) = %q, %q; want %q, %q", c.in, r, a, c.reasoning, c.answer)
 		}
+	}
+}
+
+// After a tool call the reasoning may not lead the content; the answer is
+// still alone (#2303). The reply shape here is synthetic: no captured Bedrock
+// post-tool reply is in the repo (the live test, openai_live_test.go, is the
+// check against the real provider).
+func TestOpenAIPostToolTurnReasoningApart(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := chatServer(t, 200, `{"choices":[{"message":{"role":"assistant","content":"The device is up.<reasoning>Tool said online.</reasoning>"}}]}`)
+	p := &OpenAI{BaseURL: srv.URL, Model: "m", Key: testKey}
+	turn, err := p.Next(context.Background(), []Message{
+		{Role: RoleUser, Text: "is it up?"},
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "c1", Name: "get"}}},
+		{Role: RoleTool, ToolCallID: "c1", Text: "online"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Text != "The device is up." || turn.Reasoning != "Tool said online." {
+		t.Fatalf("turn = %+v", turn)
 	}
 }

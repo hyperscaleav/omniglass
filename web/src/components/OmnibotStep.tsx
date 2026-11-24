@@ -1,8 +1,10 @@
-import { For, Show, type JSX } from "solid-js";
+import { For, Show, createSignal, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
+import Button from "./Button";
 import ReachLadder from "./ReachLadder";
 import { entityLabel } from "../lib/entities";
-import type { Step } from "../lib/assistant";
+import { argSummary, stepFailed, type Step } from "../lib/assistant";
+import { ChevronRight, TriangleAlert, Wrench } from "./icons";
 import type { Reachability } from "../lib/reachability";
 
 // OmnibotStep is one tool call in the omnibot panel (#1167): the tool, its
@@ -17,6 +19,16 @@ import type { Reachability } from "../lib/reachability";
 export type StepRenderer = (result: unknown) => JSX.Element | null;
 
 type Ref = { id: string; name: string; label?: string };
+type Placed = Ref & { system?: string; location?: string };
+
+// LIST_CAP bounds the rows a list card draws; the rest sit behind "Show all".
+export const LIST_CAP = 10;
+
+// placeOf says where a component is: its location, its primary system, or
+// both, so two rows with the same label are told apart.
+export function placeOf(c: Placed): string {
+  return [c.location, c.system].filter((x) => typeof x === "string" && x !== "").join(" / ");
+}
 
 function isRef(v: unknown): v is Ref {
   const r = v as Ref;
@@ -28,6 +40,32 @@ function ComponentLink(p: { c: Ref }) {
     <A href={`/components/${p.c.id}`} class="link link-hover font-medium">
       {entityLabel(p.c)}
     </A>
+  );
+}
+
+function ComponentRows(p: { list: Placed[] }) {
+  const [all, setAll] = createSignal(false);
+  const shown = () => (all() ? p.list : p.list.slice(0, LIST_CAP));
+  return (
+    <>
+      <ul class="flex flex-col gap-0.5 text-sm">
+        <For each={shown()}>
+          {(c) => (
+            <li class="flex items-baseline gap-2">
+              <ComponentLink c={c} />
+              <Show when={placeOf(c)}>
+                <span data-testid="component-place" class="text-xs text-base-content/60">{placeOf(c)}</span>
+              </Show>
+            </li>
+          )}
+        </For>
+      </ul>
+      <Show when={p.list.length > LIST_CAP}>
+        <Button size="xs" intent="quiet" class="mt-1" onClick={() => setAll(!all())}>
+          {all() ? "Show fewer" : `Show all ${p.list.length}`}
+        </Button>
+      </Show>
+    </>
   );
 }
 
@@ -46,9 +84,7 @@ export const STEP_RENDERERS: Record<string, StepRenderer> = {
     if (!Array.isArray(list) || !list.every(isRef)) return null;
     return (
       <Show when={list.length > 0} fallback={<p class="text-sm text-base-content/60">No components.</p>}>
-        <ul class="flex flex-col gap-0.5 text-sm">
-          <For each={list}>{(c) => <li><ComponentLink c={c} /></li>}</For>
-        </ul>
+        <ComponentRows list={list as Placed[]} />
       </Show>
     );
   },
@@ -105,7 +141,9 @@ export function StepArgs(p: { args: Record<string, unknown>; testid?: string }) 
 }
 
 // waiting marks the call the run paused on, which waits for the person's
-// answer rather than running.
+// answer rather than running. The step is one slim row (#2422): icon, tool,
+// a short argument summary and its state; a click opens its full input and
+// result. Nothing is open by default.
 export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
   const parsed = () => (props.step.result === undefined ? undefined : parse(props.step.result));
   const view = () => {
@@ -113,10 +151,16 @@ export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
     const render = STEP_RENDERERS[props.step.tool];
     return r === undefined || !render ? null : render(r);
   };
+  const failed = () => stepFailed(props.step);
   return (
-    <div data-testid="omnibot-step" class="rounded-box border border-base-300 bg-base-100 p-2.5 text-sm">
-      <div class="mb-1.5 flex items-center gap-2">
+    <details data-testid="omnibot-step" data-state={failed() ? "error" : undefined} class="group text-sm">
+      <summary class="flex cursor-pointer select-none items-center gap-2 rounded-field px-1 py-0.5 hover:bg-base-200">
+        <span class="shrink-0 transition-transform group-open:rotate-90"><ChevronRight size={12} /></span>
+        <Show when={failed()} fallback={<span class="shrink-0 text-base-content/60"><Wrench size={12} /></span>}>
+          <span class="shrink-0 text-error"><TriangleAlert size={12} /></span>
+        </Show>
         <span class="font-mono text-xs font-medium">{props.step.tool}</span>
+        <span class="min-w-0 flex-1 truncate font-mono text-xs text-base-content/60">{argSummary(props.step.args)}</span>
         <Show when={props.step.decision === "approved"}>
           <span class="badge badge-sm badge-soft badge-success">Approved</span>
         </Show>
@@ -129,17 +173,25 @@ export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
         <Show when={!props.waiting && props.step.result === undefined && props.step.decision !== "declined"}>
           <span class="badge badge-sm badge-ghost">Running</span>
         </Show>
+        <Show when={failed() && props.step.decision !== "declined"}>
+          <span class="badge badge-sm badge-soft badge-error">Error</span>
+        </Show>
+        <Show when={!failed() && props.step.result !== undefined}>
+          <span class="text-xs text-base-content/60">Done</span>
+        </Show>
+      </summary>
+      <div class="ml-4 mt-1 rounded-box border border-base-300 bg-base-100 p-2.5">
+        <StepArgs args={props.step.args} />
+        <Show when={parsed() !== undefined}>
+          <div class="mt-2">{view()}</div>
+          <details class="mt-1.5 text-xs" open={!view()}>
+            <summary class="cursor-pointer text-base-content/60">Result</summary>
+            <pre data-testid="omnibot-step-raw" class="mt-1 max-h-60 overflow-auto rounded-field bg-base-200 p-2 whitespace-pre-wrap break-all">
+              {pretty(parsed())}
+            </pre>
+          </details>
+        </Show>
       </div>
-      <StepArgs args={props.step.args} />
-      <Show when={parsed() !== undefined}>
-        <div class="mt-2">{view()}</div>
-        <details class="mt-1.5 text-xs" open={!view()}>
-          <summary class="cursor-pointer text-base-content/60">Result</summary>
-          <pre data-testid="omnibot-step-raw" class="mt-1 max-h-60 overflow-auto rounded-field bg-base-200 p-2 whitespace-pre-wrap break-all">
-            {pretty(parsed())}
-          </pre>
-        </details>
-      </Show>
-    </div>
+    </details>
   );
 }

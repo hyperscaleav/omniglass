@@ -1,4 +1,5 @@
 import { Show, createSignal } from "solid-js";
+import Page from "../components/Page";
 import { useSearchParams } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -10,7 +11,8 @@ import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { handleError } from "../lib/validate";
-import { Plus } from "../components/icons";
+import { Plus, Users as UsersIcon } from "../components/icons";
+import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 
 // User groups: the user-group admin surface, a config over the shared FlatList. A
@@ -33,33 +35,53 @@ const filterKeys: FilterKey<Group>[] = [
 
 export default function Groups() {
   const me = useMe();
-  const [params, setParams] = useSearchParams();
+  const [, setParams] = useSearchParams();
   const groups = useQuery(() => ({ queryKey: GROUPS_KEY, queryFn: listGroups }));
-  // ?g=<id> deep-links to a group (e.g. the cross-over from a user's inherited grant).
-  const openId = () => (Array.isArray(params.g) ? params.g[0] : params.g) || undefined;
+  // ?open=<id> deep-links to a group (the drawer address, #2429); the older ?g=<id> still opens it.
 
   return (
-    <FlatList<Group>
-      config={{
-        entity: { name: "user group", plural: "user groups" },
-        rows: () => groups.data ?? [],
-        loading: () => groups.isPending,
-        error: () => groups.error,
-        filterKeys,
-        filterPlaceholder: "filter by name or description",
-        columns,
-        empty: "No user groups yet.",
-        rowId: (g) => g.id,
-        openId,
-        blades: { registry: identityRegistry, rootKind: "group" },
-        create: can(me.data, "user_group", "create")
-          // The handoff is the URL (#762): ?g=<id>&edit=1 opens the new group's
-          // blade already editing, so members and grants are added without a
-          // second step.
-          ? { label: "New user group", can: () => can(me.data, "user_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
-          : undefined,
-      }}
-    />
+    <Page route="/user-groups">
+      <FlatList<Group>
+        config={{
+          entity: { name: "user group", plural: "user groups" },
+          rows: () => groups.data ?? [],
+          loading: () => groups.isPending,
+          error: () => groups.error,
+          filterKeys,
+          filterPlaceholder: "filter by name or description",
+          columns,
+          empty: (ctx) => <EmptyGroups create={ctx.create} />,
+          rowId: (g) => g.id,
+          rowAlt: (g) => g.name,
+          legacyParam: "g",
+          blades: { registry: identityRegistry, rootKind: "group" },
+          create: can(me.data, "user_group", "create")
+            // The handoff is the URL (#762): ?open=<id>&edit=1 opens the new group's
+            // blade already editing, so members and grants are added without a
+            // second step.
+            ? { label: "New user group", can: () => can(me.data, "user_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ open: g.id, g: undefined, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
+            : undefined,
+        }}
+      />
+    </Page>
+  );
+}
+
+// EmptyGroups teaches what a group is for before there is one, and offers the
+// create action when the viewer may create (the Inbox and Subscriptions shape).
+function EmptyGroups(props: { create?: () => void }) {
+  return (
+    <div class="flex flex-col items-center gap-3 px-6 py-10 text-center">
+      <span class="text-base-content/30"><UsersIcon size={32} /></span>
+      <h2 class="text-base font-semibold">No user groups yet</h2>
+      <p class="max-w-md text-sm text-base-content/60">
+        A user group is a team that holds role grants once. Everyone in it inherits them, so you assign access to
+        the team instead of to each person, and moving someone between teams changes what they can do.
+      </p>
+      <Show when={props.create}>
+        <Button intent="action" icon={Plus} onClick={() => props.create!()}>New user group</Button>
+      </Show>
+    </div>
   );
 }
 

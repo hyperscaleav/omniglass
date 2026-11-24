@@ -1,6 +1,5 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import Page from "../components/Page";
-import Breadcrumb from "../components/Breadcrumb";
 import Button from "../components/Button";
 import Drawer from "../components/Drawer";
 import Eyebrow from "../components/Eyebrow";
@@ -36,6 +35,7 @@ import {
   type SubscriptionDraft,
   type Transition,
 } from "../lib/subscriptions";
+import { confirmDelete } from "../lib/confirm";
 
 // My alarm subscriptions (#1355, epic #1341): the signed-in person's own action
 // rules, each telling them alone, on the channels they pick, when an alarm they
@@ -83,7 +83,7 @@ export default function Subscriptions(): JSX.Element {
     setBusy(null);
   }
   async function remove(s: Subscription) {
-    if (!window.confirm(`Delete the subscription "${entityLabel(s)}"? What it already sent stays in your inbox.`)) return;
+    if (!(await confirmDelete({ kind: "subscription", name: entityLabel(s), consequence: "What it already sent stays in your inbox." }))) return;
     setBusy(s.name);
     setNote(null);
     try {
@@ -104,7 +104,7 @@ export default function Subscriptions(): JSX.Element {
   return (
     <Page
       title={title}
-      breadcrumb={<Breadcrumb crumbs={[{ key: "profile", label: "Profile", href: "/profile" }, { key: "subscriptions", label: "Alarm subscriptions" }]} />}
+      trail={[{ key: "profile", label: "Profile", href: "/profile" }]}
       actions={
         <Show when={canSubscribe() && rows().length > 0}>
           <Button intent="action" icon={Plus} disabled={atCap()} title={atCap() ? `You own the most subscriptions a person may (${SUBSCRIPTION_CAP})` : undefined} onClick={() => setEditing("new")}>

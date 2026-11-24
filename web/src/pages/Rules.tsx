@@ -12,12 +12,15 @@ import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
 import ExpressionNotes from "../components/ExpressionNotes";
 import Button from "../components/Button";
+import Picker, { PICKER_CLASS } from "../components/ui/Picker";
+import Collapsible from "../components/ui/Collapsible";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
 import { EVENT_TYPES_KEY, listEventTypes } from "../lib/event_types";
 import SeverityBadge from "../components/SeverityBadge";
+import CatalogRef from "../components/CatalogRef";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { identityColumn } from "../components/IdentityCell";
-import { Pencil, Plus, Save, Trash, X } from "../components/icons";
+import { Ban, Pencil, Plus, RotateCcw, Save, X } from "../components/icons";
 import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
@@ -30,6 +33,12 @@ import { PROPERTIES_KEY, listProperties } from "../lib/properties";
 import { METRICS_KEY, listMetricTypes, type MetricRow } from "../lib/metric_types";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
+import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
+import { ownerProperties, ownerPropertiesKey } from "../lib/owner_properties";
+import { alarmsForRuleHref } from "../lib/alarmqueue";
+import { componentOptions, humanizeName, placeOf, readsKeyFromParam, readsOptions, readsValue, ruleFormPrefill, type RuleFormPrefill } from "../lib/rule_form";
+import { createFieldFocus, formProblems } from "../lib/form_problems";
+import { previewWords, seriesLabel } from "../lib/rule_preview";
 import {
   type DraftErrors,
   type EventRule,
@@ -39,6 +48,7 @@ import {
   EVENT_RULES_KEY,
   OPS_BY_LANE,
   clearWords,
+  conditionWords,
   criteriaErrorWords,
   createBody,
   createEventRule,
@@ -64,6 +74,7 @@ import {
   withLane,
 } from "../lib/event_rules";
 import { previewEventRule, type RulePreview } from "../lib/expressions";
+import { confirmDelete } from "../lib/confirm";
 
 // Rules (Catalog > Actions > Rules, #921): the event rule catalog. A rule reads
 // one sample key across the components it selects and raises an alarm at its
@@ -90,7 +101,7 @@ export const RULE_HINTS = {
   expression:
     "An expression over the arriving sample that is true or false: value, key, instance and component (its name and type), with comparisons, and, or and a few functions. It is checked as you type against what the rule reads, and a mistake is pointed at by line and column.",
   preview:
-    "Runs this draft against the last day of its key's samples, on the components you can read, without saving or writing anything: the edges it would have written and what it would hold in force now. Each sample is judged alone, so sustains are not applied.",
+    "Runs this draft against the last day of its key's samples, on the components you can read, without saving or writing anything: the edges it would have written and what it would hold in force now. It cannot wait out a sustain, so a sustain you typed is not in the counts; it says so when you have typed one.",
   sustain:
     "How long it must hold. A value has to keep meeting the criteria for this long before the alarm opens (or clears); one contrary sample starts the wait over. Blank acts at once.",
   severity:
@@ -130,10 +141,13 @@ function useMetricUnit(): (r: EventRule) => string | undefined {
   return (r) => (r.sample_lane === "metric" ? byName().get(r.sample_key) || undefined : undefined);
 }
 
-function readsCell(r: EventRule): JSX.Element {
+function readsCell(r: EventRule, linked = false): JSX.Element {
   return (
     <span class="flex min-w-0 flex-col leading-snug">
-      <span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>
+      {/* The drawer opens the metric or property the rule judges; a list row stays plain text, since a row click already opens this drawer. */}
+      <Show when={linked} fallback={<span class="truncate font-data text-[12px]" title={r.sample_key}>{r.sample_key}</span>}>
+        <CatalogRef kind={r.sample_lane === "property" ? "property" : "metric"} name={r.sample_key} />
+      </Show>
       <span class="text-[11px] text-base-content/40">{r.sample_lane}</span>
     </span>
   );
@@ -202,37 +216,22 @@ export default function Rules(): JSX.Element {
   const unit = useMetricUnit();
   const canCreate = () => canFleet(me.data, "rule", "create");
   const blades = createBladeController();
+  // "Alarm on this" lands here as /event-rules?new=1&reads=<key>&component=<id>
+  // (lib/rule_form): the form opens with those filled in. The intent is read
+  // once and then taken off the address, so a reload or Back does not reopen it.
+  const [params, setParams] = useSearchParams();
+  const openNew = params.new === "1";
+  const prefill = openNew ? ruleFormPrefill(params) : undefined;
+  if (openNew) queueMicrotask(() => setParams({ new: undefined, reads: undefined, component: undefined }, { replace: true }));
   const [editing, setEditing] = createSignal<string | null>(null);
   const editRow = () => (rules.data ?? []).find((r) => r.name === editing());
   const backToBlade = (name: string) => {
     setEditing(null);
     blades.push({ kind: "rule", id: name });
   };
-  // A link may name a rule (/event-rules?rule=<name or uuid>): an event row on Activity
-  // points at the rule that wrote it, and lands on its blade. The page follows
-  // the param as it changes (back and forward open the rule it names), and
-  // lets go of it when the blade stack closes, so a reload does not reopen a
-  // blade the operator closed.
-  const [search, setSearch] = useSearchParams();
-  const linked = () => (typeof search.rule === "string" && search.rule ? search.rule : undefined);
-  createEffect(
-    on(linked, (name) => {
-      if (!name) return;
-      const top = blades.stack().at(-1);
-      if (top?.kind === "rule" && top.id === name) return;
-      blades.close();
-      blades.push({ kind: "rule", id: name });
-    }),
-  );
-  createEffect(
-    on(
-      () => blades.stack().length,
-      (n, prev) => {
-        if (n === 0 && (prev ?? 0) > 0 && linked()) setSearch({ rule: undefined });
-      },
-      { defer: true },
-    ),
-  );
+  // A link names a rule through the list's drawer address (/event-rules?open=<name or
+  // uuid>, drawerHref): an event row on Activity points at the rule that wrote it. The
+  // older ?rule= still opens, and a uuid (an event written before a rename) resolves too.
 
   const columns: FlatColumn<EventRule>[] = [
     identityColumn<EventRule>(),
@@ -285,6 +284,8 @@ export default function Rules(): JSX.Element {
             columns,
             empty: "No rules yet.",
             rowId: (r) => r.name,
+            rowAlt: (r) => r.id,
+            legacyParam: "rule",
             blades: { registry: { rule: ruleBlade }, rootKind: "rule", controller: blades },
             railExtra: () => (
               <span class="mr-1 inline-flex items-center gap-1.5 text-[12px] text-base-content/50">
@@ -296,7 +297,7 @@ export default function Rules(): JSX.Element {
               </span>
             ),
             create: canCreate()
-              ? { label: "New rule", can: canCreate, body: (ctx) => <RuleForm mode="create" onSaved={ctx.select} /> }
+              ? { label: "New rule", can: canCreate, openInitially: openNew, body: (ctx) => <RuleForm mode="create" prefill={prefill} onSaved={ctx.select} /> }
               : undefined,
           }}
         />
@@ -357,7 +358,7 @@ function SelectorFacts(p: { rule: EventRule }): JSX.Element {
   return (
     <Show when={types().length + comps().length > 0} fallback={<span class="text-sm text-base-content/60">Every component</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm font-data" title="Component type">{t}</span>}</For>
+        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title="Component type"><CatalogRef kind="component_type" name={t} /></span>}</For>
         <For each={comps()}>
           {(id) => (
             <A href={`/components/${id}`} class="badge badge-outline badge-sm hover:underline">
@@ -458,7 +459,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
   }
 
   async function remove(r: EventRule) {
-    if (!confirm(`Delete rule "${r.name}"? Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it.`)) return;
+    if (!(await confirmDelete({ kind: "rule", name: r.name, consequence: "Deleting it clears the alarms it holds open; its past alarms stay in each component's history, no longer naming it." }))) return;
     setErr(null);
     try {
       await deleteEventRule(r.name);
@@ -471,8 +472,10 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
   // An official row is read-only for everyone: the Edit / Delete pair greys with
   // the official sentence and nothing else binds. A custom row offers Edit (the
-  // Drawer), the Disable / Enable toggle and a kebab Delete, each on its own
-  // permission; a caller holding none sees the pair greyed with what it needs.
+  // Drawer), Delete in the rail's destructive slot (#2463, where every other
+  // blade's Delete sits) and the Disable / Enable toggle under More actions,
+  // each on its own permission; a caller holding none sees the pair greyed with
+  // what it needs.
   edit.bind({
     primary: () => {
       const r = row();
@@ -480,15 +483,17 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
     },
     destructive: () => {
       const r = row();
-      if (!r || r.official || !canUpdate()) return undefined;
-      return r.enabled
-        ? { label: "Disable", tone: "warn", onClick: () => void toggleEnabled(r) }
-        : { label: "Enable", tone: "ok", onClick: () => void toggleEnabled(r) };
+      if (!r || r.official || !canDelete()) return undefined;
+      return { label: "Delete", tone: "danger", onClick: () => void remove(r) };
     },
     secondary: () => {
       const r = row();
-      if (!r || r.official || !canDelete()) return [];
-      return [{ label: "Delete", icon: <Trash size={15} />, tone: "danger", onClick: () => void remove(r) }];
+      if (!r || r.official || !canUpdate()) return [];
+      return [
+        r.enabled
+          ? { label: "Disable", icon: <Ban size={15} />, onClick: () => void toggleEnabled(r) }
+          : { label: "Enable", icon: <RotateCcw size={15} />, onClick: () => void toggleEnabled(r) },
+      ];
     },
     locked: () => {
       const r = row();
@@ -530,6 +535,9 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
                 <span class="inline-flex items-center gap-1.5">
                   {severityCell(r().severity)}
                   <InfoTip label="severity" text={RULE_HINTS.severity} />
+                  <Show when={r().severity}>
+                    <span class="text-[11px]"><CatalogRef kind="severity_level" name={r().severity} /></span>
+                  </Show>
                   <A href="/severity-levels" class="link text-[11px] text-base-content/50 hover:text-base-content">All levels</A>
                 </span>
               }
@@ -566,7 +574,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reads" hint={RULE_HINTS.reads} />
-            <div>{readsCell(r())}</div>
+            <div>{readsCell(r(), true)}</div>
             <Eyebrow label="Watches" hint={RULE_HINTS.selector} class="mt-1" />
             <SelectorFacts rule={r()} />
           </section>
@@ -594,14 +602,16 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
               <span class="text-[12px] text-base-content/50">Clears</span>
               <span data-testid="rule-clear">{clearWords(r(), unit(r()))}</span>
             </div>
-            <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1">
-              <span class="text-[12px] text-base-content/50">Fire</span>
-              <code data-testid="rule-fire-expr" class="break-all font-data text-[12px] text-base-content/80">{r().fire_criteria.expr}</code>
-              <span class="text-[12px] text-base-content/50">Clear</span>
-              <code data-testid="rule-clear-expr" class="break-all font-data text-[12px] text-base-content/80">
-                {r().clear_criteria?.expr ?? `!(${r().fire_criteria.expr})`}
-              </code>
-            </div>
+            <Collapsible title="Show expression" class="text-[12px]" triggerClass="group flex cursor-pointer items-center gap-1 rounded-field text-left text-[12px] text-base-content/60 hover:text-base-content focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/60">
+              <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 pt-1">
+                <span class="text-[12px] text-base-content/50">Fire</span>
+                <code data-testid="rule-fire-expr" class="break-all font-data text-[12px] text-base-content/80">{r().fire_criteria.expr}</code>
+                <span class="text-[12px] text-base-content/50">Clear</span>
+                <code data-testid="rule-clear-expr" class="break-all font-data text-[12px] text-base-content/80">
+                  {r().clear_criteria?.expr ?? `!(${r().fire_criteria.expr})`}
+                </code>
+              </div>
+            </Collapsible>
             <Show when={r().message}>
               <KVStacked label="Message" value={<span class="text-base-content/80">{r().message}</span>} />
             </Show>
@@ -611,10 +621,10 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
             <Eyebrow label="Writes" hint={RULE_HINTS.events} />
             <div class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-sm">
               <span class="text-[12px] text-base-content/50">Starts</span>
-              <span class="font-data" data-testid="rule-fire-type">{r().fire_event_type}</span>
+              <span data-testid="rule-fire-type"><CatalogRef kind="event_type" name={r().fire_event_type} /></span>
               <span class="text-[12px] text-base-content/50">Ends</span>
               <span data-testid="rule-clear-type">
-                {r().clear_event_type ? <span class="font-data">{r().clear_event_type}</span> : <span class="text-base-content/50">no clear event</span>}
+                {r().clear_event_type ? <CatalogRef kind="event_type" name={r().clear_event_type} /> : <span class="text-base-content/50">no clear event</span>}
               </span>
             </div>
           </section>
@@ -639,6 +649,7 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
             <Eyebrow
               label={`Open alarms${state.data ? ` (${state.data.open.length})` : ""}`}
               hint={RULE_HINTS.open}
+              right={<A href={alarmsForRuleHref(r().name)} class="link text-[11px] text-base-content/60 hover:text-base-content">See them on the alarms page</A>}
             />
             <Show when={state.data} fallback={<span class="text-[12px] text-base-content/40">Loading…</span>}>
               <StateList
@@ -706,7 +717,15 @@ function DeletedMark(p: { what: string }): JSX.Element {
 // both catalogs and its lane decides the comparisons and the value's type;
 // every rule is judged in TypeScript (lib/event_rules), shown beside its field
 // once the field is touched, and gates the submit.
-export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved: (r: EventRule) => void }): JSX.Element {
+// What each field is called where a submit names it, in the order the form shows
+// them (lib/form_problems reads both).
+const FORM_ORDER = ["name", "sampleKey", "fireValue", "fireExpr", "fireSustain", "clearValue", "clearExpr", "clearSustain", "fireEventType"] as const;
+const FORM_LABELS: Record<(typeof FORM_ORDER)[number], string> = {
+  name: "Name", sampleKey: "Reads", fireValue: "Fires when it reads", fireExpr: "Fires when", fireSustain: "For at least",
+  clearValue: "Clears when it reads", clearExpr: "Clears when", clearSustain: "Clears after at least", fireEventType: "Fire event type",
+};
+
+export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; prefill?: RuleFormPrefill; onSaved: (r: EventRule) => void }): JSX.Element {
   const qc = useQueryClient();
   const severity = useSeverity();
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
@@ -714,7 +733,22 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   const componentTypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const eventTypes = useQuery(() => ({ queryKey: EVENT_TYPES_KEY, queryFn: listEventTypes }));
-  const [d, setD] = createStore<RuleDraft>(p.rule ? draftFromRule(p.rule) : emptyDraft());
+  const [d, setD] = createStore<RuleDraft>(
+    p.rule ? draftFromRule(p.rule) : { ...emptyDraft(), components: p.prefill?.component ? [p.prefill.component] : [] },
+  );
+  const focus = createFieldFocus();
+  let formEl: HTMLFormElement | undefined;
+  // The expression editors render a fragment, so no ref reaches them: each is found
+  // by the label that names its editor.
+  const editorFor = (label: string) => () =>
+    [...(formEl?.querySelectorAll<HTMLElement>('[role="textbox"]') ?? [])].find(
+      (el) => document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent === label,
+    );
+  focus.registerFinder("fireExpr", editorFor("Fires when"));
+  focus.registerFinder("clearExpr", editorFor("Clears when"));
+  // The label follows the name until the operator writes one of their own, so a
+  // rule saved without thinking about it still reads as words, not as an identifier.
+  const [labelTouched, setLabelTouched] = createSignal(p.mode === "edit");
   // Whether the author picked a severity, None included: the create default
   // fills in only until they do.
   const [severityChosen, setSeverityChosen] = createSignal(false);
@@ -733,7 +767,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
     }
   });
 
-  const errors = createMemo<DraftErrors>(() => validateDraft(d, p.rule?.name));
+  const draftErrors = createMemo<DraftErrors>(() => validateDraft(d, p.rule?.name));
   // The server's check of each criterion written as an expression (undefined
   // until a check answers): a source that does not compile refuses the submit.
   const [exprOk, setExprOk] = createStore<{ fire?: boolean; clear?: boolean }>({});
@@ -741,15 +775,38 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   // checks both hold the save.
   const exprBad = () =>
     (d.fireExpr !== null && exprOk.fire !== true) || (d.clearMode === "custom" && d.clearExpr !== null && exprOk.clear !== true);
-  const valid = () => Object.keys(errors()).length === 0 && !exprBad();
+  const exprWords = (ok: boolean | undefined) => (ok === false ? "The expression does not compile: see the note under it." : "The expression is still being checked.");
+  // The draft's own errors, and the expression sides the server has not passed:
+  // one record, so the submit names every gap and the fields show theirs.
+  const errors = createMemo<DraftErrors>(() => {
+    const e = { ...draftErrors() };
+    if (d.fireExpr !== null && !e.fireExpr && exprOk.fire !== true) e.fireExpr = exprWords(exprOk.fire);
+    if (d.clearMode === "custom" && d.clearExpr !== null && !e.clearExpr && exprOk.clear !== true) e.clearExpr = exprWords(exprOk.clear);
+    return e;
+  });
+  const problems = createMemo(() => formProblems(errors(), FORM_ORDER, FORM_LABELS));
+  const valid = () => problems().length === 0;
   const shown = (k: keyof DraftErrors) => (touched[k] ? errors()[k] : undefined);
   const touch = (k: keyof DraftErrors) => setTouched(k, true);
 
-  const byLabel = (a: { label?: string; name: string }, b: { label?: string; name: string }) => entityLabel(a).localeCompare(entityLabel(b));
-  const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byLabel));
-  const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byLabel));
-  const componentOptions = createMemo(() => [...(components.data ?? [])].filter((c) => !d.components.includes(c.id)).sort(byLabel));
   const componentById = createMemo(() => new Map((components.data ?? []).map((c) => [c.id, c])));
+  // When the rule watches exactly one component, that component's own metrics
+  // and properties head the Reads list: the question is usually about them.
+  const watched = createMemo(() => (d.components.length === 1 ? componentById().get(d.components[0]) : undefined));
+  const ownMetrics = useQuery(() => ({ queryKey: effectiveMetricsKey(watched()?.name ?? ""), queryFn: () => effectiveMetrics(watched()!.name), enabled: !!watched() }));
+  const ownProperties = useQuery(() => ({ queryKey: ownerPropertiesKey("component", watched()?.name ?? ""), queryFn: () => ownerProperties("component", watched()!.name), enabled: !!watched() }));
+  const readsChoices = createMemo(() => {
+    const keys = [
+      ...(ownMetrics.data ?? []).map((m) => readsValue("metric", m.metric_type_name)),
+      ...(ownProperties.data ?? []).map((x) => readsValue("property", x.property_type_name)),
+    ];
+    const w = watched();
+    return readsOptions({ metrics: metrics.data ?? [], properties: properties.data ?? [], onComponent: w && keys.length ? { label: entityLabel(w), keys } : undefined });
+  });
+  const componentChoices = createMemo(() => componentOptions((components.data ?? []).filter((c) => !d.components.includes(c.id))));
+  const readsMeta = createMemo(() => (d.lane === "metric" ? metrics.data?.find((m) => m.name === d.sampleKey) : properties.data?.find((x) => x.name === d.sampleKey)));
+  const readsLabel = () => (readsMeta() ? entityLabel(readsMeta()!) : d.sampleKey);
+  const readsUnit = () => (d.lane === "metric" ? metrics.data?.find((m) => m.name === d.sampleKey)?.unit || undefined : undefined);
   // A selector entry the catalogs no longer hold (deleted after the rule was
   // written) is judged only once its list has landed, so nothing reads as
   // deleted while loading.
@@ -792,6 +849,16 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
     </Show>
   );
 
+  // "Alarm on this" names the key bare (?reads=temperature-c): the catalogs say
+  // which lane it is once they have loaded.
+  let readsPending = !!p.prefill?.reads;
+  createEffect(() => {
+    if (!readsPending || !metrics.data || !properties.data) return;
+    readsPending = false;
+    const v = readsKeyFromParam(p.prefill!.reads!, { metrics: metrics.data, properties: properties.data });
+    if (v) pickKey(v);
+  });
+
   function pickKey(v: string) {
     touch("sampleKey");
     const sep = v.indexOf(":");
@@ -799,19 +866,25 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
     setD(withLane({ ...d, componentTypes: [...d.componentTypes], components: [...d.components] }, v.slice(sep + 1), v.slice(0, sep) as RuleLane));
   }
 
-  useFormActions().bind({
+  const actions = useFormActions();
+  actions.bind({
     submitLabel: p.mode === "create" ? "Create rule" : "Save rule",
     submitIcon: p.mode === "create" ? Plus : Save,
     submit: () => void submit(),
     busy,
-    disabled: () => !valid(),
+    // The bar owns the missing-field rule (#2440): it names each gap beside
+    // the actions and focuses the first; the fields show their own messages.
+    problems,
+    problemsAction: p.mode === "create" ? "create the rule" : "save the rule",
+    focusField: (k) => focus.focus(k),
+    onAttempt: () => {
+      for (const k of Object.keys(errors())) touch(k as keyof DraftErrors);
+    },
   });
 
   async function submit() {
-    if (!valid()) {
-      for (const k of Object.keys(errors())) touch(k as keyof DraftErrors);
-      return;
-    }
+    // The bar checks first (actions.trigger); this is only the backstop.
+    if (!valid()) return;
     setBusy(true);
     setFormErr(null);
     try {
@@ -855,41 +928,46 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
   );
 
   return (
-    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <form ref={formEl} class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); actions.trigger(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
       <FieldRow bind="name" info={RULE_HINTS.name}>
         <input
+          ref={focus.register("name")}
           class="input input-bordered w-full font-data"
           classList={{ "input-error": !!shown("name") }}
           aria-required="true"
           value={d.name}
           placeholder="too-hot"
-          onInput={(e) => { setD("name", e.currentTarget.value); touch("name"); }}
+          onInput={(e) => {
+            setD("name", e.currentTarget.value);
+            if (!labelTouched()) setD("label", humanizeName(e.currentTarget.value));
+            touch("name");
+          }}
         />
         {err("name")}
       </FieldRow>
       <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={d.label} placeholder="Too hot" onInput={(e) => setD("label", e.currentTarget.value)} />
+        <input
+          class="input input-bordered w-full"
+          value={d.label}
+          placeholder="Too hot"
+          onInput={(e) => { setLabelTouched(true); setD("label", e.currentTarget.value); }}
+        />
       </FieldRow>
 
       <FieldRow label="Reads" info={RULE_HINTS.reads}>
-        <select
-          ref={bindSelectValue(keyValue, propertyOptions, metricOptions)}
-          class="select select-bordered w-full"
-          classList={{ "select-error": !!shown("sampleKey") }}
-          aria-required="true"
-          onChange={(e) => pickKey(e.currentTarget.value)}
-        >
-          <option value="" disabled>Choose a property or metric…</option>
-          <optgroup label="Properties">
-            <For each={propertyOptions()}>{(r) => <option value={`property:${r.name}`}>{entityLabel(r)} ({r.name})</option>}</For>
-          </optgroup>
-          <optgroup label="Metrics">
-            <For each={metricOptions()}>{(m) => <option value={`metric:${m.name}`}>{entityLabel(m)} ({m.name})</option>}</For>
-          </optgroup>
-        </select>
+        <div ref={focus.register("sampleKey")}>
+          <Picker
+            options={readsChoices()}
+            value={keyValue() || null}
+            onChange={(v) => { if (v) pickKey(v); }}
+            placeholder="Type to find a metric or property…"
+            aria-required="true"
+            class={`${PICKER_CLASS}${shown("sampleKey") ? " input-error" : ""}`}
+          />
+        </div>
         {err("sampleKey")}
       </FieldRow>
 
@@ -900,6 +978,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
             <div class="flex gap-2">
               <OpSelect label="Fire comparison" value={d.fireOp} onChange={(op) => setD("fireOp", op)} />
               <input
+                ref={focus.register("fireValue")}
                 aria-label="Fire value"
                 class="input input-bordered min-w-0 flex-1 font-data"
                 classList={{ "input-error": !!shown("fireValue") }}
@@ -930,6 +1009,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <ModeToggle side="fire" />
       <FieldRow label="For at least" info={RULE_HINTS.sustain}>
         <input
+          ref={focus.register("fireSustain")}
           class="input input-bordered w-full font-data"
           classList={{ "input-error": !!shown("fireSustain") }}
           placeholder="15s"
@@ -957,6 +1037,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
               <div class="flex gap-2">
                 <OpSelect label="Clear comparison" value={d.clearOp} onChange={(op) => setD("clearOp", op)} />
                 <input
+                  ref={focus.register("clearValue")}
                   aria-label="Clear value"
                   class="input input-bordered min-w-0 flex-1 font-data"
                   classList={{ "input-error": !!shown("clearValue") }}
@@ -988,6 +1069,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       </Show>
       <FieldRow label="Clears after at least" info={RULE_HINTS.sustain}>
         <input
+          ref={focus.register("clearSustain")}
           class="input input-bordered w-full font-data"
           classList={{ "input-error": !!shown("clearSustain") }}
           placeholder="0s"
@@ -1012,7 +1094,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
 
       <FieldRow label="Fire event type" info={RULE_HINTS.events}>
         <select
-          ref={bindSelectValue(() => d.fireEventType, () => eventTypes.data)}
+          ref={(el) => { focus.register("fireEventType")(el); bindSelectValue(() => d.fireEventType, () => eventTypes.data)(el); }}
           class="select select-bordered w-full font-data"
           classList={{ "select-error": !!shown("fireEventType") }}
           onChange={(e) => { setD("fireEventType", e.currentTarget.value); touch("fireEventType"); }}
@@ -1040,15 +1122,13 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
           onChange={(v) => { if (v && !d.componentTypes.includes(v)) setD("componentTypes", [...d.componentTypes, v]); }}
         />
       </FieldRow>
-      <FieldRow label="Watches components">
-        <select
-          ref={bindSelectValue(() => "", componentOptions)}
-          class="select select-bordered w-full"
-          onChange={(e) => { const v = e.currentTarget.value; if (v) setD("components", [...d.components, v]); e.currentTarget.value = ""; }}
-        >
-          <option value="">{d.components.length ? "Add another component…" : "Add a component…"}</option>
-          <For each={componentOptions()}>{(c) => <option value={c.id}>{entityLabel(c)}</option>}</For>
-        </select>
+      <FieldRow label="Watches components" hint="Labels repeat across a fleet; each option shows where the component sits.">
+        <Picker
+          options={componentChoices()}
+          value={null}
+          onChange={(v) => { if (v && !d.components.includes(v)) setD("components", [...d.components, v]); }}
+          placeholder={d.components.length ? "Add another component…" : "Type to find a component…"}
+        />
       </FieldRow>
       <div class="-mt-2 flex flex-wrap items-center gap-1.5" aria-label="Selected">
         <Show when={d.componentTypes.length + d.components.length > 0} fallback={<span class="text-[12px] text-base-content/50">Every component</span>}>
@@ -1067,6 +1147,7 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
             {(id) => (
               <span class="badge badge-outline badge-sm gap-1" classList={{ "badge-ghost font-data text-base-content/50": componentGone(id) }}>
                 {componentById().get(id) ? entityLabel(componentById().get(id)!) : id}
+                <Show when={componentById().get(id)}>{(c) => <span class="text-[10px] font-normal text-base-content/50">{placeOf(c())}</span>}</Show>
                 <Show when={componentGone(id)}><DeletedMark what={`component ${id}`} /></Show>
                 <button type="button" class="opacity-60 hover:opacity-100" aria-label={`Stop watching ${componentById().get(id)?.name ?? id}`} onClick={() => setD("components", d.components.filter((x) => x !== id))}>
                   <X size={11} />
@@ -1090,17 +1171,28 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; onSaved
       <RulePreviewPanel
         draft={d}
         ready={!!d.sampleKey && !errors().fireValue && !errors().fireExpr && !errors().clearValue && !errors().clearExpr && !exprBad()}
+        reads={readsLabel()}
+        condition={conditionWords(d, readsLabel(), readsUnit())}
+        whereIs={(id) => { const c = componentById().get(id); return c ? placeOf(c) : ""; }}
       />
     </form>
   );
 }
 
 // RulePreviewPanel runs the draft as a candidate rule against the last day of
-// its key's samples (POST /event-rules:preview, #959): the series it would hold
-// in force now, linked to their components, and the edges it would have
-// written. It writes nothing, and judges each sample alone (sustains are not
-// applied), which it says.
-function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element {
+// its key's samples (POST /event-rules:preview, #959). It answers in words that
+// match what was typed (lib/rule_preview): what the rule would have done, the
+// series it would hold in force now (owner and metric, with where each sits)
+// and the edges it would have written. It writes nothing, and the server
+// judges each sample alone, so a sustain the operator typed is named as not
+// applied rather than left to a footnote that contradicts the form.
+function RulePreviewPanel(p: {
+  draft: RuleDraft;
+  ready: boolean;
+  reads: string;
+  condition: string;
+  whereIs: (componentId: string) => string;
+}): JSX.Element {
   const [result, setResult] = createSignal<RulePreview | null>(null);
   const [busy, setBusy] = createSignal(false);
   const [failed, setFailed] = createSignal<string | null>(null);
@@ -1122,6 +1214,14 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
       setBusy(false);
     }
   }
+  const SeriesName = (q: { s: { component: string; component_id: string; instance?: string } }) => (
+    <span data-testid="preview-series" class="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+      <A href={`/components/${q.s.component_id}`} class="link link-hover">{q.s.component}</A>
+      <span class="text-base-content/60">· {p.reads}</span>
+      <Show when={q.s.instance}><span class="font-data text-base-content/60">{q.s.instance}</span></Show>
+      <Show when={p.whereIs(q.s.component_id)}><span class="text-[11px] text-base-content/45">in {p.whereIs(q.s.component_id)}</span></Show>
+    </span>
+  );
   return (
     <section ref={section} aria-label="Preview" class="flex flex-col gap-2 border-t border-base-300 pt-3">
       <Eyebrow
@@ -1135,59 +1235,54 @@ function RulePreviewPanel(p: { draft: RuleDraft; ready: boolean }): JSX.Element 
       />
       <Show when={failed()}>{(m) => <div role="alert" class="alert alert-error alert-soft text-sm"><span>{m()}</span></div>}</Show>
       <Show when={result()}>
-        {(r) => (
-          <div data-testid="preview-result" class="flex flex-col gap-2 text-sm">
-            <Show when={r().truncated}>
-              <div data-testid="preview-truncated" class="alert alert-warning alert-soft text-[12px]">
-                <span>
-                  Judged {r().series_judged} of {r().series_total} series: the rest would pass the{" "}
-                  {r().row_cap.toLocaleString("en-US")}-sample cap.
-                </span>
-              </div>
-            </Show>
-            <Show when={(r().state_unknown ?? []).length > 0}>
-              <span data-testid="preview-unknown" class="inline-flex items-center gap-1 text-[11px] text-base-content/60">
-                {r().state_unknown!.length} series started unknown
-                <InfoTip
-                  label="series that started unknown"
-                  text={`No sample in the week before the window fired or cleared, so where they started is not known: their first one in the window set their state without an edge. ${(r().state_unknown ?? []).map((s) => `${s.component}${s.instance ? ` ${s.instance}` : ""}`).join(", ")}`}
-                />
-              </span>
-            </Show>
-            <Eyebrow label={`In force now (${r().in_force_now?.length ?? 0})`} />
-            <Show when={(r().in_force_now ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">Nothing in force.</span>}>
-              <ul class="flex flex-col gap-0.5">
-                <For each={r().in_force_now ?? []}>
-                  {(s) => (
-                    <li class="flex items-center gap-2 text-[12px]">
-                      <A href={`/components/${s.component_id}`} class="link link-hover">{s.component}</A>
-                      <Show when={s.instance}><span class="font-data text-base-content/60">{s.instance}</span></Show>
-                      <span class="ml-auto text-[11px] text-base-content/50">
-                        {s.since ? <span title={fmtTime(s.since)}>since {rel(s.since)}</span> : "since before the window"}
-                      </span>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </Show>
-            <Eyebrow label={`Edges in the last ${r().window === "24h0m0s" ? "24h" : r().window} (${r().edges?.length ?? 0})`} />
-            <Show when={(r().edges ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">No edge.</span>}>
-              <ul class="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
-                <For each={r().edges ?? []}>
-                  {(e) => (
-                    <li data-testid="preview-edge" class="flex items-center gap-2 text-[12px]">
-                      <span class={`badge badge-sm ${e.kind === "fire" ? "badge-soft badge-warning" : "badge-soft badge-success"}`}>{e.kind}</span>
-                      <span>{e.component}</span>
-                      <Show when={e.instance}><span class="font-data text-base-content/60">{e.instance}</span></Show>
-                      <span class="ml-auto text-[11px] text-base-content/50" title={fmtTime(e.at)}>{rel(e.at)}</span>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </Show>
-            <span class="text-[11px] text-base-content/50">Sustains are ignored: each sample is judged alone.</span>
-          </div>
-        )}
+        {(r) => {
+          const words = () =>
+            previewWords(r(), { reads: p.reads, condition: p.condition, fireSustain: p.draft.fireSustain, clearSustain: p.draft.clearSustain });
+          return (
+            <div data-testid="preview-result" class="flex flex-col gap-2 text-sm">
+              <p data-testid="preview-sentence" class="text-sm">{words().sentence}</p>
+              <Show when={words().sustain}>
+                {(w) => <div data-testid="preview-sustain" class="alert alert-info alert-soft text-[12px]"><span>{w()}</span></div>}
+              </Show>
+              <Show when={words().cap}>
+                {(w) => <div data-testid="preview-truncated" class="alert alert-warning alert-soft text-[12px]"><span>{w()}</span></div>}
+              </Show>
+              <Show when={words().unknown}>
+                {(w) => <span data-testid="preview-unknown" class="text-[11px] text-base-content/60">{w()}</span>}
+              </Show>
+              <Eyebrow label={`In force now (${r().in_force_now?.length ?? 0})`} />
+              <Show when={(r().in_force_now ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">Nothing in force.</span>}>
+                <ul class="flex flex-col gap-0.5">
+                  <For each={r().in_force_now ?? []}>
+                    {(s) => (
+                      <li class="flex items-center gap-2 text-[12px]">
+                        <SeriesName s={s} />
+                        <span class="ml-auto flex-none text-[11px] text-base-content/50">
+                          {s.since ? <span title={fmtTime(s.since)}>since {rel(s.since)}</span> : "since before the window"}
+                        </span>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+              <Eyebrow label={`Edges in the last ${r().window === "24h0m0s" ? "24h" : r().window} (${r().edges?.length ?? 0})`} />
+              <Show when={(r().edges ?? []).length > 0} fallback={<span class="text-[12px] text-base-content/50">No edge.</span>}>
+                <ul class="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+                  <For each={r().edges ?? []}>
+                    {(e) => (
+                      <li data-testid="preview-edge" class="flex items-center gap-2 text-[12px]">
+                        <span class={`badge badge-sm ${e.kind === "fire" ? "badge-soft badge-warning" : "badge-soft badge-success"}`}>{e.kind}</span>
+                        <span class="min-w-0 truncate" title={seriesLabel(e, p.reads)}>{e.component}</span>
+                        <Show when={e.instance}><span class="font-data text-base-content/60">{e.instance}</span></Show>
+                        <span class="ml-auto flex-none text-[11px] text-base-content/50" title={fmtTime(e.at)}>{rel(e.at)}</span>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+            </div>
+          );
+        }}
       </Show>
     </section>
   );

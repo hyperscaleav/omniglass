@@ -16,15 +16,14 @@ screenshots:
     # The When mask names the CELL (`xpath=ancestor::td[1]`), not the text inside
     # it. Playwright paints a mask over whatever the selector resolves to, and a
     # `text=` selector resolves to the innermost span, so a mask on the text is
-    # the size of the text: `toLocaleString` does not zero-pad the hour, so the
-    # box is 7px narrower before 10 o'clock and a clock rollover repaints it
-    # (#773). The cell is pinned at 190px by the column descriptor.
+    # the size of the text: a relative age ("4m ago") changes
+    # width as it counts, so a mask on the text would move with the clock (#773). The cell is pinned at 190px by the column descriptor.
     #
     # The Id mask stays on the text: a uuid is a fixed 36 characters in a
     # monospace face, so its box does not move, and the enclosing cell is the
     # Id column, which no descriptor pins.
     mask:
-      - "text=/\\d+\\/\\d+\\/\\d{4}/ >> xpath=ancestor::td[1]"
+      - "text=/\\d+[smhd] ago/ >> xpath=ancestor::td[1]"
       - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
       # The capture's MCP row declares its client as the CLI at this build's
       # version, whose length changes with the build. The client line stretches

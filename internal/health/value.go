@@ -303,24 +303,65 @@ func RollUp(children []Value) Value {
 	return v
 }
 
-// OutageRank is the severity rank at and above which an active alarm makes
-// its component an outage: the seeded high level (#917). Below it, any active
-// alarm degrades. Official levels are read-only, so the floor does not move.
-const OutageRank = 40
+// The three health effects a severity level declares (#2558): what an open
+// alarm at the level does to its own component. The effect is declared on the
+// level, never implied by an alarm merely existing.
+const (
+	EffectNone     = "none"
+	EffectDegraded = "degraded"
+	EffectOutage   = "outage"
+)
+
+// ValidEffect reports whether s is one of the three declared effects.
+func ValidEffect(s string) bool {
+	return s == EffectNone || s == EffectDegraded || s == EffectOutage
+}
+
+// The ranks the pre-#2558 rule split on, kept only to derive the effect of a
+// custom level created without one: below warning is none, below high is
+// degraded, else outage.
+const (
+	warningRank = 20
+	highRank    = 40
+)
+
+// DefaultEffect derives a level's health effect from its rank for a custom
+// level that did not declare one, by the old floors.
+func DefaultEffect(rank int) string {
+	switch {
+	case rank < warningRank:
+		return EffectNone
+	case rank < highRank:
+		return EffectDegraded
+	default:
+		return EffectOutage
+	}
+}
+
+// EffectValue maps a declared effect to the value an alarm contributes to its
+// component. An unrecognized effect is Degraded rather than Healthy: an open
+// alarm should never be silently harmless because of a bad value.
+func EffectValue(effect string) Value {
+	switch effect {
+	case EffectNone:
+		return Healthy
+	case EffectOutage:
+		return Outage
+	default:
+		return Degraded
+	}
+}
 
 // ComponentValue is a component's own health, independent of any slot it
-// fills, from the ranks of its active alarms' severity levels: degraded once
-// any alarm is active against it, and an outage when one is at or above
-// OutageRank. A component that fills no slot still shows what is wrong with
-// it.
-func ComponentValue(ranks []int) Value {
+// fills, from the declared health effects of its open alarms' severity
+// levels: an outage when any alarm declares outage, degraded when any
+// declares degraded, and healthy when every open alarm declares none (or
+// there are none). A component that fills no slot still shows what is wrong
+// with it.
+func ComponentValue(effects []string) Value {
 	v := Healthy
-	for _, r := range ranks {
-		if r >= OutageRank {
-			v = Worse(v, Outage)
-			continue
-		}
-		v = Worse(v, Degraded)
+	for _, e := range effects {
+		v = Worse(v, EffectValue(e))
 	}
 	return v
 }

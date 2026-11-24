@@ -25,12 +25,22 @@ const sse = (text: string) => new Response(text, { headers: { "Content-Type": "t
 type Call = { url: string; method: string; body: Record<string, unknown> };
 let calls: Call[];
 let runReply: (body: Record<string, unknown>) => Response;
+// What the server says omnibot answers from (#2443); a live model by default.
+let facts: Record<string, unknown>;
+let factReads = 0;
 
 beforeEach(() => {
   calls = [];
   runReply = () => sse(fixture("run.sse"));
+  facts = { conversations: [], omnibot: { mode: "live", prompts: [] } };
+  factReads = 0;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const req = input as Request;
+    // The facts read is the panel's own, apart from the calls a run makes.
+    if (req.url.endsWith("/assistant/conversations") && req.method === "GET") {
+      factReads++;
+      return json(facts);
+    }
     const text = await req.text();
     const body = text ? JSON.parse(text) : {};
     calls.push({ url: req.url, method: req.method, body });
@@ -119,9 +129,85 @@ describe("the omnibot panel", () => {
     await screen.findByText("Four.");
     const thinking = screen.getByTestId("omnibot-thinking") as HTMLDetailsElement;
     expect(thinking.open).toBe(false);
-    expect(within(thinking).getByText("Thinking")).toBeTruthy();
+    expect(within(thinking).getByText("Thought")).toBeTruthy();
     expect(thinking.textContent).toContain("User asks 2+2.");
     expect(screen.getByText("Four.").closest("details")).toBeNull();
+  });
+
+  it("folds reasoning and tool calls into one collapsed block, in order, answer below (#2422)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    runReply = () =>
+      sse(
+        ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+          ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+          ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "First look." }) +
+          ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "list-components" }) +
+          ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: '{"limit":5}' }) +
+          ev({ type: "TOOL_CALL_RESULT", toolCallId: "c1", messageId: "t1", content: '{"components":[]}', role: "tool" }) +
+          ev({ type: "TOOL_CALL_START", toolCallId: "c2", toolCallName: "get-component" }) +
+          ev({ type: "TOOL_CALL_RESULT", toolCallId: "c2", messageId: "t2", content: "not found", role: "tool" }) +
+          ev({ type: "TEXT_MESSAGE_START", messageId: "m2", role: "assistant" }) +
+          ev({ type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "Done." }) +
+          ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }),
+      );
+    open();
+    send("look");
+    await screen.findByText("Done.");
+    const blocks = screen.getAllByTestId("omnibot-thinking") as HTMLDetailsElement[];
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].open).toBe(false);
+    expect(screen.getByTestId("omnibot-thinking-summary").textContent).toBe("Thought · 2 tool calls · 1 failed");
+    expect(screen.getByTestId("omnibot-thinking-error")).toBeTruthy();
+    const text = blocks[0].textContent ?? "";
+    expect(text.indexOf("First look.")).toBeLessThan(text.indexOf("list-components"));
+    expect(text.indexOf("list-components")).toBeLessThan(text.indexOf("get-component"));
+    const rows = within(blocks[0]).getAllByTestId("omnibot-step") as HTMLDetailsElement[];
+    expect(rows.every((r) => !r.open)).toBe(true);
+    expect(rows[0].textContent).toContain("limit=5");
+    expect(rows[1].dataset.state).toBe("error");
+    expect(screen.getByText("Done.").closest("details")).toBeNull();
+  });
+
+  it("keeps an opened thought block and call row open while the run streams on (#2457)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    const enc = new TextEncoder();
+    let push!: (t: string) => void;
+    let end!: () => void;
+    runReply = () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            push = (t) => c.enqueue(enc.encode(t));
+            end = () => c.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    open();
+    send("look");
+    await waitFor(() => expect(push).toBeTypeOf("function"));
+    push(
+      ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+        ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+        ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "First look." }) +
+        ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "list-components" }),
+    );
+    const block = (await screen.findByTestId("omnibot-thinking")) as HTMLDetailsElement;
+    block.open = true;
+    const row = (await within(block).findByTestId("omnibot-step")) as HTMLDetailsElement;
+    row.open = true;
+    push(
+      ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: '{"limit":5}' }) +
+        ev({ type: "TOOL_CALL_RESULT", toolCallId: "c1", messageId: "t1", content: '{"components":[]}', role: "tool" }) +
+        ev({ type: "REASONING_MESSAGE_START", messageId: "m2", role: "reasoning" }),
+    );
+    await waitFor(() => expect(within(block).getByTestId("omnibot-step").textContent).toContain("limit=5"));
+    expect(screen.getByTestId("omnibot-thinking")).toBe(block);
+    expect(block.open).toBe(true);
+    expect(within(block).getByTestId("omnibot-step")).toBe(row);
+    expect(row.open).toBe(true);
+    push(ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }));
+    end();
   });
 
   it("runs on a plain-http origin, where the browser has no crypto.randomUUID", async () => {
@@ -304,5 +390,120 @@ describe("the omnibot panel", () => {
     send("hello");
     await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
     expect(calls.find((c) => c.url.includes(":run"))!.body.context).toBeUndefined();
+  });
+
+  describe("when the server plays a recording (#2443)", () => {
+    const prompts = ["Tag the meeting 405 video bar with its asset id", "What is wrong with the meeting 405 video bar?"];
+    const unmatchedRefusal = () =>
+      json(
+        { type: "urn:omniglass:omnibot-replay-unmatched", title: "Unrecorded question", status: 422, detail: "This lab plays a recording; connect a model to ask your own question" },
+        422,
+      );
+    beforeEach(() => {
+      facts = { conversations: [], omnibot: { mode: "replay", prompts } };
+    });
+    const runs = () => calls.filter((c) => c.url.includes(":run"));
+
+    it("says it is a recorded demo and offers the recorded prompts", async () => {
+      open();
+      const note = await screen.findByTestId("omnibot-replay");
+      expect(note.textContent).toContain("Recorded demo");
+      const chips = within(await screen.findByTestId("omnibot-prompts")).getAllByRole("button");
+      expect(chips.map((c) => c.textContent)).toEqual(prompts);
+    });
+
+    it("plays a recorded prompt to its answer when it is chosen", async () => {
+      open();
+      fireEvent.click(await screen.findByRole("button", { name: prompts[0] }));
+      await screen.findByTestId("omnibot-ask");
+      expect(runs()).toHaveLength(1);
+      expect(runs()[0].body.messages).toEqual([expect.objectContaining({ role: "user", content: prompts[0] })]);
+      expect(screen.getByText(prompts[0])).toBeTruthy();
+    });
+
+    it("plays no run for a question it has no recording for, and offers the recorded ones", async () => {
+      runReply = unmatchedRefusal;
+      open();
+      await screen.findByTestId("omnibot-prompts");
+      send("Which alarm is worst?");
+      const status = await screen.findByTestId("omnibot-status");
+      expect(status.getAttribute("data-status")).toBe("unmatched");
+      expect(status.textContent).toContain("This lab plays a recording; connect a model to ask your own question");
+      expect(screen.queryAllByTestId("omnibot-step")).toHaveLength(0);
+      expect(screen.queryByTestId("omnibot-ask")).toBeNull();
+      expect(within(screen.getByTestId("omnibot-prompts")).getAllByRole("button").map((c) => c.textContent)).toEqual(prompts);
+      expect(runs()).toHaveLength(1);
+      // The panel is free for another question, and a chip then plays.
+      runReply = () => sse(fixture("run.sse"));
+      fireEvent.click(screen.getByRole("button", { name: prompts[1] }));
+      await screen.findByTestId("omnibot-ask");
+      expect(runs()).toHaveLength(2);
+      expect(screen.queryByTestId("omnibot-status")).toBeNull();
+    });
+
+    it("marks the write it waits on as part of the recording", async () => {
+      open();
+      fireEvent.click(await screen.findByRole("button", { name: prompts[0] }));
+      const ask = await screen.findByTestId("omnibot-ask");
+      expect(ask.textContent).toContain("part of the recording");
+      expect(within(ask).getByRole("button", { name: "Confirm" })).toBeTruthy();
+    });
+
+    it("resumes the recorded write once it is confirmed", async () => {
+      open();
+      fireEvent.click(await screen.findByRole("button", { name: prompts[0] }));
+      await screen.findByTestId("omnibot-ask");
+      runReply = () => sse(fixture("resume-approved.sse"));
+      fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+      await waitFor(() => expect(screen.queryByTestId("omnibot-ask")).toBeNull());
+      expect(screen.queryByTestId("omnibot-status")).toBeNull();
+    });
+  });
+
+  it("reads the mode again each time it opens, so a model configured meanwhile ends the demo", async () => {
+    facts = { conversations: [], omnibot: { mode: "replay", prompts: ["Tag it"] } };
+    const [isOpen, setOpen] = createSignal(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="*" component={() => <OmnibotPanel open={isOpen()} onClose={() => {}} />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await screen.findByTestId("omnibot-replay");
+    expect(factReads).toBe(1);
+    setOpen(false);
+    facts = { conversations: [], omnibot: { mode: "live", prompts: [] } };
+    setOpen(true);
+    await waitFor(() => expect(screen.queryByTestId("omnibot-replay")).toBeNull());
+    expect(screen.queryByTestId("omnibot-prompts")).toBeNull();
+    expect(factReads).toBe(2);
+  });
+
+  describe("the empty panel", () => {
+    it("is one line of what omnibot does, and the page it will read", () => {
+      open(undefined, { kind: "page", ref: "/systems/boardroom" });
+      const empty = screen.getByTestId("omnibot-empty");
+      expect(empty.querySelectorAll("p")).toHaveLength(2);
+      expect(empty.textContent).toContain("acts as you");
+      expect(empty.textContent).toContain("/systems/boardroom");
+    });
+
+    it("says no page goes with a question when there is none", () => {
+      open();
+      expect(screen.getByTestId("omnibot-empty").textContent).toContain("No page");
+    });
+  });
+
+  describe("with a live model", () => {
+    it("adds no note and no prompts, and takes any question", async () => {
+      open();
+      send("Which alarm is worst?");
+      await screen.findByTestId("omnibot-ask");
+      expect(screen.queryByTestId("omnibot-replay")).toBeNull();
+      expect(screen.queryByTestId("omnibot-prompts")).toBeNull();
+      expect(screen.queryByText(/part of the recording/)).toBeNull();
+    });
   });
 });

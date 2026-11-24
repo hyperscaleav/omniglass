@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, within } from "@solidjs/testing-library";
+import { render, screen, cleanup, within, fireEvent } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import OmnibotStep, { STEP_RENDERERS } from "./OmnibotStep";
 import type { Step } from "../lib/assistant";
@@ -79,6 +79,21 @@ describe("the tool renderers", () => {
     show(step("list-components", {}, { components: [{ id: uuidFor("amp-1"), name: "amp-1" }, { id: uuidFor("amp-2"), name: "amp-2", label: "Amp two" }] }));
     expect(screen.getByRole("link", { name: "amp-1" }).getAttribute("href")).toBe(`/components/${uuidFor("amp-1")}`);
     expect(screen.getByRole("link", { name: "Amp two" }).getAttribute("href")).toBe(`/components/${uuidFor("amp-2")}`);
+  });
+
+  it("caps a long list behind a Show all control", () => {
+    const components = Array.from({ length: 200 }, (_, i) => ({ id: uuidFor(`tp-${i}`), name: `tp-${i}`, label: "Touch Panel 1" }));
+    show(step("list-components", {}, { components }));
+    expect(screen.getAllByRole("link").length).toBe(10);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 200" }));
+    expect(screen.getAllByRole("link").length).toBe(200);
+  });
+
+  it("tells same-labelled components apart by where they are", () => {
+    const mk = (n: string, location: string, system?: string) => ({ id: uuidFor(n), name: n, label: "Display 1", location, system });
+    show(step("list-components", {}, { components: [mk("d-a", "Room A", "Sys A"), mk("d-b", "Room B")] }));
+    const places = screen.getAllByTestId("component-place").map((e) => e.textContent);
+    expect(places).toEqual(["Room A / Sys A", "Room B"]);
   });
 
   it("says when a list came back empty", () => {

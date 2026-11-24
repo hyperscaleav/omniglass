@@ -38,6 +38,21 @@ screenshots:
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=leaf-alarms]"
+  # The video bar in Boardroom A is the seed's worked dependency example: fed
+  # from the power conditioner, hosting the touch panel and reached through by
+  # the room display (#2428).
+  - id: fleet-component-dependencies
+    path: /web/locations/boardroom-a
+    steps:
+      - action: click
+        selector: "button:has([data-label]:text-is('Video Bar 1'))"
+      - action: click
+        selector: "aside[data-blade] button[aria-label=Expand]"
+      - action: wait
+        selector: "[data-testid=dep-downstream]"
+    alt: "A video bar's view with its Dependencies card: one upstream, the power conditioner on outlet 1, and two downstream components, the touch panel (hosted by it and reached through it) and the room display, each with its health."
+    # A healthy bar has no since-line or alarm age, and the docs seed carries
+    # no simulation card, so nothing on the page moves with the clock.
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
     alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."
@@ -47,15 +62,19 @@ screenshots:
     path: /web/systems/huddle
     alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
-    # now (#872), so nothing else on Overview moves.
+    # now (#872). The map is cropped to its members (#2465), so the Data
+    # section's first chart rises into the frame and plots like it ages.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=timeseries-chart]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
-    # The header's since-line ages with the capture.
+    # The header's since-line ages with the capture, and the cropped map
+    # (#2465) lifts the Data section's charts into the frame.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=timeseries-chart]"
   # The auditorium carries the fleet's live high-severity alarm, so the history
   # tab has something real to say. Its room holds that one system, so the
   # room's address lands on it.
@@ -75,24 +94,38 @@ screenshots:
       - ".og-statestrip"
       # The logs under the health history render seed-run stamps.
       - "[data-testid=logs-tab]"
+      # A rule's event lands when its sustain passes after the seed (#2434),
+      # so its stamp is the capture's own; its left edge holds, so the box
+      # is declared wide enough for any stamp.
+      - selector: "[data-testid=events-tab] li span.tabular-nums"
+        width: 130
   - id: fleet-data
     path: /web/systems/huddle
     steps:
-      - action: click
-        selector: "[data-testid=metric-row-room-temperature]"
-    alt: "The data section inside Overview: every declared metric stacked with a sparkline and its latest value, the temperature row expanded to the full chart."
-    # The since-line ages with the capture, and every chart x-position
-    # divides seed-to-shoot latency by the window (CI proved it crosses a
-    # pixel boundary), so the plots mask in the BASELINE while the docs
-    # embed them live (the two-render pipeline).
+      # A fresh lab charts a metric once its first sample lands.
+      - action: wait
+        selector: "[data-testid=metrics-grid] [data-testid=chart-end-dot]"
+        message: no metric on the huddle system was sampled in range
+      - action: hover
+        selector: "[data-testid=metrics-grid] [data-testid=chart-end-dot] >> nth=0"
+    alt: "The metrics grid inside Overview: a card per declared metric with its latest value and its chart over the page's range, the pointer on one chart and the crosshair standing at the same instant on every other."
+    # The since-line ages with the capture. Each metric card masks whole in
+    # the BASELINE while the docs embed it live (the two-render pipeline): a
+    # chart's x-positions divide seed-to-shoot latency by the window, the
+    # latest value moves with the sim, and a fresh lab may not yet have a
+    # sample in range for every card, so a card is a chart on one capture and
+    # "No data in range" on the next.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "[data-testid=timeseries-chart]"
-      - "[data-testid=sparkline]"
+      - "[data-testid=metrics-grid] article"
   - id: fleet-location
     path: /web/locations/east
-    alt: "A location holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
-    # Nothing on a folder's view moves with the clock: no mask.
+    alt: "A location holding no system of its own: its card with its type, health, since-when and tags, its tabs, and the outline of what is beneath it, counted by systems."
+    # The header's since line ages with the capture (#2423): its box is
+    # declared, as the blade's is, so the clock never moves the baseline.
+    mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
   # A room holding two systems keeps a view of its own: a brief card per
   # system.
   - id: fleet-location-systems
@@ -102,14 +135,17 @@ screenshots:
     # box (`width`): painted at the since span's top-left, as tall as the span
     # and 208px wide, whatever the line reads. A mask on the span alone is the
     # size of its text, and the text moves with the clock (`fmtTime` prints
-    # the month, a bare day and AM or PM; the age reads 9s or 17s), so the box
-    # moved with it (#1081). The card's header row holds still (the grid
+    # a short absolute, "Nov 23, 01:56 PM", whose width follows the month name and
+    # the day's digits; the age reads 9s or 17s; the Time component's relative
+    # "4m ago" counts the same way), so the box moved with it (#1081). The card's header row holds still (the grid
     # track pins its width, and the since line always wraps to its second
     # line) but also holds the system's name and health, which the baseline
     # keeps gating. The widest line a capture renders ("since May 28, 12:59 AM
     # · 59m") is 186px in the console's face; a line wider than 208px fails
     # the capture by name.
     mask:
+      - selector: "[data-testid=since-line]"
+        width: 184
       - selector: "[data-testid=summary-since]"
         width: 208
   # Opened down to one room so the shot shows every rule at once: folded
@@ -121,12 +157,13 @@ screenshots:
       - action: click
         selector: "role=button[name='Expand West Building']"
       - action: click
-        selector: "role=button[name='Expand Level 2']"
+        selector: "role=button[name=/^Expand Level 2( in .*)?$/]"
       - action: click
-        selector: "role=button[name='Expand Huddle Room']"
+        selector: "role=button[name=/^Expand Huddle Room( in .*)?$/]"
     alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
   - id: find-and-fix-a-location
+  - id: add-a-dependency
 ---
 
 The fleet has one door in the sidebar: **Explore**. It is an outline of every location you
@@ -147,13 +184,15 @@ system, so a location where one system sits shows that system on its own row: th
 [standard](/admin/standards/) it conforms to, and **Health** its health. Open it and
 the system's components are directly beneath, each with its product and health, and a
 component's active alarm reads in the **Detail** column. A location holding two systems lists a
-row per system, with its components under each. A component two systems share appears under
+row per system, with its components under each, and counts them in its own **Detail** (**2 systems, 4 components**), never in the Standard column. A component two systems share appears under
 both, marked **also in** the other; a component in no system sits directly under its location.
 
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
 catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
-column counts the systems beneath it by health, in four fixed slots: healthy, incomplete,
-degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
+column counts the systems beneath it by health, each with its count and packed to the left in
+that order (healthy, incomplete, degraded, outage), so a lone warning is the first thing in the
+column, never a gap and then a glyph. A row whose system has nothing in its slots reads **no components yet**, never Empty: **Empty** means no system lives there, and a system whose last component was deleted stays on its row (a row holding several systems lists it under its own header with the same words). Opening that system, in its page or its drawer, shows what a system and a slot are and offers **Add component** (the create form with this system filled in) and **Start from a standard** (the Configure tab, where the standard is chosen). A long Detail wraps to a second line and carries a
+tooltip with the whole of it. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour
 because at any real failure rate almost every large location holds one fault somewhere, and a
@@ -203,11 +242,15 @@ value; each commit becomes a chip.
   location, not only one set on it directly). **is set** and **is absent** take no value and
   find the rows that carry the tag at all, or lack it.
 
+The list narrows **as you type**, before Enter; **Enter** pins what you typed as a chip.
 While a filter is on, the outline becomes a flat list of matches, each with the path above
-it. **Enter** on a match shows it in the tree, opened down to it and selected, with the filter
+it. On a match, **Enter** shows it in the tree, opened down to it and selected, with the filter
 cleared; **Space** or a click opens its side panel. The counts line's **need attention** is
 itself the filter: it keeps what is in outage, degraded or incomplete, and it is the same
-health chip the bar shows, so the two can never disagree.
+health chip the bar shows. Its words are what it counts (**2 systems, 3 components need
+attention**) and its number is the number of rows pressing it leaves, from one count that
+Home's **Need attention** card reads too, so the two cannot disagree. The chip keeps its amber
+dot while pressed.
 
 What the filter bar does **not** offer is a location facet. Filtering on live state (a
 health, a standard, a type, a name) is exploring; naming the part of your fleet to include
@@ -259,8 +302,8 @@ A location holding a system and locations beneath it lists those locations under
 outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its health, **Why**,
-the slots and who is staffing them, each component's health light, and the data section's latest
-values (the 24 hour sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
+the slots and who is staffing them, each component's health light, and the metrics grid's latest
+values (a preset range's charts every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
 health and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
@@ -308,7 +351,9 @@ Cause before arithmetic:
 - The build a system did not choose never renders; choices are the standard editor's
   vocabulary, not an operator's.
 - A shared component is marked **also in** the other system; a member filling no slot reads
-  **no slot**, and that is a normal state.
+  **not in a slot**, a normal state, and the system names those members with the way to place them.
+  Its open alarms are on the **Why** strip with every other member's, marked **not in a slot**, and
+  they do not move the system's health: only a slot does.
 
 ## Overview: the map and the data
 
@@ -320,6 +365,10 @@ its health colour (green, amber, red, as in the Health column) with the componen
 under it; hover or focus a marker for its slot, product, health and any alarm, and click it to
 open its panel. A dashed ring is a position nobody staffs, labelled with its slot.
 
+The map is cropped to the positions the system holds (#2465): a system with a few members shows a
+small map around them rather than the whole room with most of it empty, and a system spread across
+the room shows the whole room.
+
 The map redraws to the width it has. A label never runs past the edge of the map: a marker
 near a side hangs its label inward, one near the bottom puts it above its icon, and a phone
 anchors sooner than a desktop because the same position is fewer pixels from the edge. Where
@@ -329,16 +378,34 @@ and health as any other marker.
 
 ::screenshot{#fleet-map}
 
-Below the map, when the standard declares metrics, the **data** section stacks every one
-of them, the only place a metric's latest value is said: a sparkline of the last 24 hours beside the latest value, one row per series, so
-the system's numbers read together. Click a row for the full chart, newest at the right,
-the newest bucket's last value floating on its dot. The day is drawn in five-minute buckets, so
-however busy the metric the whole day is there: the line is each bucket's average and the shaded band
-behind it runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. Hover a
-point for the bucket's average, range and sample count. A series still on its contract default has
-nothing to chart yet, and says so.
+Below the map, when the standard declares metrics, the **metrics** grid charts every one of
+them over the page's time range (the picker on the tab rail; the last 24 hours unless it names another), one card
+per metric: its name, unit and latest value above its chart, newest at the right. Each chart is
+drawn in buckets sized to the range (a minute for an hour, five minutes for a day, hours for a week or a month), so however busy
+the metric the whole range is there: the line is each bucket's average and the shaded band behind it
+runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. A metric with no
+sample in the range keeps its card, marked **No data in range**; a series still on its contract
+default says so beside its value. The grid answers its own width: one column in a drawer, two or
+three on a wide page.
+
+Every chart in the grid shares one cursor. Hover a chart and a crosshair stands at that instant on
+every chart at once, each reading its own bucket there (average, range and sample count), so the
+system's numbers compare at a moment without lining them up by eye. A chart with no bucket at that
+instant draws the line and no value: a gap is a gap. The keyboard does the same: Tab to a chart,
+and the arrow keys step its buckets (Home and End jump to the ends, Escape clears).
 
 ::screenshot{#fleet-data}
+
+The **time range** at the end of Overview's tab rail sets that window for every chart on the
+page: the last 1 hour, 6 hours, 24 hours (the default), 7 days or 30 days, each sliding to now,
+or a custom range with a fixed start and end in your local time. The range is part of the
+address (`?range=7d`, or `?from=` and `?to=` for a custom range), so a link you copy opens on
+the same window for whoever follows it, and an address with a range it cannot read opens on the
+default rather than failing. A custom range is read through the [views](/architecture/views/)
+read, so it is offered only to a caller who holds `view:read`; a preset needs only the
+system's own read. A link carrying a custom range, opened by someone without `view:read`, shows the
+last 24 hours and says why. Activity keeps its fixed windows for now (30 days of health history, 24 hours
+of events and logs), so the control is not on that tab.
 
 ## Activity: the history, the events, the logs
 
@@ -349,6 +416,13 @@ expanding to the health changes inside it and the alarms that explain them. An a
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
+Uptime is the healthy share of the time the system has been recorded inside the last 30
+days, never of days it did not exist for. A system recorded minutes ago reads over those
+minutes and the card names its window ("since Nov 23, 01:56 PM"); with no health recorded
+yet it says so instead of showing a percentage. The timeline is labelled at both ends and each
+segment's hover gives its health, from, to and duration; the red and amber triangles under it
+are alarm raises on that same axis.
+
 ::screenshot{#fleet-history}
 
 Under the health history, the **events** are the system's story on the event lane: the system's
@@ -356,6 +430,35 @@ own events and its members', newest first, each row labeled by the owner that ra
 and the **logs** are the members' raw lines merged, each naming the component that wrote
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
 Activity tab carries its own events the same way.
+
+## Timeline: what happened, in order
+
+**Timeline** lays everything a system or a component recorded over the page's time range on one
+axis, so the order of events reads straight off it: a property or metric moves, a rule raises an
+alarm, health degrades, someone sends a command, the alarm clears. Lanes stack top down, each
+collapsible:
+
+- **Health**: the health in force across the range, one span per recorded change, so a range in
+  which nothing changed is one span of the health that held. A system adds one row per member
+  component.
+- **Alarms**: every alarm raised during the range on its own row, from raise to clear (or to now
+  while still raised), in its severity's color, the bar labeled with how long it was raised. An
+  alarm raised before the range and still open in it starts at the range's left edge but keeps its
+  whole duration. Hover one for when it was raised, when it cleared, how long, the rule that raised
+  it and whether anyone acknowledged it; click it to open its own history below.
+- **Properties** and **Metrics**: the properties and metrics you pick (**Pick** on the lane). Until
+  you pick, the timeline shows what the alarming rules watch and every property that changed in
+  range, so the signal that crossed the threshold sits right above the span it raised.
+- **Events**, **Logs** and **Commands**: a marker each at its time. Markers too close to tell
+  apart become one counted marker; click any marker to list its rows, and a command's row opens its
+  arc on the Activity tab. Logs show lines at the severity you choose and worse.
+
+Hover anywhere on the lanes (or focus them and use the arrow keys) and the cursor crosses every
+lane; the line above the lanes reads them at that instant (the health, how many alarms were
+raised, each property's value and each metric's reading), and the metrics grid under the timeline
+draws its crosshair at the same instant. The time range on the tab rail governs every lane, and
+changing it reads them all again. A read that stops at its cap says so on its lane rather than
+dropping rows silently.
 
 ## Configure
 
@@ -365,13 +468,13 @@ the label (with the platform's pen) and the name with its advisory precheck; ren
 breaks bookmarks and integrations by design, so the check and the consequence line sit
 beside the field. **Classification** is the standard and type selects (a component's
 product is fixed at creation). **Placement** moves a location under a new parent, its own
-permission and its own audit verb; systems and components read where they sit.
+permission and its own audit verb; a component's and a system's edit face carries **Move to...** (see [Work with an entity](/operator/entities/)).
 **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. A sole system's Configure also carries its location's
 form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a
-component's views carry the same tab. The side panel carries the same form's identity, classification and tags; slots,
-properties and their cascade are configuration, and live here.
+component's views carry the same tab. A blade opened from Explore carries this same Configure
+tab, panels, Edit and Delete included: it is the detail view in a side panel (ADR-2423).
 
 ::screenshot{#fleet-configure}
 
@@ -403,6 +506,10 @@ component. Each section's explainer is
 on its label's tooltip.
 
 ::screenshot{#fleet-component}
+
+Below Vitals, the **metrics** grid charts the same metrics over the page's time range (the picker on the tab rail, as on a system), a card per
+metric, every chart on one shared cursor: it is the system view's grid, described there, for one
+component.
 
 **Collection** shows each endpoint with its reachability ladder (the ping answers the path, the
 transport answers the service, the login answers the credential; each rung teaches itself on
@@ -441,6 +548,31 @@ allowed** (a permission one end lacks, named), **Not found** (the owner is gone,
 can see) or **Not a valid binding** (the rules refuse it, such as a location or an outpost as the owner).
 The X on a bound row unbinds it after a confirm, and its next value waits under Heard, not bound
 again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
+
+**Dependencies** says what this component needs and what needs it, apart from where it sits. A
+dependency edge is one of three kinds: **power** (fed from an outlet of the upstream, a PDU),
+**host** (hosted by the upstream, a codec and the peripheral it reboots) or **path** (reached
+through the upstream, a gateway or a switch). **Upstream** lists what this component depends on,
+each linked, with its kind (and the outlet, on a power edge), its health, and **holding this** when
+that upstream's gate is closed on this component's endpoints right now, so they are held until it
+opens; when the holder is further up a chain (a core switch behind the switch this one depends on), it is named under the list as **Held through**. **Downstream** lists what depends on this component, one row for each, with every kind it
+depends by: when this one goes down it holds them, so "the switch is down, which holds these six
+devices" reads off the switch's page. A component outside your read is counted (**and 2 more you
+cannot see**), never named. A component with no edges says so in one line.
+
+::screenshot{#fleet-component-dependencies}
+
+**Add upstream** (with update on this component) opens a form in place: filter the fleet by label,
+name or product, pick the component it depends on (never the component itself), choose the kind,
+and for a power edge name the outlet that feeds it. The server stays the authority and says why in
+the form when it refuses: an edge that would close a cycle (the upstream already depends on this
+component through edges of the same kind), a repeat of an edge already recorded, or a power edge
+with no outlet. The X on an upstream row removes that edge after a confirm. A downstream row is the
+other component's own fact, so it is edited from that component's page; without update on this
+component, the card is read-only. The CLI does the same with `omniglass component dependency`
+(`list`, `create`, `delete`).
+
+::walkthrough{#add-a-dependency}
 
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
 with the health they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you

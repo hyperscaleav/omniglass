@@ -13,6 +13,7 @@ walkthroughs:
   - id: fix-a-rejected-session
   - id: trust-a-changed-host-key
   - id: fix-a-refused-probe
+  - id: test-an-endpoints-poll
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
@@ -97,6 +98,18 @@ give it one ("Control processor") to say what the connection is FOR, since `ssh`
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
 without one reads its transport name exactly.
 
+An endpoint reads **the same whole story in two places**: the component's expanded endpoint row
+and the endpoint's own drawer (**Manage**) render one body, so neither shows less than the
+other. It holds the identity and target, the driver (a link into its drawer) and version, the
+availability strip with its uptime, the reach ladder with each rung's last result and time, the
+session and any reasons the gate is held, the parameters and inputs with where each value came
+from (set on this endpoint, the driver's default, or derived from inputs), the **names** of the
+secrets it is bound to (never a value), whether it is an out-of-band management path, and each
+poll with its interval, what it last read, and the **Test** that runs it now. The long
+sections fold under a one-line summary.
+
+- A new device gets its first endpoint in [the add-a-component flow](/operator/add-a-component/),
+  which picks the product's driver and credential and tests it before it ends.
 - With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
   two faces:
   - **Probe**: give it a **label** (optional, and the only name-like string you type here),
@@ -167,6 +180,36 @@ Because an endpoint belongs to a component, it inherits that component's scope: 
 on a component outside your scope is not shown. An outpost **purge cascades** its endpoints and
 their derived tasks.
 
+### Test a poll now
+
+A driver-attached endpoint ends with proof that it collects, not a wait for the next cycle. With
+`endpoint:run`, each poll the endpoint's driver declares carries a **Test** button, and an endpoint
+with several also carries **Test all**, on the endpoint's blade (which a new attach opens on) and
+under the endpoint in the component's **Collection** section. A person without the permission sees
+no Test control at all.
+
+A test runs the poll once, now, through the outpost that holds the endpoint, outside its schedule
+(which does not change), and draws the answer in place:
+
+- **Read:** each sample the poll extracted, with its value and unit, the round-trip time the
+  outpost measured, and the outpost that ran it. The samples land as a scheduled run's do. Emits
+  that did not locate their value are listed under the samples, and a poll that answered but
+  read nothing says so.
+- **Gated:** an endpoint the outpost holds (a refusal such as a wrong community, a changed key, an
+  unreachable probe, or a reboot in flight) refuses the run and nothing is sent. The card carries
+  the gate's own reason, the same one the endpoint's notice shows. The notice beside the card
+  offers the way to lift it (**Retry** or **Open endpoint**) where it shows one.
+- **No outpost:** the endpoint is placed on no outpost, or its outpost is not connected, so nothing
+  can run the poll.
+- **Failed or timed out:** the outpost ran the poll and could not complete it (it names why), or
+  did not answer within the run's budget; too many runs in flight at once is told apart too.
+
+Test all runs the polls one after another, since the outpost serves one request at a time per
+endpoint. The same run is one call from the CLI or the API (`run-endpoint-poll`,
+`POST /endpoints/{endpoint}/polls/{poll}:run`).
+
+::walkthrough{#test-an-endpoints-poll}
+
 ## Tasks
 
 A task is the **collection work** an outpost runs, and it is **derived**, not authored: creating an
@@ -201,7 +244,13 @@ until it passes) and **authenticated** (the login, shown once a
 credential was actually tried). Hover or focus a rung for what it checks and what it says now. A
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
-transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
+transport answering. Over a datagram transport (udp, snmp) a silent **responsive** rung reads **no answer**,
+not down: silence proves nothing there. The host may be off, the agent or service stopped, the v2c
+community wrong (an agent drops a wrong community without a word), or the port filtered; a closed
+port (an ICMP port-unreachable, the affirmative **refused**) lands here too until the reading carries its reason (#2567). The rung's
+hint, the collection badge on the component and the row's pill all name those causes. The reachability reading and
+the unreachable streak are unchanged, so a run of silence still alarms; only what it says changed. A tcp connect that times out
+still reads down. A down endpoint also shows a plain-language **why** line. Every value is a
 real reading from the outpost, and the panel is also the authoring surface: its header carries **Add
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.

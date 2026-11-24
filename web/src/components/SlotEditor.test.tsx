@@ -8,6 +8,7 @@ import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The editor curates the slots a standard declares: the slots every conforming
 // system needs filled, each with the typed-slot guard (#626) a filling
@@ -71,7 +72,8 @@ describe("SlotEditor on a standard", () => {
     const row = slotRow(getByText("table-mic"));
     expect(within(row).getByText("Table microphone")).toBeTruthy();
     expect(within(row).getByText("2 wanted")).toBeTruthy();
-    expect(within(row).getByText("video-bar")).toBeTruthy();
+    // The accepted type links to its own drawer, reading as the catalog row does.
+    expect(within(row).getByRole("link", { name: "Video Bar" }).getAttribute("href")).toBe("/component-types?open=video-bar");
   });
 
   // The editor owns a fixed set of fields and sends them all, so its save has
@@ -217,7 +219,7 @@ describe("SlotEditor on a standard", () => {
   });
 
   it("withdraws a slot after confirmation, calling DELETE", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = answerConfirms(true);
     let del: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

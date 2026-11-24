@@ -93,19 +93,15 @@ that commits the agents' own config. Then work through the list for what it cann
    gh image <out.png>` prints the markdown to paste). It works by extracting a logged-in
    browser's session cookie, which exists only on a workstation you browse GitHub from.
 
-   **If the check fails, embed the clean docs render the slice already committed**, by
+   **If the check fails, commit the evidence under `.github/screenshots/<n>/`** and embed it by
    **immutable commit SHA**
-   (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/docs/public/screenshots/<id>.png`),
-   so the link survives the branch being deleted on squash-merge. This costs the repo
-   nothing: a UI slice re-runs `make docs-shots` and commits both sets anyway, and a re-run
-   rewrites the same filenames rather than adding new ones. This is the normal path on any
+   (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/<n>/<file>.png`),
+   so the link survives the branch being deleted on squash-merge. A PR no longer re-renders the
+   existing docs shots (main recaptures them after a merge, #2561, and a guard fails a PR that
+   edits one), so the docs renders are not the PR's evidence. This is the normal path on any
    headless or remote machine: an unattended run, a worker VM, a container, CI. Do not treat
-   a failed check as a blocker and do not skip the screenshots.
-
-   Only where the surface has **no docs shot id** (an interactive state the docs do not
-   capture), commit under `.github/screenshots/` and embed by SHA the same way. Every file
-   there is a new path that stays in git history permanently, so keep that path to what the
-   docs renders genuinely do not cover.
+   a failed check as a blocker and do not skip the screenshots. Every file under
+   `.github/screenshots/` stays in git history permanently, so keep it to what the PR needs.
 
    Do not set `GH_SESSION_TOKEN` on an unattended machine to work around this. A
    `user_session` cookie is a full-account credential rather than a scoped token, it rotates
@@ -117,9 +113,10 @@ that commits the agents' own config. Then work through the list for what it cann
    `make docs-shots` from the real console, never hand-added; each capture writes the CLEAN
    shot (`docs/public/screenshots/`, every region live) and its masked BASELINE twin
    (`docs/screenshots/baseline/`), and `make docs-shots-check` recaptures and diffs the
-   baselines at zero tolerance, the visual sibling of the `make gen` drift check, so a stale
-   screenshot cannot merge. A slice that changes an operator-facing surface **re-runs
-   `make docs-shots` and commits both sets**. Adding a new shot is a frontmatter entry plus a
+   baselines at zero tolerance, the visual sibling of the `make gen` drift check. **Main runs it,
+   not the PR (#2561):** after a merge the `recapture` job recaptures both sets and opens one
+   "docs: recapture the docs screenshots" PR, so a slice does **not** re-run `make docs-shots`
+   or touch an existing shot. Adding a new shot is a frontmatter entry plus a
    `::screenshot{#id}` directive in the prose, not a code change. **PR bodies, comments, and
    issues embed the clean renders, never the baselines** (a masked strip teaches nothing);
    the baselines exist only for the gate.

@@ -10,8 +10,8 @@ import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaselin
 // selector mask is painted at the bounding box of the element it RESOLVES to. So
 // a mask that names the element holding a value paints a box the size of that
 // value. The console does not render every capture-relative value at one width
-// (Audit.tsx's `d.toLocaleString()` leaves the hour bare, format.ts's fmtTime
-// leaves the day bare and prints a month name and AM or PM, durationText reads 9s,
+// (a relative age reads 9m or 11h, format.ts's fmtTime leaves the day bare and
+// prints a month name and AM or PM, durationText reads 9s,
 // 45s or 12m), so the same unchanged UI paints a narrower box at one hour than
 // another. A moved box is changed pixels, which every recapture rewrites into the
 // baseline on a PR that changed no UI.
@@ -87,7 +87,7 @@ const bladeRow = (value: string) => `
   <div style="display: flex; flex-direction: column; gap: 16px">
     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
       <span class="badge">healthy</span>
-      <span data-testid="blade-since" class="num" style="font-size: 12px; line-height: 16px">${value}</span>
+      <span data-testid="since-line" class="num" style="font-size: 12px; line-height: 16px">${value}</span>
     </div>
     <div>2 buildings</div>
   </div>
@@ -124,30 +124,30 @@ const cases: {
   keeps?: string[]; // what the shot exists to show, which the mask must leave live
 }[] = [
   {
-    name: "audit's When column (an hour that is not zero-padded)",
+    name: "audit's When column (a relative age that counts up)",
     page: "admin/audit.md",
     shot: "audit",
-    value: "text=/\\d+\\/\\d+\\/\\d{4}/",
+    value: "text=/\\d+[smhd] ago/",
     markup: tableRow(190),
-    narrow: "8/15/2026, 9:47:03 PM",
-    wide: "8/15/2026, 11:47:03 PM",
+    narrow: "9m ago",
+    wide: "11h ago",
     pinned: 190,
   },
   {
-    name: "files' Added column (a day that is not zero-padded)",
+    name: "files' Added column (a relative age that counts up)",
     page: "admin/files.md",
     shot: "files",
-    value: "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/",
+    value: "text=/\\d+[smhd] ago/",
     markup: tableRow(170),
-    narrow: "Aug 9, 09:47 PM",
-    wide: "Aug 15, 09:47 PM",
+    narrow: "9m ago",
+    wide: "11h ago",
     pinned: 170,
   },
   {
     name: "the entity blade's since-line",
     page: "operator/entities.md",
     shot: "entity-blade",
-    value: "[data-testid=blade-since]",
+    value: "[data-testid=since-line]",
     markup: bladeRow,
     narrow: "since Oct 4, 06:59 PM · 9s",
     wide: "since Oct 24, 01:57 AM · 17s",
@@ -235,10 +235,10 @@ test.describe("docs screenshot masks", () => {
   // refuses it by name instead of writing a baseline that moves.
   test("a value wider than its declared box fails the capture by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
-    const value = await valueBox(page, "[data-testid=blade-since]");
-    const tight = { selector: "[data-testid=blade-since]", width: Math.floor(value.width) - 1 };
+    const value = await valueBox(page, "[data-testid=since-line]");
+    const tight = { selector: "[data-testid=since-line]", width: Math.floor(value.width) - 1 };
     await expect(planMasks(page, [tight])).rejects.toThrow(
-      `[data-testid=blade-since] renders ${Math.ceil(value.width)}px wide, wider than its declared ${tight.width}px box`,
+      `[data-testid=since-line] renders ${Math.ceil(value.width)}px wide, wider than its declared ${tight.width}px box`,
     );
   });
 
@@ -247,7 +247,7 @@ test.describe("docs screenshot masks", () => {
   // baseline; a declared box must too, or it lands where the value was and leaves
   // the value's tail live.
   test("a declared box is measured when the baseline is shot, not when it was planned", async ({ page }) => {
-    const entry = { selector: "[data-testid=blade-since]", width: 184 };
+    const entry = { selector: "[data-testid=since-line]", width: 184 };
     const moveValue = () => page.evaluate(() => ((document.querySelector(".badge") as HTMLElement).style.width = "120px"));
 
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
@@ -326,7 +326,7 @@ test.describe("docs screenshot masks", () => {
   // browser dropping its one capture, the failure the CI run hit, and still paints
   // the masks (the retried raster is the one a clean run writes).
   test("a baseline whose capture the browser drops once is shot on the retry", async ({ page }) => {
-    const entry = { selector: "[data-testid=blade-since]", width: 184 };
+    const entry = { selector: "[data-testid=since-line]", width: 184 };
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
     const clean = await shootBaseline(page, await planMasks(page, [entry]));
 
@@ -345,10 +345,10 @@ test.describe("docs screenshot masks", () => {
 
   test("a value that outgrows its declared box after planning still fails by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
-    const value = await valueBox(page, "[data-testid=blade-since]");
-    const entry = { selector: "[data-testid=blade-since]", width: Math.ceil(value.width) + 2 };
+    const value = await valueBox(page, "[data-testid=since-line]");
+    const entry = { selector: "[data-testid=since-line]", width: Math.ceil(value.width) + 2 };
     const plan = await planMasks(page, [entry]);
-    await page.evaluate(() => (document.querySelector("[data-testid=blade-since]")!.textContent = "since Oct 24, 01:57 AM · 23h 59m"));
+    await page.evaluate(() => (document.querySelector("[data-testid=since-line]")!.textContent = "since Oct 24, 01:57 AM · 23h 59m"));
     await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
   });
 
