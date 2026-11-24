@@ -60,4 +60,27 @@ describe("action rail ownership", () => {
     const offenders = files.filter((f) => inlineRail.test(readFileSync(f, "utf8"))).map(rel);
     expect(offenders).toEqual(allowlist);
   });
+
+  // A form that cannot be submitted says which field is missing (#2440), and
+  // that rule lives in FormActionBar (the binding's `problems`). A form that
+  // draws its own submit button draws a rail the rule does not reach, so only
+  // the forms below may, each for a stated reason: none is a create or edit
+  // form of an entity.
+  it("no form draws its own submit row", () => {
+    const allowlist: Record<string, string> = {
+      "pages/Login.tsx": "sign-in, before any shell exists",
+      "components/ForceChangePassword.tsx": "a full-screen gate, not an entity form",
+      "components/TimeRangePicker.tsx": "an inline popover control (Apply)",
+      "components/OmnibotPanel.tsx": "a chat composer (Send)",
+      "pages/Profile.tsx": "the signed-in user's own settings card",
+    };
+    // Every opening <Button ...> / <button ...> tag; an `=>` inside an attribute
+    // (an onClick arrow) holds a `>` that must not end the tag.
+    const tags = /<(?:Button|button)\b(?:=>|[^>])*>/g;
+    const drawsSubmit = (src: string) => (src.match(tags) ?? []).some((t) => /\btype="submit"/.test(t) && !t.includes("sr-only"));
+    const ownRow = { test: drawsSubmit };
+    const offenders = files.filter((f) => ownRow.test(readFileSync(f, "utf8")) && !(rel(f) in allowlist)).map(rel);
+    expect(offenders).toEqual([]);
+    for (const f of Object.keys(allowlist)) expect(ownRow.test(readFileSync(join(here, f), "utf8")), `${f} no longer draws a submit row: drop it from the allowlist`).toBe(true);
+  });
 });

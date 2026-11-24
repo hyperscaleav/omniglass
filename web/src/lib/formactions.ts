@@ -1,3 +1,4 @@
+import { type FormProblem } from "./form_problems";
 import { type Component, type Context, createContext, createSignal, onCleanup, useContext } from "solid-js";
 
 // The form action slot: a panel's body registers what its action bar DOES, and the
@@ -44,17 +45,51 @@ export type FormBinding = {
   destructive?: () => FormAside | undefined;
   // A quiet action drawn just before submit.
   secondary?: () => FormAside | undefined;
+  // The one rule for a form that cannot be submitted (#2440): the submit stays
+  // enabled, and an attempt while `problems` is non-empty does not submit. The
+  // bar lists each failing field beside the actions ("To <verb>, fill in A and
+  // B"), `onAttempt` lets the form mark each field with its message, and the
+  // first field takes the focus. `disabled` is for in-flight and permission
+  // states, never for a missing field.
+  problems?: () => FormProblem[];
+  // The verb phrase of the sentence: "create the system".
+  problemsAction?: string;
+  focusField?: (key: string) => void;
+  onAttempt?: () => void;
 };
 
 export type FormActions = {
   binding: () => FormBinding | undefined;
   bind: (b: FormBinding) => void;
+  // True once a submit was attempted with problems: the bar then lists them
+  // until none remain.
+  attempted: () => boolean;
+  // A submit attempt, from the button or from Enter in a field: runs the
+  // binding's check, and either names what is missing or submits.
+  trigger: () => void;
 };
 
 export function createFormActions(): FormActions {
   const [binding, setBinding] = createSignal<FormBinding | undefined>();
+  const [attempted, setAttempted] = createSignal(false);
   return {
     binding,
+    attempted,
+    trigger: () => {
+      const b = binding();
+      if (!b?.submit || b.busy?.() || b.disabled?.()) return;
+      const found = b.problems?.() ?? [];
+      if (found.length > 0) {
+        setAttempted(true);
+        b.onAttempt?.();
+        // After the sentence and the field messages are drawn, so the focused
+        // field has its message beside it.
+        queueMicrotask(() => b.focusField?.(found[0].key));
+        return;
+      }
+      setAttempted(false);
+      b.submit();
+    },
     bind: (b) => {
       setBinding(() => b);
       // Clear on unmount, but ONLY our own binding. A body whose branches each bind
