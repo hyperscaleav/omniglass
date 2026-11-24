@@ -7,8 +7,8 @@ import { entityNameError } from "./names";
 
 // The severity catalog (#917): how bad an alarm is, as a list of named levels the
 // server owns rather than a fixed set the console hardcodes. Each level carries a
-// rank (higher is worse), a color token, and whether an active alarm at it puts
-// its component in outage. Every console surface that colors, orders or explains
+// rank (higher is worse), a color token, and the health effect it declares (#2558):
+// none, degraded or outage, what an open alarm at it does to its own component. Every console surface that colors, orders or explains
 // a severity reads it through this file, so an operator-defined level ("major",
 // orange, between average and high) renders, sorts and gates exactly like a
 // shipped one with no console change.
@@ -19,6 +19,23 @@ import { entityNameError } from "./names";
 
 export type SeverityLevel = SeverityLevelBody;
 export type SeverityColor = SeverityLevel["color"];
+export type HealthEffect = SeverityLevel["health_effect"];
+
+// The three declared effects, mildest first: the order the form's picker offers.
+export const HEALTH_EFFECTS: HealthEffect[] = ["none", "degraded", "outage"];
+
+// effectOf reads a level's declared effect. The deprecated outage flag stands in
+// only for a payload from a server that predates the declaration.
+export function effectOf(l: Pick<SeverityLevel, "health_effect" | "outage">): HealthEffect {
+  return l.health_effect ?? (l.outage ? "outage" : "degraded");
+}
+
+// deriveEffect mirrors the server's default for a custom level created without
+// one (below warning none, below high degraded, else outage), so the form can
+// preselect what the server would.
+export function deriveEffect(rank: number): HealthEffect {
+  return rank < 20 ? "none" : rank < 40 ? "degraded" : "outage";
+}
 
 export const severityLevelsKey = ["severity-levels"] as const;
 
@@ -54,6 +71,9 @@ export type SeverityLook = {
   // null when the catalog does not know the name.
   rank: number | null;
   outage: boolean;
+  // What an open alarm at the level does to its component; "degraded" for a name
+  // the catalog does not know (an unknown alarm is never silently harmless).
+  effect: HealthEffect;
   known: boolean;
 };
 
@@ -68,6 +88,7 @@ export type SeverityScale = {
   // Higher is worse; -Infinity for an unknown name, so it sorts last.
   rank: (name: string) => number;
   outage: (name: string) => boolean;
+  effect: (name: string) => HealthEffect;
 };
 
 export function severityScale(levels?: SeverityLevel[] | null): SeverityScale {
@@ -75,14 +96,16 @@ export function severityScale(levels?: SeverityLevel[] | null): SeverityScale {
   const byName = new Map(sorted.map((l) => [l.name, l]));
   const look = (name: string): SeverityLook => {
     const l = byName.get(name);
-    if (!l) return { name, label: name, badge: NEUTRAL, rank: null, outage: false, known: false };
-    return { name, label: entityLabel(l), badge: severityBadge(l.color), rank: l.rank, outage: l.outage, known: true };
+    if (!l) return { name, label: name, badge: NEUTRAL, rank: null, outage: false, effect: "degraded", known: false };
+    const effect = effectOf(l);
+    return { name, label: entityLabel(l), badge: severityBadge(l.color), rank: l.rank, outage: effect === "outage", effect, known: true };
   };
   return {
     levels: sorted,
     look,
     rank: (name) => byName.get(name)?.rank ?? -Infinity,
-    outage: (name) => byName.get(name)?.outage ?? false,
+    outage: (name) => (byName.has(name) ? effectOf(byName.get(name)!) === "outage" : false),
+    effect: (name) => (byName.has(name) ? effectOf(byName.get(name)!) : "degraded"),
   };
 }
 
@@ -142,15 +165,15 @@ export async function deleteSeverityLevel(name: string): Promise<void> {
   if (error) throw error;
 }
 
-export type LevelDraft = { name: string; label: string; color: SeverityColor | ""; rank: string };
+export type LevelDraft = { name: string; label: string; color: SeverityColor | ""; rank: string; effect: HealthEffect };
 export type LevelErrors = Partial<Record<"name" | "color" | "rank", string>>;
 
 export function emptyLevelDraft(): LevelDraft {
-  return { name: "", label: "", color: "", rank: "" };
+  return { name: "", label: "", color: "", rank: "", effect: "degraded" };
 }
 
 export function draftFromLevel(l: SeverityLevel): LevelDraft {
-  return { name: l.name, label: l.label ?? "", color: l.color, rank: String(l.rank) };
+  return { name: l.name, label: l.label ?? "", color: l.color, rank: String(l.rank), effect: effectOf(l) };
 }
 
 const WHOLE = /^\d+$/;
@@ -187,14 +210,6 @@ export function validateLevelDraft(d: LevelDraft, levels: SeverityLevel[], editi
   return e;
 }
 
-// outageFloor is the lowest rank whose alarms take a component out, read off
-// the levels the server marks (the official high level holds it), or null
-// before they load.
-export function outageFloor(levels: SeverityLevel[]): number | null {
-  const ranks = levels.filter((l) => l.outage).map((l) => l.rank);
-  return ranks.length ? Math.min(...ranks) : null;
-}
-
 // rankPlace says where a rank sits among the other levels, the sentence the
 // form teaches the gap with: between two, above the worst, or below the mildest.
 export function rankPlace(rank: number, levels: SeverityLevel[], editing?: string): string {
@@ -210,7 +225,7 @@ export function rankPlace(rank: number, levels: SeverityLevel[], editing?: strin
 
 // levelCreateBody is the POST a valid draft sends; a blank label is left off.
 export function levelCreateBody(d: LevelDraft): CreateSeverityLevel {
-  const body: CreateSeverityLevel = { name: d.name.trim(), color: d.color, rank: readRank(d.rank) ?? 0 };
+  const body: CreateSeverityLevel = { name: d.name.trim(), color: d.color, rank: readRank(d.rank) ?? 0, health_effect: d.effect };
   if (d.label.trim()) body.label = d.label.trim();
   return body;
 }
@@ -224,5 +239,6 @@ export function levelUpdateBody(d: LevelDraft, l: SeverityLevel): UpdateSeverity
   if (d.color && d.color !== l.color) body.color = d.color;
   const rank = readRank(d.rank);
   if (rank !== null && rank !== l.rank) body.rank = rank;
+  if (d.effect !== effectOf(l)) body.health_effect = d.effect;
   return body;
 }

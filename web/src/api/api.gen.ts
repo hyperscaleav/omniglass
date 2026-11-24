@@ -3166,11 +3166,25 @@ export type CreateSecretInputBody = {
   secret_type: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)
+ */
+export type CreateSeverityLevelInputBodyHealthEffect = typeof CreateSeverityLevelInputBodyHealthEffect[keyof typeof CreateSeverityLevelInputBodyHealthEffect];
+
+
+export const CreateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type CreateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color: string;
+  /** What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage) */
+  health_effect?: CreateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /**
@@ -5614,6 +5628,18 @@ export const SeverityLevelBodyColor = {
 } as const;
 
 /**
+ * What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank
+ */
+export type SeverityLevelBodyHealthEffect = typeof SeverityLevelBodyHealthEffect[keyof typeof SeverityLevelBodyHealthEffect];
+
+
+export const SeverityLevelBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
+/**
  * How bad an alarm is, ranked, with its color and whether it takes its component out.
  */
 export type SeverityLevelBody = {
@@ -5621,6 +5647,8 @@ export type SeverityLevelBody = {
   readonly $schema?: string;
   /** The hue the console renders the level in */
   color: SeverityLevelBodyColor;
+  /** What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank */
+  health_effect: SeverityLevelBodyHealthEffect;
   /** The level's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -5628,7 +5656,10 @@ export type SeverityLevelBody = {
   name: string;
   /** Shipped with the platform and read-only */
   official: boolean;
-  /** Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
+  /**
+     * Deprecated alias of health_effect == outage, kept so released clients do not break; read health_effect
+     * @deprecated
+     */
   outage: boolean;
   /** Compares levels: higher is more severe */
   rank: number;
@@ -7506,7 +7537,7 @@ export type RaiseAlarmInputBody = {
   /** What is wrong, for the operator reading it later */
   message?: string;
   /**
-     * How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage
+     * How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)
      * @minLength 1
      */
   severity: string;
@@ -9419,11 +9450,25 @@ export type UpdateSecretInputBody = {
   label?: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level
+ */
+export type UpdateSeverityLevelInputBodyHealthEffect = typeof UpdateSeverityLevelInputBodyHealthEffect[keyof typeof UpdateSeverityLevelInputBodyHealthEffect];
+
+
+export const UpdateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type UpdateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color?: string;
+  /** What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level */
+  health_effect?: UpdateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /** A new name; every alarm at this level follows */
@@ -13437,7 +13482,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -21903,7 +21948,7 @@ export const getListSeverityLevelUrl = () => {
 }
 
 /**
- * Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+ * Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.
  * @summary List severity levels
  */
 export const listSeverityLevel = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSeverityLevelResponse> => {
@@ -22079,7 +22124,7 @@ export const getUpdateSeverityLevelUrl = (name: string,) => {
 }
 
 /**
- * Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
+ * Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
  * @summary Update a severity level
  */
 export const updateSeverityLevel = async (name: string,

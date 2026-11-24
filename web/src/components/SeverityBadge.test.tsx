@@ -35,6 +35,7 @@ describe("SeverityBadge", () => {
   it("says in its hint what the level does to its component", () => {
     expect(mount("high").getByText("High").title).toMatch(/puts its component in outage/);
     expect(mount("average").getByText("Average").title).toMatch(/degrades its component/);
+    expect(mount("info").getByText("Info").title).toMatch(/does not affect its component's health/);
   });
 
   it("renders an operator-defined level from the catalog alone", () => {

@@ -1222,7 +1222,7 @@ Raise an alarm on a component
 omniglass component alarm create <name> [flags]
 ```
 
-Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.
@@ -1231,7 +1231,7 @@ Arguments:
 |---|---|---|---|
 | `--dedup-key` | string | (none) | What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
-| `--severity` | string | (none) | How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage |
+| `--severity` | string | (none) | How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage) |
 
 Example:
 
@@ -5793,6 +5793,7 @@ Adds an operator severity level at a rank of its own, between two others without
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
+| `--health-effect` | string | (none) | What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage) |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The level's name (lowercase kebab) |
 | `--rank` | int | `0` | Its position among the levels: higher is more severe; unique |
@@ -5843,7 +5844,7 @@ List severity levels
 omniglass severity-level list
 ```
 
-Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.
 
 Example:
 
@@ -5859,11 +5860,12 @@ Update a severity level
 omniglass severity-level update <name> [flags]
 ```
 
-Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
+Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
+| `--health-effect` | string | (none) | What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | A new name; every alarm at this level follows |
 | `--rank` | int | `0` | Its position among the levels; unique |

@@ -124,9 +124,9 @@ func TestSeverityLevels(t *testing.T) {
 	}
 }
 
-// Re-ranking a level an open alarm uses moves its component's recorded
-// health with it: across the outage floor and back.
-func TestSeverityReRankMovesHealth(t *testing.T) {
+// Changing a level's declared health effect moves its component's recorded
+// health with it, and a re-rank alone does not (#2558).
+func TestSeverityEffectChangeMovesHealth(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
@@ -136,17 +136,99 @@ func TestSeverityReRankMovesHealth(t *testing.T) {
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "major", Message: "fan noise"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range []struct {
-		rank int
-		want string
-	}{{45, "outage"}, {35, "degraded"}} {
-		r := step.rank
-		if _, err := f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Rank: &r}, all); err != nil {
+	rank := 45
+	if _, err := f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{Rank: &rank}, all); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
+		t.Fatalf("a re-rank across the old floor left bar-1 %q, want degraded (the effect is declared, not read from rank)", v)
+	}
+	for _, step := range []struct{ effect, want string }{{"outage", "outage"}, {"none", "healthy"}, {"degraded", "degraded"}} {
+		e := step.effect
+		if _, err := f.gw.UpdateSeverityLevel(ctx, "", "major", storage.SeverityLevelPatch{HealthEffect: &e}, all); err != nil {
 			t.Fatal(err)
 		}
 		if _, v := f.recorded(t, ctx, "component", "bar-1"); v != step.want {
-			t.Fatalf("after re-ranking major to %d bar-1 reads %q, want %s", r, v, step.want)
+			t.Fatalf("after declaring major %s bar-1 reads %q, want %s", e, v, step.want)
 		}
+	}
+}
+
+// An open alarm at a none level leaves its component and its system healthy and
+// still lists the alarm; a high alarm on the same component takes it out and
+// shorts its slot; a custom level created with health_effect none behaves like
+// info (#2558).
+func TestSeverityNoneEffectDoesNotBadgeTheComponent(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	_, sysBefore := f.recorded(t, ctx, "system", "hq-huddle")
+
+	if _, err := f.gw.CreateSeverityLevel(ctx, "", storage.SeverityLevel{Name: "notice", Color: "blue", Rank: 15, HealthEffect: "none"}, all); err != nil {
+		t.Fatal(err)
+	}
+	for _, level := range []string{"info", "notice"} {
+		a, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: level, Message: "firmware out of date"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "healthy" {
+			t.Fatalf("an open %s alarm left bar-1 %q, want healthy", level, v)
+		}
+		if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != sysBefore {
+			t.Fatalf("an open %s alarm moved the system to %q, want %q", level, v, sysBefore)
+		}
+		if listed, err := f.gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); err != nil || len(listed) == 0 {
+			t.Fatalf("the %s alarm is not listed on the component: %+v (%v)", level, listed, err)
+		}
+		if err := f.gw.ClearAlarm(ctx, "", "bar-1", a.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "info", Message: "firmware out of date"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "no route"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "outage" {
+		t.Fatalf("a high alarm beside an info one left bar-1 %q, want outage", v)
+	}
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v == sysBefore {
+		t.Fatalf("a high alarm left the system %q, want its slot short and the verdict moved", v)
+	}
+}
+
+// The boot seed declaring a level's effect recomputes the components behind it:
+// a fleet upgraded with an open info alarm (recorded degraded under the old
+// rank rule) reads healthy after the seed runs, with no stuck row (#2558).
+func TestSeedDeclaringEffectRecomputesOpenAlarms(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "info", Message: "firmware out of date"}); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the pre-upgrade state: info degraded its component.
+	if _, err := f.conn.Exec(ctx, `update severity_level set health_effect = 'degraded' where name = 'info'`); err != nil {
+		t.Fatal(err)
+	}
+	w, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "warning", Message: "touch"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.gw.ClearAlarm(ctx, "", "bar-1", w.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "degraded" {
+		t.Fatalf("setup: bar-1 reads %q, want the old degraded", v)
+	}
+	if err := seed.Run(ctx, f.gw); err != nil {
+		t.Fatal(err)
+	}
+	if _, v := f.recorded(t, ctx, "component", "bar-1"); v != "healthy" {
+		t.Fatalf("after the seed declared info none bar-1 reads %q, want healthy", v)
 	}
 }
 

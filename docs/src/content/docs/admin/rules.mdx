@@ -20,9 +20,9 @@ one property or metric on the components it selects. When the value meets its **
 long enough, the rule **fires** on that component: it writes an event and, when it
 has a severity, raises an alarm; when the value meets its **clear criteria** the rule clears there, with
 its own event, and the alarm clears. A rule with no severity is **informational**: it writes its
-events and pages nobody. The alarm it opens is an ordinary alarm: it takes its
-component's health down, a system slot the component fills stops counting it while it is out, and
-it can be acknowledged like any other ([alarms on a component](/operator/alarms/#alarms-on-a-component)).
+events and pages nobody. The alarm it opens is an ordinary alarm: its severity level
+declares what it does to the component's health (none, degraded or outage), a system slot the component
+fills stops counting it only while the level declares outage, and it can be acknowledged like any other ([alarms on a component](/operator/alarms/#alarms-on-a-component)).
 How the evaluator works is on [alarms and actions](/architecture/alarms-actions/#the-event_rule).
 
 Beside it, **Catalog, under Actions: Severity** (with `severity_level:read`) lists the levels a rule
@@ -174,8 +174,8 @@ sits.
   it reads** asks for them). A rule that fires above 40 and clears below 35 does not flap at 39.9. The clear criteria take a comparison or an expression the same way.
 - **Clears after at least**: the **clear sustain**, set independently: a long clear sustain holds an
   alarm through a noisy recovery without delaying the alarm.
-- **Severity**: the level the alarm is raised at, worst first. A level marked outage takes its
-  component out; any other degrades it. **None (informational)** makes a rule that records what happened
+- **Severity**: the level the alarm is raised at, worst first. A level declares its health effect: outage takes its
+  component out, degraded degrades it, and none leaves it healthy (the alarm is still listed). **None (informational)** makes a rule that records what happened
   as events and raises no alarm: it pages nobody and moves no health. A new rule starts at the worst
   level that does not take its component out; editing a rule never fills a level in for it.
 - **Fire event type** and **Clear event type**: the [events](/architecture/events/) the rule writes,
@@ -347,14 +347,14 @@ name.
 ## Severity levels
 
 **Catalog, under Actions: Severity** lists the levels worst first: each one's **rank** (higher is
-worse), how it **looks** (the chip every alarm at that level wears), its **effect** (whether an
-active alarm at it puts its component in **outage** or only **degrades** it), and its origin. The
+worse), how it **looks** (the chip every alarm at that level wears), its **health effect** (what an
+open alarm at it does to its component: **none**, **degrades** or **outage**), and its origin. The
 shipped levels, rendered from the seed:
 
 <SeededSet kind="severity_levels" />
 
-They are spaced apart, so a level of your own slots between two without renumbering; whether a level
-is an outage follows from its rank, against a fixed floor the table above marks.
+They are spaced apart, so a level of your own slots between two without renumbering; what a level does to
+its component is its declared health effect, not its rank (the table above marks each shipped level's).
 
 ### Add, edit and delete a level
 
@@ -365,19 +365,20 @@ is an outage follows from its rank, against a fixed floor the table above marks.
 - **Color**: one of the console's palette. The chip beneath the field is the one every alarm at the
   level will wear.
 - **Rank**: a whole number above zero that no other level holds. As you type it, the form says where it
-  sits (**Between Average (30) and High (40).**) and what an alarm at it does: at or above the
-  outage floor it is an **outage** level (its alarms take their component out), below it a
-  **degrades** level.
+  sits (**Between Average (30) and High (40).**).
+- **Health effect**: **none** (an alarm is listed but its component stays healthy), **degraded**, or
+  **outage** (the component stops filling its slots). It starts at the effect the typed rank would have
+  had under the old floors; pick the one you mean.
 
 A name or rank another level holds is refused as you type, before anything is sent. On an operator
 level's blade, **Edit** (with `severity_level:update`) reopens the drawer with every field, the name
-included: **renaming** a level carries every alarm at it and every rule that names it; **re-ranking**
-one across the outage floor recomputes the health of every component with an open alarm at it, so a
-level moved from 35 to 45 takes those components out at once. **Delete** (with `severity_level:delete`,
+included: **renaming** a level carries every alarm at it and every rule that names it; changing a level's **health effect**
+recomputes the health of every component with an open alarm at it, so a level moved from degraded to
+outage takes those components out at once (a re-rank alone moves nothing). **Delete** (with `severity_level:delete`,
 behind a confirm) is refused while an alarm or a rule still names the level, and the blade says so.
 An official level is read-only: its blade footer shows the same "Official, read-only" note. Reading the levels
 takes the permission on any grant, but writing one takes it on an **all-scope grant**, like a rule: a
-level's rank moves the health of every component with an alarm at it, wherever it sits. A caller whose
+level's health effect moves the health of every component with an alarm at it, wherever it sits. A caller whose
 `severity_level` permissions stop at one location sees no New severity level, and Edit and Delete greyed.
 
 The same writes from a terminal:

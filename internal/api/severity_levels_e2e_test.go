@@ -20,6 +20,8 @@ type severityLevelBody struct {
 	Rank     int    `json:"rank"`
 	Official bool   `json:"official"`
 	Outage   bool   `json:"outage"`
+
+	HealthEffect string `json:"health_effect"`
 }
 
 // TestSeverityLevelAPI drives the severity catalog over HTTP: every reader
@@ -62,7 +64,8 @@ func TestSeverityLevelAPI(t *testing.T) {
 		t.Fatalf("levels = %+v, want the five seeded, least severe first", list.SeverityLevels)
 	}
 	for _, l := range list.SeverityLevels {
-		if l.Outage != (l.Rank >= 40) || !l.Official {
+		wantEffect := map[string]string{"info": "none", "warning": "degraded", "average": "degraded", "high": "outage", "disaster": "outage"}[l.Name]
+		if l.HealthEffect != wantEffect || l.Outage != (wantEffect == "outage") || !l.Official {
 			t.Errorf("level %+v: want official, outage exactly at high and above", l)
 		}
 	}
@@ -73,7 +76,7 @@ func TestSeverityLevelAPI(t *testing.T) {
 		map[string]any{"name": "major", "label": "Major", "color": "orange", "rank": 35}, http.StatusCreated), &major); err != nil {
 		t.Fatal(err)
 	}
-	if major.Official || major.Outage || major.Rank != 35 {
+	if major.Official || major.Outage || major.Rank != 35 || major.HealthEffect != "degraded" {
 		t.Fatalf("major = %+v, want an operator level below the outage floor", major)
 	}
 	c.do(ownerTok, http.MethodPost, "/severity-levels", map[string]any{"name": "other", "color": "red", "rank": 35}, http.StatusConflict)

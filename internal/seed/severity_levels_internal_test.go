@@ -8,25 +8,26 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/health"
 )
 
-// The health rule's outage floor is the seeded high level's rank: the
-// constant and the seed move together or not at all.
-func TestOutageRankIsTheSeededHighLevel(t *testing.T) {
+// Every shipped level declares its health effect (#2558), and the declaration
+// is one the health rule knows: a level with none would take its default, and
+// the shipped set is explicit about which levels badge a component.
+func TestSeededLevelsDeclareTheirHealthEffect(t *testing.T) {
 	var doc struct {
 		Levels []struct {
-			Name string `yaml:"name"`
-			Rank int    `yaml:"rank"`
+			Name         string `yaml:"name"`
+			HealthEffect string `yaml:"health_effect"`
 		} `yaml:"levels"`
 	}
 	if err := yaml.Unmarshal(severityLevelsYAML, &doc); err != nil {
 		t.Fatal(err)
 	}
+	want := map[string]string{"info": "none", "warning": "degraded", "average": "degraded", "high": "outage", "disaster": "outage"}
+	if len(doc.Levels) != len(want) {
+		t.Fatalf("seed has %d levels, want %d", len(doc.Levels), len(want))
+	}
 	for _, l := range doc.Levels {
-		if l.Name == "high" {
-			if l.Rank != health.OutageRank {
-				t.Fatalf("the seeded high level ranks %d, but health.OutageRank is %d", l.Rank, health.OutageRank)
-			}
-			return
+		if !health.ValidEffect(l.HealthEffect) || l.HealthEffect != want[l.Name] {
+			t.Errorf("level %s declares health_effect %q, want %q", l.Name, l.HealthEffect, want[l.Name])
 		}
 	}
-	t.Fatal("the seed has no high level, the outage floor")
 }

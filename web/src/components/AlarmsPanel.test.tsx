@@ -341,7 +341,7 @@ describe("AlarmsPanel", () => {
     const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
     expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
     expect(options.map((o) => o.textContent)).toEqual([
-      "Info (degrades it, still working)",
+      "Info (does not affect health)",
       "Warning (degrades it, still working)",
       "Average (degrades it, still working)",
       "High (takes this component out)",

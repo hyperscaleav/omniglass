@@ -6,7 +6,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/rbac"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
@@ -163,14 +162,14 @@ type factsSecretType struct {
 }
 
 // factsSeverityLevel is one shipped severity level (#917) as the docs render
-// it, with the outage flag computed by the health rule's own floor, so the
-// table cannot disagree with what a verdict does.
+// it, with the health effect each declares (#2558), so the table cannot
+// disagree with what a verdict does.
 type factsSeverityLevel struct {
-	Name   string `json:"name"`
-	Label  string `json:"label"`
-	Color  string `json:"color"`
-	Rank   int    `json:"rank"`
-	Outage bool   `json:"outage"`
+	Name         string `json:"name"`
+	Label        string `json:"label"`
+	Color        string `json:"color"`
+	Rank         int    `json:"rank"`
+	HealthEffect string `json:"health_effect"`
 }
 
 // factsEventRule is one official event rule (#920, #948) as the docs render
@@ -415,6 +414,8 @@ func FactsJSON() ([]byte, error) {
 			Label string `yaml:"label"`
 			Color string `yaml:"color"`
 			Rank  int    `yaml:"rank"`
+
+			HealthEffect string `yaml:"health_effect"`
 		} `yaml:"levels"`
 	}
 	if err := yaml.Unmarshal(severityLevelsYAML, &levels); err != nil {
@@ -422,7 +423,7 @@ func FactsJSON() ([]byte, error) {
 	}
 	for _, l := range levels.Levels {
 		doc.SeverityLevels = append(doc.SeverityLevels, factsSeverityLevel{
-			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, Outage: l.Rank >= health.OutageRank,
+			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, HealthEffect: l.HealthEffect,
 		})
 	}
 

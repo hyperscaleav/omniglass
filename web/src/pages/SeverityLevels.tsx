@@ -1,4 +1,4 @@
-import { For, Show, createContext, createMemo, createSignal, useContext, type JSX } from "solid-js";
+import { For, Show, createContext, createEffect, createMemo, createSignal, useContext, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -15,6 +15,7 @@ import { entityLabel } from "../lib/entities";
 import {
   type LevelDraft,
   type LevelErrors,
+  type HealthEffect,
   type SeverityLevel,
   SEVERITY_COLORS,
   createSeverityLevel,
@@ -24,7 +25,9 @@ import {
   levelCreateBody,
   levelUpdateBody,
   listSeverityLevels,
-  outageFloor,
+  HEALTH_EFFECTS,
+  deriveEffect,
+  effectOf,
   rankPlace,
   readRank,
   severityBadge,
@@ -61,19 +64,21 @@ export const SEVERITY_HINTS = {
     "How bad an alarm is. Every alarm, hand-raised or raised by a rule, names one of these levels; the console colors and sorts by it.",
   rank:
     "Higher is worse. The shipped levels are spaced ten apart, so a level of your own slots between two without renumbering.",
-  outage:
-    "An active alarm at an outage level takes its component out (it stops filling its slots); at any other level it degrades the component and leaves it in place. The line is fixed at the official High level's rank: a level ranked at or above it is an outage level. Re-ranking a level across the line recomputes the health of every component with an open alarm at it.",
+  effect:
+    "What an open alarm at this level does to its own component, declared on the level and never implied by rank. None: the alarm is listed but the component stays healthy (an informational alarm). Degraded: the component reads degraded and keeps filling its slots. Outage: the component stops filling its slots. Changing a level's effect recomputes the health of every component with an open alarm at it.",
   name: "A lowercase kebab name, e.g. major. Alarms and rules name the level by it; renaming it carries every alarm and rule with it.",
   color: "The hue every alarm at this level wears, from the console's palette.",
 } as const;
 
-// What an active alarm at the level does to its component, in one word. Only
-// the outage wears a hue: a warning-toned "degrades" beside every lesser level
+// What an open alarm at the level does to its component, in one word. Only the
+// outage wears a hue: a warning-toned "degrades" beside every lesser level
 // competed with the level chips themselves.
+const EFFECT_WORD: Record<HealthEffect, string> = { none: "no effect", degraded: "degrades", outage: "outage" };
 function effectChip(l: SeverityLevel): JSX.Element {
-  return l.outage
+  const e = effectOf(l);
+  return e === "outage"
     ? <span class="badge badge-soft badge-error badge-sm">outage</span>
-    : <span class="text-[12px] text-base-content/60">degrades</span>;
+    : <span class="text-[12px] text-base-content/60">{EFFECT_WORD[e]}</span>;
 }
 
 function originBadge(official: boolean): JSX.Element {
@@ -86,7 +91,7 @@ const columns: FlatColumn<SeverityLevel>[] = [
   identityColumn<SeverityLevel>(),
   { key: "rank", label: "Rank", width: "72px", sortVal: (l) => l.rank, cell: (l) => <span class="font-data tabular-nums">{l.rank}</span> },
   { key: "looks", label: "Looks like", width: "110px", cell: (l) => <SeverityBadge name={l.name} /> },
-  { key: "outage", label: "Effect", width: "96px", sortVal: (l) => String(l.outage), cell: effectChip },
+  { key: "effect", label: "Health effect", width: "120px", sortVal: (l) => HEALTH_EFFECTS.indexOf(effectOf(l)), cell: effectChip },
   { key: "official", label: "Origin", width: "84px", sortVal: (l) => String(l.official), cell: (l) => originBadge(l.official) },
 ];
 
@@ -120,7 +125,7 @@ export default function SeverityLevels(): JSX.Element {
           error: () => levels.error,
           filterKeys: [
             { key: "name", type: "string", hint: "substring", get: (l) => `${entityLabel(l)} ${l.name}`, values: () => [] },
-            { key: "effect", type: "string", hint: "exact", get: (l) => (l.outage ? "outage" : "degrades"), values: () => ["outage", "degrades"] },
+            { key: "effect", type: "string", hint: "exact", get: (l) => effectOf(l), values: () => [...HEALTH_EFFECTS].reverse() },
             { key: "official", type: "string", hint: "exact", get: (l) => (l.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
           filterPlaceholder: "filter severity levels by name…",
@@ -230,11 +235,11 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
             />
             <KVStacked label="Looks like" value={<SeverityBadge name={l().name} />} />
             <KVStacked
-              label="Effect"
+              label="Health effect"
               value={
                 <span class="inline-flex items-center gap-1.5">
                   {effectChip(l())}
-                  <InfoTip label="effect" text={SEVERITY_HINTS.outage} />
+                  <InfoTip label="health effect" text={SEVERITY_HINTS.effect} />
                 </span>
               }
             />
@@ -246,6 +251,12 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
     </Show>
   );
 }
+
+const EFFECT_OPTION: Record<HealthEffect, string> = {
+  none: "None: listed, the component stays healthy",
+  degraded: "Degraded: the component keeps filling its slots",
+  outage: "Outage: the component stops filling its slots",
+};
 
 // ---- the form ----------------------------------------------------------------
 
@@ -281,7 +292,13 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
   const shown = (k: keyof LevelErrors) => (touched[k] ? errors()[k] : undefined);
   const touch = (k: keyof LevelErrors) => setTouched(k, true);
   const rank = () => readRank(d.rank);
-  const floor = () => outageFloor(all());
+  createEffect(() => {
+    const r = rank();
+    if (!effectTouched() && r !== null) setD("effect", deriveEffect(r));
+  });
+  // Until the operator picks an effect, the server's default for the typed rank
+  // is what they get; the picker starts there and says so.
+  const [effectTouched, setEffectTouched] = createSignal(p.mode === "edit");
 
   useFormActions().bind({
     submitLabel: p.mode === "create" ? "Create level" : "Save level",
@@ -368,22 +385,20 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
       </FieldRow>
       <Show when={rank()}>
         {(r) => (
-          <div class="-mt-2 flex flex-col gap-1 text-[12px] text-base-content/60">
-            <span data-testid="level-place">{rankPlace(r(), all(), p.level?.name)}</span>
-            <Show when={floor()}>
-              {(f) => (
-                <span class="inline-flex items-center gap-1.5" data-testid="level-effect">
-                  {r() >= f()
-                    ? <span class="badge badge-soft badge-error badge-xs">outage</span>
-                    : <span class="badge badge-ghost badge-xs">degrades</span>}
-                  {r() >= f() ? `its alarms take their component out (rank ${f()}+)` : `its alarms only degrade a component`}
-                  <InfoTip label="the outage line" text={SEVERITY_HINTS.outage} />
-                </span>
-              )}
-            </Show>
-          </div>
+          <span class="-mt-2 text-[12px] text-base-content/60" data-testid="level-place">{rankPlace(r(), all(), p.level?.name)}</span>
         )}
       </Show>
+      <FieldRow label="Health effect" info={SEVERITY_HINTS.effect}>
+        <select
+          ref={bindSelectValue(() => d.effect, () => true)}
+          class="select select-bordered w-full"
+          aria-label="Health effect"
+          data-testid="level-effect"
+          onChange={(e) => { setD("effect", e.currentTarget.value as HealthEffect); setEffectTouched(true); }}
+        >
+          <For each={HEALTH_EFFECTS}>{(e) => <option value={e}>{EFFECT_OPTION[e]}</option>}</For>
+        </select>
+      </FieldRow>
     </form>
   );
 }

@@ -296,11 +296,11 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := lockHealthOwner(ctx, q, "component", c.ID); err != nil {
 			return err
 		}
-		ranks, err := p.activeAlarmRanks(ctx, q, c.ID)
+		effects, err := p.activeAlarmEffects(ctx, q, c.ID)
 		if err != nil {
 			return err
 		}
-		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(ranks)); err != nil {
+		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(effects)); err != nil {
 			return err
 		}
 		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
@@ -659,21 +659,22 @@ func ownerArcExprN(ownerKind string, n int) string {
 	return fmt.Sprintf("$%d::text", n)
 }
 
-// activeAlarmRanks lists the severity ranks of a component's active alarms,
+// activeAlarmEffects lists the declared health effects of a component's active
+// alarms' severity levels (#2558),
 // the only input its own verdict takes. Takes the component's id directly (every
 // caller already has it, recomputeChain's ownerRef included): binding it
 // avoids re-deriving an id from a name that #627 no longer guarantees is
 // unique.
-func (p *PG) activeAlarmRanks(ctx context.Context, q txQuerier, componentID string) ([]int, error) {
-	var ranks []int
+func (p *PG) activeAlarmEffects(ctx context.Context, q txQuerier, componentID string) ([]string, error) {
+	var effects []string
 	if err := q.QueryRow(ctx, `
-		select coalesce(array_agg(l.rank), '{}')
+		select coalesce(array_agg(l.health_effect), '{}')
 		from alarm a join severity_level l on l.name = a.severity
 		where a.component_id = $1::uuid and a.cleared_at is null`,
-		componentID).Scan(&ranks); err != nil {
-		return nil, fmt.Errorf("storage: active alarm ranks %q: %w", componentID, err)
+		componentID).Scan(&effects); err != nil {
+		return nil, fmt.Errorf("storage: active alarm effects %q: %w", componentID, err)
 	}
-	return ranks, nil
+	return effects, nil
 }
 
 // ComponentHealth is one component's own current verdict, by its id, the
@@ -705,13 +706,13 @@ func (p *PG) ComponentHealth(ctx context.Context, componentID string) (string, e
 // not just run), but the same live computation the recompute makes. It is the
 // only input a slot it occupies takes now: an alarm impairs a component
 // wholesale, not by name capability, so there is nothing else to resolve.
-// Takes the component's id (see activeAlarmRanks).
+// Takes the component's id (see activeAlarmEffects).
 func (p *PG) componentHealth(ctx context.Context, q txQuerier, componentID string) (health.Value, error) {
-	ranks, err := p.activeAlarmRanks(ctx, q, componentID)
+	effects, err := p.activeAlarmEffects(ctx, q, componentID)
 	if err != nil {
 		return health.Healthy, err
 	}
-	return health.ComponentValue(ranks), nil
+	return health.ComponentValue(effects), nil
 }
 
 // systemsStaffedBy lists the systems this component fills a slot in, the systems
@@ -841,7 +842,7 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ow
 // children held this location's lock until it committed. A child with no
 // recorded row has never been unhealthy and is skipped, which is
 // health.RollUp's own reading of nothing. Takes the location's id directly
-// (see activeAlarmRanks).
+// (see activeAlarmEffects).
 func (p *PG) locationHealth(ctx context.Context, q txQuerier, locationID string) (health.Value, error) {
 	rows, err := q.Query(ctx, `
 		with health as (
@@ -1273,13 +1274,13 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, re
 	}
 	// Two set-based reads keyed by the in-scope member ids, not two per member.
 	type rankObs struct {
-		ranks    []int
+		effects  []string
 		observed bool
 	}
 	byID := make(map[string]rankObs, len(members))
 	rows, err := q.Query(ctx, `
 		select i.id::text,
-		       coalesce((select array_agg(l.rank) from alarm a join severity_level l on l.name = a.severity
+		       coalesce((select array_agg(l.health_effect) from alarm a join severity_level l on l.name = a.severity
 		                 where a.component_id = i.id and a.cleared_at is null), '{}'),
 		       `+componentObservedSQL("i.id")+`
 		from unnest($1::uuid[]) as i(id)`, ids)
@@ -1289,7 +1290,7 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, re
 	for rows.Next() {
 		var id string
 		var ro rankObs
-		if err := rows.Scan(&id, &ro.ranks, &ro.observed); err != nil {
+		if err := rows.Scan(&id, &ro.effects, &ro.observed); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan member health: %w", err)
 		}
@@ -1305,7 +1306,7 @@ func (p *PG) healthMembers(ctx context.Context, q txQuerier, systemID string, re
 	}
 	for _, m := range members {
 		ro := byID[m.id]
-		v := health.ComponentValue(ro.ranks)
+		v := health.ComponentValue(ro.effects)
 		h := v.String()
 		if v == health.Healthy && !ro.observed {
 			h = "unknown"
