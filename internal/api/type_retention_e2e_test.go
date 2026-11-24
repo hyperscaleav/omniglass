@@ -32,7 +32,7 @@ func TestATypesRetentionIsSetThroughItsOwnMethod(t *testing.T) {
 	// An empty body is not a clear: only an explicit null returns a type to its
 	// lane's window, so a bare command never deletes history by accident.
 	f.c.do(f.admin, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{}, http.StatusUnprocessableEntity)
-	for _, bad := range []any{0, 36501, "3"} {
+	for _, bad := range []any{0, 1, 2, 36501, "3"} {
 		f.c.do(f.admin, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{"days": bad}, http.StatusUnprocessableEntity)
 	}
 	f.c.do(f.admin, http.MethodPost, "/metric-types/no-such-type:setRetention", map[string]any{"days": 3}, http.StatusNotFound)

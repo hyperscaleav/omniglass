@@ -21,8 +21,8 @@ type TypeRetention struct {
 // SetMetricTypeRetention sets or, with nil, clears a metric type's own
 // retention window (#417). It works on an official type: the type's
 // definition is the seed's, but how long an install keeps its samples is the
-// install's. Audited as set_retention. A window outside 1 to
-// settings.RetentionMaxDays is ErrMetricTypeInvalid, an unknown name
+// install's. Audited as set_retention. A window outside
+// settings.MetricMinDays to settings.RetentionMaxDays is ErrMetricTypeInvalid, an unknown name
 // ErrMetricTypeNotFound.
 func (p *PG) SetMetricTypeRetention(ctx context.Context, actorID, name string, days *int) (*MetricType, error) {
 	if err := p.setTypeRetention(ctx, actorID, "metric_type", name, days, ErrMetricTypeInvalid, ErrMetricTypeNotFound); err != nil {
@@ -45,6 +45,9 @@ func (p *PG) setTypeRetention(ctx context.Context, actorID, table, name string, 
 	}
 	if days != nil && (*days < 1 || *days > settings.RetentionMaxDays) {
 		return fmt.Errorf("%w: a retention of %d days is outside 1 to %d", invalid, *days, settings.RetentionMaxDays)
+	}
+	if table == "metric_type" && days != nil && *days < settings.MetricMinDays {
+		return fmt.Errorf("%w: a metric type's window of %d days is under the %d-day minimum (a day folds into blocks 48 hours after it starts)", invalid, *days, settings.MetricMinDays)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
