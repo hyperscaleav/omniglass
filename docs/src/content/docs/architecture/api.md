@@ -76,7 +76,8 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)).
 - **A type's retention window is a custom method**
   ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). `POST /metric-types/{name}:setRetention`
-  and `/property-types/{name}:setRetention` take `{days}` (1 to 36,500) or `{days: null}` to return the
+  and `/property-types/{name}:setRetention` take `{days}` (3 to 36,500 for a metric type, 1 to 36,500
+  for a property type) or `{days: null}` to return the
   type to its lane's window. It works on an official type, which `PATCH` refuses as read-only: the
   type's definition is the seed's, its retention the install's. It is gated by `<type>:update` and
   `platform:update`, like the retention settings, and writes its own audit verb, `set_retention`.
