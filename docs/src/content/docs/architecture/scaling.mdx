@@ -314,7 +314,7 @@ In the driver table:
   poll runs.
 - **Thread CPU per run** is the outpost's own `poll-cpu-time` over the runs in the measured windows, and **thread share** is
   it over the cgroup's figure: the part of a run the polling thread does itself
-  ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)). A low share is a transport
+  ([outposts](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)). A low share is a transport
   that does its I/O on another goroutine, not a cheap driver.
 
 <DriverCostSource />

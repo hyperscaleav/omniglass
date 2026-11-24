@@ -689,7 +689,7 @@ floor, chunking and index probe ([ADR-0417](/architecture/decisions/#adr-0417-th
 
 Each pass lands its figures as platform metrics on the server's component in the platform system,
 written as the process, so no outpost, push or operator can write them (#1629; the keys are listed on
-the [collection](/architecture/collection/#self-monitoring-every-outposts-account-of-itself) page, rendered from the
+the [collection](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself) page, rendered from the
 code). One pass writes one sample per key and instance, at the pass's end:
 
 - **`retention-deleted-count`** and **`retention-behind`**, one each per lane the pass pruned, the
@@ -746,7 +746,7 @@ the partition roll measure the work a pass did, the mark lags sit at their healt
 rather than at 0, and the sizes, ages and window are levels to read against each other.
 
 The component is the one the boot ensures for the server's identity
-([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)), before the
+([collection](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself)), before the
 bus starts, so the pass the boot runs reports too (#1671). A boot whose ensure fails logs a WARN
 naming the identity and the cause and starts anyway: it prunes on its schedule as before and writes
 none of these figures until a boot whose ensure succeeds.
@@ -825,7 +825,7 @@ connection config so it observes every statement the gateway issues, whichever m
 That whole-pool reach is the point: the read paths query the pool directly, so a wrapper around a
 call argument cannot see them. The server installs one, `storage.SlowQueryTracer`, which counts and
 logs every statement that runs past `database.slow_query_ms`
-([self-monitoring](/architecture/collection/#self-monitoring-the-servers-account-of-itself), #1627).
+([self-monitoring](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself), #1627).
 It is where an OpenTelemetry pgx tracer attaches, and it is the seam the test harness counts round
 trips through, which is how a LIST is held to a constant number of
 queries rather than an N+1 ([counting round trips](/contributing/test-driven/#counting-round-trips-not-timing-them)).

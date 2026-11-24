@@ -90,7 +90,7 @@ The issue records; the **wire actuates** (#815). The moving parts:
 ### Queue health: each outpost's command queue, measured
 
 Every outpost's command queue reports its health on the outpost's
-[platform component](/architecture/collection/#self-monitoring-every-outposts-account-of-itself) (#1626),
+[platform component](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself) (#1626),
 as the `command-*` platform metrics, each one observation per sample. The wire writes two at the
 moment they happen, in the transaction of the stamp they derive from: `command-dispatch-latency`
 (issue to first take) when an outpost first takes a command, and `command-execution-latency` (first take
@@ -129,7 +129,7 @@ queue that got no answer or one it could not read, once per report window, 0 whe
 Each figure is a loss count or a delay, 0 healthy, and the loss ratios derive from them without a key
 of their own: delivery loss is undelivered over dispatch samples plus undelivered, execution loss is
 unexecuted over execution samples plus unexecuted. The keys, units and writers are rendered with
-every platform key on [collection](/architecture/collection/#self-monitoring-every-outposts-account-of-itself).
+every platform key on [collection](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself).
 
 A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its catalog is `command_type`, the driver-owned twin of the sample and event catalogs.
 

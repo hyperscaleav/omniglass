@@ -1,0 +1,205 @@
+---
+title: Self-monitoring
+description: "How Omniglass watches itself: every outpost and server reports its own health as platform metrics on a component of the reserved platform system, read and alarmed on like any other component."
+sidebar:
+  order: 33
+  badge:
+    text: Partial
+    variant: note
+---
+
+import PlatformKeys from '../../../components/PlatformKeys.astro';
+import PlatformCoverage from '../../../components/PlatformCoverage.astro';
+
+Omniglass reports on itself the way it reports on a fleet: each process that does the work, every
+outpost and every server, has a **component** of its own, and its health lands there as metrics. An
+operator reads whether an outpost keeps up, or whether the server is falling behind its samples, with
+the same tools they use for a codec: its metrics, their trend, and the rules that alarm on them. The
+operator's view of all of it is [Platform health](/operator/platform-health/). An endpoint's account
+of its own collection (its poll durations, failures and pushes) is a different thing, landed on the
+device's component: see
+[collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself).
+
+## The platform system
+
+The boot seed creates one reserved **system**, `platform`, of the reserved system type of the same
+name. Registering an outpost gives it an `omniglass-outpost` component in that system, named for the
+outpost and named back on the outpost row (`outpost.platform_component_id`); each server boot ensures
+an `omniglass-server` component for the server's identity
+([below](#self-monitoring-the-servers-account-of-itself)).
+
+The keys these components carry belong to the `platform` **writer class**
+([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)): the Storage
+Gateway lets only the process write them, so no push, declared value, command, calc rule or event
+rule can plant one, and a platform key named anywhere else is refused like any reserved key. An
+operator may relabel the system and its components but not reshape them: a rename, retype, move,
+reparent or delete, or another component joining the system, is a 409 naming the reservation.
+Decommissioning an outpost removes its component. The system is placed at no location, so only an
+all-scope read sees it, and a location-scoped operator sees no platform rows
+([ADR-1625](/architecture/decisions/#adr-1625-a-node-reports-itself-on-its-platform-component-and-platform-keys-take-no-prefix)).
+
+Every platform metric key, rendered from the writer-class ruling and the seed:
+
+<PlatformKeys />
+
+## Self-monitoring: every outpost's account of itself
+
+An outpost reports its own figures in the **outpost-self block** of the telemetry batch it already
+publishes (`TelemetryBatch.outpost_self`). The block names no owner and no task: the server takes the
+outpost from the subject the batch arrived on and lands the rows on that outpost's platform component,
+holding every row to the keys declared as the outpost's own. A row that names an identity, or a block
+that names an owner, is refused alone, and the batch's task groups still land. So an outpost speaks
+only for itself, and never for another outpost or for the server.
+
+What an outpost sends falls into two shapes:
+
+- **Levels, every tick.** One observation per sample, never a stored average: the dispatcher's longest
+  pass (`tick-duration`), the worst lateness and gap excess of the runs it dispatched
+  (`schedule-lateness`, `schedule-gap-excess`), the spool's depth, the held sessions by state, and the
+  Go process figures (`process-*`). A poll keeping its interval reads a zero gap excess; a late pass or
+  a skipped slot reads the distance it lost
+  ([scheduling](/architecture/outposts/#scheduling-concurrency-and-self-observability)).
+- **Counts and ratios, once a report window.** Tallied over `collection.report_seconds` (a minute by
+  default) and landed when the window ends, every window, 0 when quiet, so a count returns to 0 after
+  the window that had it rather than standing on its last event.
+
+The figures that matter most:
+
+- **`worker-busy-fraction`**: the [lane pool](/architecture/outposts/#the-endpoint-lane)'s worker time
+  spent running over the worker time it had, 0 idle to 1 every worker busy all window. It is the
+  outpost's headroom: near 1, dues start to wait for a worker. A run in flight at the window's end
+  counts the part it has run. `lane-worker-count` lands beside it, both under the one instance `lane`,
+  since the outpost runs one pool for every kind of discrete work
+  ([sizing the pool](/architecture/outposts/#sizing-the-pool),
+  [ADR-1686](/architecture/decisions/#adr-1686-a-node-reads-one-busy-fraction-for-its-one-lane-pool)).
+- **Delivery, per hop.** `delivery-in-count`, `delivery-out-count` and `delivery-loss-ratio`
+  (`(in - out) / in`, 0 when nothing came in), per item kind as the instance. On the outpost hop an
+  item is in when it settles at the spool and out when the stream acks its batch; a batch dropped at a
+  spool cap, refused by the bus or never encoded, or a self-log line the bounded buffer dropped, is in
+  and not out. The **schedule hop** writes the same three keys at the instance `schedule/{kind}`: runs
+  due in, runs made out, so a skipped due is that hop's loss. Every hop reads as the same ratio
+  ([the loss ratio](/architecture/messaging/#accounting-every-item-the-loss-ratio)).
+- **`worklist-pull-loss-ratio`**: the worklist pulls refused or unreadable over the pulls made, so an
+  outpost running a stale worklist reads as loss rather than as healthy; a window with no pull carries
+  the last outcome ([pulling the worklist](/architecture/outposts/#pulling-the-worklist)).
+- **`command-pull-failure-count`**: the pulls of its command queue that got no answer or one it could
+  not read.
+
+What one poll costs an outpost is read from the kernel: a lane worker runs each driver poll with its
+goroutine locked to its OS thread and reads the thread's CPU clock before and after, landing the mean
+per run as `poll-cpu-time` on the polled endpoint's component. It counts only the run's own thread, so
+it leaves out a held session's reader, the HTTP client's connection goroutines and the garbage
+collector's background workers: read it as a floor on a poll's cost, the process CPU as the ceiling,
+and compare drivers on it only within one transport. A platform with no per-thread clock lands
+nothing rather than a false zero
+([ADR-1870](/architecture/decisions/#adr-1870-a-polls-cpu-cost-is-its-threads-kernel-clock-cross-checked-by-the-cgroup);
+the cross-transport comparison is
+[what a driver costs an outpost](/architecture/scaling/#what-a-driver-costs-an-outpost)).
+
+Some outpost figures are the server's, because they must keep moving when the outpost does not:
+
+- **`checkin-age`**: every 15 s the server writes each claimed outpost's seconds since its last
+  heartbeat (or since its claim, before the first). It grows while an outpost is silent, and the
+  seeded `outpost-silent` rule opens a `high` alarm on the outpost's component past 90 s, three missed
+  heartbeats, cleared by the next one
+  ([ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
+  The seeded `worklist-stale` rule likewise opens a warning when `worklist-pull-loss-ratio` holds at 1
+  for two minutes.
+- **The command queue.** Every 15 s the server reads each outpost's queue and writes its depth, oldest
+  age and stuck commands, and over the window its redeliveries and expiries; the command wire writes
+  each command's dispatch and execution latency as it stamps them
+  ([queue health](/architecture/commands/#queue-health-each-outposts-command-queue-measured)).
+
+## Self-monitoring: the server's account of itself
+
+Each server boot ensures the component of the server's **identity**, `OMNIGLASS_SERVER_NAME` (the
+hostname when unset), recorded in a `platform_server` row, so a restart under one identity reports on
+one component and two servers report on two. Set the name wherever the hostname is not stable: a
+container's or a pod's changes on every start, and each new name is a new component.
+
+The server folds what it sees into the window recorder in `internal/platformmetric`, the primitive any
+Omniglass process records itself through, and lands one sample per key and instance each report
+window:
+
+- **Requests**: `http-request-count`, `http-request-duration` (mean ms) and
+  `http-request-duration-max`, per **route template** and status class
+  (`GET /api/v1/components/{name} 2xx`), never the path asked for, so a scan of a thousand names is one
+  series. An unrouted request is the one instance `unmatched`, and a nonstandard method reads `OTHER`,
+  so a client inventing paths cannot grow the series.
+- **Slow queries**: `db-slow-query-count`, the queries past `database.slow_query_ms` (500 by default,
+  0 off). Each also logs a `slow query` WARN with its statement's fingerprint (the text, whitespace
+  collapsed, bounded at 200 characters) and never its arguments, which carry operator data and
+  secrets
+  ([ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)).
+- **The pool**: `db-pool-acquired`, `db-pool-idle`, `db-pool-total` and `db-pool-max` at the
+  window's close, and `db-pool-acquire-count`, `db-pool-wait-count` and `db-pool-wait-duration` over
+  it. The waits read as a share of the acquires.
+- **The database's side**: `db-connection-count` against `db-connection-limit`,
+  `db-connection-idle-in-transaction-count` and `db-transaction-oldest-age`, read from
+  `pg_stat_activity`, so a `migrate`, a `psql` session or a second server counts too; and `db-size`,
+  `pg_database_size` at the window's close.
+- **The process**: the `process-*` figures (goroutines, heap, GC pause, CPU time, open files), from
+  the same runtime sampler an outpost reports through.
+- **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog, the server hop's
+  delivery keys, the bus request-reply failures
+  ([measuring the pipeline](/architecture/messaging/#measuring-the-pipeline)), and the background
+  ticks' depth, pace and failures ([measuring the ticks](/architecture/workers/#measuring-the-ticks)).
+- **`rule-sweep-age`**: the seconds since the event rule sweep last completed, read from a clock the
+  sweep stamps, so a stalled sweep's age keeps growing. Every 10 s each server also marks itself seen
+  in the shared database and writes its live peers' ages onto their components, so a live server
+  raises the alarm for a stalled one.
+- **`data-dir-disk-used-ratio`**: how full the filesystem under `OMNIGLASS_DATA_DIR` (where the bus
+  keeps its stream) is, 0 empty to 1 full. Root-reserved blocks count as free, so a full disk can read
+  short of 1.
+- **Retention**: the retention pass's figures
+  ([what a retention pass reports](/architecture/storage/#what-a-retention-pass-reports)).
+
+A read that fails writes nothing for that window, and the other figures still land. A boot whose
+ensure fails logs a WARN and serves anyway, reporting none of this until a boot whose ensure succeeds:
+self-monitoring never keeps the server down
+([ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing)).
+
+The bus, the database pool and the background ticks have no components of their own: their figures
+land on the server's component, told apart by key and instance, since each is one server's own view.
+Two servers report two pools, never one merged figure
+([ADR-1628.2](/architecture/decisions/#adr-16282-the-servers-platform-component-carries-the-bus-database-and-worker-pool-figures)).
+
+### What an alarm inside the platform cannot see
+
+An alarm raised by the thing it reports on cannot report that thing's death. `rule-sweep-stalled`
+catches a **stalled sweep, not a dead server**: a server that crashed or lost its database writes no
+age and stops marking itself seen, its peers stop judging it, and a lone server has no peer at all.
+The server's optional outbound **heartbeat** (`heartbeat.target` and `heartbeat.interval_seconds`)
+covers the rest: a signed request to a webhook notification target every interval, through the same
+egress allow list and audit as a notification (a target with no `hmac-key` secret bound is refused),
+carrying the server's name, build and count of open platform alarms. A receiver outside the install
+alarms on its absence. It is off by default, and hosting the receiver is out of scope
+([the heartbeat](/architecture/alarms-actions/#the-heartbeat-what-an-alarm-inside-the-platform-cannot-see),
+[ADR-1986](/architecture/decisions/#adr-1986-the-heartbeat-is-a-signed-request-through-a-notification-target-and-the-sweep-age-is-read-from-a-shared-stamp)).
+
+## Which figures alarm
+
+The seeded rules on platform figures:
+
+- `outpost-silent`: `checkin-age` past 90 s, `high`.
+- `worklist-stale`: an outpost's pulls all refused for two minutes, warning.
+- `ingest-lag-high`: the server 30 s behind its samples for two minutes, warning.
+- `rule-sweep-stalled`: `rule-sweep-age` past 30 s, six missed sweeps, `high`.
+- `disk-nearly-full`: `data-dir-disk-used-ratio` over 0.9 for two minutes, warning, cleared at 0.85.
+- `process-heap-growing` and `process-goroutines-growing`: a steady climb for six hours, the shape of
+  a leak, `average`.
+- `db-size-growing`: shipped disabled, since a fleet onboarded in its first week grows as bloat would
+  ([a trend rule reads a window](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)).
+
+Every figure Platform health reads is the `sample_key` of a shipped rule or is named, with a reason,
+on an exemption list in code (`PlatformRuleExemptions`); a test fails when a figure reaches a panel
+with neither, or when an exemption outlives the rule that overtakes it. The table is rendered from
+the rules and the list, so it shows what alarms today:
+
+<PlatformCoverage />
+
+:::design[The rest of the platform system, tracked in #1094]
+The NATS and Postgres services read from their own side, as components of their own beside the
+server's view of them, and the outpost counts the first design named that are not yet sent (tasks
+attempted, ran and failed; endpoints probed, up and down).
+:::

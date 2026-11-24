@@ -105,7 +105,7 @@ stored omnibot conversation outlives its last change ([ADR-2113](/architecture/d
 may do in each class of operation, which a caller reads only as it applies to them through
 `GET /auth/me/agent-policy` ([ADR-2063](/architecture/decisions/#adr-2063-an-install-sets-always-ask-or-never-per-class-of-operation-for-every-agent)); and `database`, whose `slow_query_ms` is the
 threshold past which the server logs and counts a query as slow, re-read each report window:
-[the server's account of itself](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
+[the server's account of itself](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself)).
 
 ## Storage: one binding table, unscoped
 

@@ -952,7 +952,7 @@ in turn on an outpost that runs only the outpost:
   step's tasks, so the sweep instead halves the step, down to just above the last step it measured,
   and caps any later growth there.
 - **The cross-check.** CPU per run is the CPU slope over the driver's run rate. Beside it sits the
-  outpost's own [`poll-cpu-time`](/architecture/outposts/#self-monitoring-the-outpost-reports-itself), the
+  outpost's own [`poll-cpu-time`](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself), the
   polling thread's kernel clock, averaged over the reports wholly inside each step's window and read
   once the last has landed, after two of the lab's live report windows. Thread share is the one over
   the other: the part of a run's cost the thread clock sees. A low share is work the run hands
@@ -963,7 +963,7 @@ The run writes its table to `internal/labfootprint/drivercost/shipped.json`, rel
 directory, so run it from the repository's root. The table is stamped with the date and the build, and
 with the host's cores and memory when the lab's Docker daemon is local. A sweep stopped part way (an
 interrupt, a lab that failed) still writes the drivers it had measured. Commit it after `make gen`, which renders it on the
-[scaling page](/architecture/scaling/#what-a-driver-costs-a-outpost), each driver on its own and rolled
+[scaling page](/architecture/scaling/#what-a-driver-costs-an-outpost), each driver on its own and rolled
 up by its kind and poll interval; a shipped driver the table lacks reads there as not yet measured, so the table cannot quietly fall behind the drivers. `--only`
 measures named drivers. A full sweep takes several hours, most of it in the windows of drivers that
 poll every five minutes; run it on the host class the figures should describe. Every flag is in the

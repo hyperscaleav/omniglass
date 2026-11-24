@@ -1,528 +1,311 @@
 ---
 title: Messaging
-description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, the live UI relay, and per-tenant subject isolation."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "The bus between the server and its outposts: the subject grammar and its grants, the telemetry stream and how a batch lands once, the loss ratio that accounts for every item, and the figures the server measures itself by."
 sidebar:
-  hidden: true
+  order: 34
+  badge:
+    text: Partial
+    variant: note
 ---
 
-:::note[Implementation status]
-Built today: the embedded nats-server with JetStream (`internal/bus/server.go`), per-outpost subject
-isolation with the auth callback, one `OG_TELEMETRY` stream on the outpost subjects
-(`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), the ingest lanes writing
-straight to Postgres (a durable per partition of the outpost's name, each with one batch in flight,
-[ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)), and the worklist and heartbeat request-reply lanes. The two-lane split below is
-target design; today there is **one stream, whose lanes do admission (owner confinement) and
-persistence inline**. Calc rules run off the
-stream too: the sample write marks them pending and a server tick computes them
-([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)).
-So do notifications: there is no CDC publisher yet, so an alarm transition writes its
-`notification` rows in its own transaction and a server tick sends them, rather than the record
-lane fanning the commit onto JetStream for an `action_rule` consumer
-([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)).
-The delivery contract on that stream is built: every publish waits for the stream's ack under a
-`Nats-Msg-Id` the stream deduplicates, and the consumer lands each batch once, in one transaction
-under its receipt ([below](#delivery-a-batch-lands-once)), and that receipt accounts for every item
-the batch carried, so a lab run reads each telemetry kind's loss across the outpost hop and the ingest
-hop, the outpost lane and the push lane apart ([below](#accounting-every-item-the-loss-ratio)). The server measures that pipeline from
-inside, its ingest lag, backlog, drops and request failures, on its own platform component
-([below](#measuring-the-pipeline)).
-:::
+Omniglass has two typed contracts. The [public API](/architecture/api/) is HTTP. This page is the
+other one: a **NATS subject contract** over JetStream, carrying the server's traffic with its
+outposts. The server embeds the NATS server (`internal/bus`), so there is no broker to run.
+**Postgres is the system of record; the bus only moves.** Operators never connect to the bus: the
+console reads over HTTP, live included ([below](#the-live-console)).
 
-This page is the **one home of the two-lane data plane**: the admission / trusted / persistence split, the CDC publisher, and the ingest-path enumeration live here, only named (with a link) everywhere else.
+## Subjects and grants
 
-Omniglass has **two typed contracts**: the [public API](/architecture/api/) (HTTP and OpenAPI) and this sibling, the **internal and edge transport**, a **NATS subject contract** over JetStream carrying service-to-service traffic, the edge, and the live UI. **Postgres stays the system of record; NATS moves.** Deployment topology: [scaling](/architecture/scaling/).
+Every control-plane subject is `og.v1.<verb>.<outpost>`, the outpost's name the last token and
+exactly one token
+([ADR-0081](/architecture/decisions/#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular)).
+That lets the server subscribe one wildcard per verb (`og.v1.worklist.*`) and lets an outpost's
+credential be an explicit allow-list of its own subjects (`outpostPermissions` in `internal/bus`):
 
-:::design[Target design, tracked in #430]
+| Verb | Direction | What it carries |
+| --- | --- | --- |
+| `worklist` | outpost asks, server answers | the outpost's worklist, synced endpoint by endpoint against a manifest ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) |
+| `worklist-changed` | server to outpost | an empty nudge to pull now, sent when a commit changes the outpost's worklist ([outposts](/architecture/outposts/#the-change-nudge)) |
+| `heartbeat` | outpost to server | the outpost's check-in |
+| `telemetry` | outpost to stream | each tick's `TelemetryBatch` |
+| `command`, `commandstatus` | outpost asks, then reports | the outpost's command queue pull and its execution reports ([commands](/architecture/commands/)) |
+| `run` | server asks, outpost answers | an on-demand run of one task |
+| `simlist`, `simhit`, `simop` | both ways | the [simulator](/architecture/simulation/) beside the outpost, which holds its credential |
+| `simobs`, `tally` | server asks | what the simulated endpoints observed and what the outpost tallied sending ([simulation](/architecture/simulation/#what-an-endpoint-observed)) |
 
-## Two lanes, one bus
+An outpost may also subscribe to its own reply namespace, `_INBOX.<outpost>`, and send one reply to
+each request it receives. The grant is derived from the outpost's identity alone: it is a coarse
+transport fence, not a second copy of the access model, which stays in the
+[Storage Gateway](/architecture/storage/).
 
-Internal traffic splits by what is moving:
+Addressing is **outpost-anchored and batch-granular**: a sample has no subject of its own, and its
+name is payload, not topic. A subject per sample would explode the grant grammar without adding a
+fence, and the consumer needs the whole batch anyway.
 
-- **Data lane (NATS-native): samples.** Untrusted publishers (an outpost, an external webhook sender)
-  publish to a **raw ingress subject** (the wire unit is a `Sample` in a `TelemetryBatch`); an
-  **admission consumer** owner-confines each sample and re-publishes only confined ones to the
-  **trusted** samples stream. The confinement set is **per publisher class**: an outpost's payload owner
-  is checked against its placement `visible_set`, a central webhook's against the endpoint's
-  declared owner (the trusted server-set `endpoint` label). The republish copies the original
-  `Nats-Msg-Id`, `correlation_id`, and `source_event_id` headers verbatim, so dedup survives the
-  hop. **Trusted server-internal producers publish straight to the trusted stream**, no admission
-  pass: calc output (owner from the validated `calc_rule` scope) and the action layer's intended
-  write (owner from the command target). The rule engine consumes the trusted stream directly; a
-  **persistence consumer** batch-writes it to the Postgres `metric`, `property`, `event`, and
-  `log_line` tables as an async sink, idempotent per batch (its receipt, as the built consumer is,
-  [ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)),
-  and the sink never gates the rule engine: a slow persistence consumer holds up only the durable record, never the live signal.
-  Confinement is at **consume time, ahead of evaluation**: a forged owner must be dropped before it
-  can open an alarm, not just before it is persisted. The admission consumer runs in **system mode**
-  (a dropped sample is logged as a discovery candidate,
-  [identity and access](/architecture/identity-access/)). Samples do not go through CDC; they are
-  already on the bus.
-- **Record / state lane (Postgres-first, CDC-out): events, alarms, actions, operator mutations**
-  (config, ack, snooze, settings, manual commands). Born in a Postgres transaction: a firing
-  `event_rule` writes the event plus the alarm transition atomically (serialized per
-  `(event_rule, owner)`), and the API writes config, ack, and settings the same way. A
-  **leader-elected CDC publisher** (exactly one active, failing over on the NATS KV lock,
-  [workers](/architecture/workers/)) reads committed changes from a replication slot by **logical
-  decoding of the WAL** and publishes each to JetStream, where `action_rule`, reconcile, and
-  projection consumers react. Delivery is at-least-once with an **idempotency key per change**, so
-  outcomes stay exactly-once downstream. **No dual-write**, no row-lock single-fire worklist, no
-  `LISTEN`/`NOTIFY` fan-out: the change commits once and the bridge fans it out. The
-  replication **slot and publication are ensured in the idempotent boot phase** (created if absent,
-  untouched if present), never a run-once dbmate migration, so a fresh database and an existing one
-  converge.
+The push lane, `og.v1.api.telemetry`, sits in a segment of its own rather than under
+`og.v1.telemetry.*`, so no outpost's grant can reach it. It is **trusted by subject**: the server
+publishes there for `POST /telemetry:push` (whose route already checked the caller's scope) and for
+`POST /webhooks/{token}`, and the consumer believes the owner a batch names only because of the
+subject it arrived on. A batch on an outpost's subject that names an owner is refused.
 
+:::design[Per-tenant NATS accounts, tracked in #529]
+One NATS account per tenant, the same boundary as one database per tenant
+([identity and access](/architecture/identity-access/)).
 :::
 
 ## The ingest paths
 
-Four ingest paths exist today, and this list is the enumeration's one home:
+Three paths carry telemetry in, and they meet at one write path, so none drifts from the others'
+semantics (how a sample is landed is [metrics and properties](/architecture/properties/)):
 
-- **The outpost bus path.** An outpost publishes one `TelemetryBatch` per tick on its own subject (`og.v1.telemetry.<outpost>`), carrying a `TaskGroup` for each task it ran, and the server binds each group's owner and writer from its task's endpoint ([collection](/architecture/collection/)). The wire shape is the generated proto; the batch's top-level task lanes belong to the API subject, and an outpost-subject batch that carries them is warned about and terminated rather than redelivered.
-- **The API push path.** `POST /telemetry:push` is the first-party HTTP ingest write: a scoped caller declares the owner and the route's scope check is the fence. The API publishes the batch onto the bus (`og.v1.api.telemetry`, trusted by subject, below) rather than writing Postgres directly, so pushed records are visible to the same stream consumers and land in history the same way ([API](/architecture/api/)).
-- **The webhook path.** A sender posts to `POST /webhooks/{token}`, the server-hosted listener for the webhook transport: the token names one endpoint, its driver's scheme authenticates the post and its listeners map the body, and the server publishes the batch on the same trusted `og.v1.api.telemetry` subject with the endpoint's component as owner, its writer the push lane's, which admits only collected keys ([collection](/architecture/collection/), [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
-- **The raw log path.** A raw log line rides either transport in the same batch but lands on its own untyped lane, `log_line`: no property name, no catalog gate ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
+- **An outpost** publishes one `TelemetryBatch` per tick on `og.v1.telemetry.<outpost>`, carrying a
+  task group for each task it ran. The server binds each group's owner from its task's endpoint; the
+  outpost names no owner ([collection](/architecture/collection/)).
+- **A push**: `POST /telemetry:push` lets a scoped caller name the owner, and the API publishes the
+  batch on the push lane rather than writing Postgres, so a pushed sample lands exactly as a
+  collected one does.
+- **A webhook**: `POST /webhooks/{token}`, whose token names one endpoint, is authenticated by its
+  driver's scheme and mapped by its listeners, then published on the push lane with the endpoint's
+  component as owner
+  ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
 
-The transports meet at one `land()` write path, so neither can drift from the other's semantics; the mechanics of `land()` (reject-not-project, the transition-only state guard, the current-value derive) belong to [samples](/architecture/properties/).
+Raw log lines ride any of the three in the same batch and land on their own untyped lane
+([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 
 ## Streams and consumers
 
-As built today there is **one stream**, `OG_TELEMETRY`, bound to the outpost subjects (`og.v1.telemetry.*`) and the API push subject (`og.v1.api.telemetry`), consumed by the ingest lanes; `og.v1.telemetry.<outpost>` is the sample firehose itself, carrying each outpost's samples and its raw self-logs. The stream files an outpost's batch under a partition of its name, `og.v1.telemetry.<p>.<outpost>` (its own `partition` subject transform, FNV-1a modulo the lane count), and each partition has a durable, `og-telemetry-worker-<p>`, with one batch in flight; `og-telemetry-worker` keeps the push subject. The lane count is `OMNIGLASS_INGEST_PARTITIONS` ([configuration](/deployment/container-image/#configuration)), 4 by default and held under the database pool less one; change it with the backlog drained, since a change moves outposts between lanes and a start that changes it over a held backlog only warns (#1934; [ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)). The set below is the target topology:
+There is one stream, `OG_TELEMETRY`, over the outpost telemetry subjects and the push lane. It is a
+work queue: a batch is stored the moment it is published and deleted the moment it is acked, so the
+disk holds only the backlog.
 
-:::design[Target design, tracked in #430]
-- **samples** (data lane): raw ingress, the **admission consumer** (owner-confines per publisher
-  class), then the **trusted** samples stream the rule engine, calc, and the persistence consumer
-  read; trusted server producers publish directly. A **work-queue consumer group** scales
-  horizontally (each message to exactly one consumer), no leader.
-- **records** (events, alarms, actions): published by the CDC publisher from Postgres commits;
-  consumed by `action_rule`, reconcile, and projection consumers.
-- **commands**: a durable, per-outpost **command queue** the edge holds a consumer on
-  ([outposts](/architecture/outposts/)).
+The stream files each outpost's batches under a partition of its name (FNV-1a modulo the lane count),
+and each partition has a durable consumer of its own, `og-telemetry-worker-<p>`, holding one batch in
+flight; `og-telemetry-worker` takes the push lane
+([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)).
+So one outpost's batches land in order, and different outposts' batches land side by side in no fixed
+order. Order matters for a property series, whose transition guard compares each value with the
+series' latest; a metric or an event lands by its own `ts`, stamped at the edge, in any order. The lane
+count is `OMNIGLASS_INGEST_PARTITIONS` ([configuration](/deployment/container-image/#configuration)),
+4 by default; change it with the backlog drained, since a change moves outposts between lanes (#1934).
 
-Durable consumers track their own position; delivery is at-least-once with `Nats-Msg-Id` dedup plus
-double ack, which with the idempotent sinks (a sample batch on its receipt, an action transition on
-`(alarm, action, transition)`, the CDC idempotency key) gives exactly-once **outcomes**. This triple
-(`Nats-Msg-Id` dedup, double ack, idempotent sink) is the canonical exactly-once mechanism the other
-pages refer to; the samples stream carries it today (below).
-:::
-
-The edge stamps `ts`, so the system is ts-authoritative: a metric or an event lands by its own `ts`
-in any order. A property series is the exception, since its transition guard compares a value with
-the series' latest, so the ingest lanes keep each publisher's batches in order end to end (below): a
-outpost's batches all share one lane, and two outposts' batches land in no fixed order with one another.
+The worklist and heartbeat are plain request-reply, so their server side is a subscription, not a
+durable: one server answers them. A second server attaching the telemetry durables joins them and
+splits the deliveries ([scaling](/architecture/scaling/)).
 
 ### Delivery: a batch lands once
 
-The canonical triple is built on `OG_TELEMETRY`
+Exactly-once outcomes come from three parts together
 ([ADR-0453](/architecture/decisions/#adr-0453-telemetry-is-published-through-jetstream-with-an-ack-a-minted-nats-msg-id-and-a-bounded-spool),
 [ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)):
 
-- **The publish waits for the stream's ack.** Every telemetry publisher (an outpost, the push route, the
-  webhook route) publishes through JetStream and treats a batch as sent only once the stream acks it.
-  The push route answers `202` only after the ack, `503` after three attempts; an outpost holds a batch the
-  stream has not acked and ships it on the next tick ([outposts](/architecture/outposts/#delivery-a-batch-lands-once)).
-- **`Nats-Msg-Id` dedup.** Each batch carries an id (a UUIDv7) minted once, when the outpost's spool
-  flushes the tick's groups into it, and kept, with its bytes, across every retry; the stream remembers an id for five minutes, so a retry inside the window
-  (an attempt it stored whose ack was lost) is answered with the first copy's ack and stored once.
-- **Double ack and an idempotent sink.** The consumer lands a batch's every sink (its log lines and
-  its three sample lanes) in **one transaction** whose first statement inserts the batch's **receipt**
-  (`telemetry_receipt`, keyed by the subject and the id), then double-acks. A failure part way writes
-  nothing; a batch id that already landed writes nothing at all. So a redelivery after a lost ack, a
-  consumer that died between its commit and its ack, and a retry past the stream's window each land
-  every row once. Receipts are kept a day. An outpost's batch is a tick of task groups under **one
-  receipt**, and the unit that fails is the group: a group the gateway refuses (its owner gone, its
-  writer refused, a value Postgres refuses) is skipped, its siblings land, the receipt is written once
-  and the message is acked, while a transient failure or a foreign key or not-null failure still
-  redelivers the whole batch. Every value the database could refuse is cleaned first (a NUL in any
-  lane's text or jsonb becomes U+FFFD), so one stray byte cannot lose the rows that rode with it
-  after a `202`.
+- **The publish waits for the stream's ack.** A publisher lets go of a batch only once the stream
+  acks it. The push route answers `202` after the ack and `503` after three attempts; an outpost holds
+  an unacked batch in its spool and ships it again on the next tick
+  ([outposts](/architecture/outposts/#delivery-a-batch-lands-once)).
+- **`Nats-Msg-Id` dedup.** Each batch carries an id (a UUIDv7) minted once and kept, with its bytes,
+  across every retry. The stream remembers an id for five minutes, so a retry inside that window is
+  answered with the first copy's ack and stored once.
+- **Double ack over an idempotent sink.** The consumer lands every lane of a batch in **one
+  transaction** whose first statement writes the batch's **receipt** (`telemetry_receipt`), then
+  double-acks. A failure part way writes nothing, and a batch whose receipt exists writes nothing, so
+  a redelivery after a lost ack, or a retry past the stream's window, lands each row once. Receipts
+  are kept a day.
 
-A publisher lets go of a batch at the stream's ack, so the ack is only as durable as the stream's
-store. The embedded server keeps it under `OMNIGLASS_NATS_STORE_DIR`, a temporary directory removed at
-shutdown unless one is set; the lab and the Helm chart set it onto a persistent volume, so a batch the
-stream acknowledged before a restart lands after it ([Helm: durable state](/deployment/helm/#durable-state), #1286).
+The unit that fails is the task group, not the batch: a group the gateway refuses (its owner gone,
+its writer refused, a value Postgres refuses) is skipped and its siblings land under the one receipt.
+A transient failure redelivers the whole batch, after a growing delay, up to five deliveries. Every
+value the database could refuse is cleaned first (a NUL byte in text or jsonb becomes U+FFFD), so one
+stray byte cannot lose the rows beside it.
 
-The property lane's transition guard is the insert's own condition, held per series by a lock, so two
-batches landing at once never write one value twice. The guard is right only if a series lands in
-order, so the lane keeps order end to end: an outpost's window stays in publish order
-([outposts](/architecture/outposts/#delivery-a-batch-lands-once)), and the consumer keeps one batch in
-flight, redelivering a transient failure before anything behind it and dropping at once a group the
-gateway refuses outright, the rest of its batch landing ([workers](/architecture/workers/)).
+An ack is only as durable as the stream's store. The embedded server keeps it under
+`OMNIGLASS_NATS_STORE_DIR`, a temporary directory unless set; the lab and the Helm chart put it on a
+persistent volume, so a batch acked before a restart lands after it
+([Helm: durable state](/deployment/helm/#durable-state)).
 
 ### Accounting every item: the loss ratio
 
-A batch landing once says nothing about whether every item in it reached the store. The **loss
-ratio** does, and it reads the same for every telemetry kind (metric, property, event, log) at every
-hop: `loss = (in - out) / in`, where `out` is the items accounted for (in the store, or held for the
-operator to place). A healthy
-pipeline reads exactly 0 for every kind, so reading it needs no knowledge of a kind's internals. A
-kind with nothing in reads no ratio, never a 0; a hop a kind does not cross has no row
-([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio), #1641).
-The schedule, outpost and ingest hops are read today (#1693, #1692). The lab also reads the sim hop,
-what the simulated endpoints settled against what reached the outpost, per protocol in requests rather
-than per kind in items, since a simulator cannot know which kinds an answer would carry
-([ADR-1694](/architecture/decisions/#adr-1694-the-sim-hop-is-read-per-protocol-in-requests-from-the-closed-loop), #1694).
-Apart from this read, the outpost and the server each write their own hop's in, out and ratio per kind
-every window as platform metrics, 0 when nothing came in (#1659,
-[below](#measuring-the-pipeline)).
+A batch landing once does not say every item in it reached the store. The **loss ratio** does, and
+reads the same for every telemetry kind (metric, property, event, log) at every hop:
+`loss = (in - out) / in`. Healthy is exactly 0, so reading it needs no knowledge of a kind's
+internals. A kind with nothing in has no ratio, never a 0
+([ADR-1641](/architecture/decisions/#adr-1641-every-telemetry-item-is-accounted-on-its-batchs-receipt-and-read-as-a-loss-ratio)).
 
-- **The ledger rides on the batch.** An outpost's spool stamps each batch it flushes with a
-  `DeliveryLedger` (field 16 of `TelemetryBatch`): the spool's `boot` (a UUIDv7 minted when the
-  spool starts), a dense `seq` from 1, the outpost clock's `minted`, `resolved` (every batch of the boot
-  at or below it had left the spool when this one was minted) and, per kind, the items it carries
-  (`count`) and the items the boot minted before it (`before`). A retry resends the same bytes, so
-  the ledger is identical on every delivery. A missing batch leaves a hole in `seq`, and the
-  neighbors' `before` offsets say how many items of each kind it held, whatever order the batches
-  arrived in.
-- **The outpost names its own losses on the ledger.** A batch the spool gives up on still took a `seq`,
-  so it leaves the same hole a batch lost after shipping does. The ledger tells them apart: its
-  `dropped` (field 6) is the runs of seqs the spool dropped, each with its cause and items per kind,
-  carried by every batch minted after the drop until one of them is acked; its `lost` (field 7) is the
-  items lost before any batch carried them, running totals since the boot began. The outpost hop's
-  outcomes are `shipped` (out) and, as loss, `spool-overflow` (the count or byte cap dropped the
-  oldest batch), `spool-expired` (a batch aged out), `bus-refused` (the bus refused a batch for good),
-  `self-log-overflow` (the self-log buffer dropped lines) and `encode-failed`. A hole the outpost's runs
-  cover is the outpost's loss under its cause; the rest of it the outpost shipped, and reads at ingest as
-  `missing`. So the outpost's out is exactly the ingest's in
-  ([ADR-1692](/architecture/decisions/#adr-1692-the-node-hop-reads-its-losses-from-runs-the-next-batches-carry)).
-- **The receipt is the accounting row.** The landing transaction writes the ledger and the batch's
-  **outcome** (its items by kind and outcome, from the pass that commits) on the batch's receipt, so
-  the accounting commits exactly when the data does and adds no rows. A redelivery the receipt
-  absorbs counts one more `deliveries` on it and lands nothing.
-- **Each item takes exactly one outcome.** Out: `stored`, `coalesced` (an unchanged property value
-  the transition guard skipped on purpose), and `unbound` (an identified sample whose identity no
-  binding places). Loss: `refused-unregistered`, `refused-writer`, `refused-instance`,
-  `refused-invalid`, `refused-empty`, `refused-write` (a group the gateway refused while its siblings
-  landed), `orphaned` (its task's owner gone), `unidentified`, the causes the consumer Terms a
-  batch whole for (`refused-owner`, `refused-task`, `refused-batch`, `refused-metadata`,
-  `abandoned`; below), and `missing` (a hole in a boot's offsets the outpost does not account for:
-  shipped, never landed).
-- **A refusal is loss.** Counting refused items as out would let a fleet refusing a third of its
-  samples read 0, and only someone who knew to look at the refusal counts would notice. The read
-  names the largest outcome behind a loss as its **cause** instead.
-- **An unbound identity is accounted for, not lost.** An identity a conduit reports that no binding
-  locations is the operator's configuration, not data omniglass dropped: the operator has not assigned
-  it, and the conduit's [unbound inbox](/architecture/collection/#shared-api-collection-one-component-many-owners)
-  already surfaces it (the count, the keys, how often it was heard). Like a device that fails to
-  answer, it is accounted for, so a healthy fleet with an unassigned identity reads 0. The outcome is
-  still counted on every row.
-- **Deduplicated sits beside the ratio.** `in` and `out` count distinct items, and a redelivery's
-  items count as `deduplicated` next to the ratio, never inside it: a retry storm counted on both
-  sides would dilute the ratio and could hide real loss.
-- **A gap belongs to its lower neighbor.** A read over a window counts a receipt minted in it, and
-  the seqs between two present receipts are the lower one's; a gap below a boot's lowest receipt is
-  that receipt's. Each gap has one owner, so adjacent windows sum to one window over both. A gap
-  can still fill until a later batch's `resolved` passes it and the stream has drained; a boot not
-  there yet reads **unsettled**, with no ratio.
-- **The schedule hop counts runs, not items.** Upstream of every item is a run that makes it: an outpost's
-  dispatcher counts each due on a task's schedule in and each run it makes out, per kind the run
-  produces (a reachability probe's metric and property, a driver poll's the lanes its emits
-  declare), so a due it passes over (a run still in flight on the lane, a late pass) is that hop's
-  loss and its cause is `skipped` (#1693). A probe an upstream holds counts made: it runs the moment
-  the upstream opens. A run off the schedule (an operator's offer) is no due. The outpost writes the
-  three keys every window at the instance `schedule/{kind}` on its own component, beside its spool's
-  per-kind instances.
-- **End to end composes.** A kind's loss over every hop it crosses is `1 - prod(1 - loss)`: a third
-  lost at the outpost and nothing at ingest is a third end to end, and an outpost that skips a fifth of its
-  dues and lands every item it made reads 0.2 end to end, the schedule hop's. A hop with nothing in
-  loses nothing, so a kind whose every due was skipped reads 1 end to end, not unknown; a kind with
-  no settled ingest reading has no end to end at all.
-- **A killed boot is named, not yet counted.** An outpost's spool is memory, so an outpost that starts again
-  while its spool holds batches loses them, and nothing that landed says how many items they held.
-  The read takes such a boot as far as it landed and names its unshipped tail beside the table;
-  counting the tail on the outpost row is #1733.
+The hops, in the order an item crosses them:
 
-A batch the consumer Terms whole records a **Term receipt** (#1691): the batch's ledger, with every
-item it declared under the cause, so the loss names why it never landed. An owner asserted on the
-outpost lane reads `refused-owner`, task rows outside the groups `refused-task`, a batch the gateway
-refused whole `refused-batch`, unreadable delivery metadata `refused-metadata`, and a batch that
-failed its fifth delivery `abandoned`. The receipt is marked `termed`, so it never counts as a
-landing: a later copy of the batch (an outpost's retry past the stream's duplicate window) that lands
-replaces it with its own ledger and outcome, and the closed loop's receipt count skips it. A Term
-receipt carries the outpost's own loss account as a landing's would, so a run the outpost dropped before
-a Termed batch still reads on the outpost row. A Term receipt that fails to record is warned and the
-batch Terms anyway. An undecodable batch has no
-ledger the server can read, so it records nothing: its items stay `missing`, and the Term is warned
+1. **Schedule** (counted in runs): an outpost's dispatcher counts each due on a task's schedule in and
+   each run it makes out, per kind the run produces. A due it passes over (the last run still in
+   flight) is lost as `skipped`.
+2. **Outpost**: the spool counts each item it was handed in and each item the stream acked out.
+3. **Ingest**: each item a landed batch carried takes exactly one outcome.
+4. **Sim** (lab only, counted in requests per protocol): what the simulated endpoints settled
+   against what the outpost sent
+   ([ADR-1694](/architecture/decisions/#adr-1694-the-sim-hop-is-read-per-protocol-in-requests-from-the-closed-loop)).
+
+End to end composes as `1 - prod(1 - loss)` over the hops a kind crosses.
+
+**The ledger rides on the batch.** An outpost's spool stamps each batch with a `DeliveryLedger`: the
+spool's `boot` (a UUIDv7 minted at start), a dense `seq`, `resolved` (every earlier batch of the boot
+had left the spool when this one was minted), and per kind the items it carries and the items the
+boot minted before it. A retry resends the same bytes, so a missing batch leaves a hole in `seq` whose
+size the neighbors' offsets give, whatever order they arrived in. The spool names its own losses on
+the ledger too: the runs of seqs it dropped, each with its cause (`spool-overflow`, `spool-expired`,
+`bus-refused`, `self-log-overflow`, `encode-failed`), carried until a later batch is acked
+([ADR-1692](/architecture/decisions/#adr-1692-the-node-hop-reads-its-losses-from-runs-the-next-batches-carry)).
+A hole the outpost does not account for was shipped and never landed, and reads at ingest as
+`missing`.
+
+**The receipt is the accounting row.** The landing transaction writes the ledger and each item's
+outcome on the batch's receipt, so the accounting commits exactly when the data does. The outcomes:
+
+- **out**: `stored`; `coalesced` (an unchanged property value the transition guard skipped on
+  purpose); `unbound` (an identity no binding places, which is the operator's configuration and shows
+  in the conduit's
+  [unbound inbox](/architecture/collection/#shared-api-collection-one-component-many-owners)).
+- **lost**: the refusals (`refused-unregistered`, `refused-writer`, `refused-instance`,
+  `refused-invalid`, `refused-empty`, `refused-write`), `orphaned` (its task's owner gone),
+  `unidentified`, `missing`, and the causes a whole batch is given up for (`refused-owner`,
+  `refused-task`, `refused-batch`, `refused-metadata`, `abandoned` after its fifth delivery).
+
+A refusal counts as loss on purpose: counting it out would let a fleet refusing a third of its samples
+read 0. The read names the largest outcome behind a loss as its **cause**. A redelivery's items are
+counted as `deduplicated` beside the ratio, never inside it, so a retry storm cannot dilute real loss.
+
+A batch given up whole still records a **Term receipt** carrying its ledger and every item under the
+cause, so the loss says why; a later copy that lands replaces it
 ([ADR-1691](/architecture/decisions/#adr-1691-a-batch-the-server-terms-whole-reads-under-its-own-cause-on-a-term-receipt)).
+An undecodable batch has no ledger to read, so its items stay `missing`.
 
-- **The push lane keeps its own ledger.** The push route and the webhook listener publish through
-  the server's bus, which stamps each batch with the same `DeliveryLedger` as it publishes: one
-  `boot` per server process, a dense `seq`, and `resolved` the seq below, since publishes go one at
-  a time and the one ahead already had the stream's answer. Its receipts carry no outpost, so the read
-  reconciles the push lane apart from the outpost lane and gives it its own rows: one hop, ingest, so
-  its row is its own end to end, and the end-to-end line composes the outpost lane alone
-  ([ADR-1696](/architecture/decisions/#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row), #1696).
-- **A refused publish is not the push lane's loss.** A publish the stream never acks answers the
-  pusher `503` and the pusher still holds its items, so the server takes them back off the offsets.
-  The seq stays spent (a copy the stream stored with its ack lost lands under it), and the hole it
-  leaves holds nothing to read as missing. A pushed batch the ingest Terms whole records its Term
-  receipt as an outpost's does, under the server's boot, so it reads under its cause on the push row; a
-  hole that does hold items is one the stream stored and the ingest could not decode, read as
-  `missing` as on the outpost lane.
-- **A push refused at the turn is the push lane's loss, counted in pushes.** Publishes go one at a
-  time, so a push waits for the turn, and a wait past 5 seconds is refused (`503`) before it mints
-  anything: no seq, no ledger, nothing to read as missing. The server counts the pushes that waited
-  and those refused on its own platform component ([below](#measuring-the-pipeline)), and the read
-  gives the push lane a **publish** row ahead of its ingest rows: in is the pushes, out those that
-  took the turn (`turn-taken`), the loss `refused-turn`. A push is one call whatever it carries, so
-  the row is counted in pushes, never composed with a kind's items
-  ([ADR-1746](/architecture/decisions/#adr-1746-a-push-refused-at-the-publish-turn-is-read-as-a-publish-row-counted-in-pushes), #1746).
-  One turn per server holds at the corporate 3,000 push load: 5 pushes a second from 60 pushers
-  refused none and waited about 0.01 ms at the p99, so the turn is not sharded until a run shows it
-  near its bound
-  ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
+**The push lane keeps its own ledger.** The server stamps each pushed batch as it publishes (one
+`boot` per server process), and the read gives the push lane rows of its own
+([ADR-1696](/architecture/decisions/#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row)).
+Pushes publish one at a time, so a push waits for its turn, and one that waits past 5 seconds is
+refused with `503` before anything is minted. That is the push lane's **publish** row, counted in
+pushes rather than items
+([ADR-1746](/architecture/decisions/#adr-1746-a-push-refused-at-the-publish-turn-is-read-as-a-publish-row-counted-in-pushes)).
 
-`omniglass lab measure` prints the table
-([lab](/developer/lab/#reading-the-delivery-table)).
+A window counts the receipts minted in it, a gap belongs to the receipt below it (so adjacent windows
+sum), and a boot whose gaps could still fill reads **unsettled**, with no ratio.
+`omniglass lab measure` prints the table ([lab](/developer/lab/#reading-the-delivery-table)), and
+[Platform health](/operator/platform-health/#where-work-is-lost) reads the same hops live.
 
-:::design[Target design, tracked in #430]
+:::design[A killed boot's unshipped tail, tracked in #1733]
+An outpost's spool is memory, so an outpost that restarts with batches in it loses them, and nothing
+that landed says how many items they held. The read names such a boot's unshipped tail beside the
+table; counting it on the outpost hop is not built.
+:::
 
 ## The pipeline, end to end
 
+What is built, from the edge to an alarm:
+
 ```d2
-direction: down
+direction: right
 classes: {
-  node: { style.border-radius: 8 }
-  key: { style: { border-radius: 8; bold: true } }
-  group: { style.border-radius: 8 }
+  box: { style.border-radius: 8 }
 }
-edge: "Edge (outpost)" {
-  class: group
-  task: "task\npoll · listen\nstateless / stateful" { class: node }
-  fn: "function\nextract → key → normalize" { class: node }
-  task -> fn
-}
-raw: "raw ingress\nnode · webhook (untrusted)" { class: node }
-admit: "admission consumer\nowner-confine per class\n(system mode)" { class: node }
-ds: "JetStream\ntrusted samples stream" { class: node; shape: queue }
-failed: "collection.failed\n(carries raw)" { class: node }
-calc: "calc_rule consumer\ncross-key · system-level" { class: node }
-erule: "event_rule consumer\nfire_criteria (+ optional clear_criteria)" { class: node }
-persist: "persistence consumer\nbatch sink (async)" { class: node }
-tables: "metric · state · log\nsample tables" { class: node; shape: cylinder }
-sched: "schedule + timer\n(leader-elected clock)" { class: node }
-pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
-alarm: "alarm\none fault · new row per open\n(event_rule, owner)" { class: node }
-cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
-actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
-itsm: "ITSM (action target)" { class: node }
-operator: operator { class: node }
-config: "config\ndeclared (spec)" { class: node }
-audit: audit_log { class: key }
-divergence: divergence { class: node; shape: hexagon }
-edge.fn -> raw: "observed · lineage on row\n(source_rule)"
-edge.fn -> failed: "parse / validation fail" { style.stroke-dash: 4 }
-raw -> admit
-admit -> ds: "confined"
-ds -> calc
-calc -> ds: "calculated · trusted producer\n(direct, no admission)"
-ds -> erule
-ds -> persist
-persist -> tables: "durable copy"
-sched -> erule: "origin=scheduled"
-erule -> pg: "PG-first: event + alarm in one tx"
-pg -> alarm: "alarm transition"
-pg -> cdc: "CDC (logical decoding)\nleader-elected publisher" { style.stroke-width: 3 }
-cdc -> actions
-actions -> ds: "command's effect · provenance=intended\n(trusted, direct)" { style.stroke-dash: 4 }
-actions -> itsm: "ITSM: open->ticket · update->comment · resolve->close" { style.stroke-dash: 4 }
-actions -> edge.task: "command + adaptive poll" { style.stroke-dash: 4 }
-operator -> config: "declares (PG-first)"
-config -- tables: "links · drift" { style.stroke-dash: 4 }
-operator -> audit: "audit" { style.stroke-dash: 4 }
-cdc -- divergence: "disagree(A,B): drift / conflict" { style.stroke-dash: 4 }
+outpost: "outpost\npoll · listen · parse" { class: box }
+push: "push · webhook\n(server routes)" { class: box }
+stream: "OG_TELEMETRY\nwork queue" { shape: queue }
+lanes: "ingest lanes\nconfine · land under receipt" { class: box }
+pg: "Postgres\nmetric · property · event · log_line" { shape: cylinder }
+ticks: "server ticks\ncalc · rule sweep · notifications" { class: box }
+outpost -> stream: "og.v1.telemetry.<outpost>"
+push -> stream: "og.v1.api.telemetry"
+stream -> lanes
+lanes -> pg: "one transaction a batch"
+pg -> ticks: "pending marks · rows"
+ticks -> pg: "derived samples · alarms · deliveries"
 ```
 
-The two lanes, drawn end to end. On the data lane, the edge parses payloads into observed samples
-and publishes them to raw ingress; the admission consumer republishes confined points to the trusted
-stream; the `event_rule` consumer evaluates live off the trusted stream while the persistence
-consumer sinks the durable copy; calc output and a command's intended write enter the trusted stream
-directly. On the record lane, an `event_rule` fire writes the event and alarm transition to PG in
-one transaction and the CDC publisher fans the commit onto JetStream, where `action_rule` consumers
-react; a command's intended sample then re-enters the data lane on the device round trip. The teal
-outpost is `audit_log`, the ground-truth record of operator writes (including config changes); observed
-and calculated samples carry `source_rule` on the row, and intended names its command via
-`command_id`. The raw payload is not stored: a parse or validation failure rides a
-`collection.failed` event. A [declared value](/architecture/variables/) holds declared intent (PG-first),
-keyed to a property sample as its observed side.
+The edge parses a device's answer into samples, so no raw payload crosses the bus
+([collection](/architecture/collection/)). The ingest lanes confine each group to the outpost's own
+tasks and land it; the landing transaction evaluates the event rules that read the batch's keys and
+marks pending the calc rules it feeds. Everything downstream of the store runs on the server's ticks
+([workers](/architecture/workers/)).
 
+:::design[Two lanes, one bus, tracked in #2611]
+
+## Two lanes, one bus
+
+The target splits traffic by what is moving:
+
+- **The data lane carries samples on the bus.** Untrusted publishers (an outpost, a webhook sender)
+  publish to a raw ingress subject; an **admission consumer** owner-confines each sample and
+  republishes the confined ones, original `Nats-Msg-Id` kept, to a **trusted** stream. Trusted server
+  producers (calc output, a command's intended write) publish to the trusted stream directly. The rule
+  engine reads the trusted stream live, and a **persistence consumer** sinks it into the sample
+  tables asynchronously, so a slow sink holds up only the durable copy, never the live signal.
+  Confinement happens before evaluation: a forged owner is dropped before it can open an alarm.
+- **The record lane is Postgres first, then CDC.** Events, alarms, actions and operator writes are
+  born in a Postgres transaction. A leader-elected **CDC publisher** reads committed changes off the
+  WAL through a replication slot (ensured in the boot phase, never a migration) and publishes each to
+  JetStream for the action, reconcile and projection consumers, at least once with an idempotency key
+  per change. No dual write and no `LISTEN`/`NOTIFY` fan-out.
+
+Today one stream's ingest lanes do admission and persistence inline, and the record lane's work runs
+on ticks over Postgres rows ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)).
 :::
 
 ## Measuring the pipeline
 
-The server measures its own pipeline from inside and lands the figures on its platform component,
-the `omniglass-server` in the platform system, once a report window (`collection.report_seconds`),
-through the same window recorder as its request timing
-([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself), #1628). Every
-failure count has its attempts beside it, so each loss reads as a ratio where 0 is healthy.
+The server measures its own pipeline and lands the figures on its platform component once a report
+window (`collection.report_seconds`), beside its request timing
+([self-monitoring](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself)). Every
+failure count sits beside its attempts, so a loss reads as a ratio where 0 is healthy.
 
-- **`ingest-lag`, `ingest-lag-max`**: how far behind its samples the server lands them. **Ingest lag
-  is the server's clock at the batch's commit minus the sample's `ts`**, read on the server once the
-  transaction has committed, so it covers the whole trip (the outpost's spool, the publish, the stream,
-  the consumer's queue and the landing itself). `ingest-lag` is the window's mean over each committed
-  batch's newest and oldest sample; `ingest-lag-max` is the window's worst, the oldest sample of any
-  batch. A sample with no `ts` on it, its group or its batch is stamped at ingest, so it counts
-  toward throughput and never toward lag. Healthy is about the outpost's spool flush (a second) plus the
-  landing: a few seconds, and `ingest-lag-max` close to `ingest-lag`. The seeded official rule
-  **`ingest-lag-high`** opens a warning alarm on the server's component when `ingest-lag-max` holds
-  over 30 s for 2 minutes, and clears it when a window reads 30 s or under.
-- **The clock skew caveat.** The outpost stamps `ts` and the server reads the commit, so lag is two
-  clocks subtracted. An outpost clock ahead of the server's reads short, even negative; one behind reads
-  long. A negative lag is kept as read, not clamped: it is the evidence of the skew, and fixing the
-  clock is the fix ([time](/architecture/time/), #419). Read a lag that jumps on one outpost's batches
-  and not the rest as a clock before a pipeline.
-- **`ingest-batch-count`, `ingest-sample-count`**: the batches the consumer committed in the window
-  and the samples they landed, the throughput. Their ratio is samples per batch. A redelivery its
-  receipt held to a no-op landed nothing, so it adds no batch, no sample and no lag; nor does a
-  outpost's group the fence or the gateway dropped.
-- **`delivery-in-count`, `delivery-out-count`, `delivery-loss-ratio`**, per item kind as the
-  instance (#1659): the server hop's delivery over the window, the same three keys and the same
-  ratio an outpost writes for its own hop ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)).
-  An item is in once its batch settles: landed (stored, coalesced and unbound items out, refused and
-  orphaned items not; a deduplicated item is out, since an earlier copy landed it, so a replay reads 0), held
-  by its receipt as a redelivery (every item in and out), or Termed (every item it names in, none
-  out: refused whole, its fifth delivery failed, unreadable metadata, or naming an owner or a task it
-  may not). A batch held for a retry counts in the window it settles. The ratio is written as 0 when
-  nothing came in, and all three land every window, 0 when quiet; healthy is 0. An undecodable batch
-  names no items, so it counts nothing here (#1712) and its items read as `missing` on the ledger
-  ([above](#accounting-every-item-the-loss-ratio)). The API lane counts its refused samples the same
-  way.
-- **`bus-telemetry-ack-failure-count`**: deliveries whose double ack the stream did not confirm,
-  a redelivery its receipt held included. The receipt holds the redelivery to a no-op, so this costs
-  work, not rows; as a share of `ingest-batch-count`, healthy is 0.
-- **`bus-consumer-pending`, `bus-consumer-ack-pending`, `bus-consumer-redelivered`**: the
-  ingest lanes' durables at the window's close, summed: batches stored and not yet delivered, delivered
-  and not yet acked (at most one a lane, the batch in flight), and redelivered. Healthy is a pending count
-  near 0 that does not grow window over window; a growing one is a backlog the lane is not clearing.
-- **`bus-stream-last-seq`, `bus-consumer-ack-floor`**: the `OG_TELEMETRY` stream's last sequence and
-  its ack floor (the sequence below its first held batch, since the lanes ack out of order with one
-  another) at the window's close: the newest batch the stream took, and the sequence at
-  and below which every batch was answered (landed, or Termed at the delivery bound). The head is read
-  before the floor, so a floor at the head means every batch published before the read was answered,
-  even while later ones are in flight. The lab's delivery read settles on it (#1758), and Platform health's Queues panel reads the floor against the head (#1763); the gap between
-  the two is the backlog in sequences, healthy small and not growing.
-- **`ingest-lane-busy`**: the share of the window the busiest ingest lane spent handling batches.
-  Each lane holds one batch in flight, so this is that lane's utilisation, and ingest keeps up only
-  while every lane does. Near 1 with a growing backlog, the lane is the
-  ceiling; low with a high lag, the lag is upstream of it.
+- **`ingest-lag`, `ingest-lag-max`**: the server's clock at the batch's commit minus the sample's
+  `ts`, so it covers the whole trip from the outpost's spool to the landing. `ingest-lag` is the
+  window's mean over each batch's newest and oldest sample, `ingest-lag-max` its worst. Healthy is a
+  few seconds. The seeded `ingest-lag-high` rule opens a warning alarm when `ingest-lag-max` holds
+  over 30 s for 2 minutes. Lag subtracts two clocks, so an outpost clock ahead of the server's reads
+  short, even negative; a negative lag is kept as the evidence of skew
+  ([ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server)).
+- **`ingest-batch-count`, `ingest-sample-count`**: the batches committed and the samples they
+  landed. A redelivery its receipt held to a no-op adds nothing.
+- **`delivery-in-count`, `delivery-out-count`, `delivery-loss-ratio`**, per item kind: the ingest
+  hop's loss over the window, the same three keys an outpost writes for its own hop
+  ([self-monitoring](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)). All three land
+  every window, the ratio 0 when nothing came in.
+- **`ingest-lane-busy`**: the share of the window the busiest lane spent landing. Near 1 with a
+  growing backlog, the lane is the ceiling; low with a high lag, the lag is upstream of it.
+- **`bus-consumer-pending`, `bus-consumer-ack-pending`, `bus-consumer-redelivered`**: the lanes'
+  durables at the window's close, summed. A pending count that grows window over window is a backlog
+  the lanes are not clearing.
+- **`bus-stream-last-seq`, `bus-consumer-ack-floor`**: the newest batch the stream took and the
+  sequence at and below which every batch was answered. The gap is the backlog in sequences.
+- **`bus-telemetry-ack-failure-count`**: deliveries whose double ack was not confirmed. The receipt
+  holds the redelivery to a no-op, so this costs work, not rows.
 - **`bus-worklist-pull-count`**, per outcome (`served`, `read-failed`, `oversize`, `respond-failed`,
-  `expired`, `abandoned`, `busy`), and **`bus-worklist-reply-bytes-max`**: the window's worklist
-  pulls, counted as each window's own (the change in the server's running totals, never the totals),
-  and the largest reply held for any outpost. Every outcome but `served` is a loss over the sum; a reply
-  size nearing the bus payload limit is the warning before `oversize`. The target sync
-  ([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) counts each request (a manifest or a batch), adds an
-  `unchanged` outcome that is not a loss, and counts one endpoint refused as too large as `oversize`.
+  `expired`, `abandoned`, `busy`), and **`bus-worklist-reply-bytes-max`**: every outcome but
+  `served` is a loss, and a reply nearing the bus payload limit is the
+  warning before `oversize`.
 - **`bus-request-count`, `bus-request-failure-count`**, per path (`heartbeat`, `command-pull`,
-  `command-report`): the outpost requests the server handled and those it failed to serve. A heartbeat
-  write that fails also logs one WARN for the outpost, `heartbeat not recorded, the outpost may read as
-  silent`, and not again until a heartbeat from that outpost lands, so a database outage under a fleet
-  heartbeating every few seconds is one line an outpost, not one a beat. Healthy is 0 failures: the
-  failure count is written 0 beside every window of requests, so Platform health's Requests panel
-  reads it against the requests, path by path, as `0 / n` (#1769).
+  `command-report`).
 - **`push-lane-publish-count`, `push-lane-refusal-count`, `push-lane-turn-wait-p99`,
-  `push-lane-turn-wait-max`**: the push lane's publish turn (#1746). The pushes and webhook posts
-  that waited for the turn, those refused because the wait passed 5 seconds (answered `503`, nothing
-  minted), and the wait itself at the 99th percentile and at worst, in milliseconds, a refusal's
-  whole wait included, and so is the wait of a pusher that gave up before either. A refusal is a share of the publishes, healthy 0; a p99 rising toward the
-  bound is a push lane whose pushers queue behind one another.
+  `push-lane-turn-wait-max`**: the push lane's publish turn.
 
-[Platform health](/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
-by hop, the outpost's spool then this ingest, each hop's loss over its components' summed counts and the
-end to end as one minus the product of each hop's survival (#1646).
+A count reads its window's sum, then one zero after its last activity, then nothing; a gauge reads
+nothing in a window with no observation, so a missing figure means no activity. What the figures say
+about scaling is on [scaling](/architecture/scaling/#scale-up-or-scale-out-what-the-figures-say); the
+calc, notification and sweep figures are on [workers](/architecture/workers/#measuring-the-ticks).
 
-A count reads its window's sum, then one zero the window after its last activity, then nothing; a
-gauge, mean or max reads nothing in a window with no observation, so a missing figure is no activity,
-never a zero that did not happen. What the figures say about scaling is
-[scaling](/architecture/scaling/#scale-up-or-scale-out-what-the-figures-say); the calc, outbox and
-sweep figures are [workers](/architecture/workers/#measuring-the-ticks). The decisions are
-[ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
+## The live console
 
-## Subjects, accounts, and scope
+The console follows live data over HTTP, never the bus, so the live path has no authorization model
+of its own. `GET /views:watch` is one Server-Sent Events stream per page that carries every binding's
+new rows from the ingest landing point, each binding resuming from the cursor its `POST /views:run`
+history was read at, with no gap and no duplicate at the seam. It is gated and scoped as the history
+read is, and bounded in lifetime so its scope never goes stale
+([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor),
+[views](/architecture/views/)).
 
-Subjects are hierarchical and **scope is expressed in them**, not bolted on:
-
-:::design[Per-tenant NATS accounts, tracked in #529]
-- **Tenant = one NATS account.** Per-account isolation (messaging) is the same boundary as
-  per-database isolation (storage): no shared subjects, no shared rows
-  ([identity and access](/architecture/identity-access/)).
+:::design[Derived rows and record changes on the live stream, tracked in #1830]
+The tail carries what the ingest lanes land. Rows a calc or event rule derives, and record changes
+such as an alarm's transition, are not on it yet.
 :::
-
-- **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server producer** with no admission pass, and the ingest consumer believes the owner the batch carries **because of the subject it arrived on**, never because the field is populated. A batch on `og.v1.telemetry.*` that asserts an owner is dropped. Only the server's own credential can reach this subject: an outpost's grant is an explicit allow-list of its own subjects, and the lane sits **outside** the single-token `og.v1.telemetry.*` wildcard.
-- **Subject permissions gate the subject string.** An outpost may publish and subscribe only the subjects for its placement; the grant is **mechanically derived from placement**, a coarse transport gate, not a second copy of the ABAC model. **Operators never connect to the bus** (see the live UI relay below).
-
-:::design[Target design, tracked in #430]
-A sample's owner lives in the **payload** (a multi-owner function resolves owner from labels), which
-subject permissions cannot see, so the **admission consumer** is the authoritative owner fence, and
-authorization stays authoritative in the [Storage Gateway](/architecture/storage/).
-:::
-
-### The control-plane subject grammar
-
-Every control-plane subject is `og.v1.<verb>.<outpost>`
-([ADR-0081](/architecture/decisions/#adr-0081-the-control-plane-wire-is-one-subject-grammar-node-anchored-and-batch-granular)):
-the outpost name is the **last token, exactly one token**, which is what lets the server subscribe
-per-verb single-token wildcards (`og.v1.worklist.*`) and lets an outpost's credential be an explicit
-allow-list of its own subjects plus its private reply namespace (`_INBOX.<outpost>`). The verb family
-today is `worklist` (request-reply), `heartbeat`, `telemetry` (the JetStream firehose),
-`command` (the per-outpost command-queue pull, request-reply like the worklist, #815), and
-`commandstatus` (the outpost's execution reports), plus `simlist` (request-reply) and `simhit` for the
-[simulator](/architecture/simulation/) beside an outpost, which holds that outpost's credential;
-`worklist-changed`, the server's empty re-pull nudge, sent when a commit changes the outpost's worklist
-([the change nudge](/architecture/outposts/#the-change-nudge), #1945); the worklist's target sync
-([ADR-1586](/architecture/decisions/#adr-1586-a-node-syncs-its-worklist-endpoint-by-endpoint-against-a-manifest)) keeps its one subject, the manifest and each batch both
-requests on `og.v1.worklist.<outpost>` told apart by a header, so it adds no grant. The trusted push lane `og.v1.api.telemetry` deliberately
-sits in its **own segment** rather than as a reserved outpost name under `og.v1.telemetry.*` (above):
-structural impossibility beats a naming convention.
-
-Addressing is **outpost-anchored and batch-granular**: a record has no subject of its own, and its
-name is payload, not topic. Per-record subjects (the MQTT-style
-`og.v1.telemetry.<outpost>.<component>.<metric>` tree) were rejected: the consumer needs the whole
-batch anyway, a subject per record explodes the permission grammar without adding a fence (the
-admission consumer owns the owner fence), and the one-token name rule was never justified by names
-as topic tokens. One consequence is that the core-NATS verbs' server-side consumers (worklist,
-heartbeat) are **singletons by construction**; the HA fork for them (queue groups versus worklist
-reassignment) is named and deferred ([scaling](/architecture/scaling/)). Telemetry does not face
-that fork: its ingest is a named durable JetStream consumer, and a second server attaching the
-same durable joins it and splits deliveries.
-
-## Request-reply: service to service
-
-Synchronous internal calls use **NATS request-reply**: an in-process call in single-binary mode, a request over the bus when modes split across pods. The public API never uses request-reply (it is HTTP); request-reply is the east-west wire only.
 
 :::design[The JetStream KV and object store, tracked in #529]
-
-## KV and object store
-
-- **KV** holds config, **distributed locks and leader-election** (the CDC publisher and the clock
-  are leader-elected singletons), and the user and permission cache (replacing Postgres
-  `LISTEN/NOTIFY` invalidation, [identity and access](/architecture/identity-access/)).
-- **Object store** holds internal artifacts (a compiled per-outpost runtime unit); user files stay on
-  the content-addressed [blob store](/architecture/files/).
-
+**KV** for config, distributed locks and leader election, and the user and permission cache;
+**object store** for internal artifacts. User files stay on the
+[blob store](/architecture/files/).
 :::
-
-:::design[The live UI relay, tracked in #523]
-
-## The live UI relay
-
-The web UI gets real-time data by **subscribing to the server, not to the bus**, never a polling
-loop on the API. **Operators do not connect to NATS**, so the live path introduces **no second
-authorization model**:
-
-- **Server-side relay.** The SSE subscribe is a normal route, capability-checked before it opens;
-  the server holds the internal JetStream subscription and runs every candidate message through the
-  **same Storage Gateway scope** a read would use (the one authoritative ABAC filter, in-process),
-  streaming only what passes: the scope filter executes in one place, **called** per message rather
-  than re-encoded as subject permissions.
-- **Transport is SSE**, on the same authenticated, same-origin HTTP seam as the rest of the API
-  (same cookie or bearer, proxy, TLS); over HTTP/2 the stream multiplexes, no connection-count
-  ceiling. **No NATS-WebSocket path and no fallback**.
-- **Seed then stream.** A [view](/architecture/views/) over HTTP paints current state; the SSE
-  stream keeps it live with deltas. Bulk reads stay on the views BFF.
-- **Where it shines:** a live fleet tile, the alarm console, and the **template-debug / dev-tap**
-  surface, an operator watching samples arrive live as a template runs
-  ([the learning tool](/contributing/learning-tool/)).
-
-:::
-
-Related: [API](/architecture/api/), [scaling](/architecture/scaling/), [outposts](/architecture/outposts/) (the edge as a NATS client), [workers](/architecture/workers/) (the JetStream consumers), and [storage](/architecture/storage/).
