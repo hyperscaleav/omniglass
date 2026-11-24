@@ -507,6 +507,8 @@ export type AlarmBody = {
   id: string;
   /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
   location?: string;
+  /** That location's uuid, the stable form of location; only on the fleet queue */
+  location_id?: string;
   /** That location's dotted ancestor path, root first (for example boi.17c) */
   location_path?: string;
   message: string;
@@ -521,6 +523,11 @@ export type AlarmBody = {
   snoozed_by?: string;
   /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
+  /**
+     * Those systems' uuids, in the same order as systems; only on the fleet queue
+     * @nullable
+     */
+  system_ids?: string[] | null;
   /**
      * The names of the systems the alarm's component is a member of; only on the fleet queue
      * @nullable
@@ -702,6 +709,28 @@ export type AssistantConversationOutputBody = {
 };
 
 /**
+ * live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here
+ */
+export type AssistantOmnibotFactsMode = typeof AssistantOmnibotFactsMode[keyof typeof AssistantOmnibotFactsMode];
+
+
+export const AssistantOmnibotFactsMode = {
+  live: 'live',
+  replay: 'replay',
+  none: 'none',
+} as const;
+
+export type AssistantOmnibotFacts = {
+  /** live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here */
+  mode: AssistantOmnibotFactsMode;
+  /**
+     * The questions a recording answers, in recorded order; empty unless mode is replay
+     * @nullable
+     */
+  prompts: string[] | null;
+};
+
+/**
  * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any
  */
 export type AssistantSettingsProvider = typeof AssistantSettingsProvider[keyof typeof AssistantSettingsProvider];
@@ -767,6 +796,8 @@ export type AuthStatusOutputBody = {
   bootstrapped: boolean;
   /** Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment */
   lab: boolean;
+  /** The identity providers a person may sign in through, by the name /auth/oidc/start/{provider} takes; empty when single sign-on is not configured */
+  sso_providers: string[];
 };
 
 /**
@@ -1918,6 +1949,17 @@ export type ComponentPropertyBody = {
   value_id: string;
 };
 
+export type SimFaultBody = {
+  /** What the profile defaults it to. */
+  default: string;
+  /** The state path, as the profile names it. */
+  path: string;
+  /** When the server first heard the device hold this value. */
+  since: string;
+  /** What it holds now. */
+  value: string;
+};
+
 export type ImpairmentFields = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -1969,6 +2011,11 @@ export type SimDeviceBody = {
   /** The component's name. */
   component: string;
   component_id: string;
+  /**
+     * The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.
+     * @nullable
+     */
+  faults?: SimFaultBody[] | null;
   /** Connections and requests the simulated device has answered since the server started. */
   hits: number;
   hits_by_protocol: SimDeviceBodyHitsByProtocol;
@@ -1976,6 +2023,8 @@ export type SimDeviceBody = {
   impaired: boolean;
   /** What an operator has broken on the device; absent when healthy. */
   impairment?: ImpairmentFields;
+  /** When the impairment was last set; absent when healthy. */
+  impairment_since?: string;
   last_hit_at?: string;
   last_protocol?: string;
   /** The component's product; its name selects the simulator profile. */
@@ -1984,6 +2033,19 @@ export type SimDeviceBody = {
   serving: boolean;
   /** What the simulator is doing with the component, most urgent first: offline (its simulator stopped reporting), starting (added since the simulator's last pull, or handed over moments ago), failed (handed to the simulator but not started), running. */
   status: SimDeviceBodyStatus;
+};
+
+export type SimBehaviorBody = {
+  /** Whether it posts a webhook each time. */
+  emits?: boolean;
+  /** How often it runs, as a duration: 5s, 1m. */
+  interval: string;
+  name: string;
+  /**
+     * The state paths it changes each time.
+     * @nullable
+     */
+  writes?: string[] | null;
 };
 
 export type SimImpairmentStatus = {
@@ -2008,12 +2070,31 @@ export type SimOIDBody = {
   path: string;
 };
 
+export type SimSetBody = {
+  /** What the profile defaults the path to, when it does. */
+  default?: string;
+  /** The request body field its value comes from. */
+  field: string;
+  /** The state path the route writes. */
+  path: string;
+  /**
+     * The values the route accepts.
+     * @nullable
+     */
+  values: string[] | null;
+};
+
 export type SimRouteBody = {
   example?: string;
   method: string;
   path: string;
   /** A route the product's own web UI calls but does not advertise. */
   private?: boolean;
+  /**
+     * The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets.
+     * @nullable
+     */
+  sets?: SimSetBody[] | null;
   summary?: string;
 };
 
@@ -2044,6 +2125,11 @@ export type ComponentSimOutputBody = {
   /** What the simulator reports for the component: serving, hits, and its impairment. */
   activity?: SimDeviceBody;
   address?: string;
+  /**
+     * What the profile changes on the device by itself over time.
+     * @nullable
+     */
+  behaviors?: SimBehaviorBody[] | null;
   /** The outpost's simulator pulled recently. */
   connected: boolean;
   impairments: SimImpairmentStatus;
@@ -2617,6 +2703,17 @@ export type CreateGroupInputBody = {
      * @pattern ^[a-z0-9][a-z0-9-]*$
      */
   name: string;
+};
+
+export type CreateIdentityLinkInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)
+     * @minLength 3
+     * @maxLength 2048
+     */
+  identifier: string;
 };
 
 export type NameRuleBody = {
@@ -3405,6 +3502,66 @@ export type DatabaseSettings = {
   slow_query_ms: number;
 };
 
+/**
+ * The blocking row's own resource, so a client can link it and offer that kind's own remove.
+ */
+export type DeleteBlockerKind = typeof DeleteBlockerKind[keyof typeof DeleteBlockerKind];
+
+
+export const DeleteBlockerKind = {
+  component: 'component',
+  endpoint: 'endpoint',
+  system: 'system',
+  location: 'location',
+} as const;
+
+export type DeleteBlocker = {
+  /** The blocking row's uuid. */
+  id: string;
+  /** The blocking row's own resource, so a client can link it and offer that kind's own remove. */
+  kind: DeleteBlockerKind;
+  /** What an operator reads for the blocking row: its label, or its name when it has none. */
+  label: string;
+  /** The blocking row's name, its operator-facing address (an endpoint's is unique within its component). */
+  name: string;
+};
+
+export type ErrorDetail = {
+  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
+  location?: string;
+  /** Error message text */
+  message?: string;
+  /** The value at the given location */
+  value?: unknown;
+};
+
+export type DeleteRefusal = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+     * @nullable
+     */
+  blockers?: DeleteBlocker[] | null;
+  /** How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap. */
+  blockers_hidden?: number;
+  /** A human-readable explanation specific to this occurrence of the problem. */
+  detail?: string;
+  /**
+     * Optional list of individual error details
+     * @nullable
+     */
+  errors?: ErrorDetail[] | null;
+  /** A URI reference that identifies the specific occurrence of the problem. */
+  instance?: string;
+  /** HTTP status code */
+  status?: number;
+  /** A short, human-readable summary of the problem type. This value should not change between occurrences of the error. */
+  title?: string;
+  /** A URI reference to human-readable documentation for the error. */
+  type?: string;
+};
+
 export type DownloadFileOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3717,6 +3874,9 @@ export type SimObservation = {
   outpost: string;
   /** @nullable */
   protocols: SimProtocolObservation[] | null;
+  /** @nullable */
+  served_ids?: string[] | null;
+  served_truncated?: boolean;
   started: string;
 };
 
@@ -3777,15 +3937,6 @@ export type EntityTagsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   tags: TagBindingBody[] | null;
-};
-
-export type ErrorDetail = {
-  /** Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
-  location?: string;
-  /** Error message text */
-  message?: string;
-  /** The value at the given location */
-  value?: unknown;
 };
 
 export type ErrorModel = {
@@ -4185,6 +4336,23 @@ export type HealthAlarmBody = {
   severity: string;
 };
 
+export type HealthMemberBody = {
+  /**
+     * The member's open alarms, newest first
+     * @nullable
+     */
+  alarms: HealthAlarmBody[] | null;
+  /** The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it */
+  health: string;
+  /** The component's uuid */
+  id: string;
+  name: string;
+  /** True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459) */
+  outside_slot: boolean;
+  /** The name of the slot the member fills in this system (as slots[].name); absent when outside_slot */
+  slot?: string;
+};
+
 export type HealthSlotBody = {
   /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health */
   active: boolean;
@@ -4232,10 +4400,21 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  carried_in?: string;
+  /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
+  first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
+  /**
+     * Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location
+     * @nullable
+     */
+  members: HealthMemberBody[] | null;
   owner: string;
   owner_kind: string;
+  /** A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location */
+  reason?: string;
   /**
      * The contributing slots; empty for a location
      * @nullable
@@ -4398,6 +4577,34 @@ export type IdentityBindingBody = {
   value: string;
 };
 
+export type IdentityLinkBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  /** The link's id, which unlinking names */
+  id: string;
+  /** The identity at the provider: its issuer and subject, iss|sub, exactly as its id_tokens carry them */
+  identifier: string;
+  /** The identifier's issuer half */
+  issuer: string;
+  /** When the person last signed in through it */
+  last_used_at?: string;
+  /** The username of whoever made the link: the person themselves or an administrator; absent once that user is purged */
+  linked_by?: string;
+  /** When the provider last accepted the link's refresh token, at sign-in or at a re-check */
+  refresh_accepted_at?: string;
+  /** True when the person made the link themselves */
+  self: boolean;
+  /** The identifier's subject half */
+  subject: string;
+};
+
+export type IdentityLinksOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  links: IdentityLinkBody[];
+};
+
 /**
  * view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user
  */
@@ -4511,6 +4718,8 @@ export type ListAssistantConversationsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   conversations: AssistantConversation[] | null;
+  /** What omnibot is answering from, so a client can say so before the first question */
+  omnibot: AssistantOmnibotFacts;
 };
 
 export type ListCalcRulesOutputBody = {
@@ -4598,6 +4807,8 @@ export type ListComponentsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: ComponentBody[] | null;
+  /** How many components matched the filters, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 export type ListDriversOutputBody = {
@@ -5595,6 +5806,8 @@ export type ListSystemsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   systems: SystemBody[] | null;
+  /** How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read. */
+  total: number;
 };
 
 /**
@@ -6309,6 +6522,38 @@ export type OwnerStruct = {
   ref: string;
 };
 
+/**
+ * The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
+ */
+export type SimPlannedEndpointBodyInputs = {[key: string]: string};
+
+export type SimPlannedEndpointBody = {
+  /** The driver the endpoint would attach; empty for a reachability probe. */
+  driver?: string;
+  /** The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value. */
+  inputs?: SimPlannedEndpointBodyInputs;
+  /** The host:port a reachability probe would reach; empty for a driver attach. */
+  target?: string;
+  /** The transport a reachability probe would speak; empty for a driver attach. */
+  transport?: string;
+};
+
+export type PlanSimComponentOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The loopback address the simulated component would answer on. */
+  address: string;
+  /**
+     * The endpoints an add would create for the collector to reach it.
+     * @nullable
+     */
+  endpoints: SimPlannedEndpointBody[] | null;
+  /** The outpost whose simulator would serve the component. */
+  outpost: string;
+  /** The simulated product planned. */
+  product: string;
+};
+
 export type PlatformAlarmBody = {
   /** The key the raising rule samples, which names the panel the alarm flags; absent for a hand-raised alarm */
   key?: string;
@@ -6618,8 +6863,15 @@ export type PlatformSimulationDevice = {
   component_id: string;
   /** Whether the simulator impairs the device at the window's end. */
   impaired: boolean;
+  /**
+     * The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
+     * @nullable
+     */
+  location_path: string[] | null;
   /** Requests the device saw over the window, by protocol. */
   received: PlatformSimulationDeviceReceived;
+  /** The name of the device's primary system; empty when it has none. */
+  system: string;
   /** Whether it is a poll target due over the window that the simulator never saw. */
   unhit: boolean;
 };
@@ -8091,6 +8343,83 @@ export type RunViewsOutputBody = {
   results: ViewResultBody[] | null;
 };
 
+export type SSOSettings = {
+  /** A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config */
+  client_secret: string;
+  /** The id_token claim carrying the person's groups at the provider (read by group mapping, #2363) */
+  groups_claim: string;
+  /** The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config */
+  issuer: string;
+  /**
+     * Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token
+     * @minimum 1
+     * @maximum 10080
+     */
+  recheck_grace_minutes: number;
+  /**
+     * Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them
+     * @minimum 1
+     * @maximum 1440
+     */
+  recheck_minutes: number;
+  /** The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens */
+  scopes: string;
+};
+
+/**
+ * Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+ */
+export type SearchCatalogBodyKind = typeof SearchCatalogBodyKind[keyof typeof SearchCatalogBodyKind];
+
+
+export const SearchCatalogBodyKind = {
+  product: 'product',
+  driver: 'driver',
+  calc_rule: 'calc_rule',
+  event_rule: 'event_rule',
+  metric: 'metric',
+} as const;
+
+export type SearchCatalogBody = {
+  /** A short qualifier: a product's vendor, a driver's version, a metric's unit */
+  detail?: string;
+  /** Which catalog the entry belongs to; the console opens its drawer on that catalog's page */
+  kind: SearchCatalogBodyKind;
+  /** The entry's display label */
+  label?: string;
+  /** The entry's name, its address in the catalog */
+  name: string;
+};
+
+export type SearchEntityBody = {
+  /** The entity's uuid, the address its page opens at */
+  id: string;
+  /** The entity's display label, when it has one */
+  label?: string;
+  /** The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is */
+  location_path?: string;
+  /** The entity's name; many components share one, the location_path tells them apart */
+  name: string;
+  /** A component's primary system, when it has one */
+  system?: string;
+};
+
+export type SearchOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+     * @nullable
+     */
+  catalog: SearchCatalogBody[] | null;
+  /** @nullable */
+  components: SearchEntityBody[] | null;
+  /** @nullable */
+  locations: SearchEntityBody[] | null;
+  /** @nullable */
+  systems: SearchEntityBody[] | null;
+};
+
 export type SetAvatarInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8223,6 +8552,7 @@ export type Settings = {
   label: LabelSettings;
   notification: NotificationSettings;
   retention: RetentionSettings;
+  sso: SSOSettings;
   ui: UISettings;
 };
 
@@ -8406,6 +8736,22 @@ export type SnoozeAlarmInputBody = {
   readonly $schema?: string;
   /** How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer */
   duration: string;
+};
+
+export type StartSelfLinkInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Your current password: a link outlives the session that makes it, so it is confirmed as a password change is */
+  current_password: string;
+  /** The identity provider to link, by name */
+  provider?: string;
+};
+
+export type StartSelfLinkOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The provider's sign-in page to send the browser to; signing in there links that identity to you and returns to your profile */
+  url: string;
 };
 
 export type SwapSlotPositionsInputBody = {
@@ -8642,6 +8988,13 @@ export type UnboundIdentitiesOutputBody = {
      * @nullable
      */
   identities: UnboundIdentityBody[] | null;
+};
+
+export type UnlinkSelfInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Your current password, as linking asks */
+  current_password: string;
 };
 
 export type UpdateActionRuleInputBody = {
@@ -9336,6 +9689,12 @@ export type ViewRowsEvent = {
 };
 
 export type ListAlarmsParams = {
+  /** Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all */
+  state?: ListAlarmsState;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
   /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
   unacknowledged?: boolean;
   /**
@@ -9358,6 +9717,15 @@ export type ListAlarmsParams = {
   /** The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are */
   page_token?: string;
 };
+
+export type ListAlarmsState = typeof ListAlarmsState[keyof typeof ListAlarmsState];
+
+
+export const ListAlarmsState = {
+  active: 'active',
+  cleared: 'cleared',
+  all: 'all',
+} as const;
 
 export type ListAlarmsAcknowledged = typeof ListAlarmsAcknowledged[keyof typeof ListAlarmsAcknowledged];
 
@@ -9421,11 +9789,29 @@ export type GetCalcRuleStateParams = {
   limit?: number;
 };
 
+export type ListComponentsParams = {
+  /** Only components of this product (name or uuid) */
+  product?: string;
+  /** Only components of a product this driver serves (name or uuid) */
+  driver?: string;
+  /** Only components of a product classified under exactly this component type (name or uuid) */
+  component_type?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
   /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended */
   unacknowledged?: boolean;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
 };
 
 export type ListComponentCommandsParams = {
@@ -9467,6 +9853,13 @@ export type IssueComponentCommandParams = {
 export type EffectiveTagsParams = {
   /** Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. */
   system?: string;
+};
+
+export type GetComponentHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
 };
 
 export type ListComponentLogsParams = {
@@ -9548,6 +9941,13 @@ export type RunEndpointPollParams = {
   timeout_seconds?: number;
 };
 
+export type GetLocationHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
+
 export type ListNotificationParams = {
   /** Only the notifications about this alarm (its uuid) */
   alarm?: string;
@@ -9574,10 +9974,64 @@ export const ListNotificationStatus = {
   '': '',
 } as const;
 
+export type PlanOutpostSimulationComponentParams = {
+  /**
+   * A product a simulator profile simulates
+   * @minLength 1
+   */
+  product: string;
+};
+
+export type ListProductsParams = {
+  /** Only products whose contract declares this metric (name or uuid) */
+  declares_metric?: string;
+  /** Only products whose contract declares this property (name or uuid) */
+  declares_property?: string;
+};
+
+export type SearchParams = {
+  /**
+   * The text to find, matched case-insensitively anywhere in a name or label
+   * @minLength 1
+   * @maxLength 200
+   */
+  q?: string;
+  /**
+   * The most hits returned for each kind
+   * @minimum 1
+   * @maximum 20
+   */
+  limit?: number;
+};
+
 /**
  * an RFC 7386 JSON Merge Patch for the namespace; null on a key restores it
  */
 export type PatchSettingsNamespaceBody = {[key: string]: unknown};
+
+export type ListSystemsParams = {
+  /** Only systems built to this standard (name or uuid) */
+  standard?: string;
+  /**
+   * Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+   * @minimum 0
+   */
+  limit?: number;
+};
+
+export type ListSystemAlarmsParams = {
+  /** Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until */
+  since?: string;
+  /** The range's end, with since; defaults to now and must not be earlier than since */
+  until?: string;
+};
+
+export type GetSystemHealthParams = {
+  /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
+  since?: string;
+  /** Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since */
+  until?: string;
+};
 
 export type ListSystemLogsParams = {
   /** Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out */
@@ -10084,8 +10538,8 @@ export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
 }
 
 /**
- * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
- * @summary List the fleet's active alarms
+ * What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's alarms
  */
 export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
 
@@ -10128,7 +10582,7 @@ export const getListAssistantConversationsUrl = () => {
 }
 
 /**
- * Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+ * Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.
  * @summary List your omnibot conversations
  */
 export const listAssistantConversations = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAssistantConversationsResponse> => {
@@ -10349,7 +10803,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,
@@ -11001,6 +11455,169 @@ export const getAuthMeAvatar = async ( options?: Parameters<typeof ogFetch>[1]):
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export type listAuthMeIdentityLinksResponse200 = {
+  data: IdentityLinksOutputBody
+  status: 200
+}
+
+export type listAuthMeIdentityLinksResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAuthMeIdentityLinksResponseSuccess = (listAuthMeIdentityLinksResponse200) & {
+  headers: Headers;
+};
+export type listAuthMeIdentityLinksResponseError = (listAuthMeIdentityLinksResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAuthMeIdentityLinksResponse = (listAuthMeIdentityLinksResponseSuccess | listAuthMeIdentityLinksResponseError)
+
+export const getListAuthMeIdentityLinksUrl = () => {
+
+
+
+
+  return `/auth/me/identity-links`
+}
+
+/**
+ * Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).
+ * @summary List your own identity links
+ */
+export const listAuthMeIdentityLinks = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeIdentityLinksResponse> => {
+
+  return ogFetch<listAuthMeIdentityLinksResponse>(getListAuthMeIdentityLinksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type unlinkAuthMeIdentityLinkResponse204 = {
+  data: void
+  status: 204
+}
+
+export type unlinkAuthMeIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type unlinkAuthMeIdentityLinkResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type unlinkAuthMeIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type unlinkAuthMeIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type unlinkAuthMeIdentityLinkResponseSuccess = (unlinkAuthMeIdentityLinkResponse204) & {
+  headers: Headers;
+};
+export type unlinkAuthMeIdentityLinkResponseError = (unlinkAuthMeIdentityLinkResponse403 | unlinkAuthMeIdentityLinkResponse404 | unlinkAuthMeIdentityLinkResponse422 | unlinkAuthMeIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type unlinkAuthMeIdentityLinkResponse = (unlinkAuthMeIdentityLinkResponseSuccess | unlinkAuthMeIdentityLinkResponseError)
+
+export const getUnlinkAuthMeIdentityLinkUrl = (link: string,) => {
+
+
+
+
+  return `/auth/me/identity-links/${link}:unlink`
+}
+
+/**
+ * Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.
+ * @summary Unlink one of your own identity links
+ */
+export const unlinkAuthMeIdentityLink = async (link: string,
+    unlinkSelfInputBody: NonReadonly<UnlinkSelfInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<unlinkAuthMeIdentityLinkResponse> => {
+
+  return ogFetch<unlinkAuthMeIdentityLinkResponse>(getUnlinkAuthMeIdentityLinkUrl(link),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(unlinkSelfInputBody)
+  }
+);}
+
+
+
+export type startAuthMeIdentityLinkResponse200 = {
+  data: StartSelfLinkOutputBody
+  status: 200
+}
+
+export type startAuthMeIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type startAuthMeIdentityLinkResponse409 = {
+  data: ErrorModel
+  status: 409
+}
+
+export type startAuthMeIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type startAuthMeIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type startAuthMeIdentityLinkResponseSuccess = (startAuthMeIdentityLinkResponse200) & {
+  headers: Headers;
+};
+export type startAuthMeIdentityLinkResponseError = (startAuthMeIdentityLinkResponse403 | startAuthMeIdentityLinkResponse409 | startAuthMeIdentityLinkResponse422 | startAuthMeIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type startAuthMeIdentityLinkResponse = (startAuthMeIdentityLinkResponseSuccess | startAuthMeIdentityLinkResponseError)
+
+export const getStartAuthMeIdentityLinkUrl = () => {
+
+
+
+
+  return `/auth/me/identity-links:start`
+}
+
+/**
+ * Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.
+ * @summary Start linking your own identity at the provider
+ */
+export const startAuthMeIdentityLink = async (startSelfLinkInputBody: NonReadonly<StartSelfLinkInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<startAuthMeIdentityLinkResponse> => {
+
+  return ogFetch<startAuthMeIdentityLinkResponse>(getStartAuthMeIdentityLinkUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(startSelfLinkInputBody)
   }
 );}
 
@@ -12504,21 +13121,28 @@ export type listComponentsResponseError = (listComponentsResponseDefault) & {
 
 export type listComponentsResponse = (listComponentsResponseSuccess | listComponentsResponseError)
 
-export const getListComponentsUrl = () => {
+export const getListComponentsUrl = (params?: ListComponentsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components`
+  return stringifiedParams.length > 0 ? `/components?${stringifiedParams}` : `/components`
 }
 
 /**
- * Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+ * Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
  * @summary List components in scope
  */
-export const listComponents = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
+export const listComponents = async (params?: ListComponentsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentsResponse> => {
 
-  return ogFetch<listComponentsResponse>(getListComponentsUrl(),
+  return ogFetch<listComponentsResponse>(getListComponentsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -12578,15 +13202,20 @@ export type deleteComponentResponse204 = {
   status: 204
 }
 
+export type deleteComponentResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteComponentResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteComponentResponseSuccess = (deleteComponentResponse204) & {
   headers: Headers;
 };
-export type deleteComponentResponseError = (deleteComponentResponseDefault) & {
+export type deleteComponentResponseError = (deleteComponentResponse409 | deleteComponentResponseDefault) & {
   headers: Headers;
 };
 
@@ -12601,7 +13230,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -12742,7 +13371,7 @@ export const getListComponentAlarmsUrl = (name: string,
 }
 
 /**
- * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's alarms
  */
 export const listComponentAlarms = async (name: string,
@@ -13500,6 +14129,59 @@ export const getListComponentEventsUrl = (name: string,) => {
 export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
   return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getComponentHealthResponse200 = {
+  data: FleetHealthOutputBody
+  status: 200
+}
+
+export type getComponentHealthResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getComponentHealthResponseSuccess = (getComponentHealthResponse200) & {
+  headers: Headers;
+};
+export type getComponentHealthResponseError = (getComponentHealthResponseDefault) & {
+  headers: Headers;
+};
+
+export type getComponentHealthResponse = (getComponentHealthResponseSuccess | getComponentHealthResponseError)
+
+export const getGetComponentHealthUrl = (name: string,
+    params?: GetComponentHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/components/${name}/health?${stringifiedParams}` : `/components/${name}/health`
+}
+
+/**
+ * The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * @summary Read a component's health
+ */
+export const getComponentHealth = async (name: string,
+    params?: GetComponentHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentHealthResponse> => {
+
+  return ogFetch<getComponentHealthResponse>(getGetComponentHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -17056,7 +17738,7 @@ export const getCreateLocationUrl = () => {
 }
 
 /**
- * Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+ * Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.
  * @summary Create a location
  */
 export const createLocation = async (createLocationInputBody: NonReadonly<CreateLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationResponse> => {
@@ -17077,15 +17759,20 @@ export type deleteLocationResponse204 = {
   status: 204
 }
 
+export type deleteLocationResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteLocationResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteLocationResponseSuccess = (deleteLocationResponse204) & {
   headers: Headers;
 };
-export type deleteLocationResponseError = (deleteLocationResponseDefault) & {
+export type deleteLocationResponseError = (deleteLocationResponse409 | deleteLocationResponseDefault) & {
   headers: Headers;
 };
 
@@ -17100,7 +17787,7 @@ export const getDeleteLocationUrl = (name: string,) => {
 }
 
 /**
- * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a location
  */
 export const deleteLocation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteLocationResponse> => {
@@ -17224,21 +17911,30 @@ export type getLocationHealthResponseError = (getLocationHealthResponseDefault) 
 
 export type getLocationHealthResponse = (getLocationHealthResponseSuccess | getLocationHealthResponseError)
 
-export const getGetLocationHealthUrl = (name: string,) => {
+export const getGetLocationHealthUrl = (name: string,
+    params?: GetLocationHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/locations/${name}/health`
+  return stringifiedParams.length > 0 ? `/locations/${name}/health?${stringifiedParams}` : `/locations/${name}/health`
 }
 
 /**
- * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
-export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
+export const getLocationHealth = async (name: string,
+    params?: GetLocationHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
 
-  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name),
+  return ogFetch<getLocationHealthResponse>(getGetLocationHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -19346,6 +20042,59 @@ export const addOutpostSimulationComponent = async (name: string,
 
 
 
+export type planOutpostSimulationComponentResponse200 = {
+  data: PlanSimComponentOutputBody
+  status: 200
+}
+
+export type planOutpostSimulationComponentResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type planOutpostSimulationComponentResponseSuccess = (planOutpostSimulationComponentResponse200) & {
+  headers: Headers;
+};
+export type planOutpostSimulationComponentResponseError = (planOutpostSimulationComponentResponseDefault) & {
+  headers: Headers;
+};
+
+export type planOutpostSimulationComponentResponse = (planOutpostSimulationComponentResponseSuccess | planOutpostSimulationComponentResponseError)
+
+export const getPlanOutpostSimulationComponentUrl = (name: string,
+    params: PlanOutpostSimulationComponentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/outposts/${name}/simulation/components:plan?${stringifiedParams}` : `/outposts/${name}/simulation/components:plan`
+}
+
+/**
+ * Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+ * @summary Plan a simulated component
+ */
+export const planOutpostSimulationComponent = async (name: string,
+    params: PlanOutpostSimulationComponentParams, options?: Parameters<typeof ogFetch>[1]): Promise<planOutpostSimulationComponentResponse> => {
+
+  return ogFetch<planOutpostSimulationComponentResponse>(getPlanOutpostSimulationComponentUrl(name,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getOutpostSimulationObservationResponse200 = {
   data: EndpointObservation
   status: 200
@@ -19686,21 +20435,28 @@ export type listProductsResponseError = (listProductsResponseDefault) & {
 
 export type listProductsResponse = (listProductsResponseSuccess | listProductsResponseError)
 
-export const getListProductsUrl = () => {
+export const getListProductsUrl = (params?: ListProductsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/products`
+  return stringifiedParams.length > 0 ? `/products?${stringifiedParams}` : `/products`
 }
 
 /**
- * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
  * @summary List products
  */
-export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
+export const listProducts = async (params?: ListProductsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
 
-  return ogFetch<listProductsResponse>(getListProductsUrl(),
+  return ogFetch<listProductsResponse>(getListProductsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -20507,6 +21263,57 @@ export const getListRolesUrl = () => {
 export const listRoles = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listRolesResponse> => {
 
   return ogFetch<listRolesResponse>(getListRolesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type searchResponse200 = {
+  data: SearchOutputBody
+  status: 200
+}
+
+export type searchResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type searchResponseSuccess = (searchResponse200) & {
+  headers: Headers;
+};
+export type searchResponseError = (searchResponseDefault) & {
+  headers: Headers;
+};
+
+export type searchResponse = (searchResponseSuccess | searchResponseError)
+
+export const getSearchUrl = (params?: SearchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
+}
+
+/**
+ * The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+ * @summary Find locations, systems, components and catalog entries by name
+ */
+export const search = async (params?: SearchParams, options?: Parameters<typeof ogFetch>[1]): Promise<searchResponse> => {
+
+  return ogFetch<searchResponse>(getSearchUrl(params),
   {
     ...options,
     method: 'GET'
@@ -22317,21 +23124,28 @@ export type listSystemsResponseError = (listSystemsResponseDefault) & {
 
 export type listSystemsResponse = (listSystemsResponseSuccess | listSystemsResponseError)
 
-export const getListSystemsUrl = () => {
+export const getListSystemsUrl = (params?: ListSystemsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems`
+  return stringifiedParams.length > 0 ? `/systems?${stringifiedParams}` : `/systems`
 }
 
 /**
- * Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+ * Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
  * @summary List systems in scope
  */
-export const listSystems = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
+export const listSystems = async (params?: ListSystemsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemsResponse> => {
 
-  return ogFetch<listSystemsResponse>(getListSystemsUrl(),
+  return ogFetch<listSystemsResponse>(getListSystemsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -22391,15 +23205,20 @@ export type deleteSystemResponse204 = {
   status: 204
 }
 
+export type deleteSystemResponse409 = {
+  data: DeleteRefusal
+  status: 409
+}
+
 export type deleteSystemResponseDefault = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
+  status: Exclude<HTTPStatusCodes, 204 | 409>
 }
 
 export type deleteSystemResponseSuccess = (deleteSystemResponse204) & {
   headers: Headers;
 };
-export type deleteSystemResponseError = (deleteSystemResponseDefault) & {
+export type deleteSystemResponseError = (deleteSystemResponse409 | deleteSystemResponseDefault) & {
   headers: Headers;
 };
 
@@ -22414,7 +23233,7 @@ export const getDeleteSystemUrl = (name: string,) => {
 }
 
 /**
- * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a system
  */
 export const deleteSystem = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemResponse> => {
@@ -22538,21 +23357,30 @@ export type listSystemAlarmsResponseError = (listSystemAlarmsResponseDefault) & 
 
 export type listSystemAlarmsResponse = (listSystemAlarmsResponseSuccess | listSystemAlarmsResponseError)
 
-export const getListSystemAlarmsUrl = (name: string,) => {
+export const getListSystemAlarmsUrl = (name: string,
+    params?: ListSystemAlarmsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/alarms`
+  return stringifiedParams.length > 0 ? `/systems/${name}/alarms?${stringifiedParams}` : `/systems/${name}/alarms`
 }
 
 /**
- * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's members' alarms
  */
-export const listSystemAlarms = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
+export const listSystemAlarms = async (name: string,
+    params?: ListSystemAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
 
-  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name),
+  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -22626,21 +23454,30 @@ export type getSystemHealthResponseError = (getSystemHealthResponseDefault) & {
 
 export type getSystemHealthResponse = (getSystemHealthResponseSuccess | getSystemHealthResponseError)
 
-export const getGetSystemHealthUrl = (name: string,) => {
+export const getGetSystemHealthUrl = (name: string,
+    params?: GetSystemHealthParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/health`
+  return stringifiedParams.length > 0 ? `/systems/${name}/health?${stringifiedParams}` : `/systems/${name}/health`
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
-export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
+export const getSystemHealth = async (name: string,
+    params?: GetSystemHealthParams, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
 
-  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name),
+  return ogFetch<getSystemHealthResponse>(getGetSystemHealthUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -25508,6 +26345,171 @@ export const revokeGrant = async (id: string,
     grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
 
   return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listUserIdentityLinksResponse200 = {
+  data: IdentityLinksOutputBody
+  status: 200
+}
+
+export type listUserIdentityLinksResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listUserIdentityLinksResponseSuccess = (listUserIdentityLinksResponse200) & {
+  headers: Headers;
+};
+export type listUserIdentityLinksResponseError = (listUserIdentityLinksResponseDefault) & {
+  headers: Headers;
+};
+
+export type listUserIdentityLinksResponse = (listUserIdentityLinksResponseSuccess | listUserIdentityLinksResponseError)
+
+export const getListUserIdentityLinksUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links`
+}
+
+/**
+ * Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.
+ * @summary List a person's identity links
+ */
+export const listUserIdentityLinks = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listUserIdentityLinksResponse> => {
+
+  return ogFetch<listUserIdentityLinksResponse>(getListUserIdentityLinksUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createUserIdentityLinkResponse201 = {
+  data: IdentityLinkBody
+  status: 201
+}
+
+export type createUserIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type createUserIdentityLinkResponse409 = {
+  data: ErrorModel
+  status: 409
+}
+
+export type createUserIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type createUserIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type createUserIdentityLinkResponseSuccess = (createUserIdentityLinkResponse201) & {
+  headers: Headers;
+};
+export type createUserIdentityLinkResponseError = (createUserIdentityLinkResponse403 | createUserIdentityLinkResponse409 | createUserIdentityLinkResponse422 | createUserIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type createUserIdentityLinkResponse = (createUserIdentityLinkResponseSuccess | createUserIdentityLinkResponseError)
+
+export const getCreateUserIdentityLinkUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links`
+}
+
+/**
+ * Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.
+ * @summary Link a person to an identity at the provider
+ */
+export const createUserIdentityLink = async (id: string,
+    createIdentityLinkInputBody: NonReadonly<CreateIdentityLinkInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createUserIdentityLinkResponse> => {
+
+  return ogFetch<createUserIdentityLinkResponse>(getCreateUserIdentityLinkUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(createIdentityLinkInputBody)
+  }
+);}
+
+
+
+export type deleteUserIdentityLinkResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteUserIdentityLinkResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type deleteUserIdentityLinkResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type deleteUserIdentityLinkResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type deleteUserIdentityLinkResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type deleteUserIdentityLinkResponseSuccess = (deleteUserIdentityLinkResponse204) & {
+  headers: Headers;
+};
+export type deleteUserIdentityLinkResponseError = (deleteUserIdentityLinkResponse403 | deleteUserIdentityLinkResponse404 | deleteUserIdentityLinkResponse422 | deleteUserIdentityLinkResponse500) & {
+  headers: Headers;
+};
+
+export type deleteUserIdentityLinkResponse = (deleteUserIdentityLinkResponseSuccess | deleteUserIdentityLinkResponseError)
+
+export const getDeleteUserIdentityLinkUrl = (id: string,
+    link: string,) => {
+
+
+
+
+  return `/users/${id}/identity-links/${link}`
+}
+
+/**
+ * Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.
+ * @summary Unlink a person from an identity at the provider
+ */
+export const deleteUserIdentityLink = async (id: string,
+    link: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteUserIdentityLinkResponse> => {
+
+  return ogFetch<deleteUserIdentityLinkResponse>(getDeleteUserIdentityLinkUrl(id,link),
   {
     ...options,
     method: 'DELETE'

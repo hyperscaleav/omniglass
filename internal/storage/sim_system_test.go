@@ -36,7 +36,7 @@ func TestCreateSimSystem(t *testing.T) {
 	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-s", LocationType: "campus"}, all); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-s", LocationType: "campus"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar")

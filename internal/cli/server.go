@@ -28,6 +28,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
+	"github.com/hyperscaleav/omniglass/internal/sso"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -258,6 +259,10 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// then a signed request to it every interval, through the egress contract,
 	// until shutdown cancels it.
 	go heartbeat.New(gw, egress.Options{}, c.ServerName, version).Run(notifyCtx)
+	// The single sign-on re-check (#2362, ADR-2361 point 9): idle until the
+	// sso settings name an issuer, then every recheck_minutes each link's
+	// refresh token is redeemed and a refusal revokes what came through it.
+	go sso.NewSweeper(gw, egress.Options{}, log).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it. A server with no component writes nothing, and
 	// still re-reads its slow-query setting each window.
@@ -348,5 +353,14 @@ func auditWriterRuling(ctx context.Context, log *slog.Logger, gw *storage.PG) {
 	for _, v := range vs {
 		log.Warn("a stored declaration names a key its writer class refuses; it is held inert",
 			"where", v.Where, "key", v.Key, "writer_class", string(v.Class))
+	}
+	evs, err := gw.StoredEndpointTargetViolations(ctx)
+	if err != nil {
+		log.Warn("endpoint target audit failed", "error", err.Error())
+		return
+	}
+	for _, v := range evs {
+		log.Warn("a stored endpoint has no target its outpost can dial, so its reachability never reads; edit its params",
+			"endpoint", v.Endpoint, "transport", v.Transport, "fix", v.Problem)
 	}
 }

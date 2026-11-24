@@ -122,7 +122,8 @@ A lab's login is well known and its data is disposable, so it is kept apart from
   can reach that address can sign in with the well-known login.
 - **It says it is a lab.** The server runs in lab mode, a setting only `omniglass lab run` passes,
   and reports it on `GET /auth/status`; the console shows the **Lab instance** banner on the sign-in
-  page and in the shell.
+  page and in the shell, as a thin strip across the very top that never scrolls away (the long
+  explanation is in its tooltip).
 - **Lab and real databases refuse each other.** The lab writes a mark into the database it creates.
   A server outside lab mode refuses a database that carries the mark, and a lab refuses a database
   that holds data and no mark (a real deployment's). Each refusal says why and what to do. The mark
@@ -190,7 +191,11 @@ push, bus request, telemetry ack and slow query windows (a capture's lab writes 
 server), so a screenshot of the page shows full sparklines rather than the few minutes a fresh lab
 has measured. Sizes end the hour on what the
 database measures, so the live line carries on from the seeded one. It needs `--ephemeral`, and a scale lab
-refuses it, so a lab you learn from or measure only ever shows what its own server measured. The
+refuses it, so a lab you learn from or measure only ever shows what its own server measured.
+`--sso` runs an identity provider (Dex) beside the lab and configures single sign-on against it,
+with a demo person linked to their identity there, for the walkthrough that signs in through it.
+The provider's address is on the lab network, which a script's browser joins and yours does not,
+so it too needs `--ephemeral`, and a scale lab refuses it. The
 [demos guide](/contributing/demos/) says how the repo uses them.
 
 **Which image runs.** A binary built by `make` runs the image the same `make` built, by the tag keyed
@@ -452,6 +457,19 @@ How to read each row:
   probed before the window began, `ingest lag exceeds the window` with how long before the window's end
   it was probed. That is an ingest finding, not a blank; the JSON carries the same under
   `ingest_lag_not_measured`, and every other figure is still reported.
+  The lag also reads `not measured` when the lane is behind, because it times only the samples that
+  landed, and a lane far behind lands only the ones that skipped the queue, which read fast (#1897). The
+  lab's closed loop reads each outpost's tally outside the ingest stream: when its `published-not-landed`
+  count over the window is above 0, the lag is refused with the share as the reason (`N % of the
+  window's published batches had not landed`). The closed loop's window is the endpoint marks, taken a
+  read or two around the database window the lag is read over, so the share is a window-edge
+  approximation, so a share up to 5 % (a batch still in flight at the end mark) stands and a share past
+  it refuses. When the closed loop was not read, the lab estimates the share from the poll cadence in
+  one unit, probes (the distinct component and probe times that landed against the probes the targets
+  should have drawn), refuses past the same 5 %, and says in the reason that it is a floor estimate. When
+  that estimate cannot be computed the lag stands, with a note under the table (`ingest_lag_note` in the
+  JSON) that it was not checked. The JSON carries `unlanded_share` and `unlanded_estimated` beside the
+  reason.
 - **consumer redeliveries**: batches the ingest consumer could not confirm and the bus handed it again
   (`unconfirmed acks`), and messages it dropped after repeated failures (`abandoned`), counted from
   the server's log since the window began. A redelivery that succeeds the second time logs nothing, so
@@ -704,6 +722,9 @@ carried one (the sample's push lane has pushed no log line).
   consumer never empty. A note under the table gives the floor and the last sequence it had not
   reached, or which gauge was never read, when the stream was the cause. At the platform's 60s report
   window the settle can take four windows, so `--settle-timeout` defaults to 5 minutes.
+  The settle polls the stream's gauges every 5 s but re-reads the receipts only when the ack floor has
+  moved, and the receipts read is bounded to the window by indexes, so a lab that cannot settle does
+  not load its database for the whole bound.
 
 - **unshipped** names an outpost boot that will never settle because its outpost started again while its spool
   still held batches: the spool is memory, so they went with the process. The boot is read as far as

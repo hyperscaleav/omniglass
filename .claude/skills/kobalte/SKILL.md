@@ -1,30 +1,69 @@
 ---
 name: kobalte
-description: Use when building or reviewing interactive overlay UI in the web/ SPA, which is built on Kobalte (@kobalte/core): tooltips, popovers, dialogs/drawers, menus, selects, comboboxes. Covers the headless-plus-Tailwind/daisyUI styling model, the portal pattern that keeps overlays from being clipped by a card or drawer, and the gotchas that waste the most time, above all that an interactive trigger placed inside a <label> silently breaks hover and steals the label. Reach for this whenever you add a floating element, wire a tooltip/popover/dialog, debug one that will not open or is clipped or has wrong accessibility, or test one in jsdom. Pairs with the solidjs skill.
+description: Use when building or reviewing interactive UI in the web/ SPA, which is built on Kobalte (@kobalte/core) behind in-house wrappers in web/src/components/ui/ (ModalDialog, ConfirmDialog, Popover, Tooltip, Select, Picker, Tabs, Toast, Collapsible, Switch, SegmentedControl): tooltips, popovers, dialogs/drawers, menus, selects, comboboxes, tabs, toasts. Covers which wrapper to reach for, how to add a new one, Covers the headless-plus-Tailwind/daisyUI styling model, the portal pattern that keeps overlays from being clipped by a card or drawer, and the gotchas that waste the most time, above all that an interactive trigger placed inside a <label> silently breaks hover and steals the label. Reach for this whenever you add a floating element, wire a tooltip/popover/dialog, debug one that will not open or is clipped or has wrong accessibility, or test one in jsdom. Pairs with the solidjs skill.
 ---
 
 # Kobalte
 
-The console's interactive primitives are [Kobalte](https://kobalte.dev) (`@kobalte/core`): the doctrine is "Kobalte for interactive primitives." Kobalte is **headless**: it ships behavior, focus management, and ARIA, but no styles. You style it with Tailwind and daisyUI classes. Before reaching for Kobalte, check whether daisyUI already has a base visual component to extend (the daisyui-base-then-extend rule); reach for Kobalte when you need real interaction (focus trapping, hover/focus open, portalling, keyboard nav), not just a look.
+The console's interactive primitives are [Kobalte](https://kobalte.dev) (`@kobalte/core`) **behind
+in-house wrappers** (ADR-2485): every surface imports a component from `web/src/components/ui/`, and
+only that directory imports `@kobalte/core`. `web/src/kobalte-guard.test.ts` fails any other import,
+tests included. Kobalte is **headless** (behavior, focus management, ARIA, no styles); each wrapper
+carries the house daisyUI/Tailwind classes as its defaults. The authority on which to use is the
+design system's "Interactive primitives are wrappers over Kobalte" table.
 
-In this repo today: `Dialog` (the `Drawer` and `CommandPalette`), `Popover` (the `ColumnMenu`), `Tooltip` (the `InfoTip`).
+## Which wrapper
+
+| Need | Import | Props (short) |
+|---|---|---|
+| Modal surface | `ModalDialog, { DialogHeading, DialogClose }` from `ui/ModalDialog` | `open`, `onClose`, `alert?`, `class`, `frameClass?` (centring layer), `overlayClass?`, `initialFocus?` |
+| Confirm that teaches | `ConfirmDialog` from `ui/ConfirmDialog` | `open`, `onClose`, `title`, `confirmLabel`, `onConfirm`, `busy?`, `error?` |
+| Floating panel | `Popover` from `ui/Popover` | `content`, children = trigger, `open?`/`onOpenChange?`, `contentClass?`, `contentLabel?`; other attrs on the trigger |
+| Hover/focus help | `Tooltip` from `ui/Tooltip` (or `InfoTip`) | `content`, children = trigger, `as?`, `placement?`, `open?`; other attrs on the trigger |
+| Short list, drawn options | `Select` from `ui/Select` (or `TreeSelect`) | `options`, `value`, `onChange`, `optionValue`, `optionLabel`, `renderOption?`, `renderValue?` |
+| Long list, type to filter | `Picker` from `ui/Picker` | `options: {value,label,detail?,disabled?}[]`, `value`/`onChange` (or `multiple`), `onCreate?` |
+| Views with panels | `Tabs` from `ui/Tabs` | `tabs`, `value`, `onChange`, `label`, children = `(value) => panel` |
+| Action result | `toast()` from `ui/Toast` | `toast.success(title)`, `toast.error(title, { body })`, `toast({ tone, title, action, ttlMs })` |
+| Open/close section | `Collapsible` from `ui/Collapsible` | `title`, children, `open?`/`defaultOpen?` |
+| On/off state | `Switch` from `ui/Switch` | `checked`, `onChange`, `label`, `description?` |
+| Mode over one view | `SegmentedControl` from `ui/SegmentedControl` | `options`, `value`, `onChange`, `label` |
+
+Native stays where it fits: a plain `<select>` of a few strings, a checkbox in a list of choices, a
+radio, a stateless `<details>`. Never hand-roll `role="combobox"`, a tablist or `window.confirm` in a
+new surface.
+
+## Adding a wrapper
+
+Need a Kobalte primitive with no wrapper (menu, hover card, slider)? Add it to `ui/` first: house
+classes as defaults, a props API in the console's terms (not a re-export of Kobalte's parts), a
+`*.test.tsx` beside it that drives the keyboard contract (open, move, select, dismiss, where the
+focus goes), and a row in the design-system table. Then consume it.
+
+**Import Kobalte's named exports, never its namespaces.** `import { Content, Root, Title } from
+"@kobalte/core/dialog"`, not `Dialog.Content`. Kobalte 0.13 builds each namespace with
+`Object.assign` onto a root function, and `Dialog` and `AlertDialog` share that root: whichever
+module loaded last owned `Dialog.Content`, and every Drawer announced itself as an alertdialog until
+`ModalDialog` moved to the named exports. The same shape can bite any two primitives sharing a root.
+
+Inside a wrapper, the mechanics below still apply.
 
 ## The structure, and why Portal matters
 
-Every Kobalte overlay follows the same shape:
+Every Kobalte overlay follows the same shape (the wrappers build it; a caller never writes it):
 
 ```tsx
-import { Tooltip } from "@kobalte/core/tooltip";
+// inside ui/Tooltip.tsx only
+import { Content, Portal, Root, Trigger } from "@kobalte/core/tooltip";
 
-<Tooltip openDelay={150} placement="top">
-  <Tooltip.Trigger class="...">trigger</Tooltip.Trigger>
-  <Tooltip.Portal>
-    <Tooltip.Content class="z-50 ...">content</Tooltip.Content>
-  </Tooltip.Portal>
-</Tooltip>
+<Root openDelay={150} placement="top">
+  <Trigger class="...">trigger</Trigger>
+  <Portal>
+    <Content class="z-50 ...">content</Content>
+  </Portal>
+</Root>
 ```
 
-`*.Portal` mounts the content to `document.body`, **outside** the component's DOM position. This is the whole point: an overlay rendered in-flow gets clipped by any ancestor with `overflow:hidden` (a card, the grid, a drawer body). Portalling escapes that. If a menu or tooltip is being cut off, the fix is almost always "put it in the Portal," not a z-index war. (The `ColumnMenu` exists precisely because the column dropdown was clipped by the grid card; it moved to a portaled `Popover`.)
+`*.Portal` mounts the content to `document.body`, **outside** the component's DOM position. This is the whole point: an overlay rendered in-flow gets clipped by any ancestor with `overflow:hidden` (a card, the grid, a drawer body). Portalling escapes that. If a menu or tooltip is being cut off, the fix is almost always "put it in the Portal," not a z-index war. (The `ColumnMenu` exists precisely because the column dropdown was clipped by the grid card; it moved to a portaled `Popover`.) A list portalled out of a `Drawer` must also be `modal` while open (`Select` and `Picker` set it), or the drawer's dialog marks the new body child `aria-hidden` and the list is unreachable to a screen reader.
 
 ## The gotcha that costs the most time: triggers do not go inside a `<label>`
 
@@ -75,3 +114,6 @@ await screen.findByText(helpText);
 ```
 
 - For the hover path and final positioning, verify in the **built app** (Playwright/`web/e2e/shot.mjs`), because jsdom does not lay out or run the pointer heuristics. A hover bug like the label problem above only shows up in a real browser; a focus-only unit test will pass while the feature is broken.
+- **Native radio arrows do not run in jsdom.** `SegmentedControl` (and any radio group) moves on the arrow keys through the browser's own radio-group behavior, which jsdom does not implement; assert the shared `name` and the click path in vitest, and drive the arrows in a real browser.
+- **A Select or Combobox moves the focus onto the option (Select) or keeps it in the input with a highlight (Combobox).** Send the next key to `document.activeElement` for a Select, to the input for a Picker; read the highlight from `[data-highlighted]`.
+- **Drivers:** `ui/Picker.testkit.ts` (`typeInPicker`, `pickInPicker`) and `TreeSelect.testkit.ts` drive those fields the way a keyboard user does; use them in a consumer's test instead of reaching into the parts.

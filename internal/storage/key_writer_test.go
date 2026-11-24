@@ -760,7 +760,7 @@ func TestHealthReadsServeOnlyTheRollup(t *testing.T) {
 			t.Errorf("the fleet projection serves %q, want the rollup's outage", s.Verdict)
 		}
 	}
-	rep, err := f.gw.SystemHealth(f.ctx, sys.ID, 0, all)
+	rep, err := f.gw.SystemHealth(f.ctx, sys.ID, storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}

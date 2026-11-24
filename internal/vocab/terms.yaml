@@ -377,8 +377,6 @@ terms:
     plural: declared values
     definition: The state an operator declares a component or system should hold, which reconcile compares with what the device reports.
     audience: operator
-    nav: /config
-    nav_label: Declared
     retired:
       - word: declared config
         pattern: '(?i)\bdeclared[- ]config\b'
@@ -562,6 +560,8 @@ not_terms:
     reason: the liveness probe
   - collection: views
     reason: the read side that backs the console's pages
+  - collection: search
+    reason: the command palette's name search across the fleet and the catalog, a read verb rather than a thing
   - collection: expressions
     reason: the expression engine's evaluate and explain verbs
   - collection: telemetry
@@ -576,13 +576,7 @@ not_terms:
     reason: Home
   - nav: /explore
     reason: Explore, the fleet's outline
-  - nav: /dashboards
-    reason: Dashboards, not yet built
-  - nav: /learn
-    reason: Learn, the teaching surface
   - nav: /simulation
     reason: the lab simulator
   - nav: /platform
-    reason: Status, the platform's own health page
-  - nav: /log-types
-    reason: a stub, the log lane is untyped today
+    reason: Platform health, the platform's own health page (one name, ADR-2446)

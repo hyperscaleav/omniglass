@@ -18,6 +18,7 @@ import { DRIVERS_KEY } from "../lib/drivers";
 import { SECRETS_KEY } from "../lib/secrets";
 import { TAGS_KEY } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { toasts, clearToasts } from "../lib/toast";
 import { treeValue } from "../components/TreeSelect.testkit";
 
 // The fleet create page's two ways in (#1329): from scratch (the default, the
@@ -102,10 +103,40 @@ function mount(path: string, me: Me = admin, standards: Standard[] = []) {
 }
 
 const fromTemplate = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: "From a template" }));
+  fireEvent.click(await screen.findByRole("radio", { name: "From a template" }));
   return (await screen.findByLabelText("Template")) as HTMLSelectElement;
 };
 const offered = (picker: HTMLSelectElement) => Array.from(picker.options).map((o) => o.value).filter(Boolean);
+
+describe("CreatePage's way back and its landing (#2465)", () => {
+  afterEach(() => { vi.restoreAllMocks(); clearToasts(); });
+
+  it("names the place the operator came from, and goes there", async () => {
+    api({});
+    mount(`/systems/create?under=${west.id}`);
+    const back = await screen.findByRole("button", { name: "← West" });
+    expect(back).toHaveTextContent("West");
+    expect(screen.queryByRole("button", { name: /Explore/ })).toBeNull();
+    fireEvent.click(back);
+    await waitFor(() => expect(landed).toBe(`/locations/${west.id}`));
+  });
+
+  it("says Explore when nothing says where the operator came from", async () => {
+    api({});
+    mount("/systems/create");
+    expect(await screen.findByRole("button", { name: /Explore/ })).toBeInTheDocument();
+  });
+
+  it("lands a created row on its Overview, not in edit mode, with a created notice", async () => {
+    api({ "/systems": { id: uuidFor("sys-new"), name: "one-off", label: "One Off" } });
+    mount("/systems/create");
+    const form = await screen.findByTestId("entity-create-form");
+    fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "one-off" } });
+    fireEvent.click(within(form).getByRole("button", { name: /create system/i }));
+    await waitFor(() => expect(landed).toBe(`/systems/${uuidFor("sys-new")}`));
+    expect(toasts().map((t) => t.title)).toEqual(["System created."]);
+  });
+});
 
 describe("CreatePage's From a template", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -113,7 +144,7 @@ describe("CreatePage's From a template", () => {
   it("starts From scratch, the kind's own form", async () => {
     api({});
     mount("/systems/create");
-    expect(await screen.findByRole("button", { name: "From scratch" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByRole("radio", { name: "From scratch" })).toBeChecked();
     expect(screen.getByTestId("entity-create-form")).toBeInTheDocument();
     expect(screen.queryByTestId("template-create")).toBeNull();
   });
@@ -148,6 +179,18 @@ describe("CreatePage's From a template", () => {
     expect(posts.find((p) => p.url.includes("FromTemplate"))).toEqual({ url: expect.stringMatching(/\/locations:createFromTemplate$/), body: { template: "meeting-floor", parent: "hq.west", name: "level-9" } });
   });
 
+  it("has a Cancel that goes back, and says why the other standards are not offered (#2465)", async () => {
+    api({});
+    mount(`/systems/create?under=${west.id}`, admin, [mr55, { id: uuidFor("std-other"), name: "huddle", label: "Huddle", official: false }]);
+    await fromTemplate();
+    expect(screen.getByTestId("template-scope")).toHaveTextContent(/1 of the 2 standards/);
+    expect(screen.getByTestId("template-scope")).toHaveTextContent(/has no system template/i);
+    fireEvent.change(screen.getByLabelText("Template"), { target: { value: "mr55-system" } });
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    fireEvent.click(cancel);
+    await waitFor(() => expect(landed).toBe(`/locations/${west.id}`));
+  });
+
   it("creates a component from a template with its address", async () => {
     const posts = api({ "/components:createFromTemplate": { template: "boreal-edge-55", component: "display-1", component_id: uuidFor("c-1"), product: "boreal-edge-55", attached: true } });
     mount(`/components/create?under=${hq.id}`);
@@ -175,6 +218,6 @@ describe("CreatePage's From a template", () => {
     api({});
     mount("/systems/create", { ...admin, permissions: ["system:read", "system:create", "location:read"] });
     await screen.findByTestId("entity-create-form");
-    expect(screen.queryByRole("button", { name: "From a template" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "From a template" })).toBeNull();
   });
 });

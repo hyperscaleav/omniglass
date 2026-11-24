@@ -75,6 +75,7 @@ type terminalDialer struct {
 	fakeSessionDialer
 	tmu     sync.Mutex
 	refusal *collection.TerminalError
+	hold    chan struct{} // when set, a refusing dial waits for it to close
 }
 
 func (d *terminalDialer) Dial(ctx context.Context, target string, timeout time.Duration, in collection.Inbound) (collection.HeldConn, error) {
@@ -85,9 +86,29 @@ func (d *terminalDialer) Dial(ctx context.Context, target string, timeout time.D
 		d.mu.Lock()
 		d.dials++
 		d.mu.Unlock()
+		d.tmu.Lock()
+		hold := d.hold
+		d.tmu.Unlock()
+		if hold != nil {
+			select {
+			case <-hold:
+			case <-ctx.Done():
+			}
+		}
 		return nil, refusal
 	}
 	return d.fakeSessionDialer.Dial(ctx, target, timeout, in)
+}
+
+// holdDials makes every later refusing dial wait until the returned release
+// is called, so a test can keep an attempt in flight deterministically.
+func (d *terminalDialer) holdDials() (release func()) {
+	hold := make(chan struct{})
+	d.tmu.Lock()
+	d.hold = hold
+	d.tmu.Unlock()
+	var once sync.Once
+	return func() { once.Do(func() { close(hold) }) }
 }
 
 func (d *terminalDialer) accept() {

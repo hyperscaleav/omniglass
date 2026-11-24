@@ -37,11 +37,37 @@ after.
 
 **Issue a command** (with `command:issue`, which the **Operator** role carries) sits in the section's
 header wherever a driver attached to one of the component's endpoints binds a command, and offers
-only those commands, since only those reach it. Pick the command, give the value it sets (a number
-for a metric such as a volume, any value for a property such as an input; a fire-and-forget command
-such as a reboot takes none), and **Issue**. A **toast** follows the new command live, from queued to
-its outcome, and its **Open** brings you to its row here, opened. A component no driver can command
-says so where its history would be.
+only those commands, since only those reach it. Pick the command, then fill in what it takes. The
+form is generated from the command's own schema, so it never asks you to know a value:
+
+- a command that sets a **state with named values** (set-power: on, off, standby; set-input: the
+  inputs a display lists) is a **list** to choose from;
+- a **number** shows its range and unit beside the field (a volume is 0 to 1 ratio) and refuses what
+  falls outside it, with the range in the message, before anything is sent;
+- a **true or false** value (set-mute) is a **switch**;
+- **free text** appears only where the type declares no values at all;
+- a command that takes **params** (an outlet number on a PDU) shows each as its own field, with its
+  range.
+
+A fire-and-forget command such as a reboot takes no value. Then **Issue**. A **toast** follows the
+new command live, from queued to its outcome, and its **Open** brings you to its row here, opened.
+
+### When none can reach the component
+
+A component no driver can command says why where its history would be: which drivers its endpoints
+use that bind no command (an SNMP driver reads, it does not set), which drivers do offer commands
+(its product's own driver first, each with the commands it binds), and **Add an endpoint**, which
+opens the form to attach one.
+
+### From an alarm
+
+An alarm's row carries **Send command** beside **Acknowledge** and **Snooze**, wherever the alarm is
+listed: the component's Overview, the Alarms page and a system's alarms. It opens the same form with
+the component already filled in, so a display that went dark is told to turn on from the alarm that
+says so, without leaving it. The button is drawn only for a person with `command:issue`, and only
+where a driver on one of the component's endpoints binds a command. The alarm clears when the
+component's next reading satisfies its rule, as it does for any other cause; the command is not tied
+to the alarm it answered, and the alarm's history does not yet list it.
 
 Reading a component's commands takes `command:read`, which every viewer holds; a viewer reads the
 history and the evidence and gets no Issue button.

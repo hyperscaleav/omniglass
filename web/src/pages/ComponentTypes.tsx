@@ -4,10 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
 import InheritedCell from "../components/InheritedCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
+import { ComponentTypeUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
 import { Plus, resolveIcon } from "../components/icons";
@@ -27,6 +30,8 @@ import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, catalogLock, catalogOr
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
+import { confirmAction } from "../lib/confirm";
 
 // Component Types (Catalog > Components: Types): the device-class type
 // catalog (ADR-0085, the component_type catalog's partial reversal of
@@ -196,7 +201,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   async function removeType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete component type "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "component type", name: r.name }))) return;
     setErr(null);
     try {
       await deleteComponentType(r.id);
@@ -213,7 +218,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   async function restoreType() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
+    if (!(await confirmAction({ title: `Discard your changes to "${r.name}"?`, body: "It goes back to the shipped values.", confirmLabel: "Discard changes", tone: "danger" }))) return;
     setErr(null);
     try {
       await restoreComponentType(r.id);
@@ -291,7 +296,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
             <KVStacked
               label="Parent"
-              value={r().parent ? <span class="font-data">{r().parent}</span> : <span class="text-base-content/50">Root</span>}
+              value={r().parent ? <CatalogRef kind="component_type" name={r().parent} /> : <span class="text-base-content/50">Root</span>}
             />
           </div>
           <BladeField
@@ -331,6 +336,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             inherited={() => inheritedFact(r(), "icon")}
             hint="A glyph key."
           />
+          <ComponentTypeUsedBy name={r().name} />
         </div>
       )}
     </Show>
@@ -346,7 +352,8 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
 export function CreateComponentTypeForm(p: { onCreated: (t: ComponentType) => void }): JSX.Element {
   const qc = useQueryClient();
   const types = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [parentId, setParentId] = createSignal("");
   const [stem, setStem] = createSignal("");
   const [abbrev, setAbbrev] = createSignal("");
@@ -388,12 +395,7 @@ export function CreateComponentTypeForm(p: { onCreated: (t: ComponentType) => vo
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Wireless Microphone" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="wireless-mic" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Wireless Microphone" namePlaceholder="wireless-mic" />
       <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>
         <ComponentTypeSelect types={types.data ?? []} value={parentId()} onChange={setParentId} emptyLabel="Root (no parent)" />
       </FieldRow>

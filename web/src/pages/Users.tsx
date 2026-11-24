@@ -85,13 +85,12 @@ const columns: FlatColumn<User>[] = [
 
 export default function Users() {
   const me = useMe();
-  const [params, setParams] = useSearchParams();
+  const [, setParams] = useSearchParams();
   // Archived (soft-deleted) users are hidden by default; the toggle includes
   // them (a distinct query key) so an admin can re-find one to restore or purge.
   const [showArchived, setShowArchived] = createSignal(false);
   const users = useQuery(() => ({ queryKey: [...USERS_KEY, showArchived()], queryFn: () => listUsers(undefined, showArchived()) }));
-  // ?u=<id> deep-links to a user (e.g. the cross-over from a group's member).
-  const openId = () => (Array.isArray(params.u) ? params.u[0] : params.u) || undefined;
+  // ?open=<id> deep-links to a user (the drawer address, #2429); the older ?u=<id> still opens it.
 
   return (
     <FlatList<User>
@@ -105,7 +104,8 @@ export default function Users() {
         columns,
         empty: "No users yet.",
         rowId: (p) => p.id,
-        openId,
+        rowAlt: (p) => p.person?.username ?? p.machine?.name,
+        legacyParam: "u",
         blades: { registry: identityRegistry, rootKind: "user" },
         railExtra: () => (
           <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
@@ -116,10 +116,10 @@ export default function Users() {
         create: {
           label: "New user",
           can: () => can(me.data, "user", "create"),
-          // The handoff is the URL (#759): ?u=<id>&edit=1 opens the new user's
-          // blade already editing (the openId deep link plus the edit param),
+          // The handoff is the URL (#759): ?open=<id>&edit=1 opens the new user's
+          // blade already editing (the open address plus the edit param),
           // so grants are assigned without a second step.
-          body: (ctx) => <CreateUserForm close={ctx.close} onCreated={(p) => { setParams({ u: p.id, edit: "1" }); ctx.close(); }} />,
+          body: (ctx) => <CreateUserForm close={ctx.close} onCreated={(p) => { setParams({ open: p.id, u: undefined, edit: "1" }); ctx.close(); }} />,
         },
       }}
     />

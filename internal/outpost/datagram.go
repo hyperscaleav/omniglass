@@ -474,7 +474,7 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 			Labels: map[string]string{collection.ReasonLabel: reason}}
 	}
 	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok {
-		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+gt.class)}, nil
+		return []collection.Sample{responsive(collection.VerdictUp, heldReading(gt))}, nil
 	}
 	var timeout time.Duration
 	var p endpointParams
@@ -503,8 +503,8 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 	}
 	if terr, ok := collection.AsTerminal(err); ok {
 		sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
-		sessions.datagramVerdict(task.EndpointID, false)
-		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+terr.Class)}, nil
+		sessions.datagramVerdict(task.EndpointID, true)
+		return []collection.Sample{responsive(collection.VerdictUp, string(collection.Responded))}, nil
 	}
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, ctx.Err())

@@ -134,7 +134,7 @@ func (p *PG) mergePatchSettingBinding(ctx context.Context, actorID, scope, names
 
 	var docRaw []byte
 	err = tx.QueryRow(ctx,
-		`select doc from setting_binding where scope = $1 and user_id is null and namespace = $2`,
+		`select doc from setting_binding where scope = $1 and user_id is null and namespace = $2 for update`,
 		scope, namespace).Scan(&docRaw)
 	current := map[string]any{}
 	switch {
@@ -311,11 +311,14 @@ func (p *PG) DeleteAllSettingBindings(ctx context.Context, actorID, scope string
 // overrideImageTx reads the (scope, namespace) platform binding row as its audit
 // image, inside the caller's transaction and before its write. A namespace with
 // no row reads as the empty document with no locks: the state the write moves it from.
+// The read takes the row lock (for update), so a factory reset, which deletes by scope
+// and takes no advisory lock, waits for this write instead of slipping between the
+// image and the write (#2221).
 func overrideImageTx(ctx context.Context, tx pgx.Tx, scope, namespace string) (map[string]any, error) {
 	o := SettingBinding{Scope: scope, Namespace: namespace, Doc: map[string]any{}, Locks: []string{}}
 	var docRaw, locksRaw []byte
 	err := tx.QueryRow(ctx,
-		`select doc, locks from setting_binding where scope = $1 and user_id is null and namespace = $2`,
+		`select doc, locks from setting_binding where scope = $1 and user_id is null and namespace = $2 for update`,
 		scope, namespace).Scan(&docRaw, &locksRaw)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):

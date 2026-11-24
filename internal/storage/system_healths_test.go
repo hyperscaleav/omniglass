@@ -30,10 +30,10 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 	t.Helper()
 	ctx := context.Background()
 	sc := scope.Set{All: true}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, sc); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, sc, sc); err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
-	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r1", LocationType: "room", ParentName: strptr("hq")}, sc); err != nil {
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r1", LocationType: "room", ParentName: strptr("hq")}, sc, sc); err != nil {
 		t.Fatalf("create room: %v", err)
 	}
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "verdict-std", Label: "Verdict"}); err != nil {
@@ -117,7 +117,7 @@ func TestSystemHealthsAgreeWithTheReport(t *testing.T) {
 	seen := map[string]int{}
 	for i := range systems {
 		s := systems[i]
-		rep, err := gw.SystemHealth(ctx, s.Name, 24*time.Hour, all)
+		rep, err := gw.SystemHealth(ctx, s.Name, storage.HealthRange{Window: 24 * time.Hour}, all, all)
 		if err != nil {
 			t.Fatalf("SystemHealth %s: %v", s.Name, err)
 		}

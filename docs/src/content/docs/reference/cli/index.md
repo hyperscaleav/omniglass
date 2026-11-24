@@ -164,13 +164,13 @@ Commands for the alarm resource
 
 ### `omniglass alarm list`
 
-List the fleet's active alarms
+List the fleet's alarms
 
 ```
 omniglass alarm list [flags]
 ```
 
-What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -179,8 +179,11 @@ What is wrong now across every component the caller may read, in one read: the a
 | `--location` | string | (none) | Only alarms whose component sits in this location or any location below it, by name |
 | `--page-token` | string | (none) | The next_page_token of the previous page: resumes the same worst-first order after it, however many alarms there are |
 | `--severity` | stringSlice | `[]` | Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several |
+| `--since` | string | (none) | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it |
 | `--snoozed` | string | (none) | true keeps the snoozed alarms, false the ones not snoozed; absent keeps both |
+| `--state` | string | (none) | Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all |
 | `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+| `--until` | string | (none) | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 Example:
 
@@ -279,7 +282,7 @@ List your omnibot conversations
 omniglass assistant conversation list
 ```
 
-Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.
 
 Example:
 
@@ -295,7 +298,7 @@ Run omnibot on one of your conversations
 omniglass assistant conversation run <name> [flags]
 ```
 
-Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
+Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -624,6 +627,67 @@ Example:
 
 ```sh
 omniglass auth me action-rule update <name>
+```
+
+#### `omniglass auth me identity-link`
+
+Commands for the identity-link resource
+
+##### `omniglass auth me identity-link list`
+
+List your own identity links
+
+```
+omniglass auth me identity-link list
+```
+
+Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).
+
+Example:
+
+```sh
+omniglass auth me identity-link list
+```
+
+##### `omniglass auth me identity-link start`
+
+Start linking your own identity at the provider
+
+```
+omniglass auth me identity-link start [flags]
+```
+
+Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--current-password` | string | (none) | Your current password: a link outlives the session that makes it, so it is confirmed as a password change is |
+| `--provider` | string | (none) | The identity provider to link, by name |
+
+Example:
+
+```sh
+omniglass auth me identity-link start --current-password current_password
+```
+
+##### `omniglass auth me identity-link unlink`
+
+Unlink one of your own identity links
+
+```
+omniglass auth me identity-link unlink <link> [flags]
+```
+
+Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--current-password` | string | (none) | Your current password, as linking asks |
+
+Example:
+
+```sh
+omniglass auth me identity-link unlink <link> --current-password current_password
 ```
 
 #### `omniglass auth me notification`
@@ -1202,7 +1266,7 @@ List a component's alarms
 omniglass component alarm list <name> [flags]
 ```
 
-What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1210,7 +1274,9 @@ Arguments:
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--include-cleared` | bool | `false` | Include cleared alarms, so the list is the history rather than what is wrong now |
+| `--since` | string | (none) | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range |
 | `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
+| `--until` | string | (none) | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 Example:
 
@@ -1458,7 +1524,7 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1652,6 +1718,34 @@ Example:
 omniglass component get <name>
 ```
 
+### `omniglass component health`
+
+Commands for the health resource
+
+#### `omniglass component health list`
+
+Read a component's health
+
+```
+omniglass component health list <name> [flags]
+```
+
+The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `--until` | string | (none) | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
+
+Example:
+
+```sh
+omniglass component health list 'hq.west.level-2.boardroom-a.$comp.videobar-1'
+```
+
 ### `omniglass component identity-binding`
 
 Commands for the identity-binding resource
@@ -1773,10 +1867,17 @@ omniglass component impairment set <name>
 List components in scope
 
 ```
-omniglass component list
+omniglass component list [flags]
 ```
 
-Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--component-type` | string | (none) | Only components of a product classified under exactly this component type (name or uuid) |
+| `--driver` | string | (none) | Only components of a product this driver serves (name or uuid) |
+| `--limit` | int | `0` | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `--product` | string | (none) | Only components of this product (name or uuid) |
 
 Example:
 
@@ -3380,7 +3481,7 @@ Create a location
 omniglass location create [flags]
 ```
 
-Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3427,7 +3528,7 @@ Delete a location
 omniglass location delete <name>
 ```
 
-Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -3466,13 +3567,18 @@ Commands for the health resource
 Read a location's health
 
 ```
-omniglass location health list <name>
+omniglass location health list <name> [flags]
 ```
 
-The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 Arguments:
   <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `--until` | string | (none) | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 Example:
 
@@ -4818,6 +4924,8 @@ omniglass outpost simulation <name>
 
 The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.
 
+A value equal to a subcommand name (observation) runs that subcommand; put -- before it to pass it as <name>, e.g. `outpost simulation -- observation`.
+
 Example:
 
 ```sh
@@ -4979,10 +5087,15 @@ omniglass product get boreal-edge-55
 List products
 
 ```
-omniglass product list
+omniglass product list [flags]
 ```
 
-Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--declares-metric` | string | (none) | Only products whose contract declares this metric (name or uuid) |
+| `--declares-property` | string | (none) | Only products whose contract declares this property (name or uuid) |
 
 Example:
 
@@ -5288,6 +5401,31 @@ Example:
 
 ```sh
 omniglass role list
+```
+
+## `omniglass search`
+
+Commands for the search resource
+
+### `omniglass search list`
+
+Find locations, systems, components and catalog entries by name
+
+```
+omniglass search list [flags]
+```
+
+The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | The most hits returned for each kind |
+| `--q` | string | (none) | The text to find, matched case-insensitively anywhere in a name or label |
+
+Example:
+
+```sh
+omniglass search list
 ```
 
 ## `omniglass secret`
@@ -5840,6 +5978,26 @@ Example:
 omniglass simulation get
 ```
 
+### `omniglass simulation plan-component`
+
+Plan a simulated component
+
+```
+omniglass simulation plan-component <name> [flags]
+```
+
+Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--product` | string | (none) | A product a simulator profile simulates |
+
+Example:
+
+```sh
+omniglass simulation plan-component <name>
+```
+
 ### `omniglass simulation plan-system`
 
 Plan a simulated system to a standard
@@ -6202,13 +6360,18 @@ Commands for the alarm resource
 List a system's members' alarms
 
 ```
-omniglass system alarm list <name>
+omniglass system alarm list <name> [flags]
 ```
 
-Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until |
+| `--until` | string | (none) | The range's end, with since; defaults to now and must not be earlier than since |
 
 Example:
 
@@ -6319,7 +6482,7 @@ Delete a system
 omniglass system delete <name>
 ```
 
-Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -6393,13 +6556,18 @@ omniglass system health
 Read a system's health
 
 ```
-omniglass system health list <name>
+omniglass system health list <name> [flags]
 ```
 
-The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 Arguments:
   <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--since` | string | (none) | Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent |
+| `--until` | string | (none) | Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since |
 
 Example:
 
@@ -6412,10 +6580,15 @@ omniglass system health list <name>
 List systems in scope
 
 ```
-omniglass system list
+omniglass system list [flags]
 ```
 
-Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | Cap the page at this many rows; 0 or absent is no cap. total still counts every match. |
+| `--standard` | string | (none) | Only systems built to this standard (name or uuid) |
 
 Example:
 
@@ -7564,6 +7737,62 @@ Example:
 
 ```sh
 omniglass user grant delete <id> <grantId>
+```
+
+### `omniglass user identity-link`
+
+Commands for the identity-link resource
+
+#### `omniglass user identity-link create`
+
+Link a person to an identity at the provider
+
+```
+omniglass user identity-link create <id> [flags]
+```
+
+Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--identifier` | string | (none) | The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it) |
+
+Example:
+
+```sh
+omniglass user identity-link create <id> --identifier identifier
+```
+
+#### `omniglass user identity-link delete`
+
+Unlink a person from an identity at the provider
+
+```
+omniglass user identity-link delete <id> <link>
+```
+
+Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.
+
+Example:
+
+```sh
+omniglass user identity-link delete <id> <link>
+```
+
+#### `omniglass user identity-link list`
+
+List a person's identity links
+
+```
+omniglass user identity-link list <id>
+```
+
+Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.
+
+Example:
+
+```sh
+omniglass user identity-link list <id>
 ```
 
 ### `omniglass user impersonate`

@@ -118,7 +118,36 @@ const row = (label: string) => {
   return r;
 };
 const rowLabels = () => rows().map(labelOf);
-const expand = (label: string) => fireEvent.click(within(row(label)).getByRole("button", { name: `Expand ${label}` }));
+const expand = (label: string) => fireEvent.click(within(row(label)).getByRole("button", { name: new RegExp(`^Expand ${label}( in .*)?$`) }));
+
+describe("expander names", () => {
+  it("tells same-named places under different parents apart, leaving the visible text alone", async () => {
+    const dup = {
+      locations: [
+        loc("north", "North Campus", "campus"),
+        loc("south", "South Campus", "campus"),
+        loc("d1", "Service Depot", "building", "north"),
+        loc("d2", "Service Depot", "building", "south"),
+        loc("n2", "Annex", "building", "north"),
+        loc("s2", "Annex", "building", "south"),
+        loc("b1", "Bay 1", "room", "d1"),
+        loc("b2", "Bay 2", "room", "d1"),
+        loc("b3", "Bay 1", "room", "d2"),
+        loc("b4", "Bay 2", "room", "d2"),
+      ],
+      systems: [],
+    } as unknown as FleetView;
+    mount("/web/explore", owner, dup, false, []);
+    await screen.findByRole("tree");
+    expand("North Campus");
+    expand("South Campus");
+    const depots = rows().filter((r) => labelOf(r) === "Service Depot");
+    expect(depots).toHaveLength(2);
+    const names = depots.map((r) => within(r).getByRole("button", { name: /^Expand/ }).getAttribute("aria-label"));
+    expect(names).toEqual(["Expand Service Depot in North Campus", "Expand Service Depot in South Campus"]);
+    expect(new Set(names).size).toBe(2);
+  });
+});
 
 describe("arrival", () => {
   it("shows the top-level locations only, sorted by name, collapsed", async () => {
@@ -253,6 +282,23 @@ describe("a location with nothing beneath", () => {
     await screen.findByRole("tree");
     expect(within(row("Quiet Room")).queryByRole("button", { name: "Expand Quiet Room" })).toBeNull();
     expect(row("Quiet Room").getAttribute("aria-expanded")).toBeNull();
+  });
+
+  it("says 'no components yet' on the row, not Empty, so the system is seen to exist (#2464)", async () => {
+    const fleet = { locations: [loc("quiet", "Quiet Room", "room")], systems: [sys("s-quiet", "Quiet", "quiet", "healthy")] } as unknown as FleetView;
+    mount("/web/explore", owner, fleet, false, []);
+    await screen.findByRole("tree");
+    expect(row("Quiet Room").textContent).toContain("no components yet");
+    expect(row("Quiet Room").textContent).not.toContain("Empty");
+  });
+
+  it("heads an empty system among two with its own 'no components yet' row", async () => {
+    const fleet = { locations: [loc("two", "Two Systems", "room")], systems: [sys("s-a", "Alpha", "two", "healthy", [dot("a-1")]), sys("s-b", "Blank", "two", "healthy")] } as unknown as FleetView;
+    mount("/web/explore", owner, fleet, false, []);
+    await screen.findByRole("tree");
+    expand("Two Systems");
+    expect(rowLabels()).toContain("Blank");
+    expect(row("Blank").textContent).toContain("no components yet");
   });
 });
 
@@ -533,5 +579,112 @@ describe("what a link or a result points at", () => {
     await screen.findByRole("tree");
     await new Promise((r) => setTimeout(r, 20));
     expect(rows().filter((r) => r.getAttribute("aria-selected") === "true")).toHaveLength(0);
+  });
+});
+
+// #2438: the need-attention chip counts what it filters, and the outline's
+// columns read cleanly.
+describe("the need-attention chip", () => {
+  const filterInput = () => screen.getByPlaceholderText(/^Filter by/) as HTMLInputElement;
+  const results = () => within(screen.getByRole("list", { name: "Matches" })).getAllByRole("listitem");
+  const chip = () => within(screen.getByTestId("explore-counts")).getByRole("button", { name: /need attention/ });
+
+  it("names what it counts, and its number is the number of rows pressing it shows", async () => {
+    mount();
+    await screen.findByRole("tree");
+    // Classroom 2 and Auditorium AV are the systems; disp-2 and dsp-1 the components.
+    expect(chip().textContent).toContain("2 systems, 2 components need attention");
+    fireEvent.click(chip());
+    await waitFor(() => expect(screen.queryByRole("tree")).toBeNull());
+    expect(results()).toHaveLength(4);
+  });
+
+  it("keeps its amber dot while pressed", async () => {
+    mount();
+    await screen.findByRole("tree");
+    expect(within(chip()).getByTestId("attention-dot")).toBeTruthy();
+    fireEvent.click(chip());
+    await waitFor(() => expect(chip().getAttribute("aria-pressed")).toBe("true"));
+    expect(within(chip()).getByTestId("attention-dot")).toBeTruthy();
+  });
+
+  it("narrows as you type, and Enter commits the chip", async () => {
+    mount();
+    await screen.findByRole("tree");
+    fireEvent.input(filterInput(), { target: { value: "dsp" } });
+    await waitFor(() => expect(screen.queryByRole("tree")).toBeNull());
+    expect(results().some((r) => (r.textContent ?? "").includes("dsp-1"))).toBe(true);
+    expect(results().some((r) => (r.textContent ?? "").includes("mic-1"))).toBe(false);
+    expect(screen.queryByRole("button", { name: "remove" })).toBeNull();
+    fireEvent.keyDown(filterInput(), { key: "Enter" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "remove" })).toBeTruthy());
+    expect((screen.getByRole("combobox") as HTMLInputElement).value).toBe("");
+    expect(results().some((r) => (r.textContent ?? "").includes("dsp-1"))).toBe(true);
+  });
+
+  it("returns to the tree when the typed text is cleared", async () => {
+    mount();
+    await screen.findByRole("tree");
+    fireEvent.input(filterInput(), { target: { value: "dsp" } });
+    await waitFor(() => expect(screen.queryByRole("tree")).toBeNull());
+    fireEvent.input(filterInput(), { target: { value: "" } });
+    await screen.findByRole("tree");
+  });
+
+  it("says in its placeholder that Enter pins the filter", async () => {
+    mount();
+    await screen.findByRole("tree");
+    expect(filterInput().placeholder).toMatch(/Enter/);
+  });
+});
+
+describe("the outline's columns", () => {
+  const filterInput = () => screen.getByPlaceholderText(/^Filter by/) as HTMLInputElement;
+
+  it("renders every name in the same face: none in the data font", async () => {
+    mount();
+    await screen.findByRole("tree");
+    expand("Headquarters");
+    expand("East Building");
+    expand("Auditorium");
+    const names = [...tree().querySelectorAll("[data-label]")];
+    expect(names.length).toBeGreaterThan(4);
+    for (const n of names) expect(n.className).not.toContain("font-data");
+    fireEvent.input(filterInput(), { target: { value: "dsp" } });
+    await waitFor(() => expect(screen.queryByRole("tree")).toBeNull());
+    for (const n of within(screen.getByRole("list", { name: "Matches" })).getAllByText(/dsp-1/)) expect(n.className).not.toContain("font-data");
+  });
+
+  it("packs health counts left in severity order, each with its count, no blank slots", async () => {
+    mount();
+    await screen.findByRole("tree");
+    expand("Headquarters");
+    expand("East Building");
+    const slots = [...within(row("Auditorium")).getByTestId("health").querySelectorAll("[data-slot]")];
+    expect(slots.map((s) => [s.getAttribute("data-slot"), s.textContent])).toEqual([["degraded", "1"]]);
+    const hq = [...within(row("Headquarters")).getByTestId("health").querySelectorAll("[data-slot]")].map((s) => s.getAttribute("data-slot"));
+    expect(hq).toEqual(["healthy", "incomplete", "degraded"]);
+  });
+
+  it("puts a place's system count under Detail, not Standard or product", async () => {
+    mount();
+    await screen.findByRole("tree");
+    expand("Headquarters");
+    expand("West Building");
+    const lab = row("Media Lab");
+    expect(lab.textContent).toContain("2 systems");
+    const cells = [...lab.children].map((c) => c.textContent ?? "");
+    // name, type, standard or product, detail, health, action
+    expect(cells[2]).toBe("");
+    expect(cells[3]).toContain("2 systems");
+  });
+
+  it("gives a long Detail a tooltip with the whole of it", async () => {
+    mount();
+    await screen.findByRole("tree");
+    const hq = row("Headquarters");
+    const detail = [...hq.children][3] as HTMLElement;
+    expect(detail.textContent).toContain("2 buildings");
+    expect(detail.className).not.toContain("truncate");
   });
 });

@@ -9,6 +9,7 @@ import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Location Types page is the location classifier catalog alone on the shared
 // FlatList: one catalog, one query, no secret_type anywhere on its path (#598
@@ -296,8 +297,8 @@ describe("LocationTypes page", () => {
     expect(within(blade).queryByText("Restore default")).toBeNull();
     // Delete is present but greyed with the official sentence: a shipped row is
     // never deleted, and while it is pristine there is nothing to discard either.
-    const del = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
-    expect(del.disabled).toBe(true);
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByText("Delete")).toBeNull();
 
     // The forked one offers Restore in the same slot a custom row puts Delete.
     // Scoped to the table: the open blade's allowed-parents picker lists every
@@ -542,7 +543,7 @@ describe("LocationTypes page", () => {
       }
       return new Response(JSON.stringify({ location_types: [restored] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    answerConfirms(true);
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...LOCATION_TYPES_KEY], [{
       ...restored, forked: true, name_rule: { stem: "level", bare_first: true, examples: ["level", "level-2"] },
