@@ -221,7 +221,7 @@ does not admit. Type reads carry it as `writer_class`:
 Three classes are reserved and internal: `outpost-probe` (an outpost's own account of an endpoint),
 `platform` (what only Omniglass writes: the health rollup, and each outpost's and the server's
 account of itself, listed on
-[collection](/architecture/collection/#self-monitoring-every-outposts-account-of-itself)) and
+[collection](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)) and
 `command-lifecycle` (the events a command's issue and terminal status write). Their names are closed
 to an admin's catalog row and to every contract. A **writer** is the entry point a write comes
 through, and it fixes the provenance: the outpost and push lanes write observed, a calc rule

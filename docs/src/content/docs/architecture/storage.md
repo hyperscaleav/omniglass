@@ -293,7 +293,7 @@ install-wide value per band.
 
 Each pass lands its figures as platform metrics on the server's own component in the platform
 system, written as the process, so no outpost, push or operator can write them (the keys render on
-[collection](/architecture/collection/#self-monitoring-every-outposts-account-of-itself)):
+[collection](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)):
 
 - **`retention-deleted-count`** and **`retention-behind`** per lane the pass pruned, the instance the
   lane's name (`metric`, `property`, `metric_trend`, `metric/<type>`, `log_line/info`). A lane that

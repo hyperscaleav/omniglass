@@ -1,183 +1,137 @@
 ---
 title: Workers
-description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile loop over declared values."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How the server does its background work: the telemetry consumer, the ticks that drain Postgres rows, how each reports keeping up, and the consumer machinery, backtest and reconcile still to come."
 sidebar:
-  hidden: true
+  order: 35
+  badge:
+    text: Partial
+    variant: note
 ---
 
-:::note[Implementation status]
-Built today: the ingest lanes, a durable JetStream work-queue consumer per partition of the outpost's name
-(`internal/bus/consumer.go`: explicit double ack, MaxDeliver 5, a growing nak delay, one batch in flight a lane,
-[ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)),
-which does owner confinement and persistence inline, each batch (a tick of an outpost's task groups) landing once, in one transaction under
-its receipt, a refused group skipped and its siblings landed
-([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
-The consumer and the calc, notification and settlement ticks report their depth, pace and failures
-as platform metrics on the server's component ([below](#measuring-the-ticks)).
-:::
-
-Workers are how Omniglass means to do the steady background work (deriving samples, sending actions, firing timers, reconciling drift) on one machinery, with crash recovery and exactly-once outcomes for free everywhere. Not all of it rides a consumer today: the event rule sweep closes sustains and reconciles streaks on a server tick ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry) point 6), calc rules drain a durable pending set on a tick of their own ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)), and notifications (webhook and email rows alike; an inbox entry is delivered by its own commit) are sent by a tick that drains the `notification` rows an alarm transition writes in its own transaction ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender)), which stands in for the action sender below until the CDC publisher (#430) lands; the same tick ends alarm snoozes past their deadline, each under `FOR UPDATE SKIP LOCKED` ([ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)). All three are replica-safe and lose nothing on restart; [time](/architecture/time/) as a primitive (#419) is where those loops converge.
+The server's background work is everything that happens without a request waiting on it: landing
+telemetry, computing calc rules, sending notifications, settling commands, holding event rule streaks
+for their sustain, and pruning what has aged out. Two shapes carry it today. Telemetry arrives on the
+bus, so a **JetStream consumer** lands it. Everything else is born as a Postgres row, so a **server
+tick** drains it: a loop on a fixed interval. The ticks that claim work rows (calc marks,
+notifications, snoozes) claim them with `FOR UPDATE SKIP LOCKED`, so two servers against one
+database share the work, and a restart resumes where the last pass stopped.
 
 ## One machinery, several consumers
 
-The one machinery is a **JetStream work-queue consumer** over a configurable concurrency pool: pull, work, ack, at-least-once plus `Nats-Msg-Id` dedup and an idempotent sink (crash recovery, exactly-once outcomes, event-time semantics for free). The telemetry consumer carries that triple today: each batch arrives under a `Nats-Msg-Id` the stream deduplicates, the consumer double-acks, and the sink is idempotent per batch, its receipt written in the batch's own transaction ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). Each lane keeps one batch in flight, and the property lane's transition guard depends on that order: the guard is a conditional insert held per series by a transaction lock (ADR-0311), which stops two concurrent batches writing one value twice but cannot reorder them. The stream gives the sequencing per publishing subject a pool needs: it files each outpost's batches under a partition of its name, so an outpost's batches share one lane and land in order while the lanes land side by side (ADR-1896). It instantiates over several consumers rather than separate loops:
+The telemetry consumer is the one consumer built
+([messaging](/architecture/messaging/#delivery-a-batch-lands-once)). It carries the exactly-once
+triple every consumer here is meant to share: the stream deduplicates a batch's `Nats-Msg-Id`, the
+consumer double-acks, and the sink is idempotent, a batch's receipt written in the batch's own
+transaction
+([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
+It runs as one durable per partition of the outpost's name, each holding one batch in flight, so an
+outpost's batches land in order while the partitions land side by side
+([ADR-1896](/architecture/decisions/#adr-1896-ingest-lands-on-a-lane-per-partition-of-the-nodes-name-in-order-per-node)).
+Order matters for the property lane, whose transition guard compares a value with the series' latest:
+a lock per series stops two batches writing one value twice, but cannot reorder them. A transient
+failure is redelivered after a growing delay, up to five deliveries; the consumer then gives the batch
+up and records why ([accounting](/architecture/messaging/#accounting-every-item-the-loss-ratio)).
 
-:::design[Target design, tracked in #430; the clock is #419]
-- **the admission consumer**: the owner-confinement gate at the head of the data lane, running in
-  system mode ([messaging](/architecture/messaging/#two-lanes-one-bus));
-- **the rule engine** (sample consumers): consumes the **trusted** JetStream samples stream,
-  applies `calc_rule`s and `event_rule`s, publishes derived samples back onto it (a trusted
-  producer, no admission pass), and writes events and alarm transitions to Postgres in one
-  transaction;
-- **the action sender** ([alarms and actions](/architecture/alarms-actions/)): consumes action work
-  fanned out by CDC, sends at-least-once, advances action step state (PG-first, CDC-out). A
-  notification's single `notify` step is sent today by a server tick over its Postgres row instead
-  ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender));
-  the row stays, and the drain moves behind this consumer once CDC lands;
-- **the persistence consumer**: the data lane's batch sink into the Postgres sample tables, async so
-  rules never wait on PG ([messaging](/architecture/messaging/#two-lanes-one-bus));
-- **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
-  singleton, below);
-- **reconcile**: the declared-value loop (below).
+The rest runs on ticks, each a goroutine of its own in `internal/bus` or `internal/notifier`, so a slow
+pass of one never delays another:
 
-A subsystem that consumes the same message is **a stage, not a second loop**; competing consumers
-scale horizontally with no leader (JetStream hands each message to exactly one member).
-:::
+| Tick | Every | What it drains |
+| --- | --- | --- |
+| calc | 1 s | up to 500 pending calc marks a pass, each in its own transaction, oldest first ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)) |
+| notification | 2 s | the queued `notification` rows an alarm transition wrote, and the snoozes past their deadline ([ADR-0618](/architecture/decisions/#adr-0618-notifications-are-postgres-rows-drained-by-a-server-tick-not-cdc-to-a-jetstream-sender), [ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)) |
+| settlement | 5 s | commands past their settle window, then event rule streaks held for their sustain ([ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)) |
+| rule reconcile | 1 min | event rule state against the newest samples, healing a rare race; once at start too |
+| check-in age | 15 s | every claimed outpost's `checkin-age` |
+| orphan flush | 1 min | the orphaned-batch counts on each outpost row |
+| receipt prune | 1 h | telemetry receipts older than a day |
+| sample retention | 1 h | samples past their retention window ([storage](/architecture/storage/#what-a-retention-pass-reports)) |
 
-A down outpost produces no message, so its liveness is a *poll*, not a drain, and the poll is the
-server's: a 15 s timer writes every claimed outpost's `checkin-age`, the seconds since it last spoke, and
-the seeded `outpost-silent` rule reads that series like any other. The design had a
-outpost-liveness sweep of its own raise an `outpost-down` alarm directly; the rule over a server-written age
-replaced it
+A silent outpost produces no message, so its liveness is read rather than drained: the check-in age
+timer writes the seconds since each outpost last spoke, and the seeded `outpost-silent` rule reads that
+series like any other
 ([ADR-1707](/architecture/decisions/#adr-1707-a-silent-node-alarms-through-a-seeded-rule-over-its-checkin-age-not-a-node-liveness-sweep)).
 
-There is no separate projector: a current value is derived on read (the latest series row on the property lane; the metric lane adds a block fallback, [storage](/architecture/storage/)) ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)), and `alarm` / `action` hold their state directly.
+There is no projector stage: a current value is read from the latest series row
+([storage](/architecture/storage/)), and `alarm` holds its own state. Two pieces of work are
+deliberately **not** background work. [Health](/architecture/health/) rolls up inside the transaction
+that changed it, since a rollup a hop later would record its transition at the wrong moment. Parsing
+happens at the edge ([collection](/architecture/collection/)).
+
+:::design[One firing engine for the ticks, tracked in #419]
+Each tick is an independent loop. The clock is to be one firing engine for all of them, with a
+singleton lease and a missed-fire policy per register (code-declared jobs, schedule rows, armed
+timers), so new periodic work stops arriving as another ticker. It is also what fires schedules and
+the `origin=scheduled` events ([time](/architecture/time/)).
+:::
+
+:::design[Consumers for derivation, actions and persistence, tracked in #2611]
+The target replaces the inline ingest and the Postgres-row ticks with stages on the bus, one
+machinery over a pool of competing consumers (each message to exactly one member, no leader):
+
+- an **admission consumer** that owner-confines raw ingress and republishes to a trusted stream
+  ([messaging](/architecture/messaging/#two-lanes-one-bus));
+- a **rule engine** that reads the trusted stream, applies calc and event rules, publishes derived
+  samples back onto it, and writes events and alarm transitions to Postgres in one transaction;
+- a **persistence consumer** that sinks the trusted stream into the sample tables, so rules never
+  wait on Postgres;
+- an **action sender** fed by a CDC publisher reading committed changes off the WAL, which takes over
+  the notification tick's rows.
+
+The CDC publisher and the clock each run as exactly one active instance. The pipeline from sample to
+alarm to action is never one transaction: calc re-enters the data lane and terminates by
+write-on-change (a recompute that lands the same value publishes nothing), with a depth cap as the
+backstop for a cyclic rule.
+:::
+
+## Stateless and stateful work
+
+The axis that decides how a piece of work is written:
+
+- **Stateless** (owner resolution, calc): the output is a function of the input, the rules and a
+  snapshot. Order does not matter, and the write is an append.
+- **Stateful** (the alarm lifecycle): state persists across inputs, so order matters. The alarm
+  transition serializes per alarm identity, the raiser's `dedup_key`
+  ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)),
+  and the write is a guarded upsert with a partial unique index as the backstop: `alarm_open_identity_key`
+  allows one open alarm per component and `dedup_key`.
+
+Every derived sample carries its lineage on the row: `provenance` says where it came from (observed,
+calculated, intended or declared), and a calculated row names its `source_rule` and the rule's id, so its
+history outlives the rule ([metrics and properties](/architecture/properties/)).
 
 ## Measuring the ticks
 
-The telemetry consumer and the server's ticks report how they keep up on the server's own platform
-component each report window (#1628), beside the consumer figures
+The consumer and the ticks report how they keep up on the server's own platform component once a
+report window (#1628), beside the pipeline figures
 ([messaging](/architecture/messaging/#measuring-the-pipeline)). Every failure count sits beside its
 attempts, so a loss reads as a ratio where 0 is healthy.
 
-- **The calc tick** (every second, up to 500 marks a pass): **`calc-pending-depth`** is the deepest
-  the `calc_pending` set stood at any pass in the window, every mark counted, the ones still waiting
-  out their debounce included; **`calc-served-count`** the calc rows the window's passes computed;
-  **`calc-pass-duration`** a pass's mean milliseconds. Healthy is a depth that falls back toward 0
-  between bursts and a pass well under the second it repeats on; a depth that grows window over
-  window while passes run long is a calc load the tick is not clearing.
-- **The notification tick** (every 2 s): **`outbox-queued-depth`** is the `notification` rows still
-  queued at the window's close, due or waiting out a retry backoff; **`outbox-due-age`** how long the
-  oldest due one has waited past its send time, 0 when nothing is due. A backoff is not a wait: a
-  failing webhook holds the depth up while the due age stays near 0. Healthy is a due age of a tick or
-  two; one that grows says the sender is not reaching its rows.
-- **The settlement tick** (every 5 s) runs two sweeps, the instances of **`sweep-duration`**,
-  **`sweep-count`** and **`sweep-failure-count`**: `command-settlement` (the commands past their
-  settle window) and `event-rule` (the rule streaks held for their sustain). Healthy is no failures
-  and a duration well under the 5 s it repeats on. A pass that succeeds writes its failure count 0,
-  so Platform health's Queues panel reads each sweep's failures against its passes as `0 / n` (#1769).
+- **Calc**: `calc-pending-depth` is the deepest the pending set stood at any pass in the window,
+  marks still waiting out their debounce included; `calc-served-count` the marks the window's passes
+  computed; `calc-pass-duration` a pass's mean milliseconds. Healthy is a depth that falls back toward
+  0 between bursts and a pass well under its second.
+- **Notifications**: `outbox-queued-depth` is the rows still queued at the window's close, due or
+  waiting out a retry backoff; `outbox-due-age` how long the oldest due row has waited past its send
+  time, 0 when none is due. A failing webhook holds the depth up while the due age stays near 0, since
+  a backoff is not a wait; a due age that grows says the sender is not reaching its rows.
+- **Settlement**: `sweep-duration`, `sweep-count` and `sweep-failure-count`, each at two instances,
+  `command-settlement` and `event-rule`. A pass that succeeds writes its failure count as 0, so
+  [Platform health](/operator/platform-health/) reads each sweep's failures against its passes.
 
-These are all the server's own clock against its own database, so unlike ingest lag no outpost clock is
-in them and no skew moves them. The definitions are
-[ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server).
+These read the server's clock against its own database, so unlike ingest lag no outpost clock is in
+them ([ADR-1628](/architecture/decisions/#adr-1628-ingest-lag-is-the-commit-time-minus-the-sample-ts-read-on-the-server)).
+The rules that alarm on the server itself, `rule-sweep-stalled` among them, are on
+[self-monitoring](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself).
 
-The `event-rule` sweep is also how the server's self-monitoring alarms hold their sustain. Five
-official rules watch Omniglass itself: `ingest-lag-high`, `retention-behind`, `rule-sweep-stalled`
-(the sweep's own age, `rule-sweep-age`, past 30 s: a stalled sweep, not a dead server), `disk-nearly-full`
-(the server's data directory disk, `data-dir-disk-used-ratio`, over 0.9 for 2 minutes, cleared at
-0.85 or under) on the server's component, and `outpost-silent` (a claimed outpost's `checkin-age` past
-90 s, three missed heartbeats, with no sustain) on the outpost's
-([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
+:::design[Backtest and reconcile, tracked in #526]
+**Backtest** re-runs a changed calc or event rule over the retained samples and diffs it against the
+old version's output, writing to a shadow and never to live state; promoting the result is a
+separate, audited step. Only calculated and event-derived data re-derives: observed samples were
+parsed at the edge and no raw payload is stored. It runs historical (each row's own rule version)
+or prospective (today's rules, the last 30 days by default).
 
-:::design[Target design, tracked in #430 (the CDC publisher) and #419 (the clock)]
-
-## Consumer groups versus singletons
-
-Two pieces run as exactly one active instance: the **CDC publisher**
-([messaging](/architecture/messaging/#two-lanes-one-bus)) and the **clock**. Both are
-**leader-elected singletons** via a **NATS KV CAS lock** (the winner holds the lease; on its death
-another candidate takes over): no separate election service, no SKIP-LOCKED row claim. A singleton
-that produces work still publishes onto the bus, where competing consumers scale it out.
-
-:::
-
-:::design[Target design, tracked in #430]
-
-## Re-entry, not one mega-pass
-
-The pipeline `sample -> alarm -> action` is **not one transaction**. Two edges re-enter: **calc**
-publishes derived samples back onto the data lane, and **actions** are born when an `event_rule`
-writes the event and alarm to PG in one transaction, after which CDC fans the commit to the action
-sender. A cross-producing stage hands off to the bus (independently durable), so the rule engine
-never recurses unboundedly in one transaction; calc re-entry **terminates by write-on-change** (a
-recompute landing the same value publishes nothing, the fixpoint) with a depth cap as a cyclic-rule
-backstop, carrying a rollup one hop per pass.
-
-:::
-
-**[Health](/architecture/health/) is the exception, deliberately not a worker stage**: its rollup (component -> system -> location) runs **inside the write transaction** that changed it, because a health recomputed a hop later would record its transition at the wrong moment. Parsing into samples is **not** a worker stage; it happens at the edge ([collection](/architecture/collection/)).
-
-## The stateless / stateful fork
-
-The axis that decides almost everything else about a subsystem:
-
-- **Stateless** (owner resolution, calc): output is a pure function of (input, rules, snapshot). Order-free, safe to backtest, no cross-event state. Write pattern: **append** (a batched multi-row INSERT).
-- **Stateful** (the alarm lifecycle): maintains persisted state across events (the open alarm), so:
-  - **Order-sensitive.** JetStream does not promise strict ordering (the server is ts-authoritative) and competing consumers can hand same-key messages to different members, so a stateful subsystem either tolerates reorder idempotently or serializes per state key. The alarm transition serializes per alarm identity, today the raiser-supplied `dedup_key` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)); the `event_rule` keying joins alongside when the rule engine lands, its ordered write in the same PG transaction as the event record.
-  - Write pattern: **guarded conditional upsert** (`INSERT ... ON CONFLICT` / `UPDATE ... WHERE`), with a **partial unique index** as the concurrency-correctness backstop (built for alarms: `alarm_open_identity_key`, one open row per `(component, dedup_key)`).
-  - **Backtest is harder**: it must process each entity's series in order.
-
-:::design[Target design, tracked in #430]
-
-## Lineage the engine stamps
-
-Every derived sample carries its lineage **on the row** (`provenance`, `source_rule` plus version,
-the one provenance pointer; [storage](/architecture/storage/), [samples](/architecture/properties/)).
-No separate execution table: a fan-out (one execution to N samples) stamps the same `source_rule` on
-each, and the rule version is the hinge for backtest.
-
-:::
-
-:::design[The backtest engine, tracked in #526]
-
-## Backtest: re-run a changed rule over retained samples
-
-The model is **not event-sourced**: current state lives in the sample tables and the `alarm` /
-`action` rows, never reconstructed from a log. But a changed `calc_rule` or `event_rule` can be
-**backtested**: a read-only what-if re-running the new rule version over the **retained samples**
-and diffing against the old version's output, touching no live state. Only the **calculated** and
-**event-derived** slices re-derive: **observed** samples are parsed at the edge (no raw stored, no
-server-side re-parse), **operator alarm transitions** come from `audit_log`, **action delivery
-status** from the action rows (the send is not re-done), and **no-data staleness** re-derives from
-the sample gaps ([time](/architecture/time/)).
-
-Two modes, switched by the `source_rule` version: **historical** uses the original rule versions
-recorded on each derived row (what the system actually computed, for audit); **prospective** uses
-the current versions (as if today's rules had always applied, for testing a change). **A backtest
-writes to a shadow, never live**: promotion is a separate, explicit, audited step. A prospective
-backtest is **windowed by default** (the last 30 days), whole-history the explicit, heavier option.
-
-:::
-
-:::design[The reconcile control loop, tracked in #526]
-
-## Reconcile: the declared-value control loop
-
-Reconcile is another JetStream consumer: it projects **declared values** onto the things that
-drift, the system-level form of the [declared value](/architecture/variables/)'s `reconcile: enforce` policy.
-
-- **Inputs**: the desired declarations (templates, component assignments, config declared values)
-  plus observed state; config changes commit in PG and CDC publishes them
-  ([audit](/architecture/audit/)), so reconcile is a CDC consumer plus the current projections.
-- **Output**: the delta, asserted as **outpost config** (which tasks and commands each outpost runs,
-  derived from placements) and as **reconciled `run` actions** (declared-value commands that stay
-  asserted, e.g. a codec's feedback registration).
-- **Idempotent**: assert-equals-observed is a no-op; it acts only on drift, logging a
-  `log_line` per run on the server's platform component, as the retention pass does
-  ([storage](/architecture/storage/#what-a-retention-pass-reports)).
-
-Open: the reconcile cadence (continuous versus on-audit-change versus a periodic full sweep) and
-backoff on a flapping target.
-
+**Reconcile** is the system-level form of a [declared value](/architecture/variables/)'s
+`reconcile: enforce`: a loop that compares what is declared with what is observed and acts only on
+drift, asserting outpost config and the commands that should stay asserted. Its cadence, and its
+backoff on a flapping target, are open.
 :::

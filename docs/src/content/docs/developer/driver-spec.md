@@ -111,7 +111,7 @@ to have the outpost read a key the component presents since); with no refusal he
 declares a pin ahead of time, for a replacement whose key you already know.
 
 A driver on `tls` speaks the line protocol over a TLS connection, its handshake the transport rung
-([tls](/architecture/collection/#tls)). How the handshake judges the certificate is the driver's
+([tls](/architecture/transports/#tls)). How the handshake judges the certificate is the driver's
 `tls-mode` input, a string input the engine reads by name, like `host` and `port`: `verify` (the
 certificate chains to one of the outpost's system roots and names the host), `pin` (the first public
 key offered is trusted, any other refused) or `skip` (nothing is checked). The driver declares its
@@ -152,7 +152,7 @@ reporting ([the gate](/architecture/collection/#the-connection-fingerprint-and-t
 except an snmp endpoint's get, which carries the community, so beneath its auth gate it is not sent
 and reads up, held (`held: auth since <ts>`): the refusal was an answer.
 
-A udp driver speaks the line protocol as datagrams ([udp](/architecture/collection/#udp)). An open
+A udp driver speaks the line protocol as datagrams ([udp](/architecture/transports/#udp)). An open
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
 input, the local port its endpoint binds, which its requests leave from and the component's pushes
 arrive on (unset, the outpost picks one, which suits a component that answers to a request's source).
@@ -197,7 +197,7 @@ ladder:
     request: { get: ["1.3.6.1.2.1.1.2.0"] }
 ```
 
-An http or https driver sends real requests ([http and https](/architecture/collection/#http-and-https)).
+An http or https driver sends real requests ([http and https](/architecture/transports/#http-and-https)).
 A request declares its `method` (GET unless it says otherwise), `path`, `query`, `headers`, a `body`
 (a JSON value, encoded by its `body_format`: `json`, `form`, `xml` or `text`) and the answer's
 `format` (`json`, `xml`, `html` or `text`, declared rather than read off the `Content-Type`, which gear
@@ -259,7 +259,7 @@ poll to carry it to the outpost. Over `https` the `tls-mode` input and the pinne
 (above), and `omniglass endpoint retry <component>/https --certificate <the offered key>` trusts a changed key.
 
 Gear whose web API signs in once declares `session.login` instead of a scheme
-([logging in over http](/architecture/collection/#logging-in-over-http)): the login dialog a telnet
+([logging in over http](/architecture/transports/#logging-in-over-http)): the login dialog a telnet
 driver declares, its steps requests. A step names only the secret fields it sends
 (`${secret.login.password}`); the outpost keeps the session it opens (the component's cookies, the
 values `capture` locates in the last answer, the `headers` that send them) in its memory alone, per
@@ -303,7 +303,7 @@ names only a capture, never a secret, `Cookie` or a header a poll or command set
 
 A component whose web page updates live from a server-sent events stream declares the stream in its
 session block, and listeners claim its events ([a server-sent events
-stream](/architecture/collection/#a-server-sent-events-stream)). The stream is a `GET` (a `path`, a
+stream](/architecture/transports/#a-server-sent-events-stream)). The stream is a `GET` (a `path`, a
 `query`, `headers` other than `Accept` and `Last-Event-ID`, which the outpost sends), read as `json`
 (the default) or `text`, and it rides the session's scheme or login like every request. A listener
 over http declares no `arm` (a stream has no upstream); its `match` may name the event (`event:
@@ -329,7 +329,7 @@ stream needs a listener (with none, nothing holds it), and a listener over http 
 
 A component whose control API is a websocket declares `transport: websocket` (or `wss`, over the
 TLS handshake, with a `tls-mode` input as `tls` and `https` take), and one held socket carries its
-polls, its commands and its listeners ([websocket and wss](/architecture/collection/#websocket-and-wss)).
+polls, its commands and its listeners ([websocket and wss](/architecture/transports/#websocket-and-wss)).
 `session.upgrade` is the `GET` that opens it (a `path`, the root when absent, a `query`, `headers`,
 never one the handshake owns), riding the session's scheme (`basic`, `bearer` or `api-key`; not
 `digest`) or an http login. A request is a frame: a `line` sent as is, or a JSON `body` (a
@@ -399,7 +399,7 @@ against the spec's declared inputs; no re-attach. Clearing an optional input res
 a required one cannot be cleared.
 
 A cloud service or a component that posts to omniglass declares `transport: webhook`
-([push ingress](/architecture/collection/#push-ingress-webhooks-on-the-server)). Nothing is dialed,
+([push ingress](/architecture/transports/#push-ingress-webhooks-on-the-server)). Nothing is dialed,
 so the spec declares listeners alone (no poll, no command, no ladder), and the server hosts them.
 The session block says how a post is authenticated, never by default: `scheme: hmac` with a
 `credential` naming an `hmac-key` secret input and a `webhook.signature` (the `header` it rides,

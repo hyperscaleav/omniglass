@@ -6,7 +6,7 @@ summary: "Accepted: the node and the server each write their own hop's delivery 
 refs: [1659, 1641, 1623, 1625, 1627, 1628, 1644, 1646, 1692, 1712]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself), [collection](/architecture/collection/#self-monitoring-every-nodes-account-of-itself), [messaging](/architecture/messaging/#measuring-the-pipeline)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself), [collection](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself), [messaging](/architecture/messaging/#measuring-the-pipeline)
 - **Decision:** (#1659, under #1623.)
   1. **Three keys, every hop, the kind as the instance.** `delivery-in-count`, `delivery-out-count`
      and `delivery-loss-ratio` (`(in - out) / in`, 0 healthy) are declared once and written by both

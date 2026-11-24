@@ -279,9 +279,9 @@ The platform ships official rules, rendered here from the seed:
   sustain opens a `high` alarm on its component, which goes to outage and stops filling its slots, and
   reading `up` clears it. Whether that takes a system out is the slot's impact and quorum.
 - `outpost-silent` opens a `high` alarm on a claimed outpost's own component once its `checkin-age`,
-  which the server writes every 15 s, passes 90 s ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)).
+  which the server writes every 15 s, passes 90 s ([outposts](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)).
 - `ingest-lag-high`, `disk-nearly-full`, `retention-behind` and `rule-sweep-stalled` watch the server's
-  own component ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself),
+  own component ([collection](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself),
   [storage](/architecture/storage/#what-a-retention-pass-reports)); `disk-nearly-full` fires over 0.9 and
   clears only at 0.85, so a disk at the line does not flap.
 - The trend rules `process-heap-growing`, `process-goroutines-growing` and `db-size-growing` are

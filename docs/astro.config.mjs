@@ -197,19 +197,6 @@ export default defineConfig({
           label: 'Being rebuilt',
           items: [
             {
-              label: 'Architecture',
-              collapsed: true,
-              items: [
-                // the journey, in the order the data travels
-                { label: 'Data collection', slug: 'architecture/collection' },
-                { label: 'Messaging', slug: 'architecture/messaging' },
-                // the foundations underneath
-                { label: 'Outposts', slug: 'architecture/outposts' },
-                { label: 'Simulation', slug: 'architecture/simulation' },
-                { label: 'Workers', slug: 'architecture/workers' },
-              ],
-            },
-            {
               label: 'Contributing',
               collapsed: true,
               items: [

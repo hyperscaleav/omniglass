@@ -11,6 +11,6 @@ the loopback the node collects from by construction: no namespace to share betwe
 The two live and die together, and the first real failure is the one reported. `--impairments`,
 `--port-offset` and `--poll` move under `--simulate` and are refused without it, as is `--once`.
 `omniglass sim run` stays for a simulator as a process of its own. The
-[simulation](/architecture/simulation/#in-the-nodes-own-process) and
+[simulation](/architecture/simulation/#in-the-outposts-own-process) and
 [nodes](/architecture/nodes/#serving-its-own-simulated-components) pages and the install guide's
 [run a simulator](/deployment/simulator/) teach it.
