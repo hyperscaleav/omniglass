@@ -226,7 +226,7 @@ func (f EventFilter) where(args []any) (string, []any) {
 	cond := ""
 	if f.Key != "" {
 		args = append(args, f.Key)
-		cond += fmt.Sprintf(" and event.event_type_id = (select et.id from event_type et where et.name = $%d)", len(args))
+		cond += fmt.Sprintf(" and event.event_type_id = (select et.id from "+catalogRows("event_type", "")+" et where et.name = $%d)", len(args))
 	}
 	if f.Source != "" {
 		args = append(args, f.Source)
