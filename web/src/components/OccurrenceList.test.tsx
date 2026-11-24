@@ -286,6 +286,27 @@ describe("OccurrenceRow columns", () => {
     expect(grid(event, false)).toBe(grid(log, false));
   });
 
+  it("every grid column holds a cell, so no row carries an empty slot before its message (#2642)", () => {
+    const event: Occurrence = { ...log, kind: "event", id: "e:2", badge: "call-started", badgeClass: "badge-ghost", facility: undefined };
+    for (const o of [event, log]) {
+      for (const src of [true, false]) {
+        const a = mount(o, src);
+        const btn = a.getAllByTestId("occurrence-row")[0].querySelector("button")!;
+        // minmax(0px, 1fr) holds a space, so collapse parenthesized tracks before counting.
+        const tracks = btn.style.gridTemplateColumns.replace(/\([^)]*\)/g, "").trim().split(/\s+/);
+        expect(tracks.length, `${o.kind} src=${src}`).toBe(btn.children.length);
+        for (const c of Array.from(btn.children)) expect(c.textContent!.trim(), `${o.kind} src=${src} empty cell`).not.toBe("");
+        cleanup();
+      }
+    }
+  });
+
+  it("a log's facility rides inline before its message rather than in a column of its own (#2642)", () => {
+    const a = mount(log, false);
+    const msg = a.getByTestId("occurrence-message");
+    expect(msg.contains(a.getByTestId("occurrence-facility"))).toBe(true);
+  });
+
   it("a long event key is clipped inside its badge, the full key on hover (#2642)", async () => {
     const event: Occurrence = { ...log, kind: "event", id: "e:1", badge: "collection-failed", badgeClass: "badge-error", facility: undefined };
     const { getByText, getByTestId } = mount(event, true);
