@@ -149,6 +149,7 @@ type componentSimOutput struct {
 	Body struct {
 		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on an outpost and a product a profile simulates."`
 		Outpost     string                         `json:"outpost,omitempty"`
+		ServedBy    string                         `json:"served_by,omitempty" doc:"The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's)."`
 		Connected   bool                           `json:"connected" doc:"The outpost's simulator pulled recently."`
 		Activity    *simDeviceBody                 `json:"activity,omitempty" doc:"What the simulator reports for the component: serving, hits, and its impairment."`
 		Product     string                         `json:"product,omitempty"`
@@ -430,8 +431,12 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 	// (within the read scope), and the profile that simulates its product.
 	type simulated struct {
 		id, outpost string
-		device      storage.SimDevice
-		prof        *profile.DeviceProfile
+		// servedBy names the simulated component answering for this one when
+		// its endpoint targets that device's address (#2461); id is then the
+		// device's, which is what the simulator knows.
+		servedBy string
+		device   storage.SimDevice
+		prof     *profile.DeviceProfile
 	}
 	resolve := func(ctx context.Context, name string, action scope.Set) (*simulated, error) {
 		id, err := gw.ResolveActionTarget(ctx, "component", name, a.scopeFor(ctx, "component", "read"), action)
@@ -453,6 +458,11 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		for _, d := range devices {
 			if d.ComponentID == id {
 				s.device = d
+			}
+			for _, al := range d.Aliases {
+				if al.ComponentID == id {
+					s.device, s.id, s.servedBy = d, d.ComponentID, d.Name
+				}
 			}
 		}
 		store, err := simCatalog()
@@ -483,7 +493,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		st, seen := status(s.outpost)
 		view := simulationBody([]storage.SimDevice{s.device}, st, seen, time.Now()).Body
 		b := &out.Body
-		b.Simulated, b.Outpost, b.Connected = true, s.outpost, view.Connected
+		b.Simulated, b.Outpost, b.Connected, b.ServedBy = true, s.outpost, view.Connected, s.servedBy
 		b.Activity = &view.Devices[0]
 		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.Name, s.device.Address, s.prof.Doc.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments

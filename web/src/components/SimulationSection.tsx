@@ -40,6 +40,10 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
           <dl class="mt-2 grid grid-cols-[6rem_1fr] items-baseline gap-x-3 gap-y-1">
             <dt class="text-base-content/50">Outpost</dt>
             <dd class="font-data text-xs">{s().outpost}</dd>
+            <Show when={s().served_by}>
+              <dt class="text-base-content/50">Served by</dt>
+              <dd class="text-xs">The simulated component <span class="font-data">{s().served_by}</span> answers at this address; this component is not a simulation of its own.</dd>
+            </Show>
             <dt class="text-base-content/50">Address</dt>
             <dd class="font-data text-xs">{s().address}</dd>
             <dt class="text-base-content/50">Status</dt>
@@ -56,7 +60,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
               </Show>
             </dd>
           </dl>
-          <SimComponentDrawer id={open() ? props.componentId : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
+          <SimComponentDrawer id={open() ? (s().served_by ?? props.componentId) : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
         </section>
       )}
     </Show>

@@ -2136,6 +2136,8 @@ export type ComponentSimOutputBody = {
   outpost?: string;
   product?: string;
   profile?: string;
+  /** The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's). */
+  served_by?: string;
   /** The component has an endpoint on an outpost and a product a profile simulates. */
   simulated: boolean;
   summary?: string;

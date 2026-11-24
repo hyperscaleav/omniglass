@@ -81,7 +81,11 @@ type componentSimBody struct {
 	Product   string `json:"product"`
 	Profile   string `json:"profile"`
 	Address   string `json:"address"`
-	Surface   []struct {
+	ServedBy  string `json:"served_by"`
+	Activity  *struct {
+		Component string `json:"component"`
+	} `json:"activity"`
+	Surface []struct {
 		Name     string `json:"name"`
 		Protocol string `json:"protocol"`
 		Port     int    `json:"port"`
@@ -483,4 +487,61 @@ func lineProtocolProduct(t *testing.T, ctx context.Context, gw *storage.PG) (str
 	}
 	t.Fatal("no seeded newtron-panel-nvp product is a simulator profile's own product")
 	return "", nil
+}
+
+// TestComponentAimedAtASimulatedDeviceIsServedByIt holds #2461: a hand-built
+// component whose endpoint targets the address a simulated device already
+// answers on is served by that simulation. The outpost lists one device (not a
+// second, failed one with the wrong profile), the simulator is handed one, and
+// the component's own simulation read is the device's, naming it.
+func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatal(err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	panel, prof := lineProtocolProduct(t, ctx, gw)
+	outpost := "site-a"
+	for _, c := range []struct{ name, target string }{{"panel-1", "127.60.0.1:51325"}, {"aimed", "127.60.0.1:8080"}} {
+		name := c.name
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &panel}, all, all, all, all); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &name, Outpost: &outpost,
+			Params: []byte(`{"target":"` + c.target + `"}`)}, all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(&fakeHub{Registry: simhub.New()})))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	var view simulationBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &view); err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Devices) != 1 || view.Devices[0].Component != "panel-1" {
+		t.Fatalf("site-a lists %+v, want panel-1 once and no row for the component aimed at it", view.Devices)
+	}
+	var sim componentSimBody
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/aimed/simulation", nil, http.StatusOK), &sim); err != nil {
+		t.Fatal(err)
+	}
+	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.Profile != prof.Name || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
+		t.Fatalf("aimed simulation = %+v, want panel-1's device, served by it", sim)
+	}
 }
