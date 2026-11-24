@@ -582,7 +582,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 message's width. */}
                             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                               <SeverityBadge name={a.severity} />
-                              <span>{a.message}</span>
+                              <span class="min-w-0 break-words">{a.message}</span>
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>

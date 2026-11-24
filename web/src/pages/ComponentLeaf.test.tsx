@@ -637,6 +637,15 @@ describe("acknowledging from Why (#872)", () => {
     await waitFor(() => expect(acked).toEqual([`${uuidFor("cf-c-bar")}:al-1`]));
   });
 
+  // A zero-basis message never wraps onto its own line, so a long word
+  // overflowed into the "by rule" label beside it. It needs a real basis.
+  it("gives the Why message a flex basis so it wraps instead of overflowing its neighbours", () => {
+    mount(undefined, undefined, bar, ackOnly);
+    const msg = screen.getByTestId("leaf-alarms").querySelector("[data-testid=alarm-message]") as HTMLElement;
+    expect(msg.className).toContain("basis-48");
+    expect(msg.className).toContain("break-words");
+  });
+
   // #2115: Acknowledge, Snooze and the timeline toggle are one non-wrapping
   // group on one center line, not three flex items on a baseline row.
   it("renders Acknowledge, Snooze and the timeline toggle in one center-aligned group", () => {
