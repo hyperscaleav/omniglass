@@ -1,274 +1,139 @@
 ---
 title: Cascade
-description: How effective settings (declared values, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How a value set once, high in the fleet, resolves onto every entity below it, and how the resolve view explains which binding won."
 sidebar:
-  hidden: true
+  order: 6
+  badge:
+    text: Partial
+    variant: note
 ---
 
-:::note[Partial]
-The **binding chain** is built for the three cells that ride it: a [tag](/architecture/tags/), a
-[variable](/architecture/variables/), and a secret each own a value on the exclusive arc
-`platform | location | system | component` (the tag arc has a fifth kind, `outpost`) and resolve
-most-specific-wins down the location, system, and component trees (union-on-key for tags), the
-least-specific tier named **`platform`** and gated by its own `platform:<action>` permission
-([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
-The same primitive resolves down the principal axis for [settings](/architecture/settings/). The
-**resolve view** is also built: the three `/components/{name}/effective-*` routes return the winner
-plus the ordered shadowed bindings, rendered by the console ResolutionPanel. Still `Design`: the two
-**classifier** bands (the product and the standard, which bind a value for every component of a
-product and every system conforming to a standard: the cross-owner cascade on
-[#1255](https://github.com/hyperscaleav/omniglass/issues/1255), and the secret and variable bands on
-[#184](https://github.com/hyperscaleav/omniglass/issues/184); a [template](/architecture/templates/) is
-never a band, since a fork leaves nothing behind to resolve through), [group](/architecture/groups/) placement by weight, additive **rule**
-accumulation with suppression, and the fall-through-to-declaration provenance in the resolve view.
-:::
-
-The cascade lets an operator set a value once, high up, have it apply everywhere below while staying
-shadowable on any one entity, and then explain exactly why a given value won.
-
-## What it resolves
-
-The effective **declared values and variables** ([variables, secrets, and declared values](/architecture/variables/)),
-**tags**, and **rule-sets** for any entity, with a first-class **resolve view** explaining every
-effective value: the winning source and what it shadowed. The order is deliberately hand-tuned (not
-derivable from a single rule), so the resolve view is the safety net, not an afterthought.
-
-## User stories
-
-In operator terms:
-
-- **Set once, shadow where it matters.** HQ's devices need a different credential, so it is set
-  at the HQ location and shadows the product's binding for everything there, no product edit; a
-  location three levels down inherits the nearest setting. *(deployment beats classifier bindings;
-  deepest location wins)*
-- **Composition tightens the part.** "Standard Huddle Room" polls codecs every 30s, tighter than
-  the codec's own product's 60s, and every codec placed in a huddle room picks that up. *(the
-  system's standard beats the component's product)*
-- **"Why did it get this?"** The resolve view shows the "Old-firmware Room Kits" group (weight 450)
-  shadowing the product's 30s ([worked example](#worked-example)). *(the effective-value resolve
-  view)*
-
-The cross-cutting cases (a fleet-wide fix that auto-clears, a policy as a floor, a hand-picked set)
-are the [group](/architecture/groups/) stories, placed by weight on this same scale.
+The **cascade** lets an operator set a value once, high up, have it apply to everything below, shadow
+it on any one entity, and then see exactly why a given value won. It resolves
+[variables, secrets](/architecture/variables/) and [tags](/architecture/tags/) today; the same
+primitive resolves [settings](/architecture/settings/) along the user axis instead of the fleet.
 
 ## The structural chain
 
-Broad decision to specific deployment; most-specific (deepest) wins:
+A value is a **binding**: a cell owned at one rung of the fleet on the exclusive arc
+([core entities](/architecture/core-entities/#ownership-the-exclusive-arc)). Resolution runs for a
+component over its containment path, least specific first, and the most specific binding wins:
 
 ```text
-platform              the install-wide binding
-product               the leaf component's product bindings
-standard              the owning system's standard bindings
-location tree         earth -> luna -> port-lovell             (deepest wins)
-system tree           parent system -> subsystem -> ...        (deepest wins)
-component tree        chassis -> card -> ...                   (deepest wins, = the leaf)
+band 0  platform         the install-wide binding
+band 1  location tree    campus -> building -> floor -> room      (deepest wins)
+band 2  system tree      hall -> room subsystem                   (deepest wins)
+band 3  component tree   chassis -> card                          (deepest wins, the leaf)
 ```
 
-- Resolution runs **for the leaf** over its containment path; a non-leaf entity (a chassis, a
-  floor) resolves over its own shorter subset.
-- **`platform` is the least-specific rung, not a floor under the chain**: an admin's decision for
-  the **whole install**, one rung like any other, written only with the install-wide
-  `platform:<action>` permission on top of the resource's own
-  ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
-- **There is no root location.** The location tree is a forest with N unparented tops, and a top is
-  an ordinary location: binding at `earth` misses `mars`, and a top added next quarter starts
-  uncovered. A tier above today's tops is a new `location_type` and a real outpost, never a magic one;
-  "everything" is `platform`, not a location.
-- **Philosophy: deployment beats the classifier.** HQ's location credential shadows what the Room
-  Kit product binds; "Standard Huddle Room" shadows what the bare Room Kit binds.
-- **Classifiers are the leaf's base.** Ancestor nodes contribute their **instance** bindings, not
-  their classifiers (a chassis hands a card its chassis-wide credential; the card keeps its own
-  product's).
-- The three structural segments are **variable-depth trees**; the deepest node wins. Weight-free,
-  pure depth.
+- **`platform` is a rung, not a floor.** It is an admin's decision for the whole install, written
+  only with the install-wide `platform:<action>` permission on top of the resource's own
+  ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
+- **There is no root location.** The location tree is a forest of tops, so a binding at one campus
+  misses the next, and a top added next quarter starts uncovered. "Everything" is `platform`.
+- **Within a band, depth decides**: the nearest binding up the tree wins, weight-free.
+- **Secrets have no system band.** A credential authenticates a session with the device itself, and
+  the room a shared device serves is the wrong owner for it.
 
-## Bindings cascade; declarations do not
-
-There are two structures here, and only one of them is the cascade.
-
-**The binding side is the cascade**: every rung above is something somebody **decided** (a product
-or standard author's value, an operator's at a location, an admin's for the whole install), ordered by
-deployment specificity and folded most-specific-wins.
-
-**The declaration side is what a thing *is*** absent any decision. A **default** lives there, a
-column on a definition row beside the unit, kind, and validation rule. It is not a rung: it shadows
-nothing and nothing shadows it. The cascade **falls through** to it when no rung bound anything,
-reported by the resolve view as a declaration, never a winning source: "an admin chose this for
-everything" and "nobody chose, so the type's declaration stands" are different facts an operator
-needs to tell apart.
-
-A default is a column on a definition row, so **a kind with no definition table has no default**.
-Absent means absent:
-
-| Kind | Where its default is declared |
-|---|---|
-| [setting](/architecture/settings/) | The tagged struct field on `Settings` (its `default:` tag). |
-| [property](/architecture/variables/#property-one-typed-name-a-classifier-contract-a-stored-value) | The **classifier contract's** `default_value` column (`product_property`, `standard_property`, `location_type_property`), the shipped instance of the pattern: `EffectiveProperties` reads `coalesce(the instance's set value, the contract default)` ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)). |
-| [variable](/architecture/variables/) | None. |
-| secret | None. |
-| [tag](/architecture/tags/) | None. |
-
-Note where a property's default is **not**: the `property` catalog entry carries the `data_type`,
-unit, and validation rule, but no value; a default is what a thing is under a given contract, and
-the contract is the classifier's, so the column lives on `product_property` and its two siblings.
-The declaration side allows its own second ordering, a default narrowing along **type** specificity
-(one product or standard declaring a different default for the same catalog property), never mixing
-with the binding cascade. A catalog-wide default beneath the contract ones does not exist today; if
-it lands, it lands as another declaration-side column, not a rung.
-
-## Combinators (by what is resolved)
-
-- **declared values / variables -> scalar shadow**: the deepest/highest source wins; one value.
-- **tags -> union on name, shadow on value**: names accumulate; for a given
-  name, the winning source's value wins.
-- **rules** (`calc_rule` / `event_rule`) -> **additive
-  accumulation + explicit suppression**: a leaf is governed by the union of rules
-  from every layer; a layer removes one by name with a suppression.
-
-## Groups overlay the cascade, placed by weight
-
-The structural tree handles values by position and kind; **[groups](/architecture/groups/)** handle
-it by attribute or hand-picked set, cutting across the tree. The cascade does not define groups; it
-consumes them by **weight** on the one specificity scale.
-
-:::design[Group placement by weight, tracked in #10]
-**One specificity scale.** Structural layers auto-derive a specificity from position, weight-free:
-`platform` lowest, then the classifier bands (product, standard), then the location / system / component trees by depth, then
-the entity's own **instance** at the ceiling. A **group's weight is its specificity on that same
-scale**: a high weight beats deployment (a must-apply binding), a low weight loses to it. The
-instance ceiling beats any group; equal specificity breaks by creation order. A typed group applies
-at its own level: a component-group to components directly, a system-group reaching a component
-**through the system layer** of its cascade.
-
-However many groups an entity is in, the group band collapses to one weighted list on the shared
-scale, and the resolve view names the winner; for the additive rule combinator, the same weight also
-resolves an add-versus-suppress conflict between layers.
-
-A **`_type`** (device/app, AV-System, room) is not a cascade layer: it is a classification
-attribute, resolved by a [group](/architecture/groups/) filter (`type == X`) placed by weight, never
-a tree position. The tree is structural; attributes are groups.
-:::
-
-**The comparison key is segmented, not a single number.** Precedence is a lexicographic key
-`(segment_rank, depth, group_weight, creation_order)`, compared field by field: `segment_rank`
-orders the structural bands (platform, the product and standard classifiers, location / system / component trees, the instance
-ceiling), `depth` orders within a variable-depth tree (deepest wins), `group_weight` places a group
-relative to the structural bands, `creation_order` breaks an exact tie. Because the segment is the
-first field, a structural segment never overruns into another however deep a tree runs or however
-many group weights stack. The single specificity numbers elsewhere on this page (`0`, `100`, the
-`300s`, the `400s`) are a **presentation-only** flattening of that key for the resolve view.
-
-## The catalog is outside the cascade
-
-`property_type` defines **identity** (kind, unit, validation, fusion_policy) for every property,
-which the cascade never shadows (policy, not ontology). A type's **default** lives on that
-declaration too, off the cascade: what the value is when no layer bound anything, not a rung the
-layers compete with, reported by the resolve view as a declaration.
+The precedence is a lexicographic key, `(band, depth)` today, compared field by field, so however
+deep a tree runs it never overruns into another band.
 
 ## Structural multi-membership (a component in N systems)
 
-Distinct from group membership. A component belongs to zero or more systems through
-[`system_member`](/architecture/core-entities/#membership-what-a-slot-attaches-to), and the
-resolution **takes the system to resolve against**: given one, it resolves against that system, and
-only if the component is a member of it (naming a system it has no binding to must not lend it
-configuration). That is the "value differs per system" case, a **per-system effective view**
-computed on demand rather than merged chains.
+A component can be a member of several systems
+([membership](/architecture/core-entities/#membership-what-a-slot-attaches-to)), but the chain it
+resolves over is single-valued: two seeds in one band would leave the fold with no tiebreak. So the
+resolution **takes the system to resolve against**. Given one, it resolves through that system, and
+only if the component is a member. Given none, it seeds from the component's **primary** membership,
+which is all `is_primary` is for. `GET /components/{name}/effective-tags?system=<ref>` takes a system
+today; the variable and secret reads resolve against the primary.
 
-Asked with **no system in hand**, the chain is seeded from the component's **primary** membership:
-what `is_primary` is for, and the whole of what it is for, a default for context-free callers, never
-a rule that overrides a caller who named a system. A component in exactly one system, which is
-nearly all of them, never meets the distinction.
+## Combinators
 
-The seed stays **single-valued** whichever way it is chosen, a correctness requirement: the rank
-orders by band and then depth with **no tiebreaker after that**, so two seeds in the same band would
-resolve nondeterministically. Membership is many-valued; the chain it feeds is not.
+What is resolved decides how bindings combine:
 
-**Secrets carry no system band at all.** A credential authenticates a session with the device
-itself, a shared component has one password, and the room it happens to serve is the wrong owner for
-it: an ownership decision, not a tiebreak, removing the case where an ambiguous inheritance would
-have been actively dangerous.
+- **Variables and secrets: scalar shadow.** One value per name; the most specific binding wins.
+- **Tags: union on key, shadow on value.** Keys accumulate down the chain; for each key the most
+  specific binding's value wins ([tags](/architecture/tags/)).
+
+:::design[Rules on the cascade, additive with suppression, tracked in #10]
+Event and calc rules join the cascade with a third combinator, **additive accumulation with explicit
+suppression**: a component is governed by the union of rules bound at every rung, and a rung removes
+one by name with a suppression. A [group](/architecture/groups/) is how most such bindings would be
+placed.
+:::
+
+## Bindings cascade; declarations do not
+
+Two structures sit side by side, and only one is the cascade. The **binding side** is every rung
+above: something somebody decided, ordered by how specific the deployment is. The **declaration
+side** is what a thing *is* absent any decision: a **default**, a column on a definition row. A
+default is not a rung. It shadows nothing and nothing shadows it; the cascade falls through to it
+when no rung bound anything. "An admin chose this for everything" and "nobody chose, so the type's
+declaration stands" are different facts.
+
+A default lives on a definition row, so a kind with no definition table has none:
+
+| Kind | Where its default is declared |
+|---|---|
+| [setting](/architecture/settings/) | The `default:` tag on its field of the `Settings` struct |
+| [property](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows) | The classifier contract's `default_value` (`product_property` and its siblings), read by `EffectiveProperties` |
+| [variable](/architecture/variables/), secret, [tag](/architecture/tags/) | None |
+
+A property type carries a name, data type and validation, but no value: a default is what a thing
+is under a contract, and the contract is the classifier's.
 
 ## The resolve view
 
-For a target entity and a key, return:
+For a component and a key, the resolve view returns the effective value, the winning binding (its
+owner, band and depth), and the ordered bindings it shadowed. Each of
+`GET /components/{name}/effective-variables`, `.../effective-secrets` and `.../effective-tags`
+returns that list, every entry marked `winner` or shadowed, and the console draws it as the
+ResolutionPanel on the component's detail. A secret's entries are masked like every other secret
+read. To use it, see [variables](/admin/variables/) and [secrets](/admin/secrets/).
 
-- the **effective value**;
-- the **winning source** (a tree node, or a group + its weight);
-- the **ordered shadowed bindings** it beat (source + value).
+## A worked example
 
-When **no rung bound the key**, there is no winning source and nothing was shadowed: the view
-reports the **declaration** ("no binding; the type declares 60s") as its own provenance, never as a
-bottom entry in the shadowed list.
-
-For rule-sets: the accumulated set, each rule tagged with its source and any **suppressions**. One
-view explains both shadowing (variables / tags) and accumulation (rules).
-
-## Worked example
-
-RM204 codec (Room Kit Pro, fw 11.2) at Room RM204 -> Floor 3 -> HQ Building -> HQ Campus, in the
-Huddle Room AV system. The fleet has four unparented tops (HQ Campus, East Campus, Airport
-Office, Service Depot), so HQ Campus is a **top, not a root**. Member of two groups: **Old-firmware Room Kits**
-(weight 450) and **PCI-scope** (weight 250). Specificity bands are illustrative (`0` platform,
-`100/200` the product and standard classifiers, `300s` location by depth, `400s` system by depth, `500` the instance), a
-presentation flattening of the segmented key `(segment_rank, depth, group_weight, creation_order)`,
-not the comparison itself.
+Codec RM204 sits in Room RM204, on Floor 3 of the HQ Building on the HQ Campus, and is a member of
+the Huddle Room system.
 
 ```text
-RM204 - cascade precedence            most-specific (highest) wins
-==============================================================================
- spec  source                            poll-interval  credential   retry-limit
- ----  --------------------------------  -------------  ----------   -----------
- 500   component RM204  (explicit)        -              -            -      <- ceiling
- 450   group: Old-firmware Room Kits      5min  *        -            -
- 440   system: Huddle Room AV system      -              -            -
- 340   location: Room RM204               -              -            -
- 330   location: Floor 3                  -              vault-B  *   -
- 320   location: HQ Building              -              -            -
- 310   location: HQ Campus  (a top)       -              vault-A      -
- 250   group: PCI-scope                   -              vault-C      -
- 200   standard: Std Huddle Room          -              -            -
- 100   product: Room Kit Pro              30s            -            -
-   0   platform  (admin, install-wide)    60s            -            -
-==============================================================================
- effective:  poll-interval = 5min    (group 450; shadowed product 30s, platform 60s)
-             credential    = vault-B (location Floor 3 @330; shadowed PCI-scope @250, HQ Campus @310)
-             retry-limit   = 3       (no binding at any rung: the declaration stands)
+RM204: precedence, most specific wins
+===================================================================
+ band  depth  binding owner                 poll-interval  credential
+ ----  -----  ----------------------------  -------------  ----------
+ 3     0      component RM204               -              -
+ 2     0      system Huddle Room            30s            -
+ 1     0      location Room RM204           -              -
+ 1     1      location Floor 3              -              vault-b
+ 1     3      location HQ Campus (a top)    -              vault-a
+ 0     -      platform                      60s            vault-z
+===================================================================
+ effective: poll-interval = 30s     (system; shadowed platform 60s)
+            credential    = vault-b (Floor 3; shadowed HQ Campus, platform)
 ```
 
-The three columns are the point:
+The credential binding at HQ Campus covers HQ and nothing else; East Campus and the Service Depot
+(a building at the top, with rooms straight off it) are covered only by the `platform` binding. The
+dev seed a [lab](/developer/lab/) starts with carries four such tops, so the rule is inspectable.
 
-- **`poll-interval`**: the **Old-firmware group (450)** sits *above* deployment, so its `5min`
-  workaround beats the product's `30s` and the admin's install-wide `60s`, what a fleet-wide bug
-  fix needs.
-- **`credential`**: the **PCI-scope group (250)** sits *below* deployment, so the specific
-  **Floor 3 (330)** setting beats it, the case a fixed band would get wrong.
-- **`retry-limit`**: **nothing bound it anywhere**, so the fold ends empty and the value falls
-  through to the declaration: `3` is not a `platform` binding and shadowed nothing, it is what the
-  type says a retry limit is.
+:::design[Target design: the classifier bands, tracked in #1255 and #184]
+Classifier bands join the chain above the trees: a product's binding applies to every component of
+that product, a standard's to every conforming system, and the deployment still beats the classifier
+("Standard Huddle Room" polls codecs every 30 s, tighter than the codec product's 60 s). Ancestor
+entities contribute their instance bindings, never their classifiers. Property values resolve across
+owners this way in [#1255](https://github.com/hyperscaleav/omniglass/issues/1255); secrets and
+variables gain the bands in [#184](https://github.com/hyperscaleav/omniglass/issues/184).
+:::
 
-Binding `credential` at **HQ Campus** covers HQ and nothing else: East Campus, Airport Office and
-Service Depot are separate tops, and a fifth site added next year starts uncovered; only the
-install-wide `60s` at **`platform`** reaches all of them, which is why the tier exists rather than a
-synthetic root location.
+::::design[Target design: groups placed by weight, tracked in #10]
 
-Service Depot is that argument made concrete rather than hypothetical. It was added to the seed
-later than the other three, it is a **building** at the top with rooms straight off it (no campus
-above, no floor between, which the type catalog allows and the model has never required), and it
-came up covered by exactly one thing: the `platform` binding. Every location-tier binding written
-before it existed still misses it.
+## Groups overlay the cascade, placed by weight
 
-The dev seed (the fleet a [lab](/developer/lab/) comes up with) seeds this fleet, so the rule is inspectable rather than illustrative: four unparented
-tops with a device under two of them, one carrying the `staging` tag its subtree's binding sets and
-the other the `prod` the `platform` binding sets.
-
-`component RM204 (500)` would top everything if it set a value directly. Additive rules accumulate
-down this same ladder, and a group can **suppress** one by name (the Old-firmware group suppresses
-the false-firing `high_memory` alarm).
-
-## Resolution, in one line
-
-Build the entity's ordered layer path, location matching groups on it by weight, fold
-variables (shadow) / tags (union + shadow) / rules (additive + suppress) down the
-combined specificity order, fall through to the type's declaration where the fold is
-empty, and emit effective values with provenance.
+A [group](/architecture/groups/) cuts across the trees by attribute or hand-picked set, and its
+weight is its specificity on the cascade's one scale. A high weight beats deployment (a fleet-wide
+firmware workaround), a low one loses to it (a policy floor a lab may override). The key becomes
+`(segment, depth, group_weight, creation_order)`, and the instance itself stays the ceiling. The
+resolve view then names a group and its weight as a winning source, and reports a fall-through to a
+declaration as its own provenance rather than as a shadowed entry.
+::::
