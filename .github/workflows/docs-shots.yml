@@ -132,7 +132,7 @@ jobs:
           if [ ${#keep[@]} -eq 0 ]; then
             echo "::notice::No masked baseline changed at ${SHA:0:7}; nothing to recapture."
             if [ -n "$open" ] && [ "$fresh" = false ]; then
-              gh pr close "$open" --repo "$REPO" --comment "Superseded: $BASE's masked baselines already match the console at ${SHA:0:7}."
+              gh pr close "$open" --repo "$REPO" --comment "Superseded: $BASE's masked baselines already match the console at ${SHA:0:7}." || echo "::notice::could not close #$open"
             fi
             exit 0
           fi
