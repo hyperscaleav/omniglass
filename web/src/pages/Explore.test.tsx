@@ -355,7 +355,7 @@ describe("creating where you stand", () => {
 });
 
 describe("finding things", () => {
-  const filterInput = () => screen.getByPlaceholderText(/^Filter by/) as HTMLInputElement;
+  const filterInput = () => screen.getByPlaceholderText(/^filter by/) as HTMLInputElement;
   const results = () => within(screen.getByRole("list", { name: "Matches" })).getAllByRole("listitem");
 
   it("narrows to what needs attention, each with its path", async () => {
@@ -525,8 +525,8 @@ describe("keyboard", () => {
   it("opens a filter result's side panel with Space", async () => {
     mount();
     await screen.findByRole("tree");
-    fireEvent.input(screen.getByPlaceholderText(/^Filter by/), { target: { value: "dsp-1" } });
-    fireEvent.keyDown(screen.getByPlaceholderText(/^Filter by/), { key: "Enter" });
+    fireEvent.input(screen.getByPlaceholderText(/^filter by/), { target: { value: "dsp-1" } });
+    fireEvent.keyDown(screen.getByPlaceholderText(/^filter by/), { key: "Enter" });
     const hit = await waitFor(() => {
       const h = within(screen.getByRole("list", { name: "Matches" })).getAllByRole("listitem").find((r) => (r.textContent ?? "").includes("dsp-1"));
       if (!h) throw new Error("no hit yet");
@@ -546,8 +546,8 @@ describe("what a link or a result points at", () => {
   it("reveals the node of things placed out of sight, rather than opening a location that is not one", async () => {
     mount("/web/explore", owner, hidden, false, []);
     await screen.findByRole("tree");
-    fireEvent.input(screen.getByPlaceholderText(/^Filter by/), { target: { value: "Placed nowhere" } });
-    fireEvent.keyDown(screen.getByPlaceholderText(/^Filter by/), { key: "Enter" });
+    fireEvent.input(screen.getByPlaceholderText(/^filter by/), { target: { value: "Placed nowhere" } });
+    fireEvent.keyDown(screen.getByPlaceholderText(/^filter by/), { key: "Enter" });
     const hit = await waitFor(() => {
       const h = within(screen.getByRole("list", { name: "Matches" })).getAllByRole("listitem").find((r) => (r.textContent ?? "").includes("Placed nowhere"));
       if (!h) throw new Error("no hit yet");
@@ -585,7 +585,7 @@ describe("what a link or a result points at", () => {
 // #2438: the need-attention chip counts what it filters, and the outline's
 // columns read cleanly.
 describe("the need-attention chip", () => {
-  const filterInput = () => screen.getByPlaceholderText(/^Filter by/) as HTMLInputElement;
+  const filterInput = () => screen.getByPlaceholderText(/^filter by/) as HTMLInputElement;
   const results = () => within(screen.getByRole("list", { name: "Matches" })).getAllByRole("listitem");
   const chip = () => within(screen.getByTestId("explore-counts")).getByRole("button", { name: /need attention/ });
 
@@ -639,7 +639,7 @@ describe("the need-attention chip", () => {
 });
 
 describe("the outline's columns", () => {
-  const filterInput = () => screen.getByPlaceholderText(/^Filter by/) as HTMLInputElement;
+  const filterInput = () => screen.getByPlaceholderText(/^filter by/) as HTMLInputElement;
 
   it("renders every name in the same face: none in the data font", async () => {
     mount();

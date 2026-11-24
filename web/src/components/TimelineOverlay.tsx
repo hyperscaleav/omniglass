@@ -8,7 +8,7 @@ import AlarmTimeline from "./AlarmTimeline";
 import { ChevronDown, ChevronRight, Sliders } from "./icons";
 import { useCursor } from "../lib/cursor";
 import { createClock } from "../lib/clock";
-import { fmtTime } from "../lib/format";
+import { fmtClock, fmtDay, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { nearestByTime } from "../lib/chart";
 import { rangeLabel, rangeStepSeconds, resolveRange, type TimeRange } from "../lib/time_range";
@@ -483,7 +483,7 @@ export default function TimelineOverlay(props: { kind: TimelineKind; id: string;
       return {
         x: x(t),
         anchor: (f === 0 ? "start" : f === 1 ? "end" : "middle") as "start" | "end" | "middle",
-        text: long ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+        text: long ? fmtDay(d.toISOString(), { local: true }) : fmtClock(d.toISOString()),
       };
     });
   });
