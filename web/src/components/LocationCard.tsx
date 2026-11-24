@@ -60,7 +60,7 @@ export default function LocationCard(props: {
             <span data-testid="location-type" class="text-base-content/60">{type() ? entityLabel(type()!) : p().location_type}</span>
           </span>
           <Show when={props.path && above().length > 0}>
-            <Tooltip as="span" tabIndex={0} data-testid="location-path" class="min-w-0 truncate text-base-content/50" content={above().join(" / ")}>{above().join(" / ")}</Tooltip>
+            <Tooltip as="span" data-testid="location-path" class="min-w-0 truncate text-base-content/50" content={above().join(" / ")}>{above().join(" / ")}</Tooltip>
           </Show>
           <Show when={props.contents}>
             <span class="text-base-content/30">{"·"}</span>

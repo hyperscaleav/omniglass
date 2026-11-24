@@ -37,8 +37,8 @@ export default function IdentityLinksList(props: {
             <span class="badge badge-soft badge-primary badge-sm">oidc</span>
             <div class="min-w-0 flex-1 leading-tight">
               <div class="flex min-w-0 items-center gap-2">
-                <Tooltip as="span" tabIndex={0} class="truncate font-data text-xs text-base-content/80" content={l.identifier}>{l.subject}</Tooltip>
-                <Tooltip as="span" tabIndex={0} class="truncate font-data text-[11px] text-base-content/40" content="The issuer: the identity provider that vouches for this subject">{l.issuer}</Tooltip>
+                <Tooltip as="span" class="truncate font-data text-xs text-base-content/80" content={l.identifier}>{l.subject}</Tooltip>
+                <Tooltip as="span" class="truncate font-data text-[11px] text-base-content/40" content="The issuer: the identity provider that vouches for this subject">{l.issuer}</Tooltip>
               </div>
               <div class="text-[11px] text-base-content/40">{meta(l)}</div>
             </div>

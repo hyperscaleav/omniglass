@@ -103,7 +103,7 @@ export default function Alarms() {
         <span class="flex flex-col gap-0.5">
           <A href={`/components/${a.component_id}`} class="font-data text-sm hover:underline" onClick={(e) => e.stopPropagation()}>{a.component}</A>
           <span class="flex min-w-0 items-baseline gap-1.5 text-xs text-base-content/55">
-            <Tooltip as="span" tabIndex={0} class="max-w-40 truncate" content={a.message}>{a.message}</Tooltip>
+            <Tooltip as="span" class="max-w-40 truncate" content={a.message}>{a.message}</Tooltip>
             <Show when={a.raised_by_rule}>
               {(rule) => <Tooltip as={A} href={drawerHref("event_rule", rule())} class="flex-none font-data text-[11px] text-base-content/50 hover:text-base-content hover:underline" content="The rule that raised this alarm" onClick={(e) => e.stopPropagation()}>{rule()}</Tooltip>}
             </Show>

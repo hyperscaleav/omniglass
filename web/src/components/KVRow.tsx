@@ -71,7 +71,7 @@ export default function KVRow(props: {
       }}
       onClick={rowClickable() ? () => props.onDrillIn?.() : undefined}
     >
-      <Tooltip as="span" tabIndex={0}
+      <Tooltip as="span"
         class="min-w-0 truncate text-sm"
         classList={{ "grow basis-32": showInput(), "font-medium": props.emphasize, "font-data": props.labelMono }}
         content={props.label}

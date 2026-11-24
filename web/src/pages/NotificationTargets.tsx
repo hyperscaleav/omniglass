@@ -113,7 +113,7 @@ export default function NotificationTargets(): JSX.Element {
       label: "Destination",
       width: "280px",
       sortVal: destination,
-      cell: (t) => <Tooltip as="span" tabIndex={0} class="block truncate font-data text-[12px] text-base-content/70" content={destination(t)}>{destination(t)}</Tooltip>,
+      cell: (t) => <Tooltip as="span" class="block truncate font-data text-[12px] text-base-content/70" content={destination(t)}>{destination(t)}</Tooltip>,
     },
     { key: "enabled", label: "Status", width: "96px", sortVal: (t) => String(t.enabled), cell: (t) => statusPill(t.enabled) },
   ];

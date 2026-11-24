@@ -24,7 +24,7 @@ export default function Breadcrumb(props: { crumbs: Crumb[] }) {
             <Show
               when={crumb.href}
               fallback={
-                <Tooltip as="span" tabIndex={0} class="truncate" style={styles()[i()]} content={crumb.title ?? crumb.label}>
+                <Tooltip as="span" class="truncate" style={styles()[i()]} content={crumb.title ?? crumb.label}>
                   <span aria-current="page">{crumb.label}</span>
                 </Tooltip>
               }

@@ -813,7 +813,7 @@ function Detail(props: { sel: Selected; onClose: () => void; fmt: (iso: string) 
                 <li class="flex gap-2">
                   <span class="shrink-0 tabular-nums text-base-content/50">{props.fmt(l.ts)}</span>
                   <span class="shrink-0 font-data" style={{ color: logFill(l.severity) }}>{l.severity ?? "-"}</span>
-                  <Tooltip as="span" tabIndex={0} class="min-w-0 truncate text-base-content/70" content={l.message}>{l.message}</Tooltip>
+                  <Tooltip as="span" class="min-w-0 truncate text-base-content/70" content={l.message}>{l.message}</Tooltip>
                 </li>
               )}
             </For>

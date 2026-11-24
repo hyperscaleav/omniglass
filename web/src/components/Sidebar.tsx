@@ -94,8 +94,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
           <Tooltip as={A}
             href="/profile"
             class="flex min-w-0 items-center gap-2.5 rounded-field hover:bg-base-300"
-            classList={{ "flex-1 p-1 -m-1": !props.collapsed, "tooltip tooltip-right": props.collapsed }}
-            data-tip={props.collapsed ? "Your profile" : undefined}
+            classList={{ "flex-1 p-1 -m-1": !props.collapsed }}
             data-testid="user-chip"
             content="Your profile"
           >

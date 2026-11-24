@@ -92,7 +92,7 @@ export function WriterCell(props: { row: { written_by?: CalcWriter | null; write
       {(x) => (
         <Show
           when={x().kind === "rule" ? (x() as Extract<ReturnType<typeof writerLabel>, { kind: "rule" }>) : undefined}
-          fallback={<Tooltip as="span" tabIndex={0} class="truncate text-[12px] text-base-content/60" content={(x() as { title: string }).title}>{(x() as { text: string }).text}</Tooltip>}
+          fallback={<Tooltip as="span" class="truncate text-[12px] text-base-content/60" content={(x() as { title: string }).title}>{(x() as { text: string }).text}</Tooltip>}
         >
           {(rule) => <CalcWriterCell writer={{ rule: rule().rule, rule_id: rule().rule_id }} />}
         </Show>

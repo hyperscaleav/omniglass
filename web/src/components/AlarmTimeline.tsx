@@ -49,7 +49,7 @@ export default function AlarmTimeline(props: { component: string; alarmId: strin
     <div id={props.id} class="flex flex-col gap-1 rounded-box bg-base-200/40 px-2.5 py-2">
       <Show when={q.error}>
         <div role="alert" class="alert alert-error alert-soft flex items-center justify-between gap-2 py-1 text-xs">
-          <Tooltip as="span" tabIndex={0} class="min-w-0 truncate" content={describeError(q.error)}>Could not read this alarm's timeline.</Tooltip>
+          <Tooltip as="span" class="min-w-0 truncate" content={describeError(q.error)}>Could not read this alarm's timeline.</Tooltip>
           <Button size="xs" intent="quiet" onClick={() => void q.refetch()}>Retry</Button>
         </div>
       </Show>
@@ -133,10 +133,10 @@ function NotifyRow(props: { e: AlarmTimelineEntry; component: string; alarmId: s
         <span class="text-base-content/55">action rule <span class="font-data text-base-content/70">{e().action_rule}</span></span>
       </Show>
       <Show when={e().what === "suppressed" && e().error}>
-        <Tooltip as="span" tabIndex={0} class="min-w-0 truncate text-base-content/45" content={e().error}>{e().error}</Tooltip>
+        <Tooltip as="span" class="min-w-0 truncate text-base-content/45" content={e().error}>{e().error}</Tooltip>
       </Show>
       <Show when={e().what === "failed"}>
-        <Tooltip as="span" tabIndex={0} class="min-w-0 truncate text-error/80" content={e().error}>
+        <Tooltip as="span" class="min-w-0 truncate text-error/80" content={e().error}>
           {e().error}{e().attempts ? ` (${e().attempts} attempts)` : ""}
         </Tooltip>
         <Show when={e().attempts ? e().notification : undefined}>

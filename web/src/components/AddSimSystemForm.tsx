@@ -253,9 +253,9 @@ function PlanRow(props: { slot: SimSlotFill }) {
     <tr data-testid="plan-slot" data-slot={r().slot} data-short={isShort() ? "true" : undefined}>
       <td>
         <span class="flex min-w-0 flex-col">
-          <Tooltip as="span" tabIndex={0} class="truncate font-data text-xs" content={r().slot}>{r().slot}</Tooltip>
+          <Tooltip as="span" class="truncate font-data text-xs" content={r().slot}>{r().slot}</Tooltip>
           <Show when={r().alternate}>
-            <Tooltip as="span" tabIndex={0} class="truncate font-data text-[11px] text-base-content/50" content={`Alternate taken: ${r().alternate}`}>{r().alternate}</Tooltip>
+            <Tooltip as="span" class="truncate font-data text-[11px] text-base-content/50" content={`Alternate taken: ${r().alternate}`}>{r().alternate}</Tooltip>
           </Show>
         </span>
       </td>
@@ -269,7 +269,7 @@ function PlanRow(props: { slot: SimSlotFill }) {
             </span>
           }
         >
-          <Tooltip as="span" tabIndex={0} class="block truncate font-data text-xs text-base-content/70" content={r().product}>{r().product}</Tooltip>
+          <Tooltip as="span" class="block truncate font-data text-xs text-base-content/70" content={r().product}>{r().product}</Tooltip>
         </Show>
       </td>
       <td class="text-right font-data tnum text-sm" classList={{ "text-base-content/40": isShort() }}>{r().count}</td>

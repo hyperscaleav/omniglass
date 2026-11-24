@@ -706,8 +706,8 @@ function OperationLine(props: { lead: string; detail: string; summary?: string }
   return (
     <span class="grid grid-cols-[6rem_minmax(0,14rem)_minmax(0,1fr)] items-baseline gap-2 px-3 py-1.5 text-xs">
       <span class="truncate font-data font-medium uppercase text-base-content/70">{props.lead}</span>
-      <Tooltip as="span" tabIndex={0} class="truncate font-data" content={props.detail}>{props.detail}</Tooltip>
-      <Tooltip as="span" tabIndex={0} class="truncate text-base-content/55" content={props.summary}>{props.summary}</Tooltip>
+      <Tooltip as="span" class="truncate font-data" content={props.detail}>{props.detail}</Tooltip>
+      <Tooltip as="span" class="truncate text-base-content/55" content={props.summary}>{props.summary}</Tooltip>
     </span>
   );
 }

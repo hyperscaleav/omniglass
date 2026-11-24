@@ -146,7 +146,7 @@ function readsCell(r: EventRule, linked = false): JSX.Element {
   return (
     <span class="flex min-w-0 flex-col leading-snug">
       {/* The drawer opens the metric or property the rule judges; a list row stays plain text, since a row click already opens this drawer. */}
-      <Show when={linked} fallback={<Tooltip as="span" tabIndex={0} class="truncate font-data text-[12px]" content={r.sample_key}>{r.sample_key}</Tooltip>}>
+      <Show when={linked} fallback={<Tooltip as="span" class="truncate font-data text-[12px]" content={r.sample_key}>{r.sample_key}</Tooltip>}>
         <CatalogRef kind={r.sample_lane === "property" ? "property" : "metric"} name={r.sample_key} />
       </Show>
       <span class="text-[11px] text-base-content/40">{r.sample_lane}</span>
@@ -1273,7 +1273,7 @@ function RulePreviewPanel(p: {
                     {(e) => (
                       <li data-testid="preview-edge" class="flex items-center gap-2 text-[12px]">
                         <span class={`badge badge-sm ${e.kind === "fire" ? "badge-soft badge-warning" : "badge-soft badge-success"}`}>{e.kind}</span>
-                        <Tooltip as="span" tabIndex={0} class="min-w-0 truncate" content={seriesLabel(e, p.reads)}>{e.component}</Tooltip>
+                        <Tooltip as="span" class="min-w-0 truncate" content={seriesLabel(e, p.reads)}>{e.component}</Tooltip>
                         <Show when={e.instance}><span class="font-data text-base-content/60">{e.instance}</span></Show>
                         <Tooltip as="span" tabIndex={0} class="ml-auto flex-none text-[11px] text-base-content/50" content={fmtTime(e.at)}>{rel(e.at)}</Tooltip>
                       </li>
