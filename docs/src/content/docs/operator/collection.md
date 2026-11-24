@@ -319,7 +319,7 @@ an https endpoint does, and **Trust this key** works the same way
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its reachability
 follows. A component
-that answers ping but not the request reads **no answer** (the reachability verdict is still down,
+that answers ping but not the request reads **no answer** (its reachability still reads down,
 as the ladder paragraph above says), and its why line says the request goes
 unanswered (the service is down, the port is closed, or the datagrams are lost); one that blocks
 ping but answers reads up. A lost datagram is re-sent within the endpoint's timeout, so a little
