@@ -196,24 +196,48 @@ const (
 	reasoningClose = "</reasoning>"
 )
 
-// splitReasoning pulls the leading <reasoning> blocks (Bedrock's gpt-oss
-// inlines its chain of thought so) off a message's content: the blocks
-// joined, and the answer after them. An unclosed block is all reasoning.
+// splitReasoning pulls every <reasoning> block (Bedrock's gpt-oss inlines its
+// chain of thought so, and after a tool call it may follow some text rather
+// than lead) off a message's content: the blocks joined, and the rest as the
+// answer. An unclosed block is reasoning to the end only where the reply leads
+// with it; after answer text it is a literal mention and stays in the answer.
 func splitReasoning(content string) (reasoning, answer string) {
-	rest := strings.TrimSpace(content)
-	var blocks []string
-	for strings.HasPrefix(rest, reasoningOpen) {
-		body := rest[len(reasoningOpen):]
+	rest := content
+	var blocks, answers []string
+	for {
+		start := strings.Index(rest, reasoningOpen)
+		if start < 0 {
+			answers = append(answers, rest)
+			break
+		}
+		answers = append(answers, rest[:start])
+		body := rest[start+len(reasoningOpen):]
 		end := strings.Index(body, reasoningClose)
 		if end < 0 {
-			blocks = append(blocks, strings.TrimSpace(body))
-			rest = ""
+			if strings.TrimSpace(strings.Join(answers, "")) == "" {
+				blocks = append(blocks, strings.TrimSpace(body))
+			} else {
+				// Mid-answer with no close: a literal mention, kept with all after it.
+				answers[len(answers)-1] += rest[start:]
+			}
 			break
 		}
 		blocks = append(blocks, strings.TrimSpace(body[:end]))
-		rest = strings.TrimSpace(body[end+len(reasoningClose):])
+		rest = body[end+len(reasoningClose):]
 	}
-	return strings.Join(blocks, "\n\n"), rest
+	var kept []string
+	for _, a := range answers {
+		if a = strings.TrimSpace(a); a != "" {
+			kept = append(kept, a)
+		}
+	}
+	var think []string
+	for _, b := range blocks {
+		if b != "" {
+			think = append(think, b)
+		}
+	}
+	return strings.Join(think, "\n\n"), strings.Join(kept, "\n\n")
 }
 
 // statusErr names a refused request by its cause, with the server's own
