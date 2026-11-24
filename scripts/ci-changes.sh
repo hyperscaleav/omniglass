@@ -25,6 +25,9 @@ while IFS= read -r f; do
   [ -n "$f" ] || continue
   n=$((n + 1))
   case "$f" in
+    # Scripts are CI and build plumbing, so they run everything (release-ci.md).
+    scripts/*)
+      all=true ;;
     # Generated documentation is checked by gen-drift, so it is not docs only.
     docs/src/generated/* | docs/src/content/docs/reference/* | docs/src/content/docs/architecture/data-model.md)
       docs=true gen=true ;;
@@ -32,6 +35,9 @@ while IFS= read -r f; do
       docs=true ;;
     web/*)
       web=true ;;
+    # The API spec is a Go output and the docs build reads it.
+    api/openapi.yaml)
+      go=true docs=true ;;
     *.go | go.mod | go.sum | db/* | internal/* | cmd/* | api/* | proto/*)
       go=true ;;
     *)

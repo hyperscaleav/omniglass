@@ -74,7 +74,7 @@ with `gen-drift.yml`); the script is the whole policy and is tested in `scripts/
 |---|---|
 | docs only (`docs/**`, `*.md`, evidence screenshots, issue templates, `.claude/**`) | the docs checks (`docs-build.yml`, `docs-shots.yml`, their own path filters) |
 | web (`web/**`) | web unit tests, `gen-drift`, the shared build, `e2e`, `smoke-lab` |
-| Go (`**/*.go`, `go.mod`, `db/**`, `internal/**`, `cmd/**`, `api/**`, `proto/**`) | the Go shards, `gen-drift`, the shared build, `e2e`, `smoke-lab` |
+| Go (`**/*.go`, `go.mod`, `db/**`, `internal/**`, `cmd/**`, `api/**`, `proto/**`) | the Go shards, `gen-drift`, the shared build, `e2e`, `smoke-lab`; `api/openapi.yaml` also runs the docs checks (`docs-build.yml` reads it) |
 | generated docs (`docs/src/generated/**`, the reference pages, the data model page) | `gen-drift` |
 | workflows, the Dockerfile, the Makefile, `scripts/**`, or any path no area claims | everything |
 
