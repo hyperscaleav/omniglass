@@ -3,7 +3,7 @@
 # `make`, run ./bin/omniglass lab run as a person would, wait for its ready
 # banner, prove the console and the lab flag answer on the printed URL, stop
 # it with Ctrl-C (SIGINT), and prove it left no container and no network.
-# CI runs it in image.yml; it also runs by hand from a checkout.
+# CI runs it in test.yml, on the shared build; it also runs by hand from a checkout.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
