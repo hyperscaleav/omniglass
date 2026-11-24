@@ -132,8 +132,12 @@ type healthMemberBody struct {
 }
 
 type healthSystemBody struct {
-	Name   string `json:"name"`
-	Health string `json:"health"`
+	ID       string `json:"id" doc:"The system's id"`
+	Name     string `json:"name" doc:"The system's short name; not unique across rooms, so address the system by path"`
+	Path     string `json:"path" doc:"The system's dotted address, unique: the handle GET /systems/{name} resolves"`
+	Label    string `json:"label" doc:"The system's display label"`
+	Location string `json:"location" doc:"The dotted path of the location the system is placed at; empty when unplaced"`
+	Health   string `json:"health"`
 }
 
 type healthTransitionBody struct {
@@ -177,7 +181,7 @@ func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
 	}
 	out.Body.Systems = make([]healthSystemBody, 0, len(rep.Systems))
 	for _, s := range rep.Systems {
-		out.Body.Systems = append(out.Body.Systems, healthSystemBody{Name: s.Name, Health: s.Verdict})
+		out.Body.Systems = append(out.Body.Systems, healthSystemBody{ID: s.ID, Name: s.Name, Path: s.Path, Label: s.Label, Location: s.Location, Health: s.Verdict})
 	}
 	out.Body.Transitions = make([]healthTransitionBody, 0, len(rep.Transitions))
 	for _, t := range rep.Transitions {
