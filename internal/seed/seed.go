@@ -428,6 +428,8 @@ func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
 			Label string `yaml:"label"`
 			Color string `yaml:"color"`
 			Rank  int    `yaml:"rank"`
+
+			HealthEffect string `yaml:"health_effect"`
 		} `yaml:"levels"`
 	}
 	if err := yaml.Unmarshal(severityLevelsYAML, &doc); err != nil {
@@ -435,7 +437,7 @@ func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, l := range doc.Levels {
 		if err := gw.UpsertSeverityLevel(ctx, storage.SeverityLevel{
-			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, Official: true,
+			Name: l.Name, Label: l.Label, Color: l.Color, Rank: l.Rank, HealthEffect: l.HealthEffect, Official: true,
 		}); err != nil {
 			return err
 		}

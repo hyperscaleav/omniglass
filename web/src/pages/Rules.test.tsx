@@ -47,9 +47,9 @@ const stale: EventRule = {
 };
 
 const levels: SeverityLevel[] = [
-  { name: "info", label: "Info", color: "gray", rank: 10, outage: false },
-  { name: "average", label: "Average", color: "orange", rank: 30, outage: false },
-  { name: "high", label: "High", color: "red", rank: 40, outage: true },
+  { name: "info", label: "Info", color: "gray", rank: 10, outage: false, health_effect: "degraded" },
+  { name: "average", label: "Average", color: "orange", rank: 30, outage: false, health_effect: "degraded" },
+  { name: "high", label: "High", color: "red", rank: 40, outage: true, health_effect: "outage" },
 ] as SeverityLevel[];
 const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", official: true }];
 const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", official: true }];

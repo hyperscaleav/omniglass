@@ -6649,9 +6649,18 @@
       "type": "text",
       "nullable": false,
       "default": "'local'::text"
+     },
+     {
+      "name": "health_effect",
+      "type": "text",
+      "nullable": false
      }
     ],
     "checks": [
+     {
+      "name": "severity_level_health_effect_check",
+      "expr": "CHECK ((health_effect = ANY (ARRAY['none'::text, 'degraded'::text, 'outage'::text])))"
+     },
      {
       "name": "severity_level_namespace_check",
       "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"

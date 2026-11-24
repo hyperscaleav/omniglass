@@ -1835,7 +1835,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1855,7 +1855,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
-					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
+					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)")
 					_ = cmd.MarkFlagRequired("severity")
 					return cmd
 				}()
@@ -7436,6 +7436,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fColor string
+				var fHealthEffect string
 				var fLabel string
 				var fName string
 				var fRank int
@@ -7451,6 +7452,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("color") {
 							body["color"] = fColor
 						}
+						if cmd.Flags().Changed("health-effect") {
+							body["health_effect"] = fHealthEffect
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
@@ -7465,6 +7469,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
 				_ = cmd.MarkFlagRequired("color")
+				cmd.Flags().StringVar(&fHealthEffect, "health-effect", "", "What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
@@ -7513,7 +7518,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List severity levels",
-					Long:    "Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.",
+					Long:    "Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.",
 					Example: "  omniglass severity-level list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7528,13 +7533,14 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fColor string
+				var fHealthEffect string
 				var fLabel string
 				var fName string
 				var fRank int
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a severity level",
-					Long:    "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
+					Long:    "Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
 					Example: "  omniglass severity-level update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7542,6 +7548,9 @@ func generatedCommands() []*cobra.Command {
 						body := map[string]any{}
 						if cmd.Flags().Changed("color") {
 							body["color"] = fColor
+						}
+						if cmd.Flags().Changed("health-effect") {
+							body["health_effect"] = fHealthEffect
 						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -7556,6 +7565,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
+				cmd.Flags().StringVar(&fHealthEffect, "health-effect", "", "What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "A new name; every alarm at this level follows")
 				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels; unique")

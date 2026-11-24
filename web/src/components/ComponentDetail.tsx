@@ -169,8 +169,10 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const snoozeSurface = createUniqueId();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
-  // catalog's flag, #917), amber when they only degrade.
+  // level's declared health effect, #2558), amber when they only degrade, and
+  // neutral when every one declares no effect.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
+  const affectsHealth = createMemo(() => activeAlarms().some((a) => scale().effect(a.severity) !== "none"));
   const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
   // The component's own health rides on its alarms read, polled; the fleet
   // view's dot (read once, for the location and the path) stands in until then.
@@ -330,7 +332,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             <Show when={leafTab() === "overview"}>
               <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
                 <Show when={activeAlarms().length > 0}>
-                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() && affectsHealth(), "border-base-300": !affectsHealth() }}>
                     <h2 class="eyebrow">Why</h2>
                     <For each={activeAlarms()}>
                       {(a) => (
@@ -340,6 +342,9 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                               line up whatever its message's width. */}
                           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                             <SeverityBadge name={a.severity} />
+                            <Show when={scale().effect(a.severity) === "none"}>
+                              <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
+                            </Show>
                             <span class="min-w-0 flex-1">{a.message}</span>
                             <Show when={a.raised_by_rule}>
                               {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}

@@ -4202,35 +4202,35 @@
    "label": "Info",
    "color": "gray",
    "rank": 10,
-   "outage": false
+   "health_effect": "none"
   },
   {
    "name": "warning",
    "label": "Warning",
    "color": "yellow",
    "rank": 20,
-   "outage": false
+   "health_effect": "degraded"
   },
   {
    "name": "average",
    "label": "Average",
    "color": "orange",
    "rank": 30,
-   "outage": false
+   "health_effect": "degraded"
   },
   {
    "name": "high",
    "label": "High",
    "color": "red",
    "rank": 40,
-   "outage": true
+   "health_effect": "outage"
   },
   {
    "name": "disaster",
    "label": "Disaster",
    "color": "darkred",
    "rank": 50,
-   "outage": true
+   "health_effect": "outage"
   }
  ],
  "event_rules": [
