@@ -17,11 +17,11 @@ import Tooltip from "./ui/Tooltip";
 // its unread count.
 function TrailLink(props: { crumb: Crumb; class?: string }) {
   return (
-    <Show when={props.crumb.href} fallback={<span class={props.class} title={props.crumb.title ?? props.crumb.label}>{props.crumb.label}</span>}>
+    <Show when={props.crumb.href} fallback={<Tooltip as="span" class={props.class} content={props.crumb.title ?? props.crumb.label}>{props.crumb.label}</Tooltip>}>
       {(href) => (
-        <A href={href()} title={props.crumb.title ?? props.crumb.label} class={`hover:text-base-content ${props.class ?? ""}`}>
+        <Tooltip as={A} href={href()} content={props.crumb.title ?? props.crumb.label} class={`hover:text-base-content ${props.class ?? ""}`}>
           {props.crumb.label}
-        </A>
+        </Tooltip>
       )}
     </Show>
   );
