@@ -55,7 +55,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: git diff --name-status "$BASE_SHA...$HEAD_SHA" | bash scripts/docs-shots-guard.sh "$HEAD_REF"
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: git diff --name-status "$BASE_SHA...$HEAD_SHA" | bash scripts/docs-shots-guard.sh "$HEAD_REF" "$HEAD_REPO" "$BASE_REPO"
 
   recapture:
     # Off on pull requests: a PR's stale shots are expected, main recaptures

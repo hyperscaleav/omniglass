@@ -211,7 +211,7 @@ capture list and the embed cannot drift, a `#id` with no frontmatter entry (or n
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
 
 Because the images track the live UI, they are refreshed like any generated artifact: a change
-to an operator surface **re-runs `make docs-shots` and commits the new PNGs**. Each capture
+to an operator surface is followed by **main re-running `make docs-shots`** after the merge (below); a PR itself commits only a new shot for a new `id`. Each capture
 writes **two renders of the same settled page**: the clean shot under
 `docs/public/screenshots/`, every region live, which is what the docs embed (a masked history
 strip teaches nothing); and its masked twin under `docs/screenshots/baseline/`, where the

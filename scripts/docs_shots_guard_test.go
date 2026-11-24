@@ -11,10 +11,10 @@ import (
 // may not modify, delete or rename an existing one, and the recapture branch
 // is the one exemption.
 
-func docsShotsGuard(t *testing.T, headRef, diff string) (string, int) {
+func docsShotsGuard(t *testing.T, headRef, diff string, repos ...string) (string, int) {
 	t.Helper()
 	requireTools(t)
-	cmd := exec.Command("bash", "docs-shots-guard.sh", headRef)
+	cmd := exec.Command("bash", append([]string{"docs-shots-guard.sh", headRef}, repos...)...)
 	cmd.Stdin = strings.NewReader(diff)
 	var errb bytes.Buffer
 	cmd.Stderr = &errb
@@ -52,8 +52,18 @@ func TestDocsShotsGuardRefusesModifyDeleteAndRename(t *testing.T) {
 func TestDocsShotsGuardExemptsTheRecaptureBranch(t *testing.T) {
 	diff := "M\tdocs/public/screenshots/fleet.png\nM\tdocs/screenshots/baseline/fleet.png\n"
 	for _, ref := range []string{"claude/docs-shots-recapture", "claude/docs-shots-recapture-release-1-4"} {
-		if out, code := docsShotsGuard(t, ref, diff); code != 0 {
+		if out, code := docsShotsGuard(t, ref, diff, "o/r", "o/r"); code != 0 {
 			t.Errorf("%s: exit %d: %s", ref, code, out)
 		}
+	}
+}
+
+func TestDocsShotsGuardDoesNotExemptAFork(t *testing.T) {
+	diff := "M\tdocs/public/screenshots/fleet.png\n"
+	if _, code := docsShotsGuard(t, "claude/docs-shots-recapture", diff, "fork/r", "o/r"); code == 0 {
+		t.Fatal("a fork's branch of the recapture name skipped the guard")
+	}
+	if _, code := docsShotsGuard(t, "claude/docs-shots-recapture", diff); code == 0 {
+		t.Fatal("a branch with no repo facts skipped the guard")
 	}
 }

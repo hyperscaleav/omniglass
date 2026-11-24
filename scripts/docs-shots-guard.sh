@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# docs-shots-guard.sh <head_ref>: fail a pull request whose diff modifies, deletes
+# docs-shots-guard.sh <head_ref> [head_repo base_repo]: fail a pull request whose diff modifies, deletes
 # or renames an existing docs screenshot (#2561).
 #
 # Reads `git diff --name-status` on stdin. A PR may ADD a shot (a new file cannot
@@ -7,13 +7,18 @@
 # existing one, because git cannot merge binaries and main recaptures the shots
 # after every merge. The recapture branch the workflow opens (claude/docs-shots-
 # recapture, claude/docs-shots-recapture-<release>) is exempt: it is the one
-# writer of existing shots.
+# writer of existing shots, and only when the branch lives in this repository
+# (a fork cannot claim the name: head_repo must equal base_repo).
 set -euo pipefail
 
 head_ref=${1:-}
-case "$head_ref" in
-  claude/docs-shots-recapture | claude/docs-shots-recapture-*) exit 0 ;;
-esac
+head_repo=${2:-}
+base_repo=${3:-}
+if [ -n "$head_repo" ] && [ "$head_repo" = "$base_repo" ]; then
+  case "$head_ref" in
+    claude/docs-shots-recapture | claude/docs-shots-recapture-*) exit 0 ;;
+  esac
+fi
 
 bad=()
 while IFS=$'\t' read -r status path rest; do
