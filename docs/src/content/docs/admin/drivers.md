@@ -96,8 +96,7 @@ An endpoint carries two kinds of data, and a driver configures only one of them:
 
   Omniglass produces it from the endpoint's transport. A driver never declares or emits it, and a
   spec that emits one is refused. A driver only tunes how some of it is gathered: its `ladder` ([the driver spec](/developer/driver-spec/))
-  picks the reachability rung and whether to ping. The cadences become per-endpoint-type defaults a
-  driver and an operator can override with #1373. The keys are the `outpost-probe` and `platform` writer
+  picks the reachability rung and whether to ping. The keys are the `outpost-probe` and `platform` writer
   classes, listed from the code on [who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class).
 - **Collected data** is what the device's own API says: a volume, a call state, an input. It is
   exactly what the driver's polls and listeners emit, each a **collected** key, and the driver
