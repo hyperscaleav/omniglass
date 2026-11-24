@@ -548,9 +548,11 @@ func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
 		t.Fatalf("aimed simulation = %+v, want panel-1's device, served by it", sim)
 	}
 
-	// A caller who may read everything but update only the ALIAS must not
-	// drive the owning device through it: the action scope is re-checked on
-	// the owner the alias resolves to.
+	// A caller who may read everything but holds no simulation:update must not
+	// drive the owning device through the alias: 403, whichever component the
+	// request names. (simulation is a fleet-wide resource, so only an
+	// all-scoped grant confers an action on it; the owner re-check in resolve
+	// is defense in depth for the day a tier can contain it.)
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -568,11 +570,10 @@ func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
 		sql  string
 		args []any
 	}{
-		{`insert into role (name, permissions) values ('alias-reader', '{"component:read","simulation:read"}'), ('alias-firer', '{"simulation:update"}')`, nil},
+		{`insert into role (name, permissions) values ('alias-reader', '{"component:read","simulation:read"}')`, nil},
 		{`insert into machine (user_id, name) values ($1, 'alias-only')`, []any{pid}},
 		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, thash, tprefix}},
 		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'alias-reader'), 'all', null)`, []any{pid}},
-		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'alias-firer'), 'component', (select id::text from component where name = 'aimed'))`, []any{pid}},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 			t.Fatalf("%s: %v", q.sql, err)
@@ -591,15 +592,7 @@ func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
 	}
 	rb, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	_ = rb
-	// 409, 422 and 503 are answers from past the scope check (not simulated,
-	// no such surface, no simulator): reaching one is the bypass. Today a
-	// component-scoped simulation:update cannot be resolved against the
-	// component table at all (the route is all-scope in practice), so the
-	// request is refused before any of them; the owner re-check in resolve
-	// keeps it so if that ever changes.
-	switch resp.StatusCode {
-	case http.StatusOK, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusServiceUnavailable:
-		t.Fatalf("a caller scoped to the alias alone got past the scope check on the owner: status %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("a caller with no simulation:update got status %d (%s), want 403", resp.StatusCode, rb)
 	}
 }
