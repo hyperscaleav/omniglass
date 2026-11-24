@@ -96,7 +96,7 @@ export default function OccurrenceList(p: {
         }
       >
         <ul class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
-          <For each={rows()}>{(o) => <OccurrenceRow o={o} showOwner={p.scope.type === "system"} />}</For>
+          <For each={rows()}>{(o) => <OccurrenceRow o={o} showSource={p.scope.type === "system"} />}</For>
         </ul>
       </Show>
     </section>

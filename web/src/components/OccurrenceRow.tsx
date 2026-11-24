@@ -1,14 +1,16 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
-import { fmtTime, rel } from "../lib/format";
+import { fmtTime } from "../lib/format";
+import Time from "./Time";
 import { formatAttributes } from "../lib/events";
 import { arrivedApart, messageParts, type Occurrence } from "../lib/occurrence";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import RuleLink from "./RuleLink";
 
 // OccurrenceRow is the one row an event or a log line wears wherever it is listed
-// (#2437): the relative time (the absolute on hover), a kind badge (an event's
-// key, or a log's severity colored by level), the owner when the list spans
-// several entities, and the message clamped to one line, so a long unbroken
+// (#2437), laid out as a grid: the relative time (the absolute on hover), a kind
+// badge (an event's key, or a log's severity colored by level, info muted), the
+// source where the list spans several entities, a log's facility, and the message
+// clamped to one line with the full text on hover, so a long unbroken
 // message never widens the row. Clicking the row opens its detail in place: the
 // message wrapped in full, its source, correlation id, structured attributes, the
 // rule that derived it and the alarm it moved. An internal id in a message (a task's
@@ -33,20 +35,25 @@ function Message(p: { text: string }): JSX.Element {
   );
 }
 
-export default function OccurrenceRow(p: { o: Occurrence; showOwner?: boolean }): JSX.Element {
+export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }): JSX.Element {
   const [open, setOpen] = createSignal(false);
   // Each row owns its timeline toggle: a rule's fire and clear events carry the
   // same alarm, and opening one opens only that row.
   const timelines = createTimelineToggles();
   const attrs = createMemo(() => formatAttributes(p.o.attributes));
   const labels = createMemo(() => formatAttributes(p.o.labels));
+  // A log is a fixed-width grid so its fields line up down the list: time,
+  // severity, source (only where entries come from several), facility, then the
+  // message taking the rest. An event uses the same slots without a facility.
+  const columns = () => ["4.5rem", "5.5rem", p.showSource ? "9rem" : "", p.o.kind === "log" ? "6.5rem" : "", "minmax(0,1fr)"].filter(Boolean).join(" ");
+  const muted = () => p.o.kind === "log" && ["info", "informational", "debug", "trace"].includes(p.o.badge.toLowerCase());
   const detailId = `occ-${Math.random().toString(36).slice(2, 9)}`;
   const facts = createMemo(() => {
     const o = p.o;
     const out: [string, string][] = [];
     // The source is the channel; the endpoint that collected the line usually
     // shares its name, so the source is shown only where it says something more.
-    if (o.source && o.source !== o.instance) out.push(["Source", o.source]);
+    if (o.source && (o.source !== o.instance || p.showSource || o.owner)) out.push(["Source", o.source]);
     if (o.instance) out.push(["Via", o.instance]);
     if (o.provenance) out.push(["Provenance", o.provenance]);
     if (o.origin) out.push(["Arrived", o.origin]);
@@ -60,17 +67,21 @@ export default function OccurrenceRow(p: { o: Occurrence; showOwner?: boolean })
       <div class="flex min-w-0 items-center gap-2">
         <button
           type="button"
-          class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left"
+          class="grid min-w-0 flex-1 cursor-pointer items-center gap-x-3 text-left"
+          style={{ "grid-template-columns": columns() }}
           aria-expanded={open()}
           aria-controls={detailId}
           onClick={() => setOpen((v) => !v)}
         >
-          <span class="w-14 shrink-0 text-[11px] tabular-nums text-base-content/45" title={p.o.ts}>{rel(p.o.ts)}</span>
-          <span class={`badge badge-sm max-w-40 shrink-0 truncate font-data text-[10px] ${p.o.badgeClass}`}>{p.o.badge}</span>
-          <Show when={p.showOwner && p.o.owner}>
-            <span class="max-w-32 shrink-0 truncate font-data text-[11px] text-base-content/60" title={p.o.owner}>{p.o.owner}</span>
+          <span data-testid="occurrence-time" class="text-[11px] text-base-content/45"><Time iso={p.o.ts} /></span>
+          <span class={`badge badge-sm max-w-full justify-self-start truncate font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}>{p.o.badge}</span>
+          <Show when={p.showSource}>
+            <span data-testid="occurrence-source" class="truncate font-data text-[11px] text-base-content/60" title={p.o.owner ?? p.o.source}>{p.o.owner ?? p.o.source}</span>
           </Show>
-          <span class="min-w-0 flex-1 truncate text-sm text-base-content/80" data-testid="occurrence-message"><Message text={p.o.message} /></span>
+          <Show when={p.o.kind === "log"}>
+            <span data-testid="occurrence-facility" class="truncate font-data text-[11px] text-base-content/40" title={p.o.facility}>{p.o.facility}</span>
+          </Show>
+          <span class="min-w-0 truncate text-sm text-base-content/80" title={p.o.message} data-testid="occurrence-message"><Message text={p.o.message} /></span>
         </button>
         {/* A rule's event names the rule and carries the alarm it moved (#951):
             beside the row's button, never inside it. */}

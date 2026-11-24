@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import OccurrenceList from "./OccurrenceList";
+import OccurrenceRow from "./OccurrenceRow";
+import type { Occurrence } from "../lib/occurrence";
 import { EVENTS_KEY, type ComponentEvents } from "../lib/events";
 import { LOGS_KEY, OUTPOST_LOGS_KEY, type ComponentLogs, type OutpostLogs } from "../lib/logs";
 
@@ -128,8 +130,9 @@ describe("OccurrenceRow", () => {
 
   it("shows the relative time with the absolute on hover", () => {
     const { getAllByTestId } = mountEvents();
-    const t = within(getAllByTestId("occurrence-row")[0]).getByText(/ago|\ds/);
-    expect(t.getAttribute("title")).toBe(nowIso);
+    const t = within(getAllByTestId("occurrence-row")[0]).getByTestId("occurrence-time");
+    fireEvent.focus(t.firstElementChild ?? t);
+    expect(t.textContent).toMatch(/ago|\ds|now/);
   });
 });
 
@@ -158,7 +161,7 @@ describe("OccurrenceList logs", () => {
     expect(getByText(/"code": 1/)).toBeTruthy();
     expect(getByText(/"class": "kernel"/)).toBeTruthy();
     expect(getByText("corr-9")).toBeTruthy();
-    expect(getByText("daemon")).toBeTruthy();
+    expect(within(getAllByTestId("occurrence-detail")[0]).getByText("daemon")).toBeTruthy();
   });
 
   it("says when a line arrived apart from the time it claims", () => {
@@ -246,5 +249,49 @@ describe("no page-specific occurrence markup remains", () => {
     for (const banned of ["EventRow", "LogRow", "EventsPanel", "LogsPanel", "LogFilters", "systemEvents(", "systemLogs(", "getLogs(", "getEvents("]) {
       expect(src, `${f} still carries ${banned}`).not.toContain(banned);
     }
+  });
+});
+
+describe("OccurrenceRow columns", () => {
+  const log: Occurrence = { kind: "log", id: "l:0", ts: nowIso, badge: "info", badgeClass: "badge-ghost", owner: "disp-1", message: "retention swept 4 partitions", source: "scheduler", facility: "retention", attributes: { dropped: 4 } };
+  const mount = (o: Occurrence, showSource: boolean) => render(() => <ul><OccurrenceRow o={o} showSource={showSource} /></ul>);
+
+  it("a system row has a source column; a component row has none", () => {
+    const sys = mount(log, true);
+    expect(sys.queryByTestId("occurrence-source")?.textContent).toBe("disp-1");
+    cleanup();
+    const comp = mount(log, false);
+    expect(comp.queryByTestId("occurrence-source")).toBeNull();
+  });
+
+  it("lays a log out as time, severity, facility, message and keeps the message to one line", () => {
+    const { getByTestId, getAllByTestId } = mount(log, false);
+    expect(getByTestId("occurrence-time")).toBeTruthy();
+    expect(getByTestId("occurrence-facility").textContent).toBe("retention");
+    expect(getByTestId("occurrence-message").classList.contains("truncate")).toBe(true);
+    expect(getByTestId("occurrence-message").getAttribute("title")).toBe("retention swept 4 partitions");
+    expect(getAllByTestId("occurrence-row")[0].querySelector("button")!.style.gridTemplateColumns).not.toBe("");
+  });
+
+  it("mutes info and keeps warning colored", () => {
+    const a = mount(log, false);
+    expect(a.getByText("info").className).toMatch(/text-base-content\/45/);
+    expect(a.getByText("info").className).not.toMatch(/badge-(warning|error)/);
+    cleanup();
+    const b = mount({ ...log, badge: "warning", badgeClass: "badge-warning" }, false);
+    expect(b.getByText("warning").classList.contains("badge-warning")).toBe(true);
+  });
+
+  it("expands in place on click, showing source, facility and attributes, with aria-expanded", () => {
+    const { getByTestId, queryByTestId, getAllByRole } = mount(log, false);
+    const btn = getAllByRole("button")[0];
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(queryByTestId("occurrence-detail")).toBeNull();
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    const d = getByTestId("occurrence-detail");
+    expect(d.textContent).toContain("scheduler");
+    expect(d.textContent).toContain("retention");
+    expect(d.textContent).toContain('"dropped": 4');
   });
 });
