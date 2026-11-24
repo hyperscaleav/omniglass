@@ -113,7 +113,7 @@ A blade with no actions at all (a role) shows no bar.
 
 The same bar carries **create**. A form that opens in a slide-over (New user, New tag, Upload
 file) or as its own blade (New endpoint) puts its **Create** button in the bar at the foot of the
-panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
+panel, never floating after the last field. On the create faces and the event rule form it stays enabled and, pressed with a gap, names what is missing; the older slide-over forms still grey it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 
 ## Delete, and what is in the way

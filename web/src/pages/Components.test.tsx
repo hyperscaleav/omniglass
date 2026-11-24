@@ -159,6 +159,10 @@ describe("Components create-as-route", () => {
     expect((await screen.findByTestId("form-problems")).textContent).toContain("Product");
     const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
+    // Pressed while the platform is still naming it, Create does not report the
+    // name as missing: nothing is missing yet.
+    fireEvent.click(submit);
+    expect(screen.queryByTestId("form-problems")?.textContent ?? "").not.toContain("Name");
     // Enabled once the platform has ANSWERED, which is a round trip since #702
     // rather than a synchronous read of a catalog the picker had loaded. The
     // wait is the behaviour change: submitting before the answer lands would

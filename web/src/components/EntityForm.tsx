@@ -731,7 +731,8 @@ export function EntityCreateForm(props: {
     const out: FormProblem[] = [];
     if (isLocation() && !locationType().trim()) out.push({ key: "locationType", label: "Location type", message: "Choose a location type." });
     if (isComponent() && !product()) out.push({ key: "product", label: "Product", message: "Choose a product." });
-    if (penIncomplete(!!labelDraft.data?.name, namePen)) out.push({ key: "name", label: "Name", message: "Type a name, or choose what lets the platform name it." });
+    // Not while the platform is still answering the name: nothing is missing yet.
+    if (!labelDraft.isFetching && penIncomplete(!!labelDraft.data?.name, namePen)) out.push({ key: "name", label: "Name", message: "Type a name, or choose what lets the platform name it." });
     return out;
   });
   const shown = (key: string) => (formActions.attempted() ? problems().find((x) => x.key === key)?.message : undefined);

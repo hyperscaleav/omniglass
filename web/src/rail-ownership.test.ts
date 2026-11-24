@@ -74,7 +74,11 @@ describe("action rail ownership", () => {
       "components/OmnibotPanel.tsx": "a chat composer (Send)",
       "pages/Profile.tsx": "the signed-in user's own settings card",
     };
-    const ownRow = /<(?:Button|button)\b[^>]*\btype="submit"(?![^>]*sr-only)/;
+    // Every opening <Button ...> / <button ...> tag; an `=>` inside an attribute
+    // (an onClick arrow) holds a `>` that must not end the tag.
+    const tags = /<(?:Button|button)\b(?:=>|[^>])*>/g;
+    const drawsSubmit = (src: string) => (src.match(tags) ?? []).some((t) => /\btype="submit"/.test(t) && !t.includes("sr-only"));
+    const ownRow = { test: drawsSubmit };
     const offenders = files.filter((f) => ownRow.test(readFileSync(f, "utf8")) && !(rel(f) in allowlist)).map(rel);
     expect(offenders).toEqual([]);
     for (const f of Object.keys(allowlist)) expect(ownRow.test(readFileSync(join(here, f), "utf8")), `${f} no longer draws a submit row: drop it from the allowlist`).toBe(true);
