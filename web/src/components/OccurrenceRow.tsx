@@ -44,9 +44,9 @@ export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }
   const attrs = createMemo(() => formatAttributes(p.o.attributes));
   const labels = createMemo(() => formatAttributes(p.o.labels));
   // A log is a fixed-width grid so its fields line up down the list: time,
-  // severity, source (only where entries come from several), facility, then the
-  // message taking the rest. An event uses the same slots without a facility.
-  const columns = () => ["4.5rem", "5.5rem", p.showSource ? "9rem" : "", p.o.kind === "log" ? "6.5rem" : "", "minmax(0,1fr)"].filter(Boolean).join(" ");
+  // severity (an event's key fits the same slot), source (only where entries come from several), facility, then the
+  // message taking the rest. An event uses the same slots, its facility slot left empty, so the message starts at the same x in an events list and a logs list stacked on one page.
+  const columns = () => ["4.5rem", "9rem", p.showSource ? "9rem" : "", "6.5rem", "minmax(0,1fr)"].filter(Boolean).join(" ");
   const muted = () => p.o.kind === "log" && ["info", "informational", "debug", "trace"].includes(p.o.badge.toLowerCase());
   const detailId = `occ-${Math.random().toString(36).slice(2, 9)}`;
   const facts = createMemo(() => {
@@ -75,11 +75,11 @@ export default function OccurrenceRow(p: { o: Occurrence; showSource?: boolean }
           onClick={() => setOpen((v) => !v)}
         >
           <span data-testid="occurrence-time" class="text-[11px] text-base-content/45"><Time iso={p.o.ts} /></span>
-          <span class={`badge badge-sm max-w-full justify-self-start truncate font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}>{p.o.badge}</span>
+          <span title={p.o.badge} class={`badge badge-sm min-w-0 max-w-full justify-self-start font-data text-[10px] ${muted() ? "badge-ghost text-base-content/45" : p.o.badgeClass}`}><span class="truncate">{p.o.badge}</span></span>
           <Show when={p.showSource}>
             <Tooltip as="span" data-testid="occurrence-source" class="truncate font-data text-[11px] text-base-content/60" content={p.o.owner ?? p.o.source}>{p.o.owner ?? p.o.source}</Tooltip>
           </Show>
-          <Show when={p.o.kind === "log"}>
+          <Show when={p.o.kind === "log"} fallback={<span aria-hidden="true" />}>
             <Tooltip as="span" data-testid="occurrence-facility" class="truncate font-data text-[11px] text-base-content/40" content={p.o.facility}>{p.o.facility}</Tooltip>
           </Show>
           <Tooltip as="span" class="min-w-0 truncate text-sm text-base-content/80" content={p.o.message} data-testid="occurrence-message"><Message text={p.o.message} /></Tooltip>

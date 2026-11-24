@@ -149,7 +149,7 @@ describe("OccurrenceList logs", () => {
   it("renders one row per line, the severity badge colored by level", () => {
     const { getByText, getAllByTestId } = mountLogs(seed);
     expect(getAllByTestId("occurrence-row")).toHaveLength(2);
-    expect(getByText("err").classList.contains("badge-error")).toBe(true);
+    expect(getByText("err").parentElement!.classList.contains("badge-error")).toBe(true);
     expect(getByText("hdmi link state changed to up")).toBeTruthy();
   });
 
@@ -274,13 +274,33 @@ describe("OccurrenceRow columns", () => {
     expect(getAllByTestId("occurrence-row")[0].querySelector("button")!.style.gridTemplateColumns).not.toBe("");
   });
 
+  it("an event and a log share one grid, so the message starts at the same x in both lists (#2642)", () => {
+    const event: Occurrence = { ...log, kind: "event", id: "e:0", badge: "collection-failed", badgeClass: "badge-error", facility: undefined };
+    const grid = (o: Occurrence, src: boolean) => {
+      const a = mount(o, src);
+      const g = a.getAllByTestId("occurrence-row")[0].querySelector("button")!.style.gridTemplateColumns;
+      cleanup();
+      return g;
+    };
+    expect(grid(event, true)).toBe(grid(log, true));
+    expect(grid(event, false)).toBe(grid(log, false));
+  });
+
+  it("a long event key is clipped inside its badge, the full key on hover (#2642)", () => {
+    const event: Occurrence = { ...log, kind: "event", id: "e:1", badge: "collection-failed", badgeClass: "badge-error", facility: undefined };
+    const { getByText } = mount(event, true);
+    const text = getByText("collection-failed");
+    expect(text.classList.contains("truncate")).toBe(true);
+    expect(text.parentElement!.getAttribute("title")).toBe("collection-failed");
+  });
+
   it("mutes info and keeps warning colored", () => {
     const a = mount(log, false);
-    expect(a.getByText("info").className).toMatch(/text-base-content\/45/);
-    expect(a.getByText("info").className).not.toMatch(/badge-(warning|error)/);
+    expect(a.getByText("info").parentElement!.className).toMatch(/text-base-content\/45/);
+    expect(a.getByText("info").parentElement!.className).not.toMatch(/badge-(warning|error)/);
     cleanup();
     const b = mount({ ...log, badge: "warning", badgeClass: "badge-warning" }, false);
-    expect(b.getByText("warning").classList.contains("badge-warning")).toBe(true);
+    expect(b.getByText("warning").parentElement!.classList.contains("badge-warning")).toBe(true);
   });
 
   it("expands in place on click, showing source, facility and attributes, with aria-expanded", () => {
