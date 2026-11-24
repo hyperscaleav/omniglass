@@ -11,6 +11,7 @@ import { COMPONENTS_KEY } from "../lib/components";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, selectedTree, treeOptions } from "../components/TreeSelect.testkit";
+import { pageHeader } from "../lib/handover";
 
 // A secret at the `platform` tier is install-wide, so the server gates the write on
 // `platform:<action>` on top of `secret:<action>`. The console must gate the same
@@ -225,7 +226,7 @@ describe("Secrets type and name presentation (#2447)", () => {
 
   it("wears the Page header and lists each type by label with its name beneath", async () => {
     mount(owner);
-    expect(await screen.findByRole("heading", { level: 1, name: "Secrets" })).toBeInTheDocument();
+    await waitFor(() => expect(pageHeader()?.title).toBe("Secrets"));
     const cell = screen.getAllByTestId("secret-type")[0];
     expect(within(cell).getByText("SNMP community")).toBeInTheDocument();
     const nameLine = within(cell).getByText("snmp-community");

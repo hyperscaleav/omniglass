@@ -577,7 +577,7 @@ Resolves the tags that cascade onto a component (platform -> location -> system 
 
 List a component's recent events
 
-Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/events`
 - Gate: `component:read`
@@ -586,7 +586,10 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `key` | string | no | Only occurrences of this event type, by name |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `q` | string | no | Only occurrences whose message contains this text, case-insensitively |
+| `source` | string | no | Only occurrences from this transport |
 
 ## `get-component-health`
 
@@ -670,6 +673,7 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `q` | string | no | Only lines whose message contains this text, case-insensitively |
 | `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
 | `source` | string | no | Only lines that arrived on this channel |
 
@@ -1549,7 +1553,7 @@ Every member's alarms in one read, newest first, each naming its component: the 
 
 List a system's recent events, members included
 
-Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/events`
 - Gate: `system:read`
@@ -1558,7 +1562,10 @@ Returns the system's own events and its members', newest first, bounded to the l
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `key` | string | no | Only occurrences of this event type, by name |
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `q` | string | no | Only occurrences whose message contains this text, case-insensitively |
+| `source` | string | no | Only occurrences from this transport |
 
 ## `get-system-health`
 
@@ -1591,6 +1598,7 @@ Returns the members' raw log lines merged newest first, bounded to the last 24 h
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `q` | string | no | Only lines whose message contains this text, case-insensitively |
 | `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
 | `source` | string | no | Only lines that arrived on this channel |
 

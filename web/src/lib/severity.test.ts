@@ -7,7 +7,8 @@ import {
   emptyLevelDraft,
   levelCreateBody,
   levelUpdateBody,
-  outageFloor,
+  deriveEffect,
+  effectOf,
   rankPlace,
   severityBadge,
   severityScale,
@@ -22,18 +23,19 @@ describe("severityScale", () => {
   const scale = severityScale(SEEDED_LEVELS);
 
   it.each([
-    ["info", "Info", "badge-ghost", 10, false],
-    ["warning", "Warning", "badge-soft badge-warning", 20, false],
-    ["average", "Average", "badge-average", 30, false],
-    ["high", "High", "badge-soft badge-error", 40, true],
-    ["disaster", "Disaster", "badge-disaster", 50, true],
-  ])("maps %s to its label, class and outage flag", (name, label, badge, rank, outage) => {
-    expect(scale.look(name)).toEqual({ name, label, badge, rank, outage, known: true });
-    expect(scale.outage(name)).toBe(outage);
+    ["info", "Info", "badge-ghost", 10, "none"],
+    ["warning", "Warning", "badge-soft badge-warning", 20, "degraded"],
+    ["average", "Average", "badge-average", 30, "degraded"],
+    ["high", "High", "badge-soft badge-error", 40, "outage"],
+    ["disaster", "Disaster", "badge-disaster", 50, "outage"],
+  ])("maps %s to its label, class and declared health effect", (name, label, badge, rank, effect) => {
+    expect(scale.look(name)).toEqual({ name, label, badge, rank, outage: effect === "outage", effect, known: true });
+    expect(scale.outage(name)).toBe(effect === "outage");
+    expect(scale.effect(name)).toBe(effect);
   });
 
   it("falls back to the raw name in the neutral chip for a name it does not know", () => {
-    expect(scale.look("critical")).toEqual({ name: "critical", label: "critical", badge: "badge-ghost", rank: null, outage: false, known: false });
+    expect(scale.look("critical")).toEqual({ name: "critical", label: "critical", badge: "badge-ghost", rank: null, outage: false, effect: "degraded", known: false });
   });
 
   it("treats every name as unknown while the levels have not loaded", () => {
@@ -127,7 +129,7 @@ describe("a level draft", () => {
   });
 
   it("refuses a name or a rank another level holds, and a rank that is not a whole number above zero", () => {
-    const d = { name: "average", label: "", color: "orange" as const, rank: "30" };
+    const d = { name: "average", label: "", color: "orange" as const, rank: "30", effect: "degraded" as const };
     expect(validateLevelDraft(d, levels)).toEqual({
       name: "A level is already named average.",
       rank: "Average already holds rank 30; each level has its own.",
@@ -143,7 +145,7 @@ describe("a level draft", () => {
   });
 
   it("judges a name on the server's entity name rule: a leading hyphen run, its length cap, never a uuid", () => {
-    const d = { name: "", label: "", color: "orange" as const, rank: "33" };
+    const d = { name: "", label: "", color: "orange" as const, rank: "33", effect: "degraded" as const };
     // The server's rule allows repeated and trailing hyphens; the form does too.
     expect(validateLevelDraft({ ...d, name: "p2--high" }, levels).name).toBeUndefined();
     expect(validateLevelDraft({ ...d, name: "p2-" }, levels).name).toBeUndefined();
@@ -167,20 +169,30 @@ describe("a level draft", () => {
     expect(rankPlace(36, levels, "major")).toBe("Between Average (30) and High (40).");
   });
 
-  it("reads the outage floor off the levels the server marks", () => {
-    expect(outageFloor(levels)).toBe(40);
-    expect(outageFloor([])).toBeNull();
+  it("reads the effect a level declares, falling back to the deprecated flag only when it is absent", () => {
+    expect(effectOf(SEEDED_LEVELS[0])).toBe("none");
+    expect(effectOf({ health_effect: undefined as never, outage: true })).toBe("outage");
+    expect(effectOf({ health_effect: undefined as never, outage: false })).toBe("degraded");
+  });
+
+  it("preselects the effect the server would derive from a rank", () => {
+    expect([5, 25, 45].map(deriveEffect)).toEqual(["none", "degraded", "outage"]);
+  });
+
+  it("sends the chosen effect on create and only a changed one on edit", () => {
+    expect(levelCreateBody({ name: "p2", label: "", color: "gray", rank: "15", effect: "none" }).health_effect).toBe("none");
+    expect(levelUpdateBody({ ...draftFromLevel(MAJOR_LEVEL), effect: "outage" }, MAJOR_LEVEL)).toEqual({ health_effect: "outage" });
   });
 
   it("creates with a trimmed name and leaves a blank label off", () => {
-    expect(levelCreateBody({ name: " p2 ", label: " ", color: "orange", rank: "35" })).toEqual({ name: "p2", color: "orange", rank: 35 });
-    expect(levelCreateBody({ name: "p2", label: "P2", color: "orange", rank: "35" }).label).toBe("P2");
+    expect(levelCreateBody({ name: " p2 ", label: " ", color: "orange", rank: "35", effect: "degraded" as const })).toEqual({ name: "p2", color: "orange", rank: 35, health_effect: "degraded" });
+    expect(levelCreateBody({ name: "p2", label: "P2", color: "orange", rank: "35", effect: "degraded" as const }).label).toBe("P2");
   });
 
   it("patches only what an edit changed", () => {
     expect(levelUpdateBody(draftFromLevel(MAJOR_LEVEL), MAJOR_LEVEL)).toEqual({});
     expect(levelUpdateBody({ ...draftFromLevel(MAJOR_LEVEL), label: "P2" }, MAJOR_LEVEL)).toEqual({ label: "P2" });
-    expect(levelUpdateBody({ name: "p2", label: "Major", color: "red", rank: "45" }, MAJOR_LEVEL)).toEqual({ name: "p2", color: "red", rank: 45 });
+    expect(levelUpdateBody({ name: "p2", label: "Major", color: "red", rank: "45", effect: "degraded" as const }, MAJOR_LEVEL)).toEqual({ name: "p2", color: "red", rank: 45 });
   });
 
   it("offers every color the badge map knows, mildest first", () => {

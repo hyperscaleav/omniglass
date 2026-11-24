@@ -2136,6 +2136,10 @@ export type ComponentSimOutputBody = {
   outpost?: string;
   product?: string;
   profile?: string;
+  /** The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's). */
+  served_by?: string;
+  /** The uuid of served_by, the address the console opens it by (names repeat across locations). */
+  served_by_id?: string;
   /** The component has an endpoint on an outpost and a product a profile simulates. */
   simulated: boolean;
   summary?: string;
@@ -3166,11 +3170,25 @@ export type CreateSecretInputBody = {
   secret_type: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)
+ */
+export type CreateSeverityLevelInputBodyHealthEffect = typeof CreateSeverityLevelInputBodyHealthEffect[keyof typeof CreateSeverityLevelInputBodyHealthEffect];
+
+
+export const CreateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type CreateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color: string;
+  /** What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage) */
+  health_effect?: CreateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /**
@@ -4334,6 +4352,10 @@ export type HealthAlarmBody = {
   message: string;
   raised_at: string;
   severity: string;
+  /** Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
+  snoozed_by?: string;
+  /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
+  snoozed_until?: string;
 };
 
 export type HealthMemberBody = {
@@ -5614,6 +5636,18 @@ export const SeverityLevelBodyColor = {
 } as const;
 
 /**
+ * What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank
+ */
+export type SeverityLevelBodyHealthEffect = typeof SeverityLevelBodyHealthEffect[keyof typeof SeverityLevelBodyHealthEffect];
+
+
+export const SeverityLevelBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
+/**
  * How bad an alarm is, ranked, with its color and whether it takes its component out.
  */
 export type SeverityLevelBody = {
@@ -5621,6 +5655,8 @@ export type SeverityLevelBody = {
   readonly $schema?: string;
   /** The hue the console renders the level in */
   color: SeverityLevelBodyColor;
+  /** What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank */
+  health_effect: SeverityLevelBodyHealthEffect;
   /** The level's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -5628,7 +5664,10 @@ export type SeverityLevelBody = {
   name: string;
   /** Shipped with the platform and read-only */
   official: boolean;
-  /** Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades */
+  /**
+     * Deprecated alias of health_effect == outage, kept so released clients do not break; read health_effect
+     * @deprecated
+     */
   outage: boolean;
   /** Compares levels: higher is more severe */
   rank: number;
@@ -7506,7 +7545,7 @@ export type RaiseAlarmInputBody = {
   /** What is wrong, for the operator reading it later */
   message?: string;
   /**
-     * How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage
+     * How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)
      * @minLength 1
      */
   severity: string;
@@ -9419,11 +9458,25 @@ export type UpdateSecretInputBody = {
   label?: string;
 };
 
+/**
+ * What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level
+ */
+export type UpdateSeverityLevelInputBodyHealthEffect = typeof UpdateSeverityLevelInputBodyHealthEffect[keyof typeof UpdateSeverityLevelInputBodyHealthEffect];
+
+
+export const UpdateSeverityLevelInputBodyHealthEffect = {
+  none: 'none',
+  degraded: 'degraded',
+  outage: 'outage',
+} as const;
+
 export type UpdateSeverityLevelInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** One of gray, blue, green, yellow, orange, red, darkred */
   color?: string;
+  /** What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level */
+  health_effect?: UpdateSeverityLevelInputBodyHealthEffect;
   /** A human label */
   label?: string;
   /** A new name; every alarm at this level follows */
@@ -9876,6 +9929,24 @@ export type EffectiveTagsParams = {
   system?: string;
 };
 
+export type ListComponentEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
 export type GetComponentHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
   since?: string;
@@ -9891,6 +9962,11 @@ export type ListComponentLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListComponentLogsSeverity = typeof ListComponentLogsSeverity[keyof typeof ListComponentLogsSeverity];
@@ -10047,6 +10123,24 @@ export type ListSystemAlarmsParams = {
   until?: string;
 };
 
+export type ListSystemEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
 export type GetSystemHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
   since?: string;
@@ -10062,6 +10156,11 @@ export type ListSystemLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListSystemLogsSeverity = typeof ListSystemLogsSeverity[keyof typeof ListSystemLogsSeverity];
@@ -13437,7 +13536,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -14135,21 +14234,30 @@ export type listComponentEventsResponseError = (listComponentEventsResponseDefau
 
 export type listComponentEventsResponse = (listComponentEventsResponseSuccess | listComponentEventsResponseError)
 
-export const getListComponentEventsUrl = (name: string,) => {
+export const getListComponentEventsUrl = (name: string,
+    params?: ListComponentEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components/${name}/events`
+  return stringifiedParams.length > 0 ? `/components/${name}/events?${stringifiedParams}` : `/components/${name}/events`
 }
 
 /**
- * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's recent events
  */
-export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
+export const listComponentEvents = async (name: string,
+    params?: ListComponentEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
-  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -21903,7 +22011,7 @@ export const getListSeverityLevelUrl = () => {
 }
 
 /**
- * Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+ * Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.
  * @summary List severity levels
  */
 export const listSeverityLevel = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSeverityLevelResponse> => {
@@ -22079,7 +22187,7 @@ export const getUpdateSeverityLevelUrl = (name: string,) => {
 }
 
 /**
- * Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
+ * Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
  * @summary Update a severity level
  */
 export const updateSeverityLevel = async (name: string,
@@ -23431,21 +23539,30 @@ export type listSystemEventsResponseError = (listSystemEventsResponseDefault) & 
 
 export type listSystemEventsResponse = (listSystemEventsResponseSuccess | listSystemEventsResponseError)
 
-export const getListSystemEventsUrl = (name: string,) => {
+export const getListSystemEventsUrl = (name: string,
+    params?: ListSystemEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/events`
+  return stringifiedParams.length > 0 ? `/systems/${name}/events?${stringifiedParams}` : `/systems/${name}/events`
 }
 
 /**
- * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's recent events, members included
  */
-export const listSystemEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
+export const listSystemEvents = async (name: string,
+    params?: ListSystemEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
 
-  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name),
+  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name,params),
   {
     ...options,
     method: 'GET'

@@ -2,7 +2,6 @@ import { Show, createEffect, createMemo } from "solid-js";
 import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import Breadcrumb from "../components/Breadcrumb";
 import DetailGate from "../components/DetailGate";
 import TemplateNotice from "../components/TemplateNotice";
 import BladeStack from "../components/BladeStack";
@@ -47,14 +46,7 @@ export default function SystemZoom() {
   const sole = createMemo(() => (view.data && locationId() ? systemsAtLocation(view.data, locationId()!).length === 1 : false));
   const title = () => (sole() && location() ? entityLabel(location()!) : system() ? entityLabel(system()!) : "System");
 
-  const crumbs = createMemo(() => {
-    const trail = view.data ? systemCrumbs(view.data, id()) : [];
-    return [
-      // Back up lands where you were: the outline opened down to this row.
-      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
-      ...trail.map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` })),
-    ];
-  });
+  const crumbs = createMemo(() => [{ key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` }, ...(view.data ? systemCrumbs(view.data, id()) : []).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` }))]);
 
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.
@@ -63,7 +55,7 @@ export default function SystemZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={title()} name={system()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={title()} name={system()?.name} trail={crumbs()} kind={{ key: "systems", label: "Systems", href: "/systems" }}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate

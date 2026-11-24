@@ -152,6 +152,9 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                 <div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
                 <div class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
+                  <Show when={scale().effect(a.severity) === "none"}>
+                    <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
+                  </Show>
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
                   <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
                     raised {rel(a.raised_at)}
@@ -208,7 +211,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
               <For each={scale().levels}>
                 {(l) => (
                   <option value={l.name} selected={l.name === severity()}>
-                    {`${entityLabel(l)} (${l.outage ? "takes this component out" : "degrades it, still working"})`}
+                    {`${entityLabel(l)} (${l.health_effect === "outage" ? "takes this component out" : l.health_effect === "none" ? "does not affect health" : "degrades it, still working"})`}
                   </option>
                 )}
               </For>

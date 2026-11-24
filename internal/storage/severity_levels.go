@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/hyperscaleav/omniglass/internal/health"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
@@ -17,14 +18,18 @@ import (
 // color, and its rank compares it to the others (higher is more severe).
 // Official levels ship with the boot seed and are read-only.
 type SeverityLevel struct {
-	ID        string
-	Name      string
-	Label     string
-	Color     string
-	Rank      int
-	Official  bool
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID    string
+	Name  string
+	Label string
+	Color string
+	Rank  int
+	// HealthEffect is what an open alarm at this level does to its own
+	// component: none, degraded or outage (#2558). Declared, never inferred
+	// from rank.
+	HealthEffect string
+	Official     bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // SeverityLevelPatch carries an update's fields; nil is unchanged. A rename
@@ -34,6 +39,9 @@ type SeverityLevelPatch struct {
 	Label *string
 	Color *string
 	Rank  *int
+	// HealthEffect, when set, changes what an open alarm at the level does to
+	// its component; every component with such an alarm is recomputed.
+	HealthEffect *string
 }
 
 // Severity level sentinels.
@@ -50,7 +58,7 @@ var (
 // maps each to a hue, so a level cannot name a color nothing renders.
 var SeverityColors = map[string]bool{"gray": true, "blue": true, "green": true, "yellow": true, "orange": true, "red": true, "darkred": true}
 
-func validateSeverityLevel(name, color string, rank int) error {
+func validateSeverityLevel(name, color string, rank int, effect string) error {
 	if err := ValidateName("severity_level", name); err != nil {
 		return fmt.Errorf("%w: %w", ErrSeverityLevelInvalid, err)
 	}
@@ -60,14 +68,17 @@ func validateSeverityLevel(name, color string, rank int) error {
 	if rank <= 0 {
 		return fmt.Errorf("%w: rank must be positive", ErrSeverityLevelInvalid)
 	}
+	if !health.ValidEffect(effect) {
+		return fmt.Errorf("%w: health_effect %q is not one of none, degraded, outage", ErrSeverityLevelInvalid, effect)
+	}
 	return nil
 }
 
-const severityLevelCols = `id, name, coalesce(label, ''), color, rank, official, created_at, updated_at`
+const severityLevelCols = `id, name, coalesce(label, ''), color, rank, health_effect, official, created_at, updated_at`
 
 func scanSeverityLevel(row pgx.Row) (SeverityLevel, error) {
 	var l SeverityLevel
-	err := row.Scan(&l.ID, &l.Name, &l.Label, &l.Color, &l.Rank, &l.Official, &l.CreatedAt, &l.UpdatedAt)
+	err := row.Scan(&l.ID, &l.Name, &l.Label, &l.Color, &l.Rank, &l.HealthEffect, &l.Official, &l.CreatedAt, &l.UpdatedAt)
 	return l, err
 }
 
@@ -80,11 +91,19 @@ func scanSeverityLevel(row pgx.Row) (SeverityLevel, error) {
 // failing opaquely. Ranks under namespaces are settled with the search path
 // (#1432).
 func (p *PG) UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error {
-	if err := validateSeverityLevel(l.Name, l.Color, l.Rank); err != nil {
+	if l.HealthEffect == "" {
+		l.HealthEffect = health.DefaultEffect(l.Rank)
+	}
+	if err := validateSeverityLevel(l.Name, l.Color, l.Rank, l.HealthEffect); err != nil {
 		return fmt.Errorf("storage: upsert severity level %q: %w", l.Name, err)
 	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin upsert severity level %q: %w", l.Name, err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	var holder string
-	err := p.pool.QueryRow(ctx, `select name from severity_level
+	err = tx.QueryRow(ctx, `select name from severity_level
 		where rank = $2 and name <> $1 and not official limit 1`, l.Name, l.Rank).Scan(&holder)
 	if err == nil {
 		return fmt.Errorf("%w: the operator level %q holds the rank of the official level %q (rank %d); re-rank it",
@@ -93,16 +112,62 @@ func (p *PG) UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("storage: check severity level %q: %w", l.Name, err)
 	}
-	if _, err := p.pool.Exec(ctx, `insert into severity_level (namespace, name, label, color, rank, official)
-		values (case when $5 then 'og' else 'local' end, $1, $2, $3, $4, $5)
+	// The effect the row held before, to recompute the components behind a
+	// change (an upgrade that declares info as none must not leave a
+	// component stuck degraded).
+	var before *string
+	if err := tx.QueryRow(ctx, `select health_effect from severity_level where name = $1 and namespace = case when $2 then 'og' else 'local' end`,
+		l.Name, l.Official).Scan(&before); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("storage: read severity level %q: %w", l.Name, err)
+	}
+	if _, err := tx.Exec(ctx, `insert into severity_level (namespace, name, label, color, rank, health_effect, official)
+		values (case when $5 then 'og' else 'local' end, $1, $2, $3, $4, $6, $5)
 		on conflict (name) do update set label = excluded.label, color = excluded.color,
-			rank = excluded.rank, official = excluded.official, updated_at = now()
+			rank = excluded.rank, health_effect = excluded.health_effect, official = excluded.official, updated_at = now()
 		where severity_level.namespace = excluded.namespace`,
-		l.Name, labelOrNull(l.Label), l.Color, l.Rank, l.Official); err != nil {
+		l.Name, labelOrNull(l.Label), l.Color, l.Rank, l.Official, l.HealthEffect); err != nil {
 		if isUniqueViolation(err) {
 			return fmt.Errorf("%w: another level holds rank %d", ErrSeverityLevelExists, l.Rank)
 		}
 		return fmt.Errorf("storage: upsert severity level %q: %w", l.Name, err)
+	}
+	if before != nil && *before != l.HealthEffect {
+		if err := p.recomputeAtSeverityLevel(ctx, tx, l.Name); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit upsert severity level %q: %w", l.Name, err)
+	}
+	return nil
+}
+
+// recomputeAtSeverityLevel recomputes the recorded health of every component
+// with an open alarm at the level: health is recorded, not computed on read, so
+// a change to what the level declares must move the components behind it in the
+// same transaction.
+func (p *PG) recomputeAtSeverityLevel(ctx context.Context, tx pgx.Tx, level string) error {
+	rows, err := tx.Query(ctx, `select distinct component_id::text from alarm where severity = $1 and cleared_at is null`, level)
+	if err != nil {
+		return fmt.Errorf("storage: components at severity level %q: %w", level, err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("storage: scan component at severity level: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := p.RecomputeHealth(ctx, tx, id); err != nil {
+			return fmt.Errorf("storage: recompute health after changing %q: %w", level, err)
+		}
 	}
 	return nil
 }
@@ -143,7 +208,10 @@ func (p *PG) CreateSeverityLevel(ctx context.Context, actorID string, l Severity
 	if !create.All {
 		return nil, ErrSeverityLevelForbidden
 	}
-	if err := validateSeverityLevel(l.Name, l.Color, l.Rank); err != nil {
+	if l.HealthEffect == "" {
+		l.HealthEffect = health.DefaultEffect(l.Rank)
+	}
+	if err := validateSeverityLevel(l.Name, l.Color, l.Rank, l.HealthEffect); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -151,8 +219,8 @@ func (p *PG) CreateSeverityLevel(ctx context.Context, actorID string, l Severity
 		return nil, fmt.Errorf("storage: begin create severity level: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	created, err := scanSeverityLevel(tx.QueryRow(ctx, `insert into severity_level (name, label, color, rank, official)
-		values ($1, $2, $3, $4, false) returning `+severityLevelCols, l.Name, labelOrNull(l.Label), l.Color, l.Rank))
+	created, err := scanSeverityLevel(tx.QueryRow(ctx, `insert into severity_level (name, label, color, rank, health_effect, official)
+		values ($1, $2, $3, $4, $5, false) returning `+severityLevelCols, l.Name, labelOrNull(l.Label), l.Color, l.Rank, l.HealthEffect))
 	if isUniqueViolation(err) {
 		return nil, ErrSeverityLevelExists
 	}
@@ -188,7 +256,7 @@ func lockMutableSeverityLevel(ctx context.Context, tx pgx.Tx, name string) (Seve
 // to every alarm and rule naming it. It needs an all-scope update grant.
 //
 // Lock order: the event rules naming the level FOR UPDATE, then the level's
-// row, then (a re-rank) the health locks. An ingest batch holds the rules it
+// row, then (an effect change) the health locks. An ingest batch holds the rules it
 // judges by FOR SHARE (newRuleEvaluator) and its raise needs the level's key
 // for the alarm's foreign key, so taking the level first would deadlock
 // against such a batch: the rename's cascade waits on the batch's rule rows
@@ -223,43 +291,27 @@ func (p *PG) UpdateSeverityLevel(ctx context.Context, actorID, name string, patc
 	if patch.Rank != nil {
 		next.Rank = *patch.Rank
 	}
-	if err := validateSeverityLevel(next.Name, next.Color, next.Rank); err != nil {
+	if patch.HealthEffect != nil {
+		next.HealthEffect = *patch.HealthEffect
+	}
+	if err := validateSeverityLevel(next.Name, next.Color, next.Rank, next.HealthEffect); err != nil {
 		return nil, err
 	}
 	updated, err := scanSeverityLevel(tx.QueryRow(ctx, `update severity_level
-		set name = $2, label = $3, color = $4, rank = $5, updated_at = now() where id = $1 returning `+severityLevelCols,
-		old.ID, next.Name, labelOrNull(next.Label), next.Color, next.Rank))
+		set name = $2, label = $3, color = $4, rank = $5, health_effect = $6, updated_at = now() where id = $1 returning `+severityLevelCols,
+		old.ID, next.Name, labelOrNull(next.Label), next.Color, next.Rank, next.HealthEffect))
 	if isUniqueViolation(err) {
 		return nil, ErrSeverityLevelExists
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: update severity level %q: %w", name, err)
 	}
-	// A re-rank can move every component with an open alarm at this level
-	// across the outage floor, and health is recorded, not computed on read:
-	// recompute each one in this transaction.
-	if updated.Rank != old.Rank {
-		rows, err := tx.Query(ctx, `select distinct component_id::text from alarm where severity = $1 and cleared_at is null`, updated.Name)
-		if err != nil {
-			return nil, fmt.Errorf("storage: components at severity level %q: %w", updated.Name, err)
-		}
-		var ids []string
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("storage: scan component at severity level: %w", err)
-			}
-			ids = append(ids, id)
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
+	// A change of the declared effect can move every component with an open
+	// alarm at this level, and health is recorded, not computed on read:
+	// recompute each one in this transaction. A re-rank no longer moves health.
+	if updated.HealthEffect != old.HealthEffect {
+		if err := p.recomputeAtSeverityLevel(ctx, tx, updated.Name); err != nil {
 			return nil, err
-		}
-		for _, id := range ids {
-			if err := p.RecomputeHealth(ctx, tx, id); err != nil {
-				return nil, fmt.Errorf("storage: recompute health after re-ranking %q: %w", updated.Name, err)
-			}
 		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "severity_level", old.ID, old, updated); err != nil {

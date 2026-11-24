@@ -223,7 +223,7 @@ test.describe("operator console", () => {
     // draft's read of the bucket and the allocator's mint fails here and nowhere
     // else.
     await expect(page.getByText(drafted, { exact: true }).first()).toBeVisible();
-    await expect(page.locator("main")).toContainText(draftedLabel);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(draftedLabel);
 
     // Clean up after the run, and prove on the way that a component placed
     // nowhere is still findable: it sits in the outline's "Placed nowhere you

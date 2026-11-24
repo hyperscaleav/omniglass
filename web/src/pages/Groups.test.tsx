@@ -8,6 +8,7 @@ import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { answerConfirms } from "../lib/confirm.testkit";
+import { pageHeader } from "../lib/handover";
 
 // The Groups page is a config over the shared FlatList (rooted on group): a row per
 // group opens the group blade (members drill into the member's user blade), and the
@@ -268,8 +269,8 @@ describe("edit as a URL fact", () => {
 describe("Groups page chrome (#2447)", () => {
   it("wears the Page header with the nav hint", () => {
     mount();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("User groups");
-    expect(screen.getByTestId("page-header").textContent).toContain("membership and the grants members inherit");
+    expect(pageHeader()?.title).toBe("User groups");
+    expect(pageHeader()?.hint).toContain("membership and the grants members inherit");
   });
 
   it("an empty directory says what a group is for and offers New user group", async () => {

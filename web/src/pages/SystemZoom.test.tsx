@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/te
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemSlotsKey } from "../lib/system_slots";
@@ -27,6 +28,7 @@ import { toLocalInput } from "../components/TimeRangePicker";
 import { seedSeverityLevels } from "../lib/testseverity";
 import type { EffectiveSlot } from "../lib/system_zoom";
 import { answerConfirms } from "../lib/confirm.testkit";
+import { pageHeader } from "../lib/handover";
 
 // The system zoom's chrome (#636): one card per slot with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
@@ -147,7 +149,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
 
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/systems/:id" component={Systems} />
+        <Route path="/systems/:id" component={withTopBar(Systems)} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route
@@ -781,7 +783,7 @@ describe("the events and logs tabs (#793)", () => {
     cleanup();
     const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
     r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], { sources: [], logs: [] });
-    expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
+    expect(await screen.findByText(/No log lines in the last 24 hours/)).toBeTruthy();
   });
 });
 
@@ -940,8 +942,9 @@ describe("the system card's header says each thing once (#872)", () => {
 describe("the location is context, the system the subject (#872)", () => {
   it("titles a sole system's view by its location and ends the path at the location's parent", () => {
     mount();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A");
-    expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
+    expect(pageHeader()?.title).toBe("Boardroom A");
+    expect(screen.queryByTestId("breadcrumb")?.textContent ?? "").not.toContain("Boardroom A");
+    expect(within(screen.getByTestId("header-line-1")).getByRole("link", { name: "Systems" })).toBeTruthy();
   });
 
   it("shows the location as a card naming its type, without repeating its name", () => {
@@ -980,7 +983,7 @@ describe("the location is context, the system the subject (#872)", () => {
 
   it("gives an unplaced system its own title and no location card", () => {
     mount(`/web/systems/${uuidFor("szp-other")}`);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");
+    expect(pageHeader()?.title).toBe("Overflow Room");
     expect(screen.queryByTestId("location-card")).toBeNull();
   });
 
@@ -1168,7 +1171,7 @@ describe("the miss face (#800)", () => {
     await waitFor(() => expect(screen.queryByText(/No system answers this address/)).toBeNull());
     const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, health: "incomplete", dots: [] }] };
     answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
-    expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();
+    await waitFor(() => expect(pageHeader()?.title).toBe("Fresh Room"));
     expect(screen.queryByText(/No system answers this address/)).toBeNull();
     vi.unstubAllGlobals();
   });

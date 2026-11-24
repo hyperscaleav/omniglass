@@ -1350,7 +1350,7 @@ var exampleEvents = []struct {
 // componentID is the row the fixture key resolved to.
 func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) error {
 	// Sentinel: any existing event on the component means this block already ran.
-	existing, err := gw.ListComponentEvents(ctx, componentID, 0, 1)
+	existing, err := gw.ListComponentEvents(ctx, componentID, 0, 1, storage.EventFilter{})
 	if err != nil {
 		return fmt.Errorf("devseed: check events: %w", err)
 	}
@@ -1436,7 +1436,7 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 	if !ok {
 		return fmt.Errorf("devseed: the breadth fixture component %q is not in the fleet", "huddle-bar")
 	}
-	existing, err := gw.ListComponentEvents(ctx, first, 0, 200)
+	existing, err := gw.ListComponentEvents(ctx, first, 0, 200, storage.EventFilter{})
 	if err != nil {
 		return fmt.Errorf("devseed: check breadth events: %w", err)
 	}

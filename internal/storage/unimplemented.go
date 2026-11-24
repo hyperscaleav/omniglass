@@ -476,7 +476,7 @@ func (UnimplementedGateway) ComponentHealth(context.Context, string) (string, er
 func (UnimplementedGateway) InsertEvents(context.Context, KeyWriter, []EventWrite) error {
 	return nil
 }
-func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Duration, int) ([]Event, error) {
+func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Duration, int, EventFilter) ([]Event, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
@@ -1087,7 +1087,7 @@ func (UnimplementedGateway) RecordServerIdentity(context.Context, string, string
 	return nil
 }
 
-func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int) ([]Event, error) {
+func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int, EventFilter) ([]Event, error) {
 	return nil, nil
 }
 

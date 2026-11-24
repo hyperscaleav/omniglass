@@ -63,18 +63,18 @@ screenshots:
     alt: "A system's view: the location as a card of context, the system's header (health, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
     # now (#872). The map is cropped to its members (#2465), so the Data
-    # section's first sparkline rises into the frame and plots like it ages.
+    # section's first chart rises into the frame and plots like it ages.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "[data-testid=sparkline]"
+      - "[data-testid=timeseries-chart]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
     # The header's since-line ages with the capture, and the cropped map
-    # (#2465) lifts the Data section's sparklines into the frame.
+    # (#2465) lifts the Data section's charts into the frame.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "[data-testid=sparkline]"
+      - "[data-testid=timeseries-chart]"
   # The auditorium carries the fleet's live high-severity alarm, so the history
   # tab has something real to say. Its room holds that one system, so the
   # room's address lands on it.

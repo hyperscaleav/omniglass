@@ -1835,7 +1835,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1855,7 +1855,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
-					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
+					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)")
 					_ = cmd.MarkFlagRequired("severity")
 					return cmd
 				}()
@@ -2443,17 +2443,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qKey string
+					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent events",
-						Long:    "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component event list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/events", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("key") {
+								q.Set("key", fmt.Sprintf("%v", qKey))
+							}
+							if cmd.Flags().Changed("source") {
+								q.Set("source", fmt.Sprintf("%v", qSource))
+							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qKey, "key", "", "Only occurrences of this event type, by name")
+					cmd.Flags().StringVar(&qSource, "source", "", "Only occurrences from this transport")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only occurrences whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd
@@ -2720,6 +2739,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var qSeverity string
 					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's recent log lines",
@@ -2735,6 +2755,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("source") {
 								q.Set("source", fmt.Sprintf("%v", qSource))
 							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -2743,6 +2766,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&qSeverity, "severity", "", "Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out")
 					cmd.Flags().StringVar(&qSource, "source", "", "Only lines that arrived on this channel")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only lines whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd
@@ -7436,6 +7460,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fColor string
+				var fHealthEffect string
 				var fLabel string
 				var fName string
 				var fRank int
@@ -7451,6 +7476,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("color") {
 							body["color"] = fColor
 						}
+						if cmd.Flags().Changed("health-effect") {
+							body["health_effect"] = fHealthEffect
+						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
@@ -7465,6 +7493,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
 				_ = cmd.MarkFlagRequired("color")
+				cmd.Flags().StringVar(&fHealthEffect, "health-effect", "", "What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
@@ -7513,7 +7542,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List severity levels",
-					Long:    "Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.",
+					Long:    "Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.",
 					Example: "  omniglass severity-level list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7528,13 +7557,14 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fColor string
+				var fHealthEffect string
 				var fLabel string
 				var fName string
 				var fRank int
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a severity level",
-					Long:    "Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
+					Long:    "Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.",
 					Example: "  omniglass severity-level update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7542,6 +7572,9 @@ func generatedCommands() []*cobra.Command {
 						body := map[string]any{}
 						if cmd.Flags().Changed("color") {
 							body["color"] = fColor
+						}
+						if cmd.Flags().Changed("health-effect") {
+							body["health_effect"] = fHealthEffect
 						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -7556,6 +7589,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
+				cmd.Flags().StringVar(&fHealthEffect, "health-effect", "", "What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "A new name; every alarm at this level follows")
 				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels; unique")
@@ -8393,17 +8427,36 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qKey string
+					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's recent events, members included",
-						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 409 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system event list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/events", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("key") {
+								q.Set("key", fmt.Sprintf("%v", qKey))
+							}
+							if cmd.Flags().Changed("source") {
+								q.Set("source", fmt.Sprintf("%v", qSource))
+							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qKey, "key", "", "Only occurrences of this event type, by name")
+					cmd.Flags().StringVar(&qSource, "source", "", "Only occurrences from this transport")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only occurrences whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd
@@ -8532,6 +8585,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var qSeverity string
 					var qSource string
+					var qQ string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' recent log lines",
@@ -8547,6 +8601,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("source") {
 								q.Set("source", fmt.Sprintf("%v", qSource))
 							}
+							if cmd.Flags().Changed("q") {
+								q.Set("q", fmt.Sprintf("%v", qQ))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -8555,6 +8612,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&qSeverity, "severity", "", "Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out")
 					cmd.Flags().StringVar(&qSource, "source", "", "Only lines that arrived on this channel")
+					cmd.Flags().StringVar(&qQ, "q", "", "Only lines whose message contains this text, case-insensitively")
 					return cmd
 				}()
 				return cmd

@@ -1,4 +1,6 @@
+import type { JSX } from "solid-js";
 import { createSignal } from "solid-js";
+import type { Crumb } from "./breadcrumb";
 
 // Handing omnibot context (#2122, #2162): each prompt carries the page the
 // person is on as an AG-UI context entry, and a triage the alarm it is on. A
@@ -83,13 +85,18 @@ export function namePage(name: string | undefined) {
   setPageName(name);
 }
 
-const [headed, setHeaded] = createSignal(false);
+// A detail page also hands the bar its trail: the path above its title, each crumb a link.
+// `kind` is the list link before the h1, `system` the primary system after it, and
+// `trail` the location path on the second line.
+export type PageHeader = { title: string | JSX.Element; hint?: string; trail?: Crumb[]; kind?: Crumb; system?: Crumb };
+const [header, setHeader] = createSignal<PageHeader | undefined>();
 
-// pageHeaded is true while a page wearing the Page header is mounted: that header
-// owns the page title, so the top bar leaves the title out of its label.
-export const pageHeaded = headed;
-export function markPageHeaded(on: boolean) {
-  setHeaded(on);
+// pageHeader is the title and hint of the mounted Page, which the top bar renders
+// as the page's one header row (#2575); pageHeaded is true while one is mounted.
+export const pageHeader = header;
+export const pageHeaded = () => header() !== undefined;
+export function setPageHeader(h: PageHeader | undefined) {
+  setHeader(h);
 }
 
 // pageHere is the page the person is on, the context every prompt carries.

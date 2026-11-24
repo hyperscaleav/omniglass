@@ -115,8 +115,14 @@ omniglass simulation add-component edge-hq --name panel-9 --product newtron-pane
 
 In the drawer, **Product** and **Change** move a component among the products its profile simulates (a
 display line in its sizes, say), which keeps its endpoint valid (with `component:update`), and
-**Remove** deletes the component after a confirmation, which removes it from the simulation (with
-`component:delete`).
+**Remove** deletes the component and its endpoints after one confirmation that lists them, which
+removes it from the simulation (with `component:delete`).
+
+A component you build by hand and aim at a simulated device's address (an endpoint on the simulator's
+outpost targeting that host) is not a second simulation. The simulation list keeps the one device, with
+its own profile and status, and the component's Simulation card says which simulated component serves
+it (`served_by` on the component's simulation read) and shows that device's state. The earlier
+component keeps the address; a later one aimed at it is served by it.
 
 ## Add a whole system
 
