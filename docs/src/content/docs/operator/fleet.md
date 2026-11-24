@@ -135,8 +135,9 @@ screenshots:
     # box (`width`): painted at the since span's top-left, as tall as the span
     # and 208px wide, whatever the line reads. A mask on the span alone is the
     # size of its text, and the text moves with the clock (`fmtTime` prints
-    # the month, a bare day and AM or PM; the age reads 9s or 17s), so the box
-    # moved with it (#1081). The card's header row holds still (the grid
+    # a short absolute, "Nov 23, 01:56 PM", whose width follows the month name and
+    # the day's digits; the age reads 9s or 17s; the Time component's relative
+    # "4m ago" counts the same way), so the box moved with it (#1081). The card's header row holds still (the grid
     # track pins its width, and the since line always wraps to its second
     # line) but also holds the system's name and health, which the baseline
     # keeps gating. The widest line a capture renders ("since May 28, 12:59 AM

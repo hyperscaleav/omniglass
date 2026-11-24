@@ -22,8 +22,10 @@ screenshots:
     # The mask DECLARES its box (`width`): painted at the since span's
     # top-left, as tall as the span and 184px wide, whatever the line reads.
     # A mask on the span alone is the size of its text, and the text moves
-    # with the clock (`fmtTime` prints the month, a bare day and AM or PM; the
-    # age reads 9s or 17s), so the box repainted a pixel narrower or wider on
+    # with the clock (`fmtTime` prints a short absolute, "Nov 23, 01:56 PM", whose
+    # width follows the month name and the day's digits; the age reads 9s or
+    # 17s; the Time component's relative "4m ago" counts the same way), so the
+    # box repainted a pixel narrower or wider on
     # an unchanged blade (#1081). The row around it holds still but also holds
     # the health, the one region on the page a baseline must keep gating. The
     # widest line a capture renders ("since May 28, 12:59 AM · 59m") is 164px
