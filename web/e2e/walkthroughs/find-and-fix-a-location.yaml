@@ -17,7 +17,7 @@ steps:
     caption: A location holding one system has no page of its own. The system's view is titled by it, with the location as a card below.
   - click: { role: tab, name: Configure }
     caption: Configure holds the location's form first, then the system's.
-  - click: '[data-testid="tab-rail"] >> role=button[name="Edit"]'
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Edit"]'
     caption: Edit the location, apart from its system. Its label was rendered by a label rule from its name.
   - click: '[data-testid="configure-face-location"] >> role=textbox[name="Label"]'
     caption: Click the label to take it over from the rule.
@@ -25,7 +25,7 @@ steps:
     caption: The label is yours now; the rule no longer rewrites it.
   - type: { target: '[data-testid="configure-face-location"] >> role=textbox[name="Label"]', text: ' Loading Dock' }
     caption: Say what the site calls it, so operators find it by that word.
-  - click: '[data-testid="tab-rail"] >> role=button[name="Save"s]'
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Save"s]'
     caption: Save the location.
   - click: { role: tab, name: Overview }
     caption: Saved. Back on the system's overview, its title already reads the new label.
