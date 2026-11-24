@@ -212,12 +212,8 @@ export default defineConfig({
                 // the foundations underneath
                 { label: 'Outposts', slug: 'architecture/outposts' },
                 { label: 'Simulation', slug: 'architecture/simulation' },
-                { label: 'Storage', slug: 'architecture/storage' },
                 { label: 'Data model', slug: 'architecture/data-model' },
                 { label: 'Workers', slug: 'architecture/workers' },
-                { label: 'Scaling and deployment', slug: 'architecture/scaling' },
-                { label: 'Settings', slug: 'architecture/settings' },
-                { label: 'Identity and access', slug: 'architecture/identity-access' },
               ],
             },
             {

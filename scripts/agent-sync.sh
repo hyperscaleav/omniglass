@@ -11,6 +11,8 @@
 # branch's own change (#1993's f1ab4652, #1948's 3114cabd). So the workflow
 # merges main before the action runs, and checks the diff after it.
 #
+#   agent-sync.sh needed [BASE]  current, conflict, check or no: whether a run should merge
+#                                BASE at all; red required checks arrive on stdin (#2597)
 #   agent-sync.sh merge [BASE]   merge BASE (default origin/main) into HEAD,
 #                                never rebasing. Prints "current", "merged", or
 #                                "conflict" then each conflicted path, leaving
@@ -38,12 +40,12 @@ PATHS=(CLAUDE.md CLAUDE.local.md AGENTS.md .claude .mcp.json .claude.json .gitmo
 
 mode=${1:-}
 base=${2:-origin/main}
-case "$mode" in merge | guard | drop) ;; *)
-  printf 'usage: agent-sync.sh merge|guard|drop [BASE]\n' >&2
+case "$mode" in merge | needed | guard | drop) ;; *)
+  printf 'usage: agent-sync.sh merge|needed|guard|drop [BASE]\n' >&2
   exit 64
   ;;
 esac
-[ $# -le 2 ] || { printf 'usage: agent-sync.sh merge|guard|drop [BASE]\n' >&2; exit 64; }
+[ $# -le 2 ] || { printf 'usage: agent-sync.sh merge|needed|guard|drop [BASE]\n' >&2; exit 64; }
 
 git rev-parse --verify --quiet "${base}^{commit}" >/dev/null \
   || { printf 'agent-sync: unknown base %q (fetch it first)\n' "$base" >&2; exit 2; }
@@ -60,6 +62,23 @@ changed() {
 }
 
 case "$mode" in
+  needed)
+    # Whether this run should merge BASE at all (#2597): every merge is a new
+    # head commit, and a new head restarts every check. current when BASE is
+    # already in; conflict when merging it would conflict; check when the
+    # branch is behind and a required check is red (its name on stdin, one a
+    # line); otherwise no. Always exits 0.
+    if git merge-base --is-ancestor "$base" HEAD; then
+      echo current
+    elif ! git merge-tree --write-tree "$base" HEAD >/dev/null 2>&1; then
+      echo conflict
+    elif [ -n "$(cat | tr -d '[:space:]')" ]; then
+      echo check
+    else
+      echo no
+    fi
+    ;;
+
   merge)
     clean_tree
     if git merge-base --is-ancestor "$base" HEAD; then
