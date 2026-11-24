@@ -51,6 +51,7 @@ func TestCheckGoPin(t *testing.T) {
 	}{
 		{"clean", goodDocker, goodMake, goodWF, false},
 		{"hard-coded image", "ARG GO_VERSION\nFROM golang:1.26.0-bookworm AS build\n", goodMake, goodWF, true},
+		{"arg scoped to an earlier stage", "FROM node:22 AS web\nARG GO_VERSION\nFROM golang:${GO_VERSION}-bookworm AS build\n", goodMake, goodWF, true},
 		{"arg with default", "ARG GO_VERSION=1.26\nFROM golang:${GO_VERSION}-bookworm\n", goodMake, goodWF, true},
 		{"make build lacks arg", goodDocker, "all:\n\tdocker build -t a .\n", goodWF, true},
 		{"make continuation lacks arg", goodDocker, "all:\n\tdocker build --target x \\\n\t\t--output o .\n", goodWF, true},

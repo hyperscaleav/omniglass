@@ -13,6 +13,9 @@ bad() { echo "check-go-pin: $*" >&2; fail=1; }
 
 df=$root/Dockerfile
 grep -qE '^ARG GO_VERSION[[:space:]]*$' "$df" || bad "Dockerfile must declare 'ARG GO_VERSION' with no default"
+# A FROM line only sees ARGs declared before the first FROM (global scope).
+awk '/^FROM /{exit} /^ARG GO_VERSION[[:space:]]*$/{found=1} END{exit !found}' "$df" \
+  || bad "Dockerfile must declare 'ARG GO_VERSION' before its first FROM, or no FROM can read it"
 grep -E '^FROM .*golang:' "$df" | grep -vE 'golang:\$\{GO_VERSION\}' | while read -r l; do echo "check-go-pin: Dockerfile pins a Go image: $l" >&2; done
 if grep -E '^FROM .*golang:' "$df" | grep -qvE 'golang:\$\{GO_VERSION\}'; then fail=1; fi
 
