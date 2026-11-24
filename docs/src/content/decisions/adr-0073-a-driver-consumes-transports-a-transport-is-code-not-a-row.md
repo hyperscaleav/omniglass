@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "a driver consumes transports; a transport is code, not a row"
 ---
 
-- **Date:** 2026-07-31 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/architecture/glossary/)
+- **Date:** 2026-07-31 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [glossary](/reference/glossary/)
 - **Decision:** The collect layer is **driver-centric**, closing the question
   [ADR-0039](#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver) left open.
   Three things follow. **A transport is code, not an operator-editable row.** `interface_type` is a low-level

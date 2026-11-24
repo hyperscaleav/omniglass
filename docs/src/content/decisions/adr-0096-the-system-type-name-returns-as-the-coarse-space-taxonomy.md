@@ -6,7 +6,7 @@ summary: "A nested, universally seeded **`system_type`** registry lands beside `
 ---
 
 - **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [API](/architecture/api/), [glossary](/architecture/glossary/)
+  [storage](/architecture/storage/), [API](/architecture/api/), [glossary](/reference/glossary/)
 - **Decision:** A new **`system_type`** table lands: a nested, universally seeded registry saying what
   **kind of space** a system is (`av / room / {board, class, meeting, training, conference, huddle}`,
   `av / sign / {video-wall, interactive-sign}`), exactly parallel to the way `component_type`

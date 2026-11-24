@@ -5,7 +5,7 @@ status: "Accepted; superseded in part by [ADR-0079](#adr-0079-five-telemetry-lan
 summary: "The telemetry model is typed registries over bare-noun data tables"
 ---
 
-- **Date:** 2026-07-23 | **Status:** Accepted | **Pages:** [datapoints](/architecture/properties/), [events](/architecture/events/), [variables](/architecture/variables/), [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Date:** 2026-07-23 | **Status:** Accepted | **Pages:** [datapoints](/architecture/properties/), [events](/architecture/events/), [variables](/architecture/variables/), [storage](/architecture/storage/), [glossary](/reference/glossary/)
 - **Decision:** every component interaction normalizes to one of three **registries**, each suffixed
   `_type` (`property_type`, `event_type`, `command_type`), over bare-noun **data tables**
   (`metric`, `state`, `property`, `event`, `command`). A registry is a classification, so it takes the

@@ -6,7 +6,7 @@ summary: "`instance` has one meaning on every lane: which one of several values 
 refs: [456, 430, 1020]
 ---
 
-- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [metrics and properties](/architecture/properties/), [commands](/architecture/commands/), [api](/architecture/api/), [glossary](/architecture/glossary/)
+- **Date:** 2026-10-26 | **Status:** Accepted | **Pages:** [metrics and properties](/architecture/properties/), [commands](/architecture/commands/), [api](/architecture/api/), [glossary](/reference/glossary/)
 - **Decision:** (#456, the architect's ruling; a sub-issue of #430.)
   1. **One meaning.** `instance` names which one of several values of one key on one owner a row
      is. Series identity stays `(owner, type, instance, provenance)`, and the empty instance is the

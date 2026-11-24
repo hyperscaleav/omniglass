@@ -104,6 +104,8 @@ export default defineConfig({
     '/contributing/walkthroughs/': '/contributing/demos/',
     // The collecting process became the outpost (ADR-2031, #2059).
     '/architecture/nodes/': '/architecture/outposts/',
+    // The frozen architecture glossary left for the generated one (#2320).
+    '/architecture/glossary/': '/reference/glossary/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -209,13 +211,13 @@ export default defineConfig({
                 { label: 'Alarms and actions', slug: 'architecture/alarms-actions' },
                 { label: 'UI', slug: 'architecture/ui' },
                 { label: 'API', slug: 'architecture/api' },
+                { label: 'Messaging', slug: 'architecture/messaging' },
                 // the foundations underneath
                 { label: 'Storage', slug: 'architecture/storage' },
                 { label: 'Data model', slug: 'architecture/data-model' },
                 { label: 'Scaling and deployment', slug: 'architecture/scaling' },
                 { label: 'Settings', slug: 'architecture/settings' },
                 { label: 'Identity and access', slug: 'architecture/identity-access' },
-                { label: 'Glossary', slug: 'architecture/glossary' },
               ],
             },
             {
@@ -229,8 +231,6 @@ export default defineConfig({
                 { label: 'Calculations', slug: 'architecture/calculations' },
                 { label: 'Expressions', slug: 'architecture/expressions' },
                 { label: 'Time', slug: 'architecture/time' },
-                { label: 'Views', slug: 'architecture/views' },
-                { label: 'AI', slug: 'architecture/ai' },
               ],
             },
             {

@@ -6,7 +6,7 @@ summary: "What an operator wants a device to be is a declared value, the word th
 refs: [2037, 2028, 1435, 2079]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [config, secrets, and variables](/architecture/variables/), [settings](/architecture/settings/)
 - **Decision:** (#2037.) One word per kind of value.
   - **Declared value** is desired device state: what an operator asserts a device should be, stored as

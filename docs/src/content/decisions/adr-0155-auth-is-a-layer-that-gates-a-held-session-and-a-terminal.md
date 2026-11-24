@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Auth is a layer that gates a held session (#1049, the architect's ruling): each attempt runs dial, then the auth step (a driver's login dialog or a transport's own auth), then the arm, then `up`, and nothing borrows the connection before the step passes; its verdict is the existing `endpoint-authenticated` rung. A terminal refusal moves the session to `rejected` (amending ADR-0150's state set), which dials no more and fails polls and commands fast with no throwaway fallback, until the endpoint's session identity changes, an operator's audited `:retry` (gated by `endpoint:retry`) moves the retry counter in the connection fingerprint (ADR-0158), or the driver's slow re-probe comes due; an unrelated edit does nothing. Three silent hang-ups after the final secret are an `auth` refusal (the login budget). `session-reason` carries the reason as a property. One login dialog serves raw tcp, telnet and ssh keyboard-interactive"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [glossary](/reference/glossary/), [drivers](/admin/drivers/)
 - **Decision:** The architect's ruling, made in session on 2026-10-23 (#1049), applies the ladder
   the stateless probes climb (dialed, responds, authenticated) to held sessions:
   1. **Auth gates the session.** Every attempt runs dial, then the **auth step**, then the

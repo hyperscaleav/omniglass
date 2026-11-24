@@ -6,7 +6,7 @@ summary: "A driver's body is a versioned declarative spec (jsonb on the driver r
 ---
 
 - **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
-  [glossary](/architecture/glossary/)
+  [glossary](/reference/glossary/)
 - **Decision:** A driver's body is a **versioned declarative spec** (`jsonb` on the driver row,
   `version: 1`, parsed strictly so an unknown field refuses rather than projects) interpreted by
   one generic engine, never per-driver code: the one transport it rides, typed inputs (`string`,
