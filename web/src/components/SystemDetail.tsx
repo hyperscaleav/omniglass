@@ -57,6 +57,7 @@ import { deleteSystem } from "../lib/systems";
 import { LOCATIONS_KEY, deleteLocation, listLocations } from "../lib/locations";
 
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
+import Tooltip from "./ui/Tooltip";
 
 // The system's detail view (#636, reoriented in #872). Systems are the unit
 // Omniglass monitors; locations are folders and metadata; components are the
@@ -280,6 +281,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // Unsaved Configure drafts (the system's and its sole location's) the tab
   // rail asks about; in a blade, closing or popping it asks too.
   const leave = createLeaveGuard();
+  // The tab rail's right end, where Configure draws its actions (#2439).
+  const [railEnd, setRailEnd] = createSignal<HTMLElement>();
   if (props.host === "blade") onCleanup(blades.guard({ kind: "system", id: props.id }, leave));
   const openComponent = (cid: string) => blades.push({ kind: "component", id: cid });
   const { destructive, err } = useEntityDelete({
@@ -353,6 +356,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             </div>
             <TabRail
               tabs={tabs()}
+              endRef={setRailEnd}
               state={tabState}
               guard={leave}
               // The range governs Overview's metrics and the Timeline; Activity
@@ -384,7 +388,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
               </Show>
               {/* The host keys the body on the id: another system is another
                   face, so the edit slot and drafts never carry over (#854). */}
-              <ConfigureFace kind="system" id={id()} guard={leave} host={props.host} destructive={destructive} />
+              <ConfigureFace mount={railEnd} kind="system" id={id()} guard={leave} host={props.host} destructive={destructive} />
             </Show>
         {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
         <Show when={tab() === "timeline"}>
@@ -423,12 +427,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   </Show>
                   <For each={windowAlarms()}>
                     {(inc) => (
-                      <span
+                      <Tooltip as="span" tabIndex={0}
                         data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
                         style={{ left: `${markerX(inc.raisedAt, historyNow(), Math.max(historyNow() - (healthSpans()[0]?.from ?? historyNow() - 30 * 24 * 3600_000), 1)) * 100}%` }}
-                        title={`${inc.message} · ${inc.component}`}
+                        content={`${inc.message} · ${inc.component}`}
                       />
                     )}
                   </For>

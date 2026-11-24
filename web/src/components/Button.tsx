@@ -1,5 +1,6 @@
 import { type Component, type JSX, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
+import Tooltip from "./ui/Tooltip";
 
 // Button is the console's one button primitive. Every button goes through it so
 // the intent class, size, icon size, leading gap, and the loading spinner are
@@ -71,22 +72,58 @@ export default function Button(props: {
       <span class="loading loading-spinner loading-xs" />
     </Show>
   );
-  return (
+  const body = (
+    <>
+      <Show when={!props.iconTrailing}>{iconEl}</Show>
+      <Show when={!props.square}>{props.children}</Show>
+      <Show when={props.iconTrailing}>{iconEl}</Show>
+    </>
+  );
+  const aria = () => props.label ?? (props.square ? props.title : undefined);
+  const plain = () => (
     <button
       type={props.type ?? "button"}
       class={cls()}
       disabled={props.disabled || props.loading}
       onClick={(e) => props.onClick?.(e)}
-      title={props.title}
       tabindex={props.tabindex}
-      aria-label={props.label ?? (props.square ? props.title : undefined)}
+      aria-label={aria()}
       aria-pressed={props.pressed === undefined ? undefined : props.pressed}
       aria-expanded={props.expanded === undefined ? undefined : props.expanded}
       aria-controls={props.controls}
     >
-      <Show when={!props.iconTrailing}>{iconEl}</Show>
-      <Show when={!props.square}>{props.children}</Show>
-      <Show when={props.iconTrailing}>{iconEl}</Show>
+      {body}
     </button>
+  );
+  // A title is a tooltip (#2486): the native attribute never shows on keyboard
+  // focus, so a titled button wears the Tooltip wrapper, which does. A natively
+  // disabled button takes neither focus nor pointer, so a titled one is
+  // aria-disabled instead (greyed by btn-disabled, click swallowed): it stays
+  // focusable and can say why it is off, and it is one element throughout, so
+  // a button going disabled or loading never remounts under the focus.
+  const off = () => !!(props.disabled || props.loading);
+  return (
+    <Show when={props.title} fallback={plain()}>
+      <Tooltip
+        content={props.title}
+        type={props.type ?? "button"}
+        class={cls()}
+        onClick={(e: MouseEvent) => {
+          if (off()) {
+            e.preventDefault();
+            return;
+          }
+          props.onClick?.(e);
+        }}
+        tabindex={props.tabindex}
+        aria-label={aria()}
+        aria-disabled={off() ? "true" : undefined}
+        aria-pressed={props.pressed === undefined ? undefined : props.pressed}
+        aria-expanded={props.expanded === undefined ? undefined : props.expanded}
+        aria-controls={props.controls}
+      >
+        {body}
+      </Tooltip>
+    </Show>
   );
 }

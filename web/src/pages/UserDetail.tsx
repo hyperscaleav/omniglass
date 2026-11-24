@@ -33,6 +33,7 @@ import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
 import { confirmAction, confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
 
 // UserDetail is a user's blade body under the read -> Edit -> Save contract.
 // Read mode shows the profile facts, the user groups the user belongs to (a drill to the
@@ -655,14 +656,14 @@ function GrantEditor(props: { user: User; editing: boolean; canGrant: boolean; c
           <div class="flex flex-wrap gap-1.5">
             <For each={inherited()}>
               {(g) => (
-                <span
+                <Tooltip as="span" tabIndex={0}
                   class="inline-flex items-center gap-1 rounded-field border border-dashed border-base-300 bg-base-100 py-[3px] pl-2.5 pr-2 text-xs"
-                  title={`Inherited from the user group "${g.group_label ?? g.group}". Edit the user group to change it.`}
+                  content={`Inherited from the user group "${g.group_label ?? g.group}". Edit the user group to change it.`}
                 >
                   <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
                   <span class="text-base-content/40">from</span>
-                  <button class="text-primary hover:underline" title="Open this user group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
-                </span>
+                  <Tooltip class="text-primary hover:underline" content="Open this user group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</Tooltip>
+                </Tooltip>
               )}
             </For>
           </div>

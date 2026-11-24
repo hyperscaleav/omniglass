@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import CreateIdentity from "./CreateIdentity";
 import { createPen } from "../lib/namegen";
 import { type DraftLabel } from "../lib/labeldraft";
+import { tipOf } from "../test-tip";
 
 // The shared Identity section of the three fleet create forms. What is asserted
 // here is the CONTRACT the three pages share; each page's own test proves it is
@@ -248,7 +249,7 @@ describe("CreateIdentity", () => {
 
   // # The affordance itself (#657)
 
-  it("carries no text on either action, only an icon and a tooltip", () => {
+  it("carries no text on either action, only an icon and a tooltip", async () => {
     // The architect's constraint, and the reason the hints below have to stay
     // legible: the button no longer says what it does, so the tooltip and the
     // field's own copy carry it.
@@ -257,14 +258,14 @@ describe("CreateIdentity", () => {
       expect(b.textContent).toBe("");
       expect(b.className).toContain("btn-square");
     }
-    expect(toggles()[0].title).toBe("Override");
+    expect(await tipOf(toggles()[0])).toBe("Override");
     // The accessible name says WHICH field, because two identically named
     // buttons in one section are two buttons a screen reader cannot tell apart.
     expect(toggles()[0].getAttribute("aria-label")).toBe("Override the name");
     unlockName();
     // Overridden reads as Settings' own restore action, the same idea and the
     // same words: handing a field back to the platform IS restoring its default.
-    expect(toggles()[0].title).toBe("Restore to default");
+    expect(await tipOf(toggles()[0])).toBe("Restore to default");
     expect(toggles()[0].getAttribute("aria-label")).toBe("Restore the name to default");
   });
 

@@ -26,6 +26,7 @@ import { ENDPOINTS_KEY } from "../lib/endpoints";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { clickDelete } from "./configure.testkit";
 import { answerConfirms } from "../lib/confirm.testkit";
 
 // ComponentDetail (#2423): the component page and the component blade render
@@ -228,6 +229,41 @@ describe("one edit model", () => {
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
   });
 
+  // The tab's actions live on the tab rail's right end (#2439): a small Edit
+  // and a ⋯ menu holding Delete, no separate row; editing swaps them for
+  // Cancel and Save in the same place.
+  it("Configure's Edit and ⋯ menu sit in the tab rail, on the page and in a blade", async () => {
+    mountPage(`/web/components/${CID}?tab=configure`);
+    const rail = await screen.findByTestId("tab-rail");
+    const edit = await within(rail).findByRole("button", { name: "Edit" });
+    expect(within(rail).getByRole("button", { name: "More actions" })).toBeTruthy();
+    expect(screen.queryByTestId("configure-rail")).toBeNull();
+    const form = await screen.findByTestId("entity-form");
+    expect(edit.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+    mountBlade();
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
+    const brail = await within(blade).findByTestId("tab-rail");
+    expect(await within(brail).findByRole("button", { name: "Edit" })).toBeTruthy();
+    expect(within(brail).getByRole("button", { name: "More actions" })).toBeTruthy();
+  });
+
+  it("Delete is in the ⋯ menu and still opens the confirmation; editing swaps to Cancel and Save in place", async () => {
+    const asked = answerConfirms(false);
+    mountPage(`/web/components/${CID}?tab=configure`);
+    const rail = await screen.findByTestId("tab-rail");
+    expect(within(rail).queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.click(await within(rail).findByRole("button", { name: "More actions" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(asked).toHaveBeenCalled());
+    fireEvent.click(await within(rail).findByRole("button", { name: "Edit" }));
+    expect(await within(rail).findByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(within(rail).getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(within(rail).queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "More actions" })).toBeNull();
+  });
+
   it("the page's ?edit=1 lands on Configure, already editing", async () => {
     mountPage(`/web/components/${CID}?edit=1`);
     expect(await screen.findByDisplayValue("videobar-1")).toBeTruthy();
@@ -235,15 +271,15 @@ describe("one edit model", () => {
 });
 
 describe("Delete, by the host's way out", () => {
-  // Delete sits in the Configure face's footer, so a caller who may delete
+  // Delete sits in the Configure face's rail, so a caller who may delete
   // but not update still gets the tab, read-only, with its Delete (#2463).
   it("a caller with delete but not update still reaches Delete", async () => {
     const qc = seed(["delete"]);
     qc.setQueryData([...ME_KEY], { ...me, permissions: ["*:read", "component:delete"] });
     mountPage(`/web/components/${CID}?tab=configure`, qc);
-    const face = await screen.findByTestId("configure-face");
-    expect(await within(face).findByRole("button", { name: "Delete" })).toBeTruthy();
-    expect(within(face).queryByRole("button", { name: "Edit" })).toBeNull();
+    const rail = await screen.findByTestId("tab-rail");
+    expect(await within(rail).findByRole("button", { name: "More actions" })).toBeTruthy();
+    expect(within(rail).queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   it("in a blade, refreshes the slots and health reads and closes the stack", async () => {
@@ -253,7 +289,7 @@ describe("Delete, by the host's way out", () => {
     const spy = vi.spyOn(r.qc, "invalidateQueries");
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
-    fireEvent.click(await within(blade).findByRole("button", { name: "Delete" }));
+    await clickDelete(blade);
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
     const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: readonly unknown[] }).queryKey);
     expect(keys).toContainEqual([...SYSTEM_SLOTS_PREFIX]);
@@ -269,7 +305,7 @@ describe("Delete, by the host's way out", () => {
     const r = mountBlade("/web/explore");
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
-    fireEvent.click(await within(blade).findByRole("button", { name: "Delete" }));
+    await clickDelete(blade);
     expect((await within(blade).findByRole("alert")).textContent).toContain("system slot it staffs");
     expect(r.controller().stack().length).toBe(1);
   });
@@ -278,7 +314,7 @@ describe("Delete, by the host's way out", () => {
     answerConfirms(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 }));
     mountPage(`/web/components/${CID}?tab=configure`);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await clickDelete();
     expect(await screen.findByTestId("explore-page")).toBeTruthy();
   });
 });

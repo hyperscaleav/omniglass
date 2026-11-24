@@ -5,6 +5,7 @@ import { rel } from "../lib/format";
 import { certTone, daysLeftWord, expiryDay, shortKey, tlsMode, type ReachTLS, type Tone } from "../lib/tls";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { type ReachWord, segments, uptime, reason, layerUp, layerWord, requestRung, requestLayer, requestHeld, type ReachEndpoint } from "../lib/reachability";
+import Tooltip from "./ui/Tooltip";
 
 // The availability strip and the layered-gate breakdown of an endpoint: the
 // parts of the endpoint's story that are drawn from its reachability read.
@@ -96,7 +97,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
         <span class="w-16 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">trust</span>
         <span class={mode().tone === "warn" ? "text-warning" : "text-base-content/70"}>{mode().word}</span>
         <Show when={p.tls.key}>
-          <span class="font-data text-base-content/40" title={p.tls.key}>· {shortKey(p.tls.key!)}</span>
+          <Tooltip as="span" tabIndex={0} class="font-data text-base-content/40" content={p.tls.key}>· {shortKey(p.tls.key!)}</Tooltip>
         </Show>
         <InfoTip label="how the endpoint verifies" text={mode().hint} />
       </div>
@@ -131,7 +132,7 @@ export function GateBreakdown(p: { iface: ReachEndpoint }) {
                 <span class="text-base-content/40">· {l.detail}</span>
               </Show>
               <Show when={l.ts}>
-                <span class="text-base-content/40" title={l.ts}>· {rel(l.ts, now())}</span>
+                <Tooltip as="span" tabIndex={0} class="text-base-content/40" content={l.ts}>· {rel(l.ts, now())}</Tooltip>
               </Show>
             </div>
           );

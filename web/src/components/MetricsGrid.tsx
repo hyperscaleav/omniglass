@@ -13,6 +13,7 @@ import { createClock } from "../lib/clock";
 import { LEAF_POLL_MS, vitalValueText } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { gridWindow, hasData } from "../lib/metrics_grid";
+import Tooltip from "./ui/Tooltip";
 
 // MetricsGrid (#2424): every effective metric of a component or a system
 // charted over the page's range, one card each (name, unit, the current
@@ -89,7 +90,7 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                 return (
                   <article data-testid={`metric-card-${name}`} class="flex min-w-0 flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-3">
                     <header class="flex items-baseline gap-2">
-                      <h3 class="min-w-0 truncate text-sm font-medium" title={name}>{entityLabel({ name: name, label: m().label })}</h3>
+                      <Tooltip as="h3" class="min-w-0 truncate text-sm font-medium" content={name}>{entityLabel({ name: name, label: m().label })}</Tooltip>
                       <Show when={m().unit}>
                         <span class="text-xs text-base-content/50">{m().unit}</span>
                       </Show>

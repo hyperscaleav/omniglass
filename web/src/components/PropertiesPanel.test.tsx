@@ -120,7 +120,7 @@ describe("PropertiesPanel", () => {
   // A key the component only observes or was told (#1297) has no declared or
   // calculated value to edit: it stands in the Reconciliation panel, which reads
   // the same rows, and stays out of this one, so it is not offered as an empty
-  // off-contract override, and an owner with only such keys reads as empty here.
+  // off-contract override, and an owner with only such keys lists nothing here.
   it("leaves out a property that is only observed or told", () => {
     const observed: EffectiveProperty = {
       property_type_name: "serial-number", property_type_id: "serial-number-id", label: "Serial number", data_type: "string",
@@ -131,8 +131,11 @@ describe("PropertiesPanel", () => {
     expect(queryByText("Serial number")).toBeNull();
     expect(getByRole("group", { name: /off contract/i })).toBeTruthy();
     unmount();
+    // The Reconciliation table lists it, so this panel does not claim that
+    // nothing resolves beside it (#2439).
     const empty = mount([observed]);
-    expect(empty.getByText(/come from the product it is an instance of/i)).toBeTruthy();
+    expect(empty.queryByText("Serial number")).toBeNull();
+    expect(empty.queryByText(/Nothing resolves for this component yet/)).toBeNull();
   });
 
   // The empty state teaches where properties come from without asserting WHY none
@@ -247,5 +250,22 @@ describe("propertyResolutionBlade", () => {
     expect(getByText("off contract")).toBeTruthy();
     expect(getByText(/does not declare this property/i)).toBeTruthy();
     expect(getByText(/clearing it removes the value/i)).toBeTruthy();
+  });
+});
+
+// The empty line claims nothing resolves, so it never shows while the owner
+// has rows the Reconciliation table lists from the same read (#2439).
+describe("PropertiesPanel empty line", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const told: EffectiveProperty = { property_type_name: "power.state", property_type_id: "p-id", label: "Power", data_type: "string", required: false, is_set: false, from_contract: false, value: null, reconciliation: { want: null, told: "on", is: "on", is_instance: "ep-1", drift: false } } as unknown as EffectiveProperty;
+
+  it("is absent when the owner has reconciled rows", () => {
+    const { queryByText } = mount([told]);
+    expect(queryByText(/Nothing resolves for this component yet/)).toBeNull();
+  });
+
+  it("shows when the owner has no rows at all", () => {
+    const { getByText } = mount([]);
+    expect(getByText(/Nothing resolves for this component yet/)).toBeTruthy();
   });
 });

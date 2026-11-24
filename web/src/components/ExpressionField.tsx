@@ -6,6 +6,7 @@ import { caretOf, validateExpression, type ExpressionBinding, type ExpressionChe
 import { bindLabel, diagnosticHref, type Vocabulary } from "../lib/expressionEditor";
 import type { ExpressionEditor } from "./expressionEditorView";
 import { describeError } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 // ExpressionField is the console's one expression editor (#960, #1000): the
 // source in a CodeMirror editor that reads Expr (highlighting), completes the
@@ -281,10 +282,10 @@ export default function ExpressionField(p: {
                     {d.message}
                   </span>
                   <Show when={d.code}>
-                    <a class="link font-data text-[11px] text-base-content/60" href={diagnosticHref(d.code!)} target="_blank" rel="noreferrer"
-                      title="What this diagnostic catches, with examples">
+                    <Tooltip as="a" class="link font-data text-[11px] text-base-content/60" href={diagnosticHref(d.code!)} target="_blank" rel="noreferrer"
+                      content="What this diagnostic catches, with examples">
                       {d.code}
-                    </a>
+                    </Tooltip>
                   </Show>
                   <Show when={d.unbound && p.onBind}>
                     <button type="button" class="link text-[11px] text-base-content/80" onClick={() => p.onBind!(d.unbound!)}>

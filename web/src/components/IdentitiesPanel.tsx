@@ -29,6 +29,7 @@ import {
   type UnboundIdentity,
 } from "../lib/identity_bindings";
 import { confirmAction } from "../lib/confirm";
+import Truncate from "./ui/Truncate";
 
 // IdentitiesPanel is a conduit component's identities (#1389, ADR-1282): a
 // component that speaks for many owners collects once, and each value it
@@ -216,7 +217,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                           {(b) => (
                             <tr data-testid={`binding-${b().key}-${b().value}`}>
                               <td class="font-data text-xs text-base-content/60">{b().key}</td>
-                              <td class="truncate font-data text-xs" title={b().value}>{b().value}</td>
+                              <td class="font-data text-xs"><Truncate text={b().value} /></td>
                               <td class="text-base-content/40"><ArrowRight size={13} /></td>
                               <td>
                                 <span class="inline-flex items-baseline gap-2">
@@ -278,7 +279,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                             <>
                               <tr data-testid={`unbound-${u().key}-${u().value}`}>
                                 <td class="font-data text-xs text-base-content/60">{u().key}</td>
-                                <td class="truncate font-data text-xs" title={u().value}>{u().value}</td>
+                                <td class="font-data text-xs"><Truncate text={u().value} /></td>
                                 <td class="text-xs text-base-content/70">
                                   <span class="tabular-nums">heard {u().count} {u().count === 1 ? "time" : "times"}</span>
                                   <span class="text-base-content/45"> · last {rel(u().last_heard_at, now())}</span>

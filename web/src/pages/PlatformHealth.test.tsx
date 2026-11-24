@@ -9,6 +9,7 @@ import { SIMULATION_KEY, type SimFleet } from "../lib/simulation";
 import { OUTPOST_DOWN_AFTER_MS } from "../lib/outposts";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { tipOf } from "../test-tip";
 
 // The Platform health page (#1644): a header (the build running, its uptime,
 // the platform health linking to its system, a lab badge) over an outpost table
@@ -153,11 +154,11 @@ function refuse() {
 
 
 describe("PlatformHealth page", () => {
-  it("keeps a long version on one line inside its tile and carries the full text as a tooltip", () => {
+  it("keeps a long version on one line inside its tile and carries the full text as a tooltip", async () => {
     const long = "fbb3d54eb-dirty-20261117T233000Z";
     mount({ ...full, servers: [{ ...full.servers![0], version: long }] });
     const tile = screen.getByTestId("platform-version");
-    expect(tile).toHaveAttribute("title", long);
+    expect(await tipOf(tile)).toBe(long);
     for (const c of ["min-w-0", "overflow-hidden", "whitespace-nowrap", "text-ellipsis"]) expect(tile).toHaveClass(c);
   });
 
@@ -183,7 +184,6 @@ describe("PlatformHealth page", () => {
     expect(within(table).getByText("Checkin")).toBeInTheDocument();
     expect(within(table).getByText("Commands")).toBeInTheDocument();
     const trigger = within(table).getByRole("button", { name: "Check-in Age" });
-    expect(trigger.closest("th")).not.toHaveAttribute("title");
     fireEvent.keyDown(document.body, { key: "Tab" });
     trigger.focus();
     expect(await screen.findByText("Seconds since the outpost last checked in.")).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createUniqueId, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
@@ -56,6 +56,7 @@ import { SYSTEM_HEALTH_PREFIX, SYSTEM_HEALTHS_KEY } from "../lib/health";
 import { isRoomOf, slotsOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
+import Tooltip from "./ui/Tooltip";
 
 // ComponentDetail (#637, reoriented in #872, one body for both hosts since
 // #2423): a component's whole detail body, rendered by its page
@@ -100,6 +101,8 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   // nested open stacks on whichever host it is in.
   const blades = useBlades();
   const leave = createLeaveGuard();
+  // The tab rail's right end, where Configure draws its actions (#2439).
+  const [railEnd, setRailEnd] = createSignal<HTMLElement>();
   // In a blade, closing or popping it asks the same guard a tab switch does.
   if (props.host === "blade") onCleanup(blades.guard({ kind: "component", id: props.id }, leave));
   // Three tabs (#826): Overview, Activity, Configure. A legacy ?tab=events
@@ -289,6 +292,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             </div>
             <TabRail
               tabs={leafTabs()}
+              endRef={setRailEnd}
               state={tabState}
               guard={leave}
               // The range governs Overview's metrics grid (#2424) and the Timeline.
@@ -302,7 +306,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             <Show when={leafTab() === "configure"}>
               {/* The host keys the body on the id, so another component is
                   another face, never this one's drafts (#854). */}
-              <ConfigureFace kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
+              <ConfigureFace mount={railEnd} kind="component" id={id()} guard={leave} host={props.host} destructive={destructive} />
             </Show>
             {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
             <Show when={leafTab() === "timeline"}>
@@ -467,17 +471,17 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                           <>
                             <dt class="text-base-content/50">{row().label}</dt>
                             <dd data-testid={`vital-${key}`} class="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 font-mono text-xs">
-                              <span title={vitalValueText(row().value) !== String(row().value) ? String(row().value) : undefined}>
+                              <Tooltip as="span" tabIndex={0} content={vitalValueText(row().value) !== String(row().value) ? String(row().value) : undefined}>
                                 {vitalValueText(row().value)}
                                 <Show when={row().unit}>
                                   {" "}
                                   <span data-testid="vital-unit" class="text-base-content/50">{row().unit}</span>
                                 </Show>
-                              </span>
+                              </Tooltip>
                               <Show when={row().sampled} fallback={<span class="text-[10px] text-base-content/40">contract default</span>}>
                                 {/* Centered on the value's digits, not on its line box,
                                     which rests the dot on the baseline (#1379). */}
-                                <span class="h-1.5 w-1.5 flex-none -translate-y-px self-center rounded-full bg-success" title="live series" />
+                                <Tooltip as="span" tabIndex={0} class="h-1.5 w-1.5 flex-none -translate-y-px self-center rounded-full bg-success" content="live series" />
                               </Show>
                               <Show when={row().sourceRuleId}>
                                 <CalcRuleLink name={row().sourceRule!} id={row().sourceRuleId!} />
@@ -518,10 +522,10 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                                       {(it) => (
                                         <li class="flex items-baseline gap-2">
                                           <span class="min-w-14 text-base-content/60" classList={{ "font-medium text-base-content/85": it.instance === sp().shown }}>{instanceName(it.instance)}</span>
-                                          <span class="font-data" title={vitalValueText(it.value) !== String(it.value) ? String(it.value) : undefined}>
+                                          <Tooltip as="span" tabIndex={0} class="font-data" content={vitalValueText(it.value) !== String(it.value) ? String(it.value) : undefined}>
                                             {vitalValueText(it.value)}
                                             <Show when={row().unit}>{" "}<span class="text-base-content/50">{row().unit}</span></Show>
-                                          </span>
+                                          </Tooltip>
                                           <span class="text-[11px] text-base-content/45">{ageWords(it.ts, pageNow())}</span>
                                         </li>
                                       )}

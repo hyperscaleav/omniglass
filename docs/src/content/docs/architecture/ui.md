@@ -257,8 +257,8 @@ hang off it (#854):
    copy), and the health read. A component that staffs a slot is refused by the server (409,
    referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
 2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
-   (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the
-   Configure footer), where the operator's eyes are, not at the top of a long form. A save that
+   (`saveError`). An identity or catalog blade shows it in its footer beside Save (`SaveError`); a fleet
+   detail's Configure shows it under the tab rail that carries Save, above the form. A save that
    rejects is never swallowed silently.
 3. **Dirty-leave prompt.** Switching tabs away from Configure with drafts that differ from the row
    asks "Discard your unsaved changes?" (`lib/leave_guard.ts`, asked by `TabRail`). Confirming
