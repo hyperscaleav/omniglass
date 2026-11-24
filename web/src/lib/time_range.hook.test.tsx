@@ -56,7 +56,7 @@ describe("useTimeRange", () => {
   });
 });
 
-// A blade's range (#2425, ADR-2423): it opens on the default, not the page's range, and is its
+// A blade's range (#2425, ADR-2423): it opens on the page's range but is its
 // own, so picking one in a blade never rewrites the page's address.
 function BladeProbe() {
   const { range, setRange } = useHostTimeRange("blade");
@@ -71,14 +71,14 @@ function BladeProbe() {
 }
 
 describe("useHostTimeRange", () => {
-  it("a blade opens on the default and keeps its own picks out of the address", async () => {
+  it("a blade opens on the page's range and keeps its own picks out of the address", async () => {
     window.history.pushState({}, "", "/web/b?range=6h");
     render(() => (
       <Router base="/web">
         <Route path="/b" component={BladeProbe} />
       </Router>
     ));
-    expect(screen.getByTestId("range").textContent).toBe(JSON.stringify({ kind: "preset", preset: "24h" }));
+    expect(screen.getByTestId("range").textContent).toBe(JSON.stringify({ kind: "preset", preset: "6h" }));
     fireEvent.click(screen.getByText("7d"));
     await screen.findByText(JSON.stringify({ kind: "preset", preset: "7d" }));
     expect(screen.getByTestId("search").textContent).toBe("?range=6h");
