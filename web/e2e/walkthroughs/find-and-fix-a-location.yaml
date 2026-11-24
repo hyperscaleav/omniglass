@@ -29,8 +29,8 @@ steps:
     caption: Save the location.
   - click: { role: tab, name: Overview }
     caption: Saved. Back on the system's overview, its title already reads the new label.
-  - click: { role: link, name: Explore }
-    caption: Back to Explore.
+  - click: '[data-testid="breadcrumb"] >> role=link[name="Explore" s]'
+    caption: Back to Explore, opened down to the location you were on.
   - wait: { role: treeitem, name: Bay 3 Loading Dock }
     caption: The outline reads the new label too. One location, one label, wherever it is read.
     hold: 1500

@@ -46,7 +46,7 @@ export default function SystemZoom() {
   const sole = createMemo(() => (view.data && locationId() ? systemsAtLocation(view.data, locationId()!).length === 1 : false));
   const title = () => (sole() && location() ? entityLabel(location()!) : system() ? entityLabel(system()!) : "System");
 
-  const crumbs = createMemo(() => (view.data ? systemCrumbs(view.data, id()) : []).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` })));
+  const crumbs = createMemo(() => [{ key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` }, ...(view.data ? systemCrumbs(view.data, id()) : []).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` }))]);
 
   // A miss is judged only once the fleet view is current: the create
   // handoff lands here while the cached view predates the new row.

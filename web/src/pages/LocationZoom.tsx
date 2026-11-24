@@ -66,7 +66,11 @@ export default function LocationZoom() {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
     // The path ends at the parent: the location itself is the page title.
-    return chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` }));
+    return [
+      // Back up lands where you were: the outline opened down to this row.
+      { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` },
+      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), href: `/locations/${l.id}` })),
+    ];
   });
 
   // A miss is judged only once the fleet view is current: the create

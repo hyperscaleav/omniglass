@@ -14,11 +14,11 @@ import InboxIndicator from "./InboxIndicator";
 // command-palette trigger (a global jump, distinct from a page's own filter),
 // omnibot's panel for a person who may run it (#1167), and the inbox bell with
 // its unread count.
-function TrailLink(props: { crumb: Crumb }) {
+function TrailLink(props: { crumb: Crumb; class?: string }) {
   return (
-    <Show when={props.crumb.href} fallback={<span title={props.crumb.title ?? props.crumb.label}>{props.crumb.label}</span>}>
+    <Show when={props.crumb.href} fallback={<span class={props.class} title={props.crumb.title ?? props.crumb.label}>{props.crumb.label}</span>}>
       {(href) => (
-        <A href={href()} title={props.crumb.title ?? props.crumb.label} class="hover:text-base-content">
+        <A href={href()} title={props.crumb.title ?? props.crumb.label} class={`hover:text-base-content ${props.class ?? ""}`}>
           {props.crumb.label}
         </A>
       )}
@@ -29,7 +29,7 @@ function TrailLink(props: { crumb: Crumb }) {
 // A detail page's location path, the header's second line: every crumb a link,
 // the middle ones folded into an ellipsis menu when the measured width cannot
 // hold them (one line always, never wrapped).
-function Trail(props: { crumbs: Crumb[] }) {
+function Trail(props: { crumbs: Crumb[]; lead?: Crumb }) {
   const [width, setWidth] = createSignal(0);
   let el: HTMLElement | undefined;
   onMount(() => {
@@ -43,7 +43,10 @@ function Trail(props: { crumbs: Crumb[] }) {
   const sep = () => <span class="flex-none text-base-content/30">/</span>;
   return (
     <nav ref={el} aria-label="Breadcrumb" data-testid="breadcrumb" class="flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap text-xs text-base-content/60">
-      <For each={parts().head}>{(c, i) => <>{i() > 0 && sep()}<TrailLink crumb={c} /></>}</For>
+      <Show when={props.lead}>
+        {(l) => <span data-testid="lead-system" class="flex flex-none items-baseline gap-1.5 sm:hidden"><TrailLink crumb={l()} /><span class="text-base-content/30">·</span></span>}
+      </Show>
+      <For each={parts().head}>{(c, i) => <>{i() > 0 && sep()}<TrailLink crumb={c} class={parts().tail.length === 0 && i() === parts().head.length - 1 ? "min-w-0 truncate" : ""} /></>}</For>
       <Show when={parts().hidden.length > 0}>
         {sep()}
         <Popover class="btn btn-quiet btn-xs btn-square h-4 min-h-0 w-4 flex-none self-center" aria-label="Show hidden path" title="Show hidden path" placement="bottom-start" contentClass="menu z-50 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none" content={
@@ -54,7 +57,7 @@ function Trail(props: { crumbs: Crumb[] }) {
           <MoreHorizontal size={14} />
         </Popover>
       </Show>
-      <For each={parts().tail}>{(c) => <>{sep()}<TrailLink crumb={c} /></>}</For>
+      <For each={parts().tail}>{(c) => <>{sep()}<TrailLink crumb={c} class="min-w-0 truncate" /></>}</For>
     </nav>
   );
 }
@@ -70,17 +73,17 @@ export default function TopBar(props: { section: string; title?: string | JSX.El
           <Show when={props.kind} fallback={<Show when={props.section}>
             <span class="eyebrow flex-none text-base-content/70">{props.section.replaceAll(" · ", " / ")} /</span>
           </Show>}>
-            {(k) => <span class="eyebrow flex flex-none items-baseline gap-2 text-base-content/70"><TrailLink crumb={k()} /><span class="text-base-content/30">/</span></span>}
+            {(k) => <span data-kind class="eyebrow hidden flex-none items-baseline gap-2 text-base-content/70 sm:flex"><TrailLink crumb={k()} /><span class="text-base-content/30">/</span></span>}
           </Show>
           <h1 class="min-w-[4ch] shrink truncate text-lg font-semibold leading-tight tracking-tight">{props.title}</h1>
           <Show when={props.system}>
-            {(sys) => <span class="min-w-0 shrink truncate text-sm text-base-content/60">(<TrailLink crumb={sys()} />)</span>}
+            {(sys) => <span class="hidden min-w-0 shrink truncate text-sm sm:inline text-base-content/60">(<TrailLink crumb={sys()} />)</span>}
           </Show>
         </div>
         <Show when={props.trail?.length} fallback={<Show when={props.hint}>
           <p data-testid="header-line-2" class="hidden truncate text-xs text-base-content/60 lg:block">{props.hint}</p>
         </Show>}>
-          <div data-testid="header-line-2" class="min-w-0"><Trail crumbs={props.trail!} /></div>
+          <div data-testid="header-line-2" class="min-w-0"><Trail crumbs={props.trail!} lead={props.system} /></div>
         </Show>
       </div>
       <button

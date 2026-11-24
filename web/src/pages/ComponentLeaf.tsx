@@ -61,8 +61,8 @@ export default function ComponentLeaf() {
     const sid = primary()?.systemId;
     return component()?.location_id ?? (sid ? (view.data?.systems ?? []).find((s) => s.id === sid)?.location ?? null : null);
   };
-  // Line 2 is the location path; the primary system rides line 1 beside the label.
-  const crumbs = createMemo(() => (view.data ? locationPath(view.data, locationId()).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` })) : []));
+  // Line 2 is the Explore back link then the location path; the primary system rides line 1 beside the label.
+  const crumbs = createMemo(() => (view.data ? [{ key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` }, ...locationPath(view.data, locationId()).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` }))] : []));
   const primarySystem = createMemo(() => {
     const s = (view.data?.systems ?? []).find((x) => x.id === primary()?.systemId);
     return s ? { key: s.id, label: entityLabel(s), href: `/systems/${s.id}` } : undefined;

@@ -138,6 +138,16 @@ describe("the component leaf", () => {
     expect(screen.getByTestId("time-range-trigger")).toBeTruthy();
   });
 
+  it("links Explore back to this component's row in the outline, first crumb of line 2", async () => {
+    mount();
+    const trail = screen.getByTestId("breadcrumb");
+    expect(within(trail).getByRole("link", { name: "Explore" })).toBeTruthy();
+    expect(within(trail).getAllByRole("link").filter((a) => !a.closest('[data-testid="lead-system"]'))[0].textContent).toBe("Explore");
+    fireEvent.click(within(trail).getByRole("link", { name: "Explore" }));
+    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("cf-c-bar")}`);
+  });
+
   // The two-line header (#2575): line 1 is the kind's list, the label as the one
   // h1 and the primary system; line 2 is the location path, as links.
   it("line 1 reads Components / label (system), line 2 the location path, one h1, no body breadcrumb", () => {

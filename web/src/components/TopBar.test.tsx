@@ -41,6 +41,9 @@ describe("the top bar's omnibot button", () => {
   });
 });
 
+// The path's own links: the phone-only lead system is not a crumb.
+const crumbLinks = (el: HTMLElement) => within(el).getAllByRole("link").filter((a) => !a.closest('[data-testid="lead-system"]'));
+
 describe("TopBar two-line header (#2575)", () => {
   const crumbs = (n: number) => Array.from({ length: n }, (_, i) => ({ key: `c${i}`, label: `Place number ${i}`, href: `/locations/c${i}` }));
   const kind = { key: "kind", label: "Components", href: "/components" };
@@ -73,14 +76,30 @@ describe("TopBar two-line header (#2575)", () => {
     mount(2);
     const trail = screen.getByTestId("breadcrumb");
     expect(screen.getByTestId("header-line-1").contains(trail)).toBe(false);
-    expect(within(trail).getAllByRole("link").map((a) => a.textContent)).toEqual(["Place number 0", "Place number 1"]);
+    expect(crumbLinks(trail).map((a) => a.textContent)).toEqual(["Place number 0", "Place number 1"]);
     expect(screen.queryByRole("button", { name: "Show hidden path" })).toBeNull();
+  });
+
+  it("on a phone the system leads line 2 and line 1 drops the kind prefix", () => {
+    mount(2);
+    const line1 = screen.getByTestId("header-line-1");
+    expect(within(line1).getByRole("link", { name: "Components" }).closest("[data-kind]")!.className).toMatch(/hidden.*sm:flex/);
+    const lead = within(screen.getByTestId("header-line-2")).getByTestId("lead-system");
+    expect(lead.className).toContain("sm:hidden");
+    expect(lead.textContent).toContain("System ABC");
+  });
+
+  it("the last crumb truncates with an ellipsis instead of clipping", () => {
+    mount(2);
+    const links = crumbLinks(screen.getByTestId("breadcrumb"));
+    expect(links[links.length - 1].className).toMatch(/truncate/);
+    expect(links[links.length - 1].className).toMatch(/min-w-0/);
   });
 
   it("collapses the middle of a long path to an ellipsis menu that lists them as links", async () => {
     mount(6);
     const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getAllByRole("link").map((a) => a.textContent)).toEqual(["Place number 0", "Place number 5"]);
+    expect(crumbLinks(trail).map((a) => a.textContent)).toEqual(["Place number 0", "Place number 5"]);
     fireEvent.click(screen.getByRole("button", { name: "Show hidden path" }));
     const menu = await screen.findByTestId("trail-menu");
     expect(within(menu).getAllByRole("link").map((a) => a.textContent)).toEqual(["Place number 1", "Place number 2", "Place number 3", "Place number 4"]);
