@@ -111,7 +111,7 @@ describe("ResolutionPanel", () => {
     expect(getByText("No values reach this component.")).toBeTruthy();
   });
 
-  // Platform-band secrets (the simulator's) reach every component; they sit
+  // Secrets that win from the platform band reach every component; they sit
   // behind a toggle so what applies to this one is what is listed (#2439).
   it("keeps platform secrets behind Show platform values", () => {
     const secrets = [
@@ -122,9 +122,9 @@ describe("ResolutionPanel", () => {
     const { queryByText, getByText, getByTestId } = mount({ members: solo, name: "solo-bar", secrets });
     expect(queryByText("sim-snmp")).toBeNull();
     expect(getByText("device-login")).toBeTruthy();
-    // A platform secret that is not the simulator's stays listed.
-    expect(getByText("platform-ntp")).toBeTruthy();
+    expect(queryByText("platform-ntp")).toBeNull();
     fireEvent.click(getByTestId("platform-values-toggle"));
     expect(getByText("sim-snmp")).toBeTruthy();
+    expect(getByText("platform-ntp")).toBeTruthy();
   });
 });
