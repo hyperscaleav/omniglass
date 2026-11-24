@@ -159,7 +159,9 @@ a name more than one row you can see answers to is a 409 listing each one in the
 resolves (a name nothing answers to stays a 404), and the CLI prints it as "the name matches N rows you can see; address one by its id or dotted address" followed by the matches, so the error tells you what to type next:
 
 ```text
-secret "demo-panel-login" is ambiguous: 2 you can see answer to it; address one as $platform/demo-panel-login or boi.17c/demo-panel-login
+the name matches 2 rows you can see; address one by its id or dotted address instead:
+  $platform/demo-panel-login
+  boi.17c/demo-panel-login
 ```
 
 A name is a lookup, so it lands on whatever the one row you can see by that name is now: a write
