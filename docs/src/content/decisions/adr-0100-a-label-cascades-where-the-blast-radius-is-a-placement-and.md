@@ -7,7 +7,7 @@ summary: "A label rule reads its entity's PLACEMENT (a component's location labe
 
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
   [storage](/architecture/storage/), [identity and access](/architecture/identity-access/),
-  [glossary](/architecture/glossary/)
+  [glossary](/reference/glossary/)
 - **Decision (placement is in the data map):** A component's label rule reads `LocationLabel` (the
   label of the location it sits at) and `SystemTypeLabel` (the label of its primary system's type); a
   system's reads `LocationLabel`. This **reverses the narrowing in

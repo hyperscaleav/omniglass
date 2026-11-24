@@ -6,7 +6,7 @@ summary: "The entity formerly named `interface` renames to `endpoint` end to end
 ---
 
 - **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
-  [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [API](/architecture/api/),
+  [nodes](/architecture/nodes/), [glossary](/reference/glossary/), [API](/architecture/api/),
   [identity and access](/architecture/identity-access/)
 - **Decision:** The entity formerly named `interface` is an **endpoint**, renamed end to end in one
   slice (#811, the naming ruling on #603): the table (with the task arc's column and every

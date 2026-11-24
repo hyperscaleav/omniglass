@@ -6,7 +6,7 @@ summary: "A label rule is Go `text/template` over a **closed `map[string]string`
 ---
 
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+  [storage](/architecture/storage/), [glossary](/reference/glossary/)
 - **Decision:** A label rule is an operator-authored Go `text/template` evaluated over a **closed,
   flat `map[string]string`** and a **closed FuncMap** (`title`, `upper`, `lower`, `slug`). The map
   carries the entity's own columns and the facts resolved from its **classification** chain, and

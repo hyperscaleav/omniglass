@@ -6,7 +6,7 @@ summary: "A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to
 ---
 
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+  [storage](/architecture/storage/), [glossary](/reference/glossary/)
 - **Decision (the opt-in):** `location_type` gains a **nullable `name_rule`**, and its presence IS
   the opt-in: null means an operator names every location of that type. There is no boolean beside it,
   so "this type generates" and "this is what it generates" cannot disagree. A campus, a building and a

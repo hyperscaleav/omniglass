@@ -1,180 +1,104 @@
 ---
 title: Views
-description: "The read side for consumers no typed endpoint was written for: a view binding reads samples inside the caller's scope, history then the live tail from one cursor, for dashboards, agents and scripts."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "How the read side for consumers no route was written for is built: a view binding reads samples inside the caller's scope, its history then its live tail from one cursor."
 sidebar:
-  hidden: true
+  order: 52
+  badge:
+    text: Partial
+    variant: note
 ---
 
-:::note[Partial]
-Built today: the **view binding** ([below](#bindings-the-scoped-read-of-the-sample-store)), the one scoped
-read of metric, property, event and log samples, with its history at `POST /views:run` and its live rows at
-`GET /views:watch`, every binding of a page over one SSE stream (#1830,
-[ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)).
-Platform health's sparklines read through it. Not built: the named, saved view (#2051), in the design
-block that follows the binding.
-:::
+A page built into the console reads through typed routes written for it. A dashboard widget pointed at
+any system, an agent's question, or a script's chart has no route written for it in advance, so it
+reads through a **view binding**: the one scoped read of the sample store, with its history at
+`POST /views:run` and its live rows at `GET /views:watch`
+([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)).
+Both are in the [API reference](/reference/api/); this page is how they behave.
 
 ## Bindings: the scoped read of the sample store
 
-A **binding** is what a chart, a feed, an agent or a script reads the samples through. It names:
+A binding names four things:
 
-- a **primitive**: `metric` or `property` (a series per entity, key and instance), `event` or `log`
-  (rows, newest first, a page at a time);
-- an **entity selector**: literal `refs` (names, uuids or dotted addresses), or a `kind` and a `filter`
-  (a system's members, a product's components, a system type's systems);
-- the **keys** (metric, property or event type names) and a **range**, `from` and `to` or a
-  `window_seconds` back from now;
-- an optional **step**, which answers a metric or property as an epoch-aligned bucket grid instead of
-  raw points. A metric bucket carries `count`, `min`, `max`, `avg` and `last`, so the renderer picks the
-  aggregate. A step that is a whole number of hours and reaches past raw retention answers the older
-  hours from the [hourly trends](/architecture/storage/), and `covered_from` says where the data can begin.
+- **a primitive**: `metric` or `property`, answered as a series per entity, key and instance; or
+  `event` or `log`, answered as rows, newest first, a page at a time;
+- **an entity selector**: literal `refs` (names, uuids or dotted addresses), or a `kind` (component or
+  system) and a filter (a system's members, a product's components, a system type's systems);
+- **the keys**: the metric, property or event type names to read;
+- **a range**: `from` and `to`, or `window_seconds` back from now.
 
-A read too large to answer whole (past 200 entities, 20,000 raw points or 5,000 buckets) is a 422 naming
-the limit, never a silently truncated answer: widen the step or narrow the selector.
+An optional `step_seconds` answers a metric or property as an epoch-aligned grid of buckets instead
+of raw points. A metric bucket carries `count`, `min`, `max`, `avg` and `last`, so the renderer picks
+the aggregate. A step that is a whole number of hours and reaches past raw retention reads the older
+hours from the hourly trends ([storage](/architecture/storage/)).
 
-### History and live meet at a cursor
+A read too large to answer whole (past 200 entities, 20,000 raw points or 5,000 buckets) is a 422
+naming the limit, never a silently truncated answer.
 
-Every sample the server lands is also committed, in the same write, to an in-memory **tail**, an ordered
-log of recent commits with a cursor. `/views:run` reads every binding from one snapshot and answers the
-cursor that snapshot was taken at; `/views:watch` takes each binding with its cursor and streams only the
-rows after it. So a sample is either in the history or on the stream, never both and never neither, which
-is the property a live chart needs to stay correct without a reload. Up to 32 bindings share one stream:
+## History and live meet at a cursor
+
+Every sample the server lands is also committed, in the same write, to an in-memory **tail**: an
+ordered log of recent commits with a cursor (`internal/tail`). `/views:run` reads every binding from one
+snapshot and answers the cursor it was taken at; `/views:watch` takes each binding with its cursor and
+streams only what came after. A sample is in the history or on the stream, never both and never
+neither, which is what a live chart needs to stay right without a reload.
+
+One stream carries up to 32 bindings, as server-sent events:
 
 - a `rows` event carries each binding's new rows, its id the cursor after them;
-- a `mark` event advances an idle stream's position every 15 seconds;
-- a reconnect that sends the last id back (`Last-Event-ID`) resumes every binding with nothing repeated;
-- a `reset` names one or more bindings whose cursor the tail no longer holds (too old, or from before a restart),
-  and the stream ends: its reader re-runs the history and reconnects.
+- a `mark` event moves an idle stream's position every 15 seconds;
+- a reconnect that sends its last id back (`Last-Event-ID`) resumes every binding with nothing repeated;
+- a `reset` names a binding whose cursor the tail no longer holds, and ends the stream, so its reader
+  runs the history again.
 
-A binding's cursor only moves forward: a stream starts at its slowest binding, so the client keeps each
-binding at the later of its own cursor and the stream's position, and a reconnect resends nothing a
-history already holds. The tail holds the last 4,096 commits or 64 MiB of rows, whichever is less, so a
-burst of wide commits cannot grow it without bound; a cursor older than that is a `reset`. A view read
-takes its database connection before it fences the tail, so ingest never waits on a read queued for a
-connection.
+The tail holds the newest 4,096 commits or 64 MiB of rows, whichever is less, so a burst cannot grow it
+without bound. It is the server's own ingest landing: a value a rule or a calc derives is not on it,
+and a second server does not see the first's commits.
 
-The tail is the server's own ingest landing, so a value a [calc](/architecture/calculations/) or a rule derives
-is not on it, and a second server would not see the first's commits.
+## Scope
 
-### Scope
+Both routes need `view:read`, and each binding also needs its kind's read (`component:read` or
+`system:read`) and resolves inside that read's [scope](/architecture/identity-access/). A filter
+selector resolves to the entities the caller can see; a literal ref outside the scope is the same 404
+as one that does not exist.
 
-Both routes need `view:read`, and each binding also needs its kind's read (`component:read`,
-`system:read`) and resolves inside that read's [scope](/architecture/identity-access/). A kind selector
-resolves to the entities the caller can see; a literal ref outside the scope is the same 404 as one that
-does not exist, so a binding never confirms what it may not show. The stream resolves its selectors once,
-when it connects, and carries rows of those entities only.
+A stream resolves its selectors once, when it opens, so it is bounded to keep that answer fresh: it
+ends after 15 minutes, and on each 15 second heartbeat it rechecks its caller, ending once the session
+no longer resolves or the caller's grants changed. The client reconnects from its cursor at once, and
+the reconnect authenticates and resolves again. One user holds at most 16 watches open, 1,024 across
+the server; past either, opening one is a 429.
 
-So that a resolved scope never goes stale, a stream is bounded: it ends at its 15 minute lifetime (or its
-`duration_seconds`, if shorter), and on each 15 second heartbeat it rechecks its caller, ending once the
-session no longer resolves (a revoked token, a deleted user) or the caller's grants changed. The client
-reconnects from its cursor at once, and the reconnect authenticates and resolves its selectors again, so a
-revoked caller gets the 401 or 403 and a narrowed one the narrower scope. One user holds at most 16
-watches open (1,024 across the server); past it the open is a 429, and the console binds a
-page's bindings over as few watches as hold them, 32 bindings to a watch, so most pages need one.
+## Who reads through it
 
-### From the CLI and an agent
+- **The console**: `createViewBinding` (`web/src/lib/binding.ts`) reads a binding's history through
+  the query cache and subscribes it to the page's one hub, which opens as few watches as hold the
+  page's bindings. Platform health's sparklines are bindings ([UI](/architecture/ui/)).
+- **The CLI**: `omniglass view run` and `omniglass view watch`, generated from the routes.
+- **An agent**: `run-views` on the [MCP tools](/reference/mcp/) catalog, under the agent's token and
+  scope like any other call.
 
-The generated CLI reads a binding with `omniglass view run` and follows it with `omniglass view watch`,
-and `run-views` is on the [MCP tools](/reference/mcp/) catalog. An agent's fleet query tool and the
-analytics skill over it are #2050, which calls this route rather than a read path of its own.
-
-### In the console
-
-`createViewBinding` (`web/src/lib/binding.ts`) is the console's primitive over it: it reads a binding's
-history through the query cache, then subscribes it to the page's one hub, which opens one
-`/views:watch` per 32 bindings on the page (the contract's bound) and folds each live row into the state the history began.
-On [Platform health](/guides/operator/platform-health/) each server panel is one binding over its
-sampled keys, and its sparklines move as the server records rather than on a poll.
-
-::::design[Target design: named, saved views, tracked in #2051]
-
-:::caution[Design: named views are entirely unbuilt]
-The named-view framework below is not built: there is no `view` table and no `/views/{id}:run` route.
-The binding above is the built read of samples a named view will bind, and its typed series and rows,
-not a generic `{columns, rows}`, are the result shape a named view answers
-([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)). Today's read side is typed CRUD `GET`s plus six
-hand-written composed reads (reachability, events, the component and outpost log
-reads, the fleet projection at `GET /views/fleet`, the first route actually served under
-`/views/`, and the platform projection at `GET /views/platform`, the second, behind
-[Platform health](/operator/platform-health/), with its closed-loop read at
-`GET /views/platform/simulation`) that stand in until this framework lands,
-which the [API](/architecture/api/) page's views-exception note covers.
+:::design[An agent's fleet query tool over the binding, tracked in #2050]
+An agent's fleet query tool, and the analytics skill over it, call the binding rather than a read path
+of their own.
 :::
 
-Writes go through typed resource CRUD, and a coded console page keeps its typed reads. A **view**
-exists for the consumer no typed endpoint can be written for in advance (a dashboard widget pointed at
-anything, an agent's question, an operator's saved query): a named query over a binding, executed
-through the scoped [Storage Gateway](/architecture/storage/), a safe backend-for-frontend hit without
-touching raw tables or writing SQL. The [API](/architecture/api/) exposes it and
-[API first](/contributing/api-first/) is the doctrine behind it.
+::::design[Named, saved views, tracked in #2051]
+A **view** is a named query over a binding that the platform ships or an operator saves, run by its
+id at `/views/{id}:run` with typed parameters bound at run time (an undeclared or a missing required
+parameter is a 400).
 
-## Why a view layer
-
-- A coded page reads through its typed routes; a read nobody can write a route for ahead of time (a
-  widget an operator points at any system, an agent's query, a saved report) is a **view**, a named
-  query the platform ships or an operator saves, not a bespoke endpoint per consumer.
-- **One shape per primitive**: a view answers the binding's typed series or rows, so a widget that
-  renders one renders every view of that primitive, with no raw query path.
-- **One safety boundary**: no view ever runs unscoped or as raw SQL, which is what lets the read
-  side be a public BFF.
-
-## What a view is
-
-A `view` carries an id, a typed **params schema**, the query it runs, a **default / private** flag,
-and the `official` boolean:
-
-- **Default views** ship with the binary (curated, PR-governed, optionally Postgres-view-backed):
-  a `firing-now` view a dashboard widget or an agent reads unchanged.
-- **Private views** are operator-saved **structured** queries (filter + order + fields + params),
-  **never raw SQL**, following the official / private
-  [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the catalogs.
-- **Parameterized**: typed params bound at run time at `/views/{id}:run?param=`; an undeclared or
-  missing-required param is a clean 400.
-
-## The result: the binding's shape
-
-A named view answers what its binding answers: one series per entity, key and instance for `metric`
-and `property`, a cursor-paged page of rows for `event` and `log`, each with the high-water cursor a
-live tail resumes from. **Views by default, materialized only when earned**: a hot view becomes
-a materialized projection only when a read profile proves the live query too slow
-([storage](/architecture/storage/)).
-
-## Scope and safety
-
-- Every view runs in the gateway's **scoped mode**: the caller's `visible_set`
-  ([identity and access](/architecture/identity-access/)) filters every view with no per-view code.
-  A private view **cannot widen its author's scope** (it resolves against their visible set at run
-  time), so a saved query is never a privilege escape.
-- A view is **read-only** by construction (no writes, no side effects), which is what makes
-  exposing views broadly (the API, an MCP tool, a shared dashboard) safe.
-- Config-dependent presentation (a severity level's label and color) resolves client-side from the
-  config view, not baked into the result.
-
-## How views are consumed
-
-One read contract, three consumers:
-
-- **Dashboards**: a widget binds a view or a binding through `createViewBinding`
-  ([UI](/architecture/ui/)); the widgets and canvas are #1826.
-- **The API and CLI**: every view at `/views/{id}:run`, part of the public contract.
-- **An AI agent**: the [MCP surface](/architecture/api/)'s query tool calls the same binding route,
-  scoped and audited like any caller, with no separate agent read path (#2050).
-
-## Live updates
-
-A view read is **query-polling by default** (slow-changing config uses a long stale time); a view
-may **stream** over a server-side [SSE](/architecture/messaging/) relay where latency or fan-out
-earns it, as a [binding](#history-and-live-meet-at-a-cursor) already does ([UI](/architecture/ui/), [time](/architecture/time/)).
-
-## Versioning
-
-A default view evolves **additively** within the API version (new columns, new optional params,
-never a removal or a meaning change); a breaking change to a shipped view is a new view. A private
-view is operator-owned data.
+- **A shipped view** comes with the binary, curated and reviewed, read unchanged by a widget or an
+  agent.
+- **A saved view** is an operator's structured query (filter, order, fields, parameters), never raw
+  SQL, in the operator's namespace beside the shipped ones as every catalog is.
+- **It answers what its binding answers**, typed series or rows, so a widget that renders one view of
+  a primitive renders every view of it.
+- **It cannot widen its author's scope**: it resolves against whoever runs it, at run time, so a saved
+  query is never a privilege escape, and it is read-only by construction.
+- **It evolves additively**: a shipped view gains fields or optional parameters and never loses one;
+  a breaking change is a new view.
 
 :::caution[Open question]
-The structured view-definition grammar for private views (filter + order + fields + params), shared with
-the [API](/architecture/api/) list filter language ([expressions](/architecture/expressions/)).
+The grammar a saved view's filter is written in, shared with the API's list `filter`
+([expressions](/architecture/expressions/)).
 :::
 ::::

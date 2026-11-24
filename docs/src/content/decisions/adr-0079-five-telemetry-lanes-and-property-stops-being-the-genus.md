@@ -9,7 +9,7 @@ summary: "five telemetry lanes with five names: the catalog splits on data_type,
   [storage](/architecture/storage/), [core entities](/architecture/core-entities/),
   [collection](/architecture/collection/), [commands](/architecture/commands/),
   [events](/architecture/events/), [data model](/architecture/data-model/),
-  [health](/architecture/health/), [glossary](/architecture/glossary/)
+  [health](/architecture/health/), [glossary](/reference/glossary/)
 - **Decision:** the telemetry model is **five lanes** with five names and no overlap: a **metric**
   is a quantity (numeric, aggregates, carries unit and precision), a **property** is a value (what
   something is, including a number used as a name; values have duration, not averages), an

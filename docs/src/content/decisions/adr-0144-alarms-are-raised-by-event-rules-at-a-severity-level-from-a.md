@@ -5,7 +5,7 @@ status: "Accepted; amended (#977): the dedup key names the rule by uuid, and a r
 summary: "Alarms are raised by event rules (one table per rule kind, `rule:*` authoring, `raised_by_rule_id`, one alarm per endpoint) at a severity level from a ranked registry referenced by name; `critical` became `high`, the outage floor"
 ---
 
-- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/), [glossary](/architecture/glossary/)
+- **Date:** 2026-10-18 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/), [glossary](/reference/glossary/)
 - **Decision:** The detection half of ADR-0050 is built (epic #819), on five rulings the architect took
   at approval:
   1. **One table per rule kind:** `event_rule` now; `calc_rule` and `action_rule` join as siblings.
