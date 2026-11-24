@@ -199,7 +199,8 @@ const (
 // splitReasoning pulls every <reasoning> block (Bedrock's gpt-oss inlines its
 // chain of thought so, and after a tool call it may follow some text rather
 // than lead) off a message's content: the blocks joined, and the rest as the
-// answer. An unclosed block runs to the end and is all reasoning.
+// answer. An unclosed block is reasoning to the end only where the reply leads
+// with it; after answer text it is a literal mention and stays in the answer.
 func splitReasoning(content string) (reasoning, answer string) {
 	rest := content
 	var blocks, answers []string
@@ -213,7 +214,12 @@ func splitReasoning(content string) (reasoning, answer string) {
 		body := rest[start+len(reasoningOpen):]
 		end := strings.Index(body, reasoningClose)
 		if end < 0 {
-			blocks = append(blocks, strings.TrimSpace(body))
+			if strings.TrimSpace(strings.Join(answers, "")) == "" {
+				blocks = append(blocks, strings.TrimSpace(body))
+			} else {
+				// Mid-answer with no close: a literal mention, kept with all after it.
+				answers[len(answers)-1] += rest[start:]
+			}
 			break
 		}
 		blocks = append(blocks, strings.TrimSpace(body[:end]))

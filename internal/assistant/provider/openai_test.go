@@ -211,7 +211,11 @@ func TestSplitReasoning(t *testing.T) {
 		{"  <reasoning>a</reasoning>\n<reasoning>c</reasoning> b ", "a\n\nc", "b"},
 		{"<reasoning>never closed", "never closed", ""},
 		{"answer <reasoning>not leading</reasoning>", "not leading", "answer"},
-		{"one <reasoning>a</reasoning> two <reasoning>never closed", "a\n\nnever closed", "one\n\ntwo"},
+		// An unclosed tag is reasoning only where a reply leads with it; a literal
+		// mention mid-text stays in the answer, with everything after it.
+		{"one <reasoning>a</reasoning> two <reasoning>never closed", "a", "one\n\ntwo <reasoning>never closed"},
+		{"wrap it in <reasoning> tags, then answer", "", "wrap it in <reasoning> tags, then answer"},
+		{"<reasoning>a</reasoning>use <reasoning> in prose", "a", "use <reasoning> in prose"},
 	} {
 		r, a := splitReasoning(c.in)
 		if r != c.reasoning || a != c.answer {
@@ -221,7 +225,9 @@ func TestSplitReasoning(t *testing.T) {
 }
 
 // After a tool call the reasoning may not lead the content; the answer is
-// still alone (#2303).
+// still alone (#2303). The reply shape here is synthetic: no captured Bedrock
+// post-tool reply is in the repo (the live test, openai_live_test.go, is the
+// check against the real provider).
 func TestOpenAIPostToolTurnReasoningApart(t *testing.T) {
 	t.Parallel()
 	srv, _, _ := chatServer(t, 200, `{"choices":[{"message":{"role":"assistant","content":"The device is up.<reasoning>Tool said online.</reasoning>"}}]}`)
