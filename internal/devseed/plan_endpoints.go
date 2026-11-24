@@ -43,7 +43,7 @@ func planDevices(ctx context.Context, gw storage.Gateway, rows planRows, portOff
 	}
 	cands := make([]simfleet.Component, len(rows.Components))
 	for i, c := range rows.Components {
-		cands[i] = simfleet.Component{ID: fmt.Sprintf("%09d", i), Product: c.Product}
+		cands[i] = simfleet.Component{ID: fmt.Sprintf("%09d", i), Product: c.Product, Control: c.Control}
 	}
 	devs, err := simfleet.Plan(cands, nil, simfleet.Catalog{
 		ProfileFor: func(p string) (*profile.DeviceProfile, bool) {

@@ -505,6 +505,26 @@ standards:
     products:
       panel: t-panel-55
 ` + oneArchetype, `leaves slot "player" unfilled`},
+		{"control of an unfilled slot", `
+name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+    control: [speaker]
+` + oneArchetype, `t.yaml:8: standard "sign-55" controls slot "speaker", which it fills with no product`},
+		{"control named twice", `
+name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+    control: [panel, panel]
+` + oneArchetype, `t.yaml:8: standard "sign-55" names slot "panel" under control twice`},
 		{"misspelt field", `
 name: t
 standards:
@@ -986,5 +1006,31 @@ standards:
 				t.Fatalf("got %v, want an error containing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// The boardrooms' displays take commands (#2649): every mr86 system's
+// main-display fill is marked for its control face, and no other fill of any
+// system is, so the corporate lab adds one endpoint a boardroom.
+func TestCorporateControlsOnlyTheBoardroomDisplays(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	boardrooms := 0
+	for _, s := range p.allSystems() {
+		for _, f := range s.Slots {
+			want := s.Standard == "mr86" && f.Slot == "main-display"
+			if f.Control != want {
+				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, want)
+			}
+			if want {
+				boardrooms++
+			}
+		}
+	}
+	if boardrooms == 0 {
+		t.Fatal("no boardroom display is controlled at 100 systems")
 	}
 }

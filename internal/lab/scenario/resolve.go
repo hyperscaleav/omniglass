@@ -104,6 +104,9 @@ type SlotFill struct {
 	Slot    string
 	Product string
 	Count   int
+	// Control is a slot the standard wires with its product's control face
+	// as well (Standard.Control, #2649).
+	Control bool
 }
 
 // SystemPlan is one planned system: its name, its generated label, its

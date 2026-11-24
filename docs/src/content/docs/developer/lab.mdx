@@ -1148,6 +1148,7 @@ standards:
       main-display: boreal-edge-65
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
+    control: [main-display]     # optional: slots whose devices also take commands
 archetypes:
   - name: hq
     label: Headquarters
@@ -1193,7 +1194,11 @@ simulator that runs it, never the plan or a log. A webhook face (one naming the 
 endpoint and the route that adds a room, [simulation](/architecture/simulation/#a-simulated-service-posts-from-the-start))
 makes a webhook sender: a component with an endpoint of that driver, a signing secret minted on
 every run and sealed in the server, and an identity binding per system on the driver's room
-identity, named for the system. The validator collects every problem at once and names
+identity, named for the system. A standard's `control` names the slots whose devices also take
+commands: each is wired with its product's control face beside the driver that reads it (the Boreal
+displays' web admin beside their SNMP agent, behind the simulated login), so a demo can fix a fault
+from the console. Name few: each is one more endpoint polling every such device across every site.
+A slot under `control` must be one the standard fills. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text

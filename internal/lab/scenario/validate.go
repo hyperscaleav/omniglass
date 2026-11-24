@@ -199,6 +199,16 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 		Within:    cat.Within,
 		Noun:      "named",
 	})
+	control := map[string]bool{}
+	for _, c := range s.Control {
+		switch {
+		case control[c.Name]:
+			add(c.Line, "standard %q names slot %q under control twice", name, c.Name)
+		case s.Products[c.Name].Name == "":
+			add(c.Line, "standard %q controls slot %q, which it fills with no product", name, c.Name)
+		}
+		control[c.Name] = true
+	}
 	for _, f := range plan.Slots {
 		if f.Missing > 0 {
 			ref := s.Products[f.Slot]
@@ -206,7 +216,7 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 			continue
 		}
 		cs.components = append(cs.components, Count{Name: f.Product, Count: f.Count})
-		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count})
+		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count, Control: control[f.Slot]})
 	}
 	return cs, probs
 }

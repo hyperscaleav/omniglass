@@ -45,6 +45,8 @@ var simSecrets = []storage.SecretSpec{
 		OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
 	{Name: simfleet.RecordingKeySecret, Label: "Simulated recording service api key", SecretType: "api-key",
 		OwnerKind: "platform", Fields: map[string]string{"key": "recording-lab-key"}},
+	{Name: simfleet.BorealLoginSecret, Label: "Simulated Boreal display login", SecretType: "basic-auth",
+		OwnerKind: "platform", Fields: map[string]string{"username": "admin", "password": "boreal"}},
 }
 
 // SimSecretSpecs is a copy of the platform secrets the simulated fleet's

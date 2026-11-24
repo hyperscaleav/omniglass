@@ -84,7 +84,12 @@ type Standard struct {
 	Name       Ref            `yaml:"name"`
 	SystemType Ref            `yaml:"system_type"`
 	Products   map[string]Ref `yaml:"products"`
-	Line       int            `yaml:"-"`
+	// Control names the slots whose devices also take commands (#2649): each
+	// is wired with its product's control face beside the driver that reads
+	// it, so a demo can fix a fault from the console. Few, by design: a
+	// control face is one more endpoint polling every such device.
+	Control []Ref `yaml:"control"`
+	Line    int   `yaml:"-"`
 }
 
 // Archetype is one kind of site, each site a campus with its own outpost (one
@@ -156,7 +161,7 @@ func (rs *Ratios) UnmarshalYAML(n *yaml.Node) error {
 // UnmarshalYAML decodes a standard and keeps its line.
 func (s *Standard) UnmarshalYAML(n *yaml.Node) error {
 	type plain Standard
-	if err := decodeKnown(n, (*plain)(s), "name", "system_type", "products"); err != nil {
+	if err := decodeKnown(n, (*plain)(s), "name", "system_type", "products", "control"); err != nil {
 		return err
 	}
 	s.Line = n.Line
