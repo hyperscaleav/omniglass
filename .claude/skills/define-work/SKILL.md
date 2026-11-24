@@ -42,7 +42,7 @@ slice with no sub-structure, skip this skill and file a normal feature issue per
 ## House rules for the draft
 
 - Prose-first, portfolio-quality, no em dashes, head-noun-last naming
-  that matches the architecture glossary.
+  that matches the glossary (`internal/vocab/terms.yaml`).
 - `area:*` labels for every subsystem touched; kind of work is the Issue Type, never a
   label.
 - Cite pages of the architecture of record by link; treat unverified prose claims about
