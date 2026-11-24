@@ -44,7 +44,7 @@ is the property a live chart needs to stay correct without a reload. Up to 32 bi
 - a `rows` event carries each binding's new rows, its id the cursor after them;
 - a `mark` event advances an idle stream's position every 15 seconds;
 - a reconnect that sends the last id back (`Last-Event-ID`) resumes every binding with nothing repeated;
-- a `reset` names a binding whose cursor the tail no longer holds (too old, or from before a restart),
+- a `reset` names one or more bindings whose cursor the tail no longer holds (too old, or from before a restart),
   and the stream ends: its reader re-runs the history and reconnects.
 
 A binding's cursor only moves forward: a stream starts at its slowest binding, so the client keeps each
@@ -82,8 +82,8 @@ analytics skill over it are #2050, which calls this route rather than a read pat
 ### In the console
 
 `createViewBinding` (`web/src/lib/binding.ts`) is the console's primitive over it: it reads a binding's
-history through the query cache, then subscribes it to the page's one hub, which holds a single
-`/views:watch` for every binding on the page and folds each live row into the state the history began.
+history through the query cache, then subscribes it to the page's one hub, which opens one
+`/views:watch` per 32 bindings on the page (the contract's bound) and folds each live row into the state the history began.
 On [Platform health](/guides/operator/platform-health/) each server panel is one binding over its
 sampled keys, and its sparklines move as the server records rather than on a poll.
 
