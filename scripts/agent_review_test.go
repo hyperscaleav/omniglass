@@ -1175,6 +1175,11 @@ func TestAgentReviewGate(t *testing.T) {
 		{"every required check done", `{"require":["test","e2e"],"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"success"},{"name":"e2e","status":"completed","conclusion":"success"}]}`, "review"},
 		{"a skipped required check counts as done", `{"require":["e2e"],"mergeable":"MERGEABLE","checks":[{"name":"e2e","status":"completed","conclusion":"skipped"}]}`, "review"},
 		{"red wins over a missing check", `{"require":["test","e2e"],"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"failure"}]}`, "hold: test failed"},
+		// Only the newest run of a name counts (#2629): a superseded or
+		// re-run check leaves its older runs on the head.
+		{"an older red run is superseded by a newer green one", `{"require":["test"],"mergeable":"MERGEABLE","checks":[{"id":1,"name":"test","status":"completed","conclusion":"failure"},{"id":2,"name":"test","status":"completed","conclusion":"success"}]}`, "review"},
+		{"the newest run wins whatever order it is listed in", `{"require":["test"],"mergeable":"MERGEABLE","checks":[{"id":2,"name":"test","status":"completed","conclusion":"success"},{"id":1,"name":"test","status":"completed","conclusion":"cancelled"}]}`, "review"},
+		{"an older green run does not hide a newer red one", `{"require":["e2e"],"mergeable":"MERGEABLE","checks":[{"id":1,"name":"e2e","status":"completed","conclusion":"success"},{"id":2,"name":"e2e","status":"completed","conclusion":"failure"}]}`, "hold: e2e failed"},
 	} {
 		in := strings.Replace(c.in, `{"mergeable"`, `{"ignore":"`+ignore+`","mergeable"`, 1)
 		out, code := agentReview(t, in, "gate")
@@ -1294,5 +1299,39 @@ func TestAgentReviewSupersede(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(out), &got); err != nil || len(got) != 2 || got[0].ID != 1 || !got[0].Dismiss || got[1].ID != 2 || got[1].Dismiss {
 		t.Fatalf("supersede = %s (%v)", out, err)
+	}
+}
+
+// agent-fix's own check is the fixer's, not the PR's: its failure must not hold
+// the review (#2629). The ignore pattern is the workflow's own, so the two
+// cannot drift.
+func TestAgentReviewGateIgnoresAgentFixWithTheWorkflowsPattern(t *testing.T) {
+	wf, err := os.ReadFile("../.github/workflows/agent-review.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ignore string
+	for line := range strings.SplitSeq(string(wf), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "IGNORE: '"); ok {
+			ignore = strings.TrimSuffix(rest, "'")
+		}
+	}
+	if ignore == "" {
+		t.Fatal("no IGNORE in agent-review.yml")
+	}
+	facts, err := json.Marshal(map[string]any{
+		"ignore":    ignore,
+		"mergeable": "MERGEABLE",
+		"require":   []string{"test"},
+		"checks": []map[string]any{
+			{"id": 1, "name": "test", "status": "completed", "conclusion": "success"},
+			{"id": 2, "name": "agent-fix", "status": "completed", "conclusion": "failure"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, code := agentReview(t, string(facts), "gate"); code != 0 || out != "review" {
+		t.Fatalf("an agent-fix failure held the review: %q (exit %d), want review", out, code)
 	}
 }

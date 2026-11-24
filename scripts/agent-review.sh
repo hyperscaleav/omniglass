@@ -642,7 +642,9 @@ BRIEF
     # name); require lists the check names that must exist.
     printf '%s' "$facts" | jq -r '
       (.ignore // "^$") as $ig
-      | [.checks[] | select(type == "object") | select((.name // "") | test($ig) | not)] as $c
+      # A re-run or superseded run leaves older runs of the same name on the
+      # head; only the newest counts (#2629).
+      | ([.checks[] | select(type == "object") | select((.name // "") | test($ig) | not)] | group_by(.name) | map(max_by(.id // 0))) as $c
       | ([$c[] | select(.status == "completed"
           and ((.conclusion // "") | IN("failure", "timed_out", "cancelled", "action_required", "startup_failure")))
           | .name] | unique) as $red
