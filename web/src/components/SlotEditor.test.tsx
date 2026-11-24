@@ -72,7 +72,8 @@ describe("SlotEditor on a standard", () => {
     const row = slotRow(getByText("table-mic"));
     expect(within(row).getByText("Table microphone")).toBeTruthy();
     expect(within(row).getByText("2 wanted")).toBeTruthy();
-    expect(within(row).getByText("video-bar")).toBeTruthy();
+    // The accepted type links to its own drawer, reading as the catalog row does.
+    expect(within(row).getByRole("link", { name: "Video Bar" }).getAttribute("href")).toBe("/component-types?open=video-bar");
   });
 
   // The editor owns a fixed set of fields and sends them all, so its save has

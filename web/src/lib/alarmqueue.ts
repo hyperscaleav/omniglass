@@ -23,6 +23,9 @@ export const SEVERITY = "severity";
 export const LOCATION = "location";
 export const ACK = "ack";
 export const SNOOZED = "snoozed";
+// The rule that raised an alarm, by name (#2432). The server does not narrow by it
+// (no `rule` query parameter yet), so it holds over the rows loaded, like the free-text filter.
+export const RULE = "rule";
 
 const YES_NO = ["yes", "no"];
 
@@ -39,6 +42,8 @@ export function chipsFromParams(p: Params): Chip[] {
   if (sev.length) chips.push({ key: SEVERITY, op: "eq", values: sev });
   const loc = list(p.location)[0];
   if (loc) chips.push({ key: LOCATION, op: "eq", values: [loc] });
+  const rule = list(p.rule)[0];
+  if (rule) chips.push({ key: RULE, op: "eq", values: [rule] });
   for (const [key, param] of [[ACK, p.ack], [SNOOZED, p.snoozed]] as const) {
     const v = list(param)[0];
     if (v && YES_NO.includes(v)) chips.push({ key, op: "eq", values: [v] });
@@ -49,11 +54,12 @@ export function chipsFromParams(p: Params): Chip[] {
 // paramsFromChips writes chips back to the address: the inverse of
 // chipsFromParams, `state=active` always first so the link names what it shows.
 export function paramsFromChips(chips: Chip[], state: AlarmState = "active"): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = { state, severity: undefined, location: undefined, ack: undefined, snoozed: undefined };
+  const out: Record<string, string | undefined> = { state, severity: undefined, location: undefined, ack: undefined, snoozed: undefined, rule: undefined };
   for (const c of chips) {
     if (c.op !== "eq" || !c.values.length) continue;
     if (c.key === SEVERITY) out.severity = c.values.join(",");
     else if (c.key === LOCATION) out.location = c.values[0];
+    else if (c.key === RULE) out.rule = c.values[0];
     else if (c.key === ACK || c.key === SNOOZED) out[c.key] = c.values[0];
   }
   return out;
@@ -95,7 +101,13 @@ export function alarmFilterKeys(chips: () => Chip[], severities: () => string[])
       },
       values: (rows) => [...new Set(rows.map((a) => a.location).filter((l): l is string => !!l))].sort(),
     },
+    { key: RULE, type: "string", hint: "exact", get: (a) => a.raised_by_rule ?? "", values: (rows) => [...new Set(rows.map((a) => a.raised_by_rule).filter((r): r is string => !!r))].sort() },
     { key: ACK, type: "string", hint: "exact", get: (a) => (a.acknowledged ? "yes" : "no"), values: () => YES_NO },
     { key: SNOOZED, type: "string", hint: "exact", get: (a) => (a.snoozed_until ? "yes" : "no"), values: () => YES_NO },
   ];
+}
+
+// alarmsForRuleHref is the queue filtered to the alarms one rule raised (#2432).
+export function alarmsForRuleHref(rule: string): string {
+  return `/alarms?${new URLSearchParams({ state: "active", rule }).toString()}`;
 }

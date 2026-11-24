@@ -38,6 +38,15 @@
 //     - post: /components                           # an API path (under /api/v1)
 //       body: { name: bay-2-display, product: boreal-edge-55, location: bay-2 }
 //
+// A scene that needs a fault and its recovery (#2425: an alarm raised and
+// cleared before the camera rolls) also puts a state, waits until a read holds
+// a text, and pauses while time passes, all off camera:
+//
+//     - put: /components/<addr>/impairment          # a PUT, any 2xx is done
+//       body: { unplugged: true }
+//     - until: { get: /components/<addr>/alarms, contains: raised_at, timeout: 120000 }
+//     - pause: 60                                   # seconds, 1 to 300
+//
 // The probe replays every walkthrough on one stack, so two setups may not claim the
 // same component or alarm when a step changes it (setupCollisions, #1404).
 //
@@ -89,7 +98,7 @@ import { PREVIEW } from './walkthroughcore.mjs';
  * @property {number} [timeout]
  * @property {('Alt' | 'Shift' | 'Control' | 'Meta')[]} [modifiers]
  */
-/** @typedef {{ method: 'POST', path: string, body: Record<string, unknown> }} SetupItem */
+/** @typedef {{ method: 'POST' | 'PUT', path: string, body: Record<string, unknown> } | { method: 'UNTIL', path: string, contains: string, timeout: number } | { method: 'PAUSE', seconds: number }} SetupItem */
 /** @typedef {{ path: string, target: Target, timeout: number }} Ready */
 /** @typedef {'sso'} LabNeed */
 /** @typedef {{ title: string, description: string, lab: LabNeed[], setup: SetupItem[], ready: Ready | null, steps: Step[], poster: number }} Walkthrough */
@@ -281,6 +290,9 @@ function validateStep(raw, n) {
   return [step, problems];
 }
 
+// MAX_UNTIL_MS is the longest a setup's until waits for its read to hold.
+const MAX_UNTIL_MS = 300_000;
+
 // Validates a walkthrough's setup; returns [normalized items, problems].
 /**
  * @param {unknown} raw
@@ -299,17 +311,39 @@ function validateSetup(raw) {
       problems.push(`${at} must be a mapping`);
       return;
     }
-    const unknown = Object.keys(item).filter((k) => k !== 'post' && k !== 'body');
+    const unknown = Object.keys(item).filter((k) => !['post', 'put', 'body', 'until', 'pause'].includes(k));
     problems.push(...unknown.map((k) => `${at} has unknown key "${k}"`));
-    if (!('post' in item)) {
+    if ('until' in item) {
+      const where = `${at} (until)`;
+      const u = item.until;
+      const before = problems.length;
+      if (!isObj(u)) {
+        problems.push(`${where} must be { get, contains, timeout? }`);
+        return;
+      }
+      if (!isStr(u.get) || !u.get.startsWith('/')) problems.push(`${where} needs get: an API path starting with "/"`);
+      if (!isStr(u.contains) || !u.contains) problems.push(`${where} needs contains: the text the read must hold`);
+      const timeout = u.timeout ?? 120000;
+      if (!(Number.isInteger(timeout) && timeout > 0 && timeout <= MAX_UNTIL_MS)) problems.push(`${where} timeout must be 1 to ${MAX_UNTIL_MS} ms`);
+      if (problems.length === before) items.push({ method: 'UNTIL', path: /** @type {string} */ (u.get), contains: /** @type {string} */ (u.contains), timeout: /** @type {number} */ (timeout) });
+      return;
+    }
+    if ('pause' in item) {
+      if (!(Number.isInteger(item.pause) && /** @type {number} */ (item.pause) >= 1 && /** @type {number} */ (item.pause) <= 300)) problems.push(`${at} (pause) must be 1 to 300 seconds`);
+      else items.push({ method: 'PAUSE', seconds: /** @type {number} */ (item.pause) });
+      return;
+    }
+    const verb = 'put' in item ? 'put' : 'post';
+    if (!(verb in item)) {
       if (!unknown.length) problems.push(`${at} needs post: an API path`);
       return;
     }
-    const where = `${at} (post)`;
+    const where = `${at} (${verb})`;
     const before = problems.length;
-    if (!isStr(item.post) || !item.post.startsWith('/')) problems.push(`${where} must be an API path starting with "/"`);
+    const target = item[verb];
+    if (!isStr(target) || !target.startsWith('/')) problems.push(`${where} must be an API path starting with "/"`);
     if (!isObj(item.body)) problems.push(`${where} needs a body`);
-    if (problems.length === before) items.push({ method: 'POST', path: item.post, body: item.body });
+    if (problems.length === before) items.push({ method: verb === 'put' ? 'PUT' : 'POST', path: /** @type {string} */ (target), body: /** @type {Record<string, unknown>} */ (item.body) });
   });
   return [items, problems];
 }
@@ -385,18 +419,33 @@ export function validateWalkthrough(doc, file) {
 // both stage the same scene.
 /**
  * @param {SetupItem[]} setup
- * @param {{ base: string, token: string | undefined, fetch: (url: string, init: RequestInit) => Promise<Response> }} at
+ * @param {{ base: string, token: string | undefined, fetch: (url: string, init: RequestInit) => Promise<Response>, sleep?: (ms: number) => Promise<void>, now?: () => number }} at
  */
-export async function runSetup(setup, { base, token, fetch }) {
+export async function runSetup(setup, { base, token, fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), now = Date.now }) {
   if (!setup.length) return;
   if (!token) throw new Error('walkthrough setup needs the owner token in OG_TOKEN (run via make walkthroughs)');
+  const auth = { Authorization: `Bearer ${token}` };
   for (const [i, item] of setup.entries()) {
+    if (item.method === 'PAUSE') {
+      await sleep(item.seconds * 1000);
+      continue;
+    }
+    if (item.method === 'UNTIL') {
+      const until = now() + item.timeout;
+      for (;;) {
+        const res = await fetch(`${base}/api/v1${item.path}`, { method: 'GET', headers: auth });
+        if (res.ok && (await res.text()).includes(item.contains)) break;
+        if (now() >= until) throw new Error(`walkthrough setup ${i + 1}: GET ${item.path} never held "${item.contains}" in ${Math.round(item.timeout / 1000)}s`);
+        await sleep(2000);
+      }
+      continue;
+    }
     const res = await fetch(`${base}/api/v1${item.path}`, {
       method: item.method,
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(item.body),
     });
-    if (res.ok || res.status === 409) continue;
+    if (res.ok || (item.method === 'POST' && res.status === 409)) continue;
     const text = (await res.text().catch(() => '')).slice(0, 300);
     throw new Error(`walkthrough setup ${i + 1}: ${item.method} ${item.path} answered ${res.status}${text ? `: ${text}` : ''}`);
   }
@@ -409,7 +458,9 @@ export async function runSetup(setup, { base, token, fetch }) {
  * @param {SetupItem} item
  * @returns {{ key: string, what: string } | null}
  */
-function setupClaim({ path, body }) {
+function setupClaim(item) {
+  if (item.method !== 'POST') return null;
+  const { path, body } = item;
   if (path === '/components' && isStr(body.name)) return { key: `component:${body.name}`, what: `component "${body.name}"` };
   const on = /^\/components\/([^/]+)\/alarms$/.exec(path)?.[1];
   if (on && isStr(body.dedup_key)) return { key: `alarm:${on}/${body.dedup_key}`, what: `alarm "${body.dedup_key}" on ${on}` };

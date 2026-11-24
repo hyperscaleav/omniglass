@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import CatalogRef from "../components/CatalogRef";
 import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
 import { Plus } from "../components/icons";
@@ -337,7 +339,9 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
                   <For each={r().allowed_parent_types}>
                     {(pid) => (
                       <span class="badge badge-outline badge-sm">
-                        {parentTypeLabel(pid)}
+                        <Show when={pid !== ROOT_PLACEMENT} fallback={parentTypeLabel(pid)}>
+                          <CatalogRef kind="location_type" name={pid} />
+                        </Show>
                       </span>
                     )}
                   </For>
@@ -375,7 +379,8 @@ export function CreateLocationTypeForm(p: { onCreated: (t: LocationType) => void
   const qc = useQueryClient();
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const typeOptions = () => types.data ?? [];
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [icon, setIcon] = createSignal("");
   const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
   const [busy, setBusy] = createSignal(false);
@@ -413,12 +418,7 @@ export function CreateLocationTypeForm(p: { onCreated: (t: LocationType) => void
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Wing" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="wing" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Wing" namePlaceholder="wing" />
       <FieldRow label="Icon" hint="A glyph key, e.g. map-pin (the default).">
         <input class="input input-bordered w-full font-data" value={icon()} placeholder="map-pin" onInput={(e) => setIcon(e.currentTarget.value)} />
       </FieldRow>

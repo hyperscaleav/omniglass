@@ -7,7 +7,10 @@ import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
+import HealthReason from "./HealthReason";
+import OutsideSlotNotice from "./OutsideSlotNotice";
 import AddComponentLink from "./AddComponentLink";
+import SystemEmpty from "./SystemEmpty";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
@@ -35,15 +38,18 @@ import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import RuleLink from "./RuleLink";
 import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
-import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
+import { uptimeOver } from "../lib/uptime";
+import { stretchReasons, memberAlarmRows, stretchesOf, markerX, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "./LogFilters";
-import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import TimeRangePicker from "./TimeRangePicker";
-import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import MetricsGrid from "./MetricsGrid";
+import TimelineOverlay from "./TimelineOverlay";
+import { CursorProvider } from "../lib/cursor";
+import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
+import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { useBlades } from "../lib/blades";
@@ -75,9 +81,6 @@ import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// The Data table reads a day at five-minute buckets (#1269): 288 of them, the
-// min/max band and the avg line, so a one-sample spike survives and the read
-// is the same size however busy the metric.
 // HISTORY_TICK_MS is how often the history and the charts take a new now:
 // a thirty-day strip and a day's sparkline move too little in a second to
 // redraw on every tick.
@@ -135,7 +138,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
-  const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
+  // An alarm on a member outside every slot moves nothing above it (ADR-2459),
+  // so it gives the strip no fault tone: red only for an outage-level alarm on a
+  // slotted member, amber while one of those is on it, neutral when the strip
+  // holds only alarms that do not count toward the system's health.
+  const inOutage = createMemo(() => alarms().some((a) => !a.outsideSlot && scale().outage(a.severity)));
+  const counts = createMemo(() => alarms().some((a) => !a.outsideSlot));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const standardRow = createMemo(() => (standards.data ?? []).find((x) => x.name === standard()));
@@ -150,6 +158,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     { key: "activity", label: "Activity" },
+    { key: "timeline", label: "Timeline" },
     ...(can(me.data, "system", "update") || can(me.data, "system", "delete") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tabState = createTabState(props.host, tabs, { legacy: { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" } });
@@ -169,15 +178,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     enabled: tab() === "activity",
     refetchInterval: LEAF_POLL_MS,
   }));
-  // The body's one time range (#2304). On a page it is held in the address,
-  // so a link carries it; in a blade it opens on the page's and is then the
-  // blade's own (#2423, #2425), so a blade never rewrites the page beneath it. A preset slides to now and
-  // reads `hours` back from it; an absolute range reads its own [from, to)
-  // through the views binding (the metrics grid, #2424, reads it).
+  // The one time range (#2304), held in the address: the metrics grid and the
+  // timeline read over it, and the picker on the tab rail writes it. A blade
+  // opens on the default and keeps its own.
   const { range: asked, setRange } = useHostTimeRange(props.host);
   // An absolute range reads through the views read, which needs view:read: a
   // shared link opened by a caller without it reads the default instead, and
-  // the data section says why rather than drawing empty charts.
+  // the host says why rather than drawing empty charts (#2304).
   const canViews = () => can(me.data, "view", "read");
   const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
   const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
@@ -203,7 +210,16 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const healthSpans = createMemo(() =>
     timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.health ?? null, historyNow()),
   );
-  const uptime = createMemo(() => uptimePct(healthSpans()));
+  const uptimeWindow = createMemo(() =>
+    uptimeOver({
+      transitions: health.data?.transitions ?? [],
+      health: health.data?.health,
+      carriedIn: health.data?.carried_in,
+      firstRecordedAt: health.data?.first_recorded_at,
+      now: historyNow(),
+    }),
+  );
+  const uptime = () => uptimeWindow().pct;
   const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow()));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
@@ -266,6 +282,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const b = bodyOf();
     return b ? memberModel(b, memberCtx()) : { rows: [], groups: [] };
   });
+  // Nothing staffs any slot and no component sits loose: the empty state's cue (#2464).
+  const noMembers = createMemo(() => !!bodyOf() && members().rows.length === 0 && members().groups.every((g) => g.members.length === 0));
   const componentCount = () => (system()?.dots ?? []).length;
 
   // The ambient stack (the page's own, or the stack this blade sits on):
@@ -328,6 +346,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
               <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its health is what the components filling its slots add up to." />
               <HealthBadge health={health.data?.health} size="sm" />
+              <HealthReason health={health.data?.health} reason={health.data?.reason} />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
               </Show>
@@ -349,11 +368,15 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
               tabs={tabs()}
               state={tabState}
               guard={leave}
-              // The range governs Overview's charts. Activity's reads keep
-              // their own fixed windows (#2304's follow-up), so the control
-              // is not offered where it would be ignored.
-              end={tab() === "overview" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
+              // The range governs Overview's metrics and the Timeline; Activity
+              // keeps its own fixed windows, so the control is not offered there.
+              end={tab() === "overview" || tab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
+            <Show when={rangeDenied()}>
+              <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
+                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+              </p>
+            </Show>
             <Show when={tab() === "configure"}>
               {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
@@ -376,6 +399,16 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   face, so the edit slot and drafts never carry over (#854). */}
               <ConfigureFace kind="system" id={id()} guard={leave} host={props.host} destructive={destructive} />
             </Show>
+        {/* One axis of what happened (#2425), above the metrics on the same cursor. */}
+        <Show when={tab() === "timeline"}>
+          <CursorProvider>
+            <div data-testid="timeline-tab" class="flex min-w-0 flex-col gap-5 p-4">
+              {/* Keyed on the id: another system is another timeline, its picks and its open detail left behind. */}
+              <Show when={id()} keyed>{(oid) => <TimelineOverlay kind="systems" id={oid} range={range()} />}</Show>
+              <MetricsGrid kind="systems" id={id()} range={range()} />
+            </div>
+          </CursorProvider>
+        </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
             <div class="flex flex-wrap items-stretch gap-3">
@@ -389,20 +422,25 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     "text-error": uptimeTone() === "bad",
                   }}
                 >
-                  {uptime() ?? "–"}<span class="text-lg">%</span>
+                  <Show when={uptime() !== null} fallback="–">
+                    {uptime()}<span class="text-lg">%</span>
+                  </Show>
                 </span>
-                <span class="text-[10px] text-base-content/45">of the last 30 days</span>
+                <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
-                <div class="relative mt-1 h-2">
+                <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
+                  <Show when={windowAlarms().length > 0}>
+                    <span class="absolute right-3 top-0 text-[10px] leading-3 text-base-content/40">▲ alarm raised</span>
+                  </Show>
                   <For each={windowAlarms()}>
                     {(inc) => (
                       <span
                         data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
-                        style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
+                        style={{ left: `${markerX(inc.raisedAt, historyNow(), Math.max(historyNow() - (healthSpans()[0]?.from ?? historyNow() - 30 * 24 * 3600_000), 1)) * 100}%` }}
                         title={`${inc.message} · ${inc.component}`}
                       />
                     )}
@@ -569,7 +607,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   {/* Cause before arithmetic (#785): what is wrong, on which
                       component, impairing which slot, since when. */}
                   <Show when={alarms().length > 0}>
-                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": counts() && !inOutage(), "border-base-300": !counts() }}>
                       <h2 class="eyebrow">Why</h2>
                       <For each={alarms()}>
                         {(a) => (
@@ -583,7 +621,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">{a.where} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.acknowledged}>
                                 <span class="text-xs text-base-content/50">
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
@@ -593,7 +631,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 <AlarmActions
                                   componentId={a.componentId ?? ""}
                                   alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged }}
-                                  show={{ ack: !!a.componentId, troubleshoot: true, timeline: a.componentId ? timelines : undefined }}
+                                  show={{ ack: !!a.componentId, troubleshoot: true, command: !!a.componentId, timeline: a.componentId ? timelines : undefined }}
                                 />
                               </span>
                             </div>
@@ -608,9 +646,18 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                   <section class="flex flex-col gap-2">
                     <div class="flex items-center justify-between gap-2">
                       <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
-                      <AddComponentLink system={id()} size="xs" intent={members().rows.length + members().groups.length === 0 ? "action" : "quiet"} />
+                      <Show when={!noMembers()}>
+                        <AddComponentLink system={id()} size="xs" intent="quiet" />
+                      </Show>
                     </div>
-                    <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
+                    <OutsideSlotNotice members={health.data?.members ?? undefined} placeHref={can(me.data, "system", "update") ? `/systems/${id()}?tab=configure` : undefined} />
+                    <Show when={!membersQ.isPending && noMembers()}>
+                      <SystemEmpty systemId={id()} hasStandard={!!standard()} onStandard={() => tabState.select("configure")} />
+                    </Show>
+                    {/* The standard's slots still show, empty, beneath the words. */}
+                    <Show when={members().rows.length > 0 || members().groups.length > 0}>
+                      <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
+                    </Show>
                   </section>
                   <Show when={mapDecl()}>
                     {(decl) => (
@@ -621,11 +668,6 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                       </div>
                     )}
                   </Show>
-        <Show when={rangeDenied()}>
-          <p data-testid="range-denied" role="status" class="text-xs text-warning">
-            This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
-          </p>
-        </Show>
         <MetricsGrid kind="systems" id={id()} range={range()} />
                 </div>
               )}

@@ -127,6 +127,15 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
 afterEach(cleanup);
 
 describe("the component leaf", () => {
+  // The Timeline view (#2425): the overlay and the metrics grid on one cursor,
+  // under the page's one time range.
+  it("offers a Timeline view with the time range, the overlay and the metrics on it", () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=timeline`);
+    expect(screen.getByRole("tab", { name: "Timeline" })).toBeTruthy();
+    expect(screen.getByTestId("timeline-overlay")).toBeTruthy();
+    expect(screen.getByTestId("time-range-trigger")).toBeTruthy();
+  });
+
   // The path names the room once (#872): the room holds one system, so the
   // room's crumb IS the system's, whose view is the room's.
   it("arriving directly walks the places to its one-system room, named once, as the system", () => {
@@ -361,6 +370,17 @@ describe("the leaf's dispatch facts (#786)", () => {
     await waitFor(() => expect(window.location.search).toContain("range=7d"));
     await waitFor(() => expect(within(screen.getByTestId("metrics-grid")).getByText("Last 7 days")).toBeTruthy());
     await waitFor(() => expect(leafClient!.getQueryCache().find({ queryKey: [...metricBucketsKey("components", uuidFor("cf-c-bar"), "icmp-rtt-avg", 168, 3600)] })).toBeTruthy());
+  });
+
+  // #2432: a vitals row offers "Alarm on this", which opens the new-rule form
+  // reading that metric on this component.
+  it("a vitals row links to a new rule reading that metric on this component", () => {
+    const admin: Me = { ...me, fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+    mount(undefined, undefined, undefined, admin, undefined, {
+      metrics: [{ metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false }],
+    });
+    const link = within(screen.getByTestId("vital-uptime")).getByRole("link", { name: "Alarm on Uptime" });
+    expect(link.getAttribute("href")).toBe(`/web/event-rules?new=1&reads=uptime&component=${uuidFor("cf-c-bar")}`);
   });
 
   // #1550: a metric's unit rides after its value in the muted style, and a

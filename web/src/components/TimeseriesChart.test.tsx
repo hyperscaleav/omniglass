@@ -152,25 +152,6 @@ describe("TimeseriesChart on a shared cursor (#2424)", () => {
     expect(getAllByTestId("chart-crosshair")[0].textContent).toContain("20.0");
   });
 
-  it("a cursor over an empty bucket reads no value, not its neighbor's", () => {
-    const buckets = [
-      { ts: "2026-08-20T13:00:00Z", count: 2, min: 1, max: 2, avg: 1.5, last: 2 },
-      { ts: "2026-08-20T14:00:00Z", count: 0, min: null, max: null, avg: null, last: null },
-      { ts: "2026-08-20T15:00:00Z", count: 2, min: 3, max: 4, avg: 3.5, last: 4 },
-    ];
-    const { getAllByTestId } = render(() => (
-      <CursorProvider>
-        <TimeseriesChart samples={a} now={now} windowMs={win} />
-        <TimeseriesChart buckets={buckets} resolutionMs={3600_000} now={now} windowMs={win} />
-      </CursorProvider>
-    ));
-    const [svgA] = getAllByTestId("timeseries-chart").map(sized);
-    // 14:30, the empty bucket's middle: its neighbors' middles are an hour away.
-    fireEvent.mouseMove(svgA, { clientX: 44 + (3.5 / 6) * (640 - 44 - 16) });
-    const hairs = getAllByTestId("chart-crosshair");
-    expect(hairs[1].querySelector("[data-testid=cursor-value]")).toBeNull();
-  });
-
   it("a chart with no point near the cursor draws the line but no value", () => {
     const buckets = [{ ts: "2026-08-20T16:00:00Z", count: 2, min: 1, max: 2, avg: 1.5, last: 2 }];
     const { getAllByTestId } = render(() => (

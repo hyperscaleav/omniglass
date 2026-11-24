@@ -1,9 +1,10 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
@@ -191,8 +192,8 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
 // CreateEventTypeForm: register a custom event type. Only the name is required.
 export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
-  const [label, setLabel] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -211,7 +212,7 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
     try {
       const created = await createEventType({
         name: name().trim(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: EVENT_TYPES_KEY });
@@ -228,12 +229,7 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. call-started or cable-unplugged.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="call-started" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="Call started" onInput={(e) => setLabel(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Call started" namePlaceholder="call-started" />
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
       </FieldRow>

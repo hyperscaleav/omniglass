@@ -77,6 +77,14 @@ func toProductBody(m *storage.Product) productBody {
 	}
 }
 
+// listProductsInput narrows the catalog to the products whose contract declares
+// a metric or a property (#2430, the metric and property drawers' used-by read).
+// Both given means both declared. A name that names nothing matches nothing.
+type listProductsInput struct {
+	DeclaresMetric   string `query:"declares_metric" doc:"Only products whose contract declares this metric (name or uuid)"`
+	DeclaresProperty string `query:"declares_property" doc:"Only products whose contract declares this property (name or uuid)"`
+}
+
 type listProductsOutput struct {
 	Body struct {
 		Products []productBody `json:"products"`
@@ -156,9 +164,15 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/products",
 		Summary:     "List products",
-		Description: "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
-	}, "product", "read"), func(ctx context.Context, _ *struct{}) (*listProductsOutput, error) {
+		Description: "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.",
+	}, "product", "read"), func(ctx context.Context, in *listProductsInput) (*listProductsOutput, error) {
 		items, err := gw.ListProducts(ctx)
+		if in.DeclaresMetric != "" {
+			items, err = declaringProducts(ctx, gw, items, err, "metric", in.DeclaresMetric)
+		}
+		if in.DeclaresProperty != "" {
+			items, err = declaringProducts(ctx, gw, items, err, "property", in.DeclaresProperty)
+		}
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list products")
 		}
@@ -248,4 +262,28 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		return nil, nil
 	})
+}
+
+// declaringProducts keeps the products of items whose contract declares the named
+// key in lane, preserving items' order. prior carries an earlier step's error
+// through so the chained calls in the list handler check it once.
+func declaringProducts(ctx context.Context, gw storage.Gateway, items []storage.Product, prior error, lane, name string) ([]storage.Product, error) {
+	if prior != nil {
+		return nil, prior
+	}
+	declared, err := gw.ListProductsDeclaring(ctx, lane, name)
+	if err != nil {
+		return nil, err
+	}
+	ids := make(map[string]bool, len(declared))
+	for i := range declared {
+		ids[declared[i].ID] = true
+	}
+	kept := make([]storage.Product, 0, len(declared))
+	for i := range items {
+		if ids[items[i].ID] {
+			kept = append(kept, items[i])
+		}
+	}
+	return kept, nil
 }

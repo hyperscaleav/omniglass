@@ -386,7 +386,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	if _, err := gw.EffectiveMetrics(ctx, "system", "shared", readZoneA); err != nil {
 		t.Errorf("EffectiveMetrics(shared) scoped to zone-a = %v, want ok", err)
 	}
-	if _, err := gw.SystemHealth(ctx, "shared", storage.HealthRange{}, readZoneA); err != nil {
+	if _, err := gw.SystemHealth(ctx, "shared", storage.HealthRange{}, readZoneA, readZoneA); err != nil {
 		t.Errorf("SystemHealth(shared) scoped to zone-a = %v, want ok", err)
 	}
 	if _, err := gw.EffectiveSlots(ctx, "shared", readZoneA); err != nil {

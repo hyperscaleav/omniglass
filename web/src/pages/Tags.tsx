@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import BladeTitle from "../components/BladeTitle";
@@ -238,7 +239,8 @@ function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void })
 // entity kinds it applies to and whether it cascades, then mint it.
 export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: string }): JSX.Element {
   const qc = useQueryClient();
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity({ name: p.initialName });
+  const identity = createIdentity({ name: p.initialName });
+  const { display, name } = identity;
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
   const [isEnum, setIsEnum] = createSignal(false);
@@ -279,12 +281,7 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads in lists and pickers. Optional: a key with none reads as its name.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Cost Center" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A lowercase identifier, unique tenant-wide (e.g. environment, cost-center)."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="cost-center" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Cost Center" namePlaceholder="cost-center" />
       <FieldRow label="Applies to">
         <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />
       </FieldRow>

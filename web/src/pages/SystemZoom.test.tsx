@@ -251,6 +251,32 @@ describe("the system zoom", () => {
     expect(within(strip).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
   });
 
+  // #2459 (ADR-2459): a member outside every slot is shown, not rolled up. Its
+  // open alarm is on the strip as "not in a slot" while the badge reads healthy,
+  // the strip carries no fault tone, no reason line speaks for a healthy system,
+  // and the notice teaches that only a slot counts toward the system's health.
+  it("shows an outside-a-slot member's alarm while the system reads healthy", () => {
+    const outside = {
+      ...health,
+      slots: (health.slots ?? []).map((r) => ({ ...r, impaired: false, down: [], alarms: [] })),
+      health: "healthy",
+      reason: "no slot is impaired",
+      members: [{ name: "amp-1", id: uuidFor("szp-c-amp"), health: "outage", outside_slot: true,
+        alarms: [{ id: "al-amp", component: "amp-1", component_id: uuidFor("szp-c-amp"), severity: "high", message: "Amplifier powered off", raised_at: "2026-08-15T15:00:00Z", acknowledged: false }] }],
+    } as unknown as FleetHealth;
+    mount(undefined, outside);
+    expect(within(screen.getByTestId("system-header")).getByText("healthy")).toBeTruthy();
+    const strip = screen.getByTestId("alarm-strip");
+    expect(within(strip).getByText("Amplifier powered off")).toBeTruthy();
+    expect(within(strip).getByText(/not in a slot/)).toBeTruthy();
+    expect(strip.className).not.toContain("border-error");
+    expect(strip.className).not.toContain("border-warning");
+    expect(screen.queryByTestId("health-reason")).toBeNull();
+    const notice = screen.getByTestId("outside-slot-notice").textContent ?? "";
+    expect(notice).toContain("1 component is not in a slot: amp-1.");
+    expect(notice).toContain("does not count toward this system's health");
+  });
+
   // The strip is where a storm is triaged from (#990): acknowledging a causing
   // alarm must not need the component's own page.
   describe("acknowledging from the Why strip", () => {
@@ -373,7 +399,7 @@ describe("the components-first body (#790)", () => {
   it("a no-slot member is a row saying so, not a strip of chips", () => {
     mount();
     const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
-    expect(within(row).getByText("no slot")).toBeTruthy();
+    expect(within(row).getByText("not in a slot")).toBeTruthy();
     expect(screen.queryByTestId("no-slot-strip")).toBeNull();
   });
 
@@ -412,11 +438,11 @@ describe("the map tab (#791)", () => {
     ] },
   }];
 
-  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays three tabs", () => {
+  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays four tabs", () => {
     mount(undefined, health, [], MAPPED);
     expect(screen.getByTestId("system-map")).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Configure"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Timeline", "Configure"]);
     cleanup();
     mount();
     expect(screen.getByTestId("tab-rail")).toBeTruthy();
@@ -598,6 +624,52 @@ describe("the history tab (#792)", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     expect(figure().className).toContain("text-error");
     expect(figure().className).not.toContain("text-healthy");
+  });
+
+  // #2435: the share is over the time the system has existed, and the card
+  // names that window. NOW is 2026-08-20T16:00Z here.
+  describe("a system recorded minutes ago (#2435)", () => {
+    const young = (over: Record<string, unknown>) =>
+      ({ ...health, health: "healthy", transitions: [], first_recorded_at: "2026-08-20T15:56:00Z", ...over }) as unknown as FleetHealth;
+    const card = () => screen.getByTestId("uptime-kpi");
+
+    it("reads 100% over a window it names, not of the last 30 days", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ transitions: [{ ts: "2026-08-20T15:56:00Z", health: "healthy" }] }));
+      expect(card().textContent).toContain("100%");
+      expect(card().textContent).toMatch(/since Aug 20/);
+      expect(card().textContent).not.toContain("of the last 30 days");
+    });
+
+    it("a first-recorded owner with no edge in the range still reads 100%", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({}));
+      expect(card().textContent).toContain("100%");
+    });
+
+    it("no health recorded says so and shows no percentage", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ first_recorded_at: undefined, health: undefined }));
+      expect(card().textContent).toContain("no health recorded yet");
+      expect(card().textContent).not.toContain("%");
+    });
+
+    it("lists no zero-length stretch", () => {
+      mount(
+        `/web/systems/${uuidFor("szp-sys")}?tab=history`,
+        young({ health: "degraded", transitions: [{ ts: "2026-08-20T15:56:00.000Z", health: "incomplete" }, { ts: "2026-08-20T15:56:00.300Z", health: "degraded" }] }),
+      );
+      const items = within(screen.getByTestId("stretch-list")).getAllByTestId(/^stretch-/);
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).not.toMatch(/Commissioning/);
+    });
+
+    it("labels the strip's ends and each segment says verdict, from, to and duration", () => {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, young({ health: "degraded", transitions: [{ ts: "2026-08-20T15:56:00Z", health: "healthy" }, { ts: "2026-08-20T15:58:00Z", health: "degraded" }] }));
+      const strip = screen.getByTestId("health-history-full");
+      expect(within(strip).getByTestId("strip-start").textContent).toMatch(/Aug 20/);
+      expect(within(strip).getByTestId("strip-end").textContent).toBe("now");
+      const seg = strip.querySelectorAll("[data-segment]");
+      expect(seg.length).toBe(2);
+      expect(seg[0].getAttribute("data-segment")).toMatch(/healthy.*2m/);
+    });
   });
 
   it("renders the ongoing unhealthy stretch as the first entry, expandable to the alarms that explain it", async () => {

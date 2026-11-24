@@ -24,9 +24,6 @@ import { gridWindow, hasData } from "../lib/metrics_grid";
 // range, and the detail-body refactor or a dashboard moves it unchanged. The
 // grid answers its container's width (container queries), not the window's,
 // so the same grid is one column in a drawer and two or three on a page.
-// refused is whether a read failed for want of a permission (a 403 problem).
-const refused = (err: unknown) => (err as { status?: number } | null)?.status === 403;
-
 export default function MetricsGrid(props: { kind: "components" | "systems"; id: string; range: TimeRange }) {
   const metricsQ = useQuery(() => ({
     queryKey: props.kind === "components" ? effectiveMetricsKey(props.id) : systemMetricsKey(props.id),
@@ -53,12 +50,10 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
       const instance = m.is_sampled ? m.instance : undefined;
       const w = win();
       if (w.hours === undefined) {
-        // An absolute range wholly in the past holds still, so it is read
-        // once; one whose end is still ahead keeps polling, as a preset does.
+        // An absolute range holds still, so it is read once, never polled.
         return {
           queryKey: metricBucketsBetweenKey(props.kind, props.id, m.metric_type_name, w.from, w.to, w.stepSeconds, instance),
           queryFn: () => metricBucketsBetween(props.kind, props.id, m.metric_type_name, w.from, w.to, w.stepSeconds, instance),
-          refetchInterval: w.to > Date.now() ? SERIES_POLL_MS : (false as const),
         };
       }
       const hours = w.hours;
@@ -115,16 +110,8 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                       fallback={
                         <div class="flex h-[170px] flex-col items-center justify-center gap-2 text-xs text-base-content/45">
                           <Show when={q()?.isError} fallback="Reading…">
-                            <Show
-                              when={!(props.range.kind === "absolute" && refused(q()?.error))}
-                              // A custom range reads through the views binding, which
-                              // needs view:read; a link can carry one to a caller the
-                              // picker offers none to, and no Retry would help them.
-                              fallback={<span>A custom range needs the view:read permission.</span>}
-                            >
                             <span>Could not read this series.</span>
                             <Button size="xs" intent="quiet" loading={q()?.isFetching} onClick={() => void q()?.refetch()}>Retry</Button>
-                            </Show>
                           </Show>
                         </div>
                       }

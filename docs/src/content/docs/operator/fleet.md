@@ -183,13 +183,15 @@ system, so a location where one system sits shows that system on its own row: th
 [standard](/admin/standards/) it conforms to, and **Health** its health. Open it and
 the system's components are directly beneath, each with its product and health, and a
 component's active alarm reads in the **Detail** column. A location holding two systems lists a
-row per system, with its components under each. A component two systems share appears under
+row per system, with its components under each, and counts them in its own **Detail** (**2 systems, 4 components**), never in the Standard column. A component two systems share appears under
 both, marked **also in** the other; a component in no system sits directly under its location.
 
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
 catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
-column counts the systems beneath it by health, in four fixed slots: healthy, incomplete,
-degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
+column counts the systems beneath it by health, each with its count and packed to the left in
+that order (healthy, incomplete, degraded, outage), so a lone warning is the first thing in the
+column, never a gap and then a glyph. A row whose system has nothing in its slots reads **no components yet**, never Empty: **Empty** means no system lives there, and a system whose last component was deleted stays on its row (a row holding several systems lists it under its own header with the same words). Opening that system, in its page or its drawer, shows what a system and a slot are and offers **Add component** (the create form with this system filled in) and **Start from a standard** (the Configure tab, where the standard is chosen). A long Detail wraps to a second line and carries a
+tooltip with the whole of it. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour
 because at any real failure rate almost every large location holds one fault somewhere, and a
@@ -239,11 +241,15 @@ value; each commit becomes a chip.
   location, not only one set on it directly). **is set** and **is absent** take no value and
   find the rows that carry the tag at all, or lack it.
 
+The list narrows **as you type**, before Enter; **Enter** pins what you typed as a chip.
 While a filter is on, the outline becomes a flat list of matches, each with the path above
-it. **Enter** on a match shows it in the tree, opened down to it and selected, with the filter
+it. On a match, **Enter** shows it in the tree, opened down to it and selected, with the filter
 cleared; **Space** or a click opens its side panel. The counts line's **need attention** is
 itself the filter: it keeps what is in outage, degraded or incomplete, and it is the same
-health chip the bar shows, so the two can never disagree.
+health chip the bar shows. Its words are what it counts (**2 systems, 3 components need
+attention**) and its number is the number of rows pressing it leaves, from one count that
+Home's **Need attention** card reads too, so the two cannot disagree. The chip keeps its amber
+dot while pressed.
 
 What the filter bar does **not** offer is a location facet. Filtering on live state (a
 health, a standard, a type, a name) is exploring; naming the part of your fleet to include
@@ -344,7 +350,9 @@ Cause before arithmetic:
 - The build a system did not choose never renders; choices are the standard editor's
   vocabulary, not an operator's.
 - A shared component is marked **also in** the other system; a member filling no slot reads
-  **no slot**, and that is a normal state.
+  **not in a slot**, a normal state, and the system names those members with the way to place them.
+  Its open alarms are on the **Why** strip with every other member's, marked **not in a slot**, and
+  they do not move the system's health: only a slot does.
 
 ## Overview: the map and the data
 
@@ -407,6 +415,13 @@ expanding to the health changes inside it and the alarms that explain them. An a
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
+Uptime is the healthy share of the time the system has been recorded inside the last 30
+days, never of days it did not exist for. A system recorded minutes ago reads over those
+minutes and the card names its window ("since Nov 23, 01:56 PM"); with no health recorded
+yet it says so instead of showing a percentage. The timeline is labelled at both ends and each
+segment's hover gives its health, from, to and duration; the red and amber triangles under it
+are alarm raises on that same axis.
+
 ::screenshot{#fleet-history}
 
 Under the health history, the **events** are the system's story on the event lane: the system's
@@ -414,6 +429,35 @@ own events and its members', newest first, each row labeled by the owner that ra
 and the **logs** are the members' raw lines merged, each naming the component that wrote
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
 Activity tab carries its own events the same way.
+
+## Timeline: what happened, in order
+
+**Timeline** lays everything a system or a component recorded over the page's time range on one
+axis, so the order of events reads straight off it: a property or metric moves, a rule raises an
+alarm, health degrades, someone sends a command, the alarm clears. Lanes stack top down, each
+collapsible:
+
+- **Health**: the health in force across the range, one span per recorded change, so a range in
+  which nothing changed is one span of the health that held. A system adds one row per member
+  component.
+- **Alarms**: every alarm raised during the range on its own row, from raise to clear (or to now
+  while still raised), in its severity's color, the bar labeled with how long it was raised. An
+  alarm raised before the range and still open in it starts at the range's left edge but keeps its
+  whole duration. Hover one for when it was raised, when it cleared, how long, the rule that raised
+  it and whether anyone acknowledged it; click it to open its own history below.
+- **Properties** and **Metrics**: the properties and metrics you pick (**Pick** on the lane). Until
+  you pick, the timeline shows what the alarming rules watch and every property that changed in
+  range, so the signal that crossed the threshold sits right above the span it raised.
+- **Events**, **Logs** and **Commands**: a marker each at its time. Markers too close to tell
+  apart become one counted marker; click any marker to list its rows, and a command's row opens its
+  arc on the Activity tab. Logs show lines at the severity you choose and worse.
+
+Hover anywhere on the lanes (or focus them and use the arrow keys) and the cursor crosses every
+lane; the line above the lanes reads them at that instant (the health, how many alarms were
+raised, each property's value and each metric's reading), and the metrics grid under the timeline
+draws its crosshair at the same instant. The time range on the tab rail governs every lane, and
+changing it reads them all again. A read that stops at its cap says so on its lane rather than
+dropping rows silently.
 
 ## Configure
 

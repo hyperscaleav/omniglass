@@ -5466,9 +5466,19 @@ components:
         health:
           description: "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"
           type: string
+        members:
+          description: Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location
+          items:
+            $ref: "#/components/schemas/HealthMemberBody"
+          type:
+            - array
+            - "null"
         owner:
           type: string
         owner_kind:
+          type: string
+        reason:
+          description: "A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location"
           type: string
         slots:
           description: The contributing slots; empty for a location
@@ -5496,6 +5506,7 @@ components:
         - owner
         - health
         - slots
+        - members
         - systems
         - transitions
       type: object
@@ -5713,6 +5724,37 @@ components:
         - message
         - raised_at
         - acknowledged
+      type: object
+    HealthMemberBody:
+      additionalProperties: false
+      properties:
+        alarms:
+          description: The member's open alarms, newest first
+          items:
+            $ref: "#/components/schemas/HealthAlarmBody"
+          type:
+            - array
+            - "null"
+        health:
+          description: "The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it"
+          type: string
+        id:
+          description: The component's uuid
+          type: string
+        name:
+          type: string
+        outside_slot:
+          description: "True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459)"
+          type: boolean
+        slot:
+          description: The name of the slot the member fills in this system (as slots[].name); absent when outside_slot
+          type: string
+      required:
+        - name
+        - id
+        - health
+        - outside_slot
+        - alarms
       type: object
     HealthOutputBody:
       additionalProperties: false
@@ -6410,8 +6452,13 @@ components:
           type:
             - array
             - "null"
+        total:
+          description: How many components matched the filters, before limit capped the page. With no filter, how many the caller may read.
+          format: int64
+          type: integer
       required:
         - components
+        - total
       type: object
     ListDriversOutputBody:
       additionalProperties: false
@@ -7137,8 +7184,13 @@ components:
           type:
             - array
             - "null"
+        total:
+          description: How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read.
+          format: int64
+          type: integer
       required:
         - systems
+        - total
       type: object
     ListTagsOutputBody:
       additionalProperties: false
@@ -9006,12 +9058,22 @@ components:
         impaired:
           description: Whether the simulator impairs the device at the window's end.
           type: boolean
+        location_path:
+          description: The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         received:
           additionalProperties:
             format: int64
             type: integer
           description: Requests the device saw over the window, by protocol.
           type: object
+        system:
+          description: The name of the device's primary system; empty when it has none.
+          type: string
         unhit:
           description: Whether it is a poll target due over the window that the simulator never saw.
           type: boolean
@@ -9021,6 +9083,8 @@ components:
         - received
         - impaired
         - unhit
+        - system
+        - location_path
       type: object
     PlatformSimulationGap:
       additionalProperties: false
@@ -17637,8 +17701,39 @@ paths:
       x-omniglass-permission: component_type:update
   /components:
     get:
-      description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+      description: Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
       operationId: list-components
+      parameters:
+        - description: Only components of this product (name or uuid)
+          explode: false
+          in: query
+          name: product
+          schema:
+            description: Only components of this product (name or uuid)
+            type: string
+        - description: Only components of a product this driver serves (name or uuid)
+          explode: false
+          in: query
+          name: driver
+          schema:
+            description: Only components of a product this driver serves (name or uuid)
+            type: string
+        - description: Only components of a product classified under exactly this component type (name or uuid)
+          explode: false
+          in: query
+          name: component_type
+          schema:
+            description: Only components of a product classified under exactly this component type (name or uuid)
+            type: string
+        - description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+            format: int64
+            minimum: 0
+            type: integer
       responses:
         "200":
           content:
@@ -17772,7 +17867,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
-      description: What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -17796,6 +17891,26 @@ paths:
           schema:
             description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended
             type: boolean
+        - description: "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range"
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range"
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the alarms raised at or before this RFC 3339 time; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the alarms raised at or before this RFC 3339 time; must not be earlier than since
+            examples:
+              - "2026-11-23T12:00:00Z"
+            format: date-time
+            type: string
       responses:
         "200":
           content:
@@ -22553,8 +22668,23 @@ paths:
       x-omniglass-plaintext: true
   /products:
     get:
-      description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+      description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
       operationId: list-products
+      parameters:
+        - description: Only products whose contract declares this metric (name or uuid)
+          explode: false
+          in: query
+          name: declares_metric
+          schema:
+            description: Only products whose contract declares this metric (name or uuid)
+            type: string
+        - description: Only products whose contract declares this property (name or uuid)
+          explode: false
+          in: query
+          name: declares_property
+          schema:
+            description: Only products whose contract declares this property (name or uuid)
+            type: string
       responses:
         "200":
           content:
@@ -24234,8 +24364,25 @@ paths:
       x-omniglass-permission: system_type:update
   /systems:
     get:
-      description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+      description: Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
       operationId: list-systems
+      parameters:
+        - description: Only systems built to this standard (name or uuid)
+          explode: false
+          in: query
+          name: standard
+          schema:
+            description: Only systems built to this standard (name or uuid)
+            type: string
+        - description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+            format: int64
+            minimum: 0
+            type: integer
       responses:
         "200":
           content:
@@ -24367,7 +24514,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/alarms:
     get:
-      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-alarms
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -24376,6 +24523,26 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until"
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until"
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+        - description: The range's end, with since; defaults to now and must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: The range's end, with since; defaults to now and must not be earlier than since
+            examples:
+              - "2026-11-23T12:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":
@@ -24423,7 +24590,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/health:
     get:
-      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)

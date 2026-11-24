@@ -120,30 +120,6 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     expect(bodies[0].bindings[0]).toMatchObject({ keys: ["rtt"], from: new Date(from).toISOString(), to: new Date(to).toISOString(), step_seconds: 60 });
   });
 
-  // An absolute range still running (its end ahead of now) keeps polling, as
-  // a preset does; one wholly in the past is read once.
-  it("polls an absolute range whose end is still ahead, and reads a past one once", async () => {
-    const intervals = async (from: number, to: number) => {
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: RequestInfo | URL) => {
-          const req = input instanceof Request ? input : new Request(String(input));
-          const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
-          if (req.method === "POST") return json({ results: [{ metric: [], cursor: "b.1", covered_from: "", entities: [], from: "", to: "" }], cursor: "b.1" });
-          return json({ metrics: [metrics[1]] });
-        }),
-      );
-      mount("systems", "room-1", () => ({ kind: "absolute", from, to }));
-      await waitFor(() => expect(lastClient!.getQueryCache().findAll({ queryKey: ["metric-buckets-between"] }).length).toBe(1));
-      const q = lastClient!.getQueryCache().findAll({ queryKey: ["metric-buckets-between"] })[0];
-      const iv = (q.observers[0].options as { refetchInterval?: unknown }).refetchInterval;
-      cleanup();
-      return iv;
-    };
-    expect(await intervals(Date.now() - HOUR, Date.now() + HOUR)).toBe(30_000);
-    expect(await intervals(Date.now() - 3 * HOUR, Date.now() - 2 * HOUR)).toBeFalsy();
-  });
-
   it("hovering one chart puts the crosshair at the same instant on every chart in the grid; leaving clears all", async () => {
     stub([]);
     mount("components", "cam-1", () => ({ kind: "preset", preset: "6h" }));
@@ -192,43 +168,6 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     await lastClient!.refetchQueries({ queryKey: ["component-metrics", "cam-1"] });
     expect(screen.getAllByTestId("timeseries-chart")[0]).toBe(chart);
     expect(document.activeElement).toBe(chart);
-  });
-
-  // A link can carry an absolute range to a caller who may not read views
-  // (the picker offers none to them): the card says what is missing rather
-  // than offering a Retry that cannot succeed.
-  it("an absolute range refused for want of view:read says so, with no Retry", async () => {
-    const to = Date.now() - HOUR;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const req = input instanceof Request ? input : new Request(String(input));
-        const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
-        if (req.method === "POST") return json({ status: 403, title: "Forbidden", detail: "view:read" }, 403);
-        return json({ metrics: [metrics[1]] });
-      }),
-    );
-    mount("systems", "room-1", () => ({ kind: "absolute", from: to - HOUR, to }));
-    const card = await screen.findByTestId("metric-card-rtt");
-    expect(await within(card).findByText(/custom range needs the view:read permission/)).toBeTruthy();
-    expect(within(card).queryByRole("button", { name: "Retry" })).toBeNull();
-  });
-
-  it("a preset range's 403 is not blamed on view:read: it reads as a failed series with Retry", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const u = new URL((input instanceof Request ? input : new Request(String(input))).url);
-        const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
-        if (u.pathname.endsWith("/samples")) return json({ status: 403, title: "Forbidden" }, 403);
-        return json({ metrics: [metrics[1]] });
-      }),
-    );
-    mount("systems", "room-1", () => ({ kind: "preset", preset: "6h" }));
-    const card = await screen.findByTestId("metric-card-rtt");
-    expect(await within(card).findByText("Could not read this series.")).toBeTruthy();
-    expect(within(card).queryByText(/view:read/)).toBeNull();
-    expect(within(card).getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
   it("draws nothing when the entity has no metrics", async () => {

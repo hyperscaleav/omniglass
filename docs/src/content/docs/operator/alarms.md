@@ -241,7 +241,13 @@ the first state and you need to be able to see past it to the second.
 
 A location's health is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
 when one system anywhere beneath it is out. A system's health is the worst contribution among the **slots** it
-needs filled.
+needs filled, and the line beside it names the slots behind it. A component in the system that fills
+**no slot** is tracked, and its open alarms show on the system with **not in a slot** beside them, but
+it does not count toward the system's health. A system's health comes only from rules somebody
+declared, its slots and what each slot's impact says losing it costs, never from an alarm merely
+existing: an alarm that should not move the system (a touch panel's firmware being out of date, say)
+stays on the component until somebody places it in a slot. A system-level rule such as "any open alarm
+on a member degrades this system" is something you would declare, and is designed under #1002.
 
 **The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
 view names the chain instead: **Why** leads its Overview, each alarm naming the down component
