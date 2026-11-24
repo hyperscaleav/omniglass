@@ -183,8 +183,16 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
     setBusy(true);
     setErr(null);
     try {
-      for (const e of owned) await deleteEndpoint(e.id);
-      await deleteComponent(props.id);
+      const gone: string[] = [];
+      try {
+        for (const e of owned) { await deleteEndpoint(e.id); gone.push(e.name); }
+        await deleteComponent(props.id);
+      } catch (er) {
+        // Not one transaction: say what was already removed, so the operator
+        // is not left guessing why the component stopped collecting.
+        await qc.invalidateQueries({ queryKey: ENDPOINTS_KEY });
+        throw { detail: `${describeError(er)}${gone.length ? ` (already removed: its ${gone.join(", ")} endpoint${gone.length === 1 ? "" : "s"}; the component remains)` : ""}` };
+      }
       await Promise.all([
         qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true }),
         qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),

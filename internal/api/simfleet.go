@@ -149,6 +149,7 @@ type componentSimOutput struct {
 	Body struct {
 		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on an outpost and a product a profile simulates."`
 		Outpost     string                         `json:"outpost,omitempty"`
+		ServedByID  string                         `json:"served_by_id,omitempty" doc:"The uuid of served_by, the address the console opens it by (names repeat across places)."`
 		ServedBy    string                         `json:"served_by,omitempty" doc:"The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's)."`
 		Connected   bool                           `json:"connected" doc:"The outpost's simulator pulled recently."`
 		Activity    *simDeviceBody                 `json:"activity,omitempty" doc:"What the simulator reports for the component: serving, hits, and its impairment."`
@@ -502,6 +503,9 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		view := simulationBody([]storage.SimDevice{s.device}, st, seen, time.Now()).Body
 		b := &out.Body
 		b.Simulated, b.Outpost, b.Connected, b.ServedBy = true, s.outpost, view.Connected, s.servedBy
+		if s.servedBy != "" {
+			b.ServedByID = s.id
+		}
 		b.Activity = &view.Devices[0]
 		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.Name, s.device.Address, s.prof.Doc.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments

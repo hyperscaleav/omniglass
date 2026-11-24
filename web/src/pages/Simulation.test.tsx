@@ -396,10 +396,26 @@ describe("the component page's Simulation section", () => {
   it("says which simulated component serves a component aimed at its address", async () => {
     stubFetch();
     const { qc } = mount(() => <SimulationSection componentId={DSP} />);
-    qc.setQueryData([...componentSimKey(DSP)], { ...componentSim, served_by: "display-1" });
+    qc.setQueryData([...componentSimKey(DSP)], { ...componentSim, served_by: "display-1", served_by_id: DISPLAY });
     const section = await screen.findByTestId("leaf-simulation");
     expect(section.textContent).toContain("Served by");
     expect(section.textContent).toContain("display-1");
+    // The drawer opens by the owner's uuid, not its (repeatable) name.
+    fireEvent.click(within(section).getByRole("button", { name: /Open simulation/ }));
+    const drawer = await screen.findByRole("dialog");
+    expect(drawer.textContent).toContain("127.60.0.2");
+  });
+
+  it("says what was already removed when the component delete fails after its endpoints went", async () => {
+    stubFetch({
+      "GET /endpoints": { endpoints: [{ id: EP1, name: "snmp", transport: "udp", component_id: DISPLAY }] },
+      [`DELETE /endpoints/${EP1}`]: {},
+      [`DELETE /components/${DISPLAY}`]: new Answer(409, { title: "Conflict", status: 409, detail: "still referenced" }),
+    });
+    answerConfirms(true);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect((await screen.findByText(/already removed: its snmp endpoint/)).textContent).toContain("the component remains");
   });
 
   it("says where a simulated component is served and opens its drawer", async () => {

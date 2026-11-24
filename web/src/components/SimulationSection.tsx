@@ -60,7 +60,7 @@ export default function SimulationSection(props: { componentId: string }): JSX.E
               </Show>
             </dd>
           </dl>
-          <SimComponentDrawer id={open() ? (s().served_by ?? props.componentId) : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
+          <SimComponentDrawer id={open() ? (s().served_by_id ?? props.componentId) : null} onClose={() => setOpen(false)} onRemoved={() => navigate("/simulation")} showOpen={false} />
         </section>
       )}
     </Show>

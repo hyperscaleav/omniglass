@@ -78,13 +78,14 @@ type fleetBody struct {
 }
 
 type componentSimBody struct {
-	Simulated bool   `json:"simulated"`
-	Outpost   string `json:"outpost"`
-	Product   string `json:"product"`
-	Profile   string `json:"profile"`
-	Address   string `json:"address"`
-	ServedBy  string `json:"served_by"`
-	Activity  *struct {
+	Simulated  bool   `json:"simulated"`
+	Outpost    string `json:"outpost"`
+	Product    string `json:"product"`
+	Profile    string `json:"profile"`
+	Address    string `json:"address"`
+	ServedBy   string `json:"served_by"`
+	ServedByID string `json:"served_by_id"`
+	Activity   *struct {
 		Component string `json:"component"`
 	} `json:"activity"`
 	Surface []struct {
@@ -543,7 +544,7 @@ func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/aimed/simulation", nil, http.StatusOK), &sim); err != nil {
 		t.Fatal(err)
 	}
-	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.Profile != prof.Name || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
+	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.ServedByID == "" || sim.ServedByID != view.Devices[0].ComponentID || sim.Profile != prof.Name || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
 		t.Fatalf("aimed simulation = %+v, want panel-1's device, served by it", sim)
 	}
 
