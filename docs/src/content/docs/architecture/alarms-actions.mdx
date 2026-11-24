@@ -615,7 +615,7 @@ and sorts by its rank, so an operator level renders like a shipped one with no c
 **Catalog > Actions > Severity levels** (#921) lists the levels worst first with their rank, color and
 health effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
 delete, gated `severity_level:*` on an all-scope grant like a rule write (ADR-0144, ruled
-2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one location reads
+2026-10-20): a level's health effect moves health fleet-wide, so a holder whose grant stops at one location reads
 the levels but writes none (a 403). Official levels are read-only. Its form teaches the rank as it is typed: where the rank sits among the
 levels, and its health-effect picker starts at the effect the rank would derive. An alarm whose level declares none says on the component that it does not affect health.
 
