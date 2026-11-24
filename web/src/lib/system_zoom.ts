@@ -189,6 +189,10 @@ export type AlarmRow = {
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string;
+  // The snooze the health read carries (#2448): Snooze is offered only while
+  // there is none, Unsnooze and the chip while there is.
+  snoozedUntil: string | null;
+  snoozedBy: string;
 };
 
 export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null): AlarmRow[] {
@@ -212,6 +216,8 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         acknowledged: a.acknowledged ?? false,
         acknowledgedAt: a.acknowledged_at ?? null,
         acknowledgedBy: a.acknowledged_by ?? "",
+        snoozedUntil: a.snoozed_until ?? null,
+        snoozedBy: a.snoozed_by ?? "",
       });
     }
   }
@@ -238,6 +244,8 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         acknowledged: a.acknowledged ?? false,
         acknowledgedAt: a.acknowledged_at ?? null,
         acknowledgedBy: a.acknowledged_by ?? "",
+        snoozedUntil: a.snoozed_until ?? null,
+        snoozedBy: a.snoozed_by ?? "",
       });
     }
   }

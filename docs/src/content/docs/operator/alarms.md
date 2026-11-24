@@ -112,7 +112,7 @@ There is no un-acknowledge.
 
 **Snoozing stops the people an alarm notifies from being told about it, for a bounded time.** It is
 for the alarm that flaps or that you are already working on: **Snooze** beside the alarm (in the
-**Why** strip and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
+**Why** strip of a component or a system, in the system blade, and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
 or 24 hours. While it holds, every notification about that alarm, a raise or a clear, on a
 webhook, by email or in an inbox, is recorded instead of sent, and each one stays on the alarm's
 timeline reading **snoozed**, with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip

@@ -252,6 +252,25 @@ describe("alarmRows", () => {
     expect(rows.find((r) => r.id === "al-new")).toMatchObject({ acknowledged: false, acknowledgedAt: null, acknowledgedBy: "" });
   });
 
+  // The snooze rides beside the acknowledgement (#2448): without it a strip
+  // would offer Snooze on an alarm that is already snoozed.
+  it("carries the snooze the health read reports, none by default", () => {
+    const h = {
+      ...health,
+      slots: [{
+        name: "dsp", label: "DSP", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
+        impaired: true, active: true, assigned_to: [], down: [],
+        alarms: [
+          { id: "al-snz", component: "dsp-1", component_id: uuidFor("sz-c-dsp"), severity: "high", message: "Quiet", raised_at: "2026-08-15T14:20:00Z", snoozed_until: "2026-08-15T16:00:00Z", snoozed_by: "alice" },
+          { id: "al-loud", component: "dsp-1", component_id: uuidFor("sz-c-dsp"), severity: "warning", message: "Loud", raised_at: "2026-08-15T14:30:00Z" },
+        ],
+      }],
+    } as never;
+    const rows = alarmRows(h, SEEDED_LEVELS);
+    expect(rows.find((r) => r.id === "al-snz")).toMatchObject({ snoozedUntil: "2026-08-15T16:00:00Z", snoozedBy: "alice" });
+    expect(rows.find((r) => r.id === "al-loud")).toMatchObject({ snoozedUntil: null, snoozedBy: "" });
+  });
+
   it("is empty for a healthy report", () => {
     expect(alarmRows({ ...health, slots: [] } as never)).toEqual([]);
   });

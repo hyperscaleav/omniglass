@@ -177,6 +177,35 @@ describe("one body in two hosts", () => {
     requestTriage(undefined);
   });
 
+  // Snooze is offered on a system's alarm as on a component's (#2448): Snooze
+  // while it is not snoozed, the chip and Unsnooze once it is.
+  it("an unsnoozed alarm offers Snooze, a snoozed one its chip and Unsnooze, page and blade", async () => {
+    const snoozed = (until?: string) => {
+      const qc = seed();
+      qc.setQueryData([...systemHealthKey(SID)], {
+        ...health,
+        slots: [{ ...health.slots![0], alarms: [{ ...health.slots![0].alarms![0], ...(until ? { snoozed_until: until, snoozed_by: "alice" } : {}) }] }],
+      });
+      return qc;
+    };
+    mountPage(undefined, snoozed());
+    let controls = within(await screen.findByTestId("alarm-strip")).getByTestId("alarm-controls");
+    expect(within(controls).getByRole("button", { name: /^Snooze/ })).toBeTruthy();
+    expect(within(controls).queryByRole("button", { name: /^Unsnooze/ })).toBeNull();
+    cleanup();
+    const until = new Date(Date.now() + 3_600_000).toISOString();
+    mountPage(undefined, snoozed(until));
+    controls = within(await screen.findByTestId("alarm-strip")).getByTestId("alarm-controls");
+    expect(within(controls).getByRole("button", { name: /^Unsnooze/ })).toBeTruthy();
+    expect(within(controls).queryByRole("button", { name: /^Snooze/ })).toBeNull();
+    cleanup();
+    mountBlade(undefined, snoozed());
+    const blade = await screen.findByRole("dialog");
+    controls = within(await within(blade).findByTestId("alarm-strip")).getByTestId("alarm-controls");
+    expect(within(controls).getByRole("button", { name: /^Snooze/ })).toBeTruthy();
+    expect(within(controls).getByRole("button", { name: /acknowledge/i })).toBeTruthy();
+  });
+
   it("a component opens over the system's blade, on the same stack", async () => {
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");
