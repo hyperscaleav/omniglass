@@ -405,16 +405,16 @@ watches Omniglass itself: the server's `ingest-lag-max` held over 30 s for 2 min
 a claimed outpost's platform component once its `checkin-age`, which the server writes for every claimed
 outpost every 15 s, reads past 90 s (three missed 30 s heartbeats), with no sustain of its own since the
 age is one; the outpost's next heartbeat brings the age back under and clears it
-([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)). `disk-nearly-full` opens a
+([outposts](/architecture/self-monitoring/#self-monitoring-every-outposts-account-of-itself)). `disk-nearly-full` opens a
 `warning` alarm on the server's platform component when `data-dir-disk-used-ratio` holds over 0.9 for
 2 minutes, and clears only at 0.85 or under, so a disk at the line does not flap
-([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
+([collection](/architecture/self-monitoring/#self-monitoring-the-servers-account-of-itself)).
 `retention-behind` opens a `warning` alarm on the server's component when a retention lane or
 compaction stays behind its window for 5 minutes, and clears on the first pass that catches up
 ([storage](/architecture/storage/#what-a-retention-pass-reports)). `rule-sweep-stalled` opens a
 `high` alarm on a server's component when its `rule-sweep-age`, the seconds since its event rule
 sweep last completed, reads past 30 s, with no sustain since the age is one, and clears when the
-sweep resumes ([collection](/architecture/collection/#what-an-alarm-inside-the-platform-cannot-see)).
+sweep resumes ([collection](/architecture/self-monitoring/#what-an-alarm-inside-the-platform-cannot-see)).
 Three are
 [trend rules](#a-trend-rule-reads-a-window-not-a-sample), each an `average` alarm on the platform
 component of what it measures: `process-heap-growing` and `process-goroutines-growing` fire when a

@@ -276,7 +276,7 @@ so its row reads it in amber and the endpoint's row wears **unverified** without
 mode is one of the endpoint's driver inputs (`tls-mode`), edited on the endpoint's detail like its
 host or port. A pinned key that changes reads **rejected** with class `certificate`, naming both
 keys; once you know the component was replaced, `omniglass endpoint retry <component>/https --certificate <the
-offered key>` trusts the new one ([tls](/architecture/collection/#tls)).
+offered key>` trusts the new one ([tls](/architecture/transports/#tls)).
 
 An **http** or **https** endpoint's driver sends real requests, each carrying the endpoint's
 credential (a basic login, a bearer token, or an API key, by the driver's declared scheme). Its
@@ -285,7 +285,7 @@ first answer that accepts the credential reads yes. A component that refuses it 
 endpoint, class `auth`, its row saying why and offering **Retry** ([a refusal with no
 session](#a-refusal-with-no-session)), and nothing that carries the credential is sent again until
 the endpoint changes (point it at the right secret, or rotate the secret) or you retry it, while its
-ping and its transport keep reporting ([http and https](/architecture/collection/#http-and-https)).
+ping and its transport keep reporting ([http and https](/architecture/transports/#http-and-https)).
 
 A driver whose component signs in once (a form login that sets a cookie, a JSON login that answers
 a token) logs in before its first request and keeps that session for every poll and command after,
@@ -294,7 +294,7 @@ forgets the session (a reboot, an idle timeout) the next request logs in exactly
 endpoint stays up. A wrong password is one login attempt: the endpoint reads **rejected**, class
 `auth`, with the component's reason (`auth: the login was sent back to the login page (302 to
 /login)`), and logs in again only once you fix the secret (or point the endpoint at the right one)
-([logging in over http](/architecture/collection/#logging-in-over-http)). A component answering
+([logging in over http](/architecture/transports/#logging-in-over-http)). A component answering
 HTTP digest is read the same way, its password never sent.
 
 An http or https endpoint whose driver holds the component's server-sent events stream (the seeded
@@ -303,7 +303,7 @@ stream is open, and every change the component announces lands the moment it hap
 involved. A dropped stream reads **recovering**, then picks up where it left off (from the last event
 it was sent, which the component replays after), so nothing is lost or counted twice; a component that refuses the stream's credential
 reads **rejected** with the reason, and holds the endpoint's polls beneath the same refusal until you
-fix the secret ([a server-sent events stream](/architecture/collection/#a-server-sent-events-stream)).
+fix the secret ([a server-sent events stream](/architecture/transports/#a-server-sent-events-stream)).
 
 A **websocket** or **wss** endpoint (the seeded Kestrel control socket driver is one) holds one
 socket that carries everything: its session pill reads **up** while the socket is open, a change the
@@ -313,7 +313,7 @@ component stops answering the outpost's pings, reads **recovering** and comes ba
 subscription sent again; a component that refuses the upgrade's credential reads **rejected** with
 the reason after one attempt, until you fix the secret. A wss endpoint pins its component's key as
 an https endpoint does, and **Trust this key** works the same way
-([websocket and wss](/architecture/collection/#websocket-and-wss)).
+([websocket and wss](/architecture/transports/#websocket-and-wss)).
 
 A **udp** endpoint has no port to open, so its breakdown lists its **request** rung beside the ping:
 the driver's named request, answered (with its round trip) or not, which is the layer its reachability
@@ -323,7 +323,7 @@ unanswered (the service is down, the port is closed, or the datagrams are lost);
 ping but answers reads up. A lost datagram is re-sent within the endpoint's timeout, so a little
 loss never reads down. The endpoint binds its own port on the outpost (its driver's `listen-port`
 input, else one the outpost picks), which the component's pushes arrive on; edit it on the endpoint's
-detail like its host or port ([udp](/architecture/collection/#udp)).
+detail like its host or port ([udp](/architecture/transports/#udp)).
 
 To author a reachability check, add an **endpoint** to the component (above), from this
 panel's own header: a bare probe endpoint is the reachability check, and **attaching a
