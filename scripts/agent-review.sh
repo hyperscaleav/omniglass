@@ -72,7 +72,7 @@
 #                                       one-shot review as a lens result named
 #                                       oneshot: a finding verify refuted is
 #                                       dropped, one it gave no word on kept
-#   agent-review.sh gate                read {mergeable, ignore, checks} and
+#   agent-review.sh gate                read {mergeable, ignore, require, checks} and
 #                                       print whether to review this head now:
 #                                       review, wait (another check runs), or
 #                                       hold: <why> (a conflict or a red check)
@@ -628,24 +628,28 @@ BRIEF
     ;;
 
   gate)
-    [ $# -eq 1 ] || { printf 'usage: agent-review.sh gate < {mergeable, ignore, checks}\n' >&2; exit 64; }
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh gate < {mergeable, ignore, require, checks}\n' >&2; exit 64; }
     facts=$(cat)
     if ! printf '%s' "$facts" | jq -e 'type == "object" and (.checks | type == "array")' >/dev/null 2>&1; then
-      printf 'agent-review: stdin is not {mergeable, ignore, checks}\n' >&2
+      printf 'agent-review: stdin is not {mergeable, ignore, require, checks}\n' >&2
       exit 2
     fi
     # Whether to review this head now: "hold: <why>" when it conflicts with
     # its base or another check already failed (a red PR gets no new review),
-    # "wait" while another check still runs, "review" otherwise. ignore names
-    # the checks of the agent workflows themselves (a regex on the name).
+    # "wait" while another check still runs or a required one has not
+    # registered yet (the tests gate the review, #2597), "review" otherwise.
+    # ignore names the checks of the agent workflows themselves (a regex on the
+    # name); require lists the check names that must exist.
     printf '%s' "$facts" | jq -r '
       (.ignore // "^$") as $ig
       | [.checks[] | select(type == "object") | select((.name // "") | test($ig) | not)] as $c
       | ([$c[] | select(.status == "completed"
           and ((.conclusion // "") | IN("failure", "timed_out", "cancelled", "action_required", "startup_failure")))
           | .name] | unique) as $red
+      | ((.require // []) | map(select(. as $n | any($c[]; .name == $n) | not))) as $absent
       | if (.mergeable // "") == "CONFLICTING" then "hold: the PR conflicts with its base"
         elif ($red | length) > 0 then "hold: \($red | join(", ")) failed"
+        elif ($absent | length) > 0 then "wait"
         elif ([$c[] | select(.status != "completed")] | length) > 0 then "wait"
         else "review" end'
     ;;

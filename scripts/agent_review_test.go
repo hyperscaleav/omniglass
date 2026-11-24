@@ -1168,6 +1168,13 @@ func TestAgentReviewGate(t *testing.T) {
 		{"red", `{"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"failure"},{"name":"e2e","status":"in_progress"},{"name":"test","status":"completed","conclusion":"failure"}]}`, "hold: test failed"},
 		{"running", `{"mergeable":"UNKNOWN","checks":[{"name":"test","status":"in_progress"},{"name":"lint","status":"completed","conclusion":"success"}]}`, "wait"},
 		{"own checks ignored", `{"mergeable":"MERGEABLE","checks":[{"name":"agent-review","status":"completed","conclusion":"failure"},{"name":"lens (invariants)","status":"completed","conclusion":"failure"},{"name":"plan","status":"in_progress"}]}`, "review"},
+		// The tests gate the review (#2597): a required check that has not
+		// registered yet is not a green PR.
+		{"required check not registered yet", `{"require":["test","e2e"],"mergeable":"MERGEABLE","checks":[{"name":"changes","status":"completed","conclusion":"success"},{"name":"test","status":"queued"}]}`, "wait"},
+		{"no checks at all yet", `{"require":["test"],"mergeable":"MERGEABLE","checks":[]}`, "wait"},
+		{"every required check done", `{"require":["test","e2e"],"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"success"},{"name":"e2e","status":"completed","conclusion":"success"}]}`, "review"},
+		{"a skipped required check counts as done", `{"require":["e2e"],"mergeable":"MERGEABLE","checks":[{"name":"e2e","status":"completed","conclusion":"skipped"}]}`, "review"},
+		{"red wins over a missing check", `{"require":["test","e2e"],"mergeable":"MERGEABLE","checks":[{"name":"test","status":"completed","conclusion":"failure"}]}`, "hold: test failed"},
 	} {
 		in := strings.Replace(c.in, `{"mergeable"`, `{"ignore":"`+ignore+`","mergeable"`, 1)
 		out, code := agentReview(t, in, "gate")
