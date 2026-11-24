@@ -801,7 +801,7 @@ export interface paths {
   "/components/{name}/events": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listComponentEvents>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listComponentEventsResponseSuccess["data"];
@@ -2737,7 +2737,7 @@ export interface paths {
   "/systems/{name}/events": {
     get: {
       path: { "name": string };
-      query: never;
+      query: NonNullable<Parameters<typeof og.listSystemEvents>[1]>;
       body: never;
       bodyRequired: false;
       data: og.listSystemEventsResponseSuccess["data"];

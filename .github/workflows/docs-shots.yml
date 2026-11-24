@@ -1,13 +1,21 @@
 name: docs-shots
 
-# Two gates for the docs screenshots, which are a generated resource declared in
-# each page's `screenshots` frontmatter:
+# The docs screenshots are a generated resource declared in each page's
+# `screenshots` frontmatter. Main owns their refresh (#2561); a PR never
+# re-renders an existing shot, because git cannot merge binaries and every merge
+# used to make the other open PRs conflict.
 #
-# - verify (fast, deterministic): every declared shot has a committed PNG, every
-#   PNG is declared, ids are unique. Catches a forgotten capture or an orphan.
-# - freshness (heavier): recapture against the real console (a throwaway lab
-#   with no node, built by make, and Playwright, all in Docker, #1267) and fail
-#   on ANY unmasked pixel change.
+# - verify (fast, deterministic, every PR): every declared shot has a committed
+#   PNG, every PNG is declared, ids are unique; and the guard fails a PR that
+#   modifies, deletes or renames an existing shot (a new shot is fine).
+# - recapture (push to main or a release branch only): recapture against the
+#   real console (a throwaway lab with no node, built by make, and Playwright,
+#   all in Docker, #1267); when any shot changed, push the recapture to
+#   claude/docs-shots-recapture and open or update one PR as the agents' App
+#   (the same App agent-open-pr.yml opens PRs with), which the architect approves
+#   like any PR. Branch protection is untouched, no bypass. A concurrency group
+#   coalesces merges that land close together, and a run whose commit is no
+#   longer the branch head stands down, so the latest main wins.
 #   Nondeterministic regions (v7-uuid text, seed-time stamps) are masked in each
 #   page's frontmatter, so the pinned browser's rasters are byte-stable and the
 #   tolerance is zero (#398, #623); DOCS_SHOTS_MAX_RATIO remains an escape hatch
@@ -32,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
@@ -39,18 +49,26 @@ jobs:
         run: cd web && npm ci
       - name: Verify screenshots are declared and present
         run: make docs-shots-verify
+      - name: Guard existing shots against a PR's edit
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: git diff --name-status "$BASE_SHA...$HEAD_SHA" | bash scripts/docs-shots-guard.sh "$HEAD_REF" "$HEAD_REPO" "$BASE_REPO"
 
-  freshness:
-    # Off on pull requests until #2561: main recaptures the docs shots after a
-    # merge wave, so a PR's stale shots are expected and would only read red.
-    # The structural verify job above still runs on every PR.
+  recapture:
+    # Off on pull requests: a PR's stale shots are expected, main recaptures
+    # them after the merge.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    # contents:write only so the failure path below can publish its recapture
-    # to the throwaway ci/docs-shots-recapture ref; fork PRs still get a
-    # read-only token, so this widens nothing for outside contributors.
+    concurrency:
+      group: docs-shots-recapture-${{ github.ref_name }}
+      cancel-in-progress: true
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,38 +76,63 @@ jobs:
           # git describe walks history from HEAD, so a shallow clone cannot see it.
           fetch-depth: 0
           fetch-tags: true
-      # make docs-shots-check builds the lab (make: the image and the binary,
-      # with only Docker), so the job needs no Go toolchain.
+          persist-credentials: false
+      # make docs-shots builds the lab (make: the image and the binary, with only
+      # Docker), so the job needs no Go toolchain.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
       - name: Install web deps
         run: cd web && npm ci
-      - name: Recapture and compare against the committed screenshots
-        run: make docs-shots-check
-      # On drift, publish this job's own recapture. CI is the canonical raster
-      # environment (fonts, freetype, the pinned browser image all pinned by the
-      # runner); a contributor whose machine rasterizes differently (a sandboxed
-      # or air-gapped host) adopts these PNGs instead of fighting a sub-percent
-      # environmental diff their capture can never close.
-      - name: Upload the recaptured screenshots
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Recapture both shot sets on the merged tree
+        run: make docs-shots
+      - name: Mint the agent App token
+        id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
-          name: docs-shots-recapture
-          path: .docs-shots-tmp/
-          # The recapture dir is dot-prefixed (gitignored working dir), and v4
-          # skips hidden paths by default, which uploads nothing.
-          include-hidden-files: true
-      # The same recapture as a force-pushed throwaway ref, for environments
-      # whose egress can reach git but not the artifact storage (a sandboxed
-      # agent session). Fetch with:
-      #   git fetch origin ci/docs-shots-recapture
-      - name: Publish the recapture to the ci ref
-        if: failure()
+          client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+      - name: Push the recapture and open or update its PR
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@users.noreply.github.com
-          git add -f .docs-shots-tmp
-          git commit -m "ci: docs-shots recapture for ${{ github.sha }} [skip ci]"
-          git push -f origin HEAD:refs/heads/ci/docs-shots-recapture
+          set -euo pipefail
+          if [ "$BASE" = main ]; then
+            branch=claude/docs-shots-recapture
+          else
+            branch="claude/docs-shots-recapture-${BASE//\//-}"
+          fi
+          open=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
+          # A newer merge already moved the base: this run's tree is stale and
+          # the newer run will recapture.
+          head=$(gh api "repos/$REPO/git/ref/heads/$BASE" --jq .object.sha)
+          if [ "$head" != "$SHA" ]; then
+            echo "$BASE moved to $head; standing down for the newer run."
+            exit 0
+          fi
+          git add -A docs/public/screenshots docs/screenshots/baseline
+          if git diff --cached --quiet; then
+            echo "The recapture matches the committed shots."
+            if [ -n "$open" ]; then
+              gh pr close "$open" --repo "$REPO" --comment "Superseded: $BASE's shots already match the console at ${SHA:0:7}."
+            fi
+            exit 0
+          fi
+          git config user.name "hyperscale-agent[bot]"
+          git config user.email "hyperscale-agent[bot]@users.noreply.github.com"
+          git commit -q -m "docs: recapture screenshots after ${SHA:0:7}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/$branch"
+          body=$(printf '%s\n\n%s\n' \
+            "Main recaptures the docs screenshots after a merge (#2561). This is the recapture of \`$BASE\` at ${SHA:0:7}: both sets, the clean shots under docs/public/screenshots/ and their masked baselines under docs/screenshots/baseline/. Approve it like any PR; a later merge updates this branch in place." \
+            "demo: none (docs shots only)")
+          if [ -n "$open" ]; then
+            gh pr edit "$open" --repo "$REPO" --body "$body"
+            echo "Updated PR #$open."
+          else
+            gh pr create --repo "$REPO" --base "$BASE" --head "$branch" --title "docs: recapture the docs screenshots" --body "$body"
+          fi

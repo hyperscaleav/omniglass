@@ -113,7 +113,7 @@ A blade with no actions at all (a role) shows no bar.
 
 The same bar carries **create**. A form that opens in a slide-over (New user, New tag, Upload
 file) or as its own blade (New endpoint) puts its **Create** button in the bar at the foot of the
-panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
+panel, never floating after the last field. On the create faces and the event rule form it stays enabled and, pressed with a gap, names what is missing; the older slide-over forms still grey it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 
 ## Delete, and what is in the way
@@ -157,6 +157,11 @@ you pressed **+** on (`← West Building`) and goes there; opened from nowhere i
 ::screenshot{#entity-edit-face}
 
 ## Create, edit, delete
+
+The **Create** button is never greyed. Pressing it on a form with a gap does not submit: a line beside the
+buttons reads "To create the component, fill in Product and Name", each name a link that focuses its
+field, the fields are marked, and the first one takes the focus. The create faces end at that action
+row; anything that waits for the entity to exist (its tags) appears on the detail after you create it.
 
 - A **component** is added through its own flow, from its product to an endpoint that has answered
   ([add a component](/operator/add-a-component/)); the plain form below is its **advanced** link.
@@ -409,3 +414,19 @@ sign you picked the wrong component or that the slot needs widening.
 Declaring the slots is on the [Standards guide](/admin/standards/#slots-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
+
+## Read what a system or component has been saying
+
+A system's **Activity** tab and a component's both list their **events** and **log lines**, and both
+list them the same way, so what you learn on one carries to the other. A row is the **time** (relative,
+with the exact time on hover), a **badge** (an event's key, or a log's severity in its level's color), the
+**member** that wrote it when the list spans several (a system's), and the **message** on one line, however
+long. Click a row to open its detail in place: the whole message wrapped, its source, correlation id, structured
+attributes, the rule that derived it and the alarm it moved (the clock opens that alarm's timeline). An
+internal id in a message (a task's 64-character id) shows as a short labelled reference such as
+`task 9f2c4e7a`; hover it for the full id.
+
+One filter bar narrows either list, and each filter narrows what the server reads, so the capped
+24-hour window holds only matching rows: **message contains** on both; **at least** (a severity
+threshold) and **from** (a source the window carries) on logs; **key** and **source** on events. The same
+filters are the `key`, `source`, `severity` and `q` parameters on the events and logs reads.

@@ -84,6 +84,20 @@ func TestOutpostSimDevices(t *testing.T) {
 		t.Fatalf("device = %+v", d)
 	}
 
+	// A component whose endpoint is aimed at an address a simulated device
+	// already answers on is served by that simulation, not a second one
+	// (#2461): the list still holds dsp-1 once, and names the hand-built
+	// component beside it.
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hand-built"}, all, all, all, all); err != nil {
+		t.Fatalf("create hand-built: %v", err)
+	}
+	endpoint("hand-built-http", "tcp", "hand-built", "sim-a", "127.20.0.5:443")
+	if again, err := gw.OutpostSimDevices(ctx, "sim-a", all); err != nil || len(again) != 1 || again[0].Name != "dsp-1" {
+		t.Fatalf("after aiming hand-built at dsp-1's address: %v %+v, want dsp-1 only", err, again)
+	} else if len(again[0].Aliases) != 1 || again[0].Aliases[0].Name != "hand-built" || again[0].Aliases[0].ComponentID == "" {
+		t.Fatalf("aliases = %+v, want hand-built", again[0].Aliases)
+	}
+
 	// The list honors the caller's component scope (resolved component
 	// roots): a reader whose scope covers dsp-1 sees it, one whose scope
 	// covers only another component, or nothing, does not.

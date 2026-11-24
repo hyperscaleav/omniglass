@@ -34,6 +34,10 @@ export function landingFor(view: FleetView, locationId: string): Landing {
 const locationCrumbs = (view: FleetView, locationId: string): Crumb[] =>
   ancestors(locationId, locationIndex(view)).map((l) => ({ kind: "location" as const, id: l.id, label: entityLabel(l) }));
 
+// A component's location path for the header's second line: the chain down to
+// where it sits (its primary system rides the first line instead).
+export const locationPath = (view: FleetView, locationId: string | null | undefined): Crumb[] => (locationId ? locationCrumbs(view, locationId) : []);
+
 // A system's path. A sole system's view is titled by its location, so the path
 // ends at the location's parent; a location shared by several systems has a view of
 // its own, so the path keeps it. An unplaced system has no path.

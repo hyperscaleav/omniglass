@@ -80,7 +80,7 @@ describe("Systems create-as-route", () => {
     // Identity + Placement fields present; the binding sections are locked.
     expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("Standard")).toBeTruthy();
-    expect(screen.getByText(/Available once the system is created/)).toBeTruthy();
+    expect(screen.queryByText(/Available once the system is created/)).toBeNull();
   });
 
   it("offers the standard catalog on the create form, with a one-off option", async () => {
@@ -227,13 +227,14 @@ describe("Systems create identity", () => {
     // #702, so the wait is on it landing rather than on a button that is
     // disabled from the first frame either way.
     await waitFor(() => expect(screen.getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy());
-    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("form-problems")).textContent).toContain("Name");
     fireEvent.input(key, { target: { value: "one-off" } });
-    await waitFor(() => expect(submit.disabled).toBe(false));
+    await waitFor(() => expect(screen.queryByTestId("form-problems")).toBeNull());
 
     fireEvent.input(key, { target: { value: "" } });
     await pickTree(type, "Classroom");
-    await waitFor(() => expect(submit.disabled).toBe(false));
+    await waitFor(() => expect(screen.queryByTestId("form-problems")).toBeNull());
   });
 
   it("omits the name from the POST body when it is left blank", async () => {

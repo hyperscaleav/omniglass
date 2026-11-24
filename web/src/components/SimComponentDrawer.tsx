@@ -17,6 +17,7 @@ import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtCount, rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
+import { ENDPOINTS_KEY, deleteEndpoint, listEndpoints, endpointTarget, type Endpoint } from "../lib/endpoints";
 import { COMPONENTS_KEY, deleteComponent, listComponents, updateComponent } from "../lib/components";
 import {
   SIMULATION_KEY,
@@ -169,14 +170,34 @@ function ComponentBody(props: { id: string; onRemoved: () => void }): JSX.Elemen
 
   async function remove() {
     const label = sim.data?.activity?.component ?? "this component";
-    if (!(await confirmDelete({ kind: "simulated component", name: label, verb: "Remove", consequence: "The component and its endpoints are deleted, and the simulator stops serving it. This cannot be undone." }))) return;
+    // The component's endpoints go with it (the server refuses to delete a
+    // component that still owns one), so the one confirmation lists them.
+    let owned: Endpoint[] = [];
+    try {
+      owned = (await listEndpoints()).filter((e) => e.component_id === props.id);
+    } catch (e) {
+      setErr(describeError(e));
+      return;
+    }
+    const list = owned.length ? ` Its ${owned.length === 1 ? "endpoint" : "endpoints"}: ${owned.map((e) => `${e.name} (${endpointTarget(e)})`).join(", ")}.` : "";
+    if (!(await confirmDelete({ kind: "simulated component", name: label, verb: "Remove", consequence: `The component and its endpoints are deleted, and the simulator stops serving it. This cannot be undone.${list}` }))) return;
     setBusy(true);
     setErr(null);
     try {
-      await deleteComponent(props.id);
+      const gone: string[] = [];
+      try {
+        for (const e of owned) { await deleteEndpoint(e.id); gone.push(e.name); }
+        await deleteComponent(props.id);
+      } catch (er) {
+        // Not one transaction: say what was already removed, so the operator
+        // is not left guessing why the component stopped collecting.
+        await qc.invalidateQueries({ queryKey: ENDPOINTS_KEY });
+        throw { detail: `${describeError(er)}${gone.length ? ` (already removed: its ${gone.join(", ")} endpoint${gone.length === 1 ? "" : "s"}; the component remains)` : ""}` };
+      }
       await Promise.all([
         qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true }),
         qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
+        qc.invalidateQueries({ queryKey: ENDPOINTS_KEY }),
         // Marked stale, not refetched: the component is gone, and a read now
         // would only 404 under a page that is about to close or leave.
         qc.invalidateQueries({ queryKey: componentSimKey(props.id), refetchType: "none" }),

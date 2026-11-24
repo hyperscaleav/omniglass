@@ -49,20 +49,22 @@ type componentLogsInput struct {
 	Name     string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Severity string `query:"severity" enum:"emergency,alert,critical,error,warning,notice,info,debug" doc:"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out"`
 	Source   string `query:"source" maxLength:"100" doc:"Only lines that arrived on this channel"`
+	Q        string `query:"q" maxLength:"200" doc:"Only lines whose message contains this text, case-insensitively"`
 }
 
 func (in *componentLogsInput) filter() storage.LogFilter {
-	return storage.LogFilter{Severity: in.Severity, Source: in.Source}
+	return storage.LogFilter{Severity: in.Severity, Source: in.Source, Text: in.Q}
 }
 
 type systemLogsInput struct {
 	Name     string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Severity string `query:"severity" enum:"emergency,alert,critical,error,warning,notice,info,debug" doc:"Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out"`
 	Source   string `query:"source" maxLength:"100" doc:"Only lines that arrived on this channel"`
+	Q        string `query:"q" maxLength:"200" doc:"Only lines whose message contains this text, case-insensitively"`
 }
 
 func (in *systemLogsInput) filter() storage.LogFilter {
-	return storage.LogFilter{Severity: in.Severity, Source: in.Source}
+	return storage.LogFilter{Severity: in.Severity, Source: in.Source, Text: in.Q}
 }
 
 type outpostLogsOutput struct {

@@ -533,8 +533,9 @@ dev: all
 
 # Capture the docs screenshots against the real console (a throwaway lab with
 # no node, #1267, and Playwright in the pinned container), writing PNGs into
-# docs/public/screenshots/ from each page's `screenshots` frontmatter. Commit
-# the regenerated images like any other generated resource.
+# docs/public/screenshots/ from each page's `screenshots` frontmatter. Main runs
+# this after every merge and opens the recapture PR (#2561): a PR does not commit
+# re-rendered existing shots (a guard fails it), only a new shot for a new id.
 docs-shots: all
 	bash docs/screenshots/capture.sh
 

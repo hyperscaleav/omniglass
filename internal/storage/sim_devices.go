@@ -23,6 +23,16 @@ type SimDevice struct {
 	Impairment *impair.Impairment
 	// ImpairedSince is when the impairment was last set; nil when healthy.
 	ImpairedSince *time.Time
+	// Aliases are the components whose endpoints target this device's
+	// address after it was made: they are served by this simulation, not
+	// simulations of their own (#2461), so the simulator is never handed them.
+	Aliases []SimAlias
+}
+
+// SimAlias is a component served by another component's simulation.
+type SimAlias struct {
+	ComponentID string
+	Name        string
 }
 
 // OutpostSimDevices lists each component with an endpoint placed on the outpost,
@@ -90,7 +100,27 @@ func (p *PG) OutpostSimDevices(ctx context.Context, name string, read scope.Set)
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: outpost sim devices %q: %w", name, err)
 	}
-	return out, nil
+	return foldAliases(out), nil
+}
+
+// foldAliases keeps one device per address: the earliest component (ids are
+// time-ordered, and the rows arrive in id order) owns it, and a later one
+// aimed at the same address becomes its alias. A device with no address
+// stands alone.
+func foldAliases(devs []SimDevice) []SimDevice {
+	owner := map[string]int{}
+	out := make([]SimDevice, 0, len(devs))
+	for _, d := range devs {
+		if d.Address != "" {
+			if i, ok := owner[d.Address]; ok {
+				out[i].Aliases = append(out[i].Aliases, SimAlias{ComponentID: d.ComponentID, Name: d.Name})
+				continue
+			}
+			owner[d.Address] = len(out)
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 // TargetHost is the host part of an endpoint target: "10.0.0.5:80" and

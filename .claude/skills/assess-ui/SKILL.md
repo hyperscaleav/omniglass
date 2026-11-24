@@ -155,9 +155,9 @@ architect reviews there.
    That is the default for an unattended session; `gh image` is the alternative only
    where a logged-in browser exists.
 2. **The docs-shots ripple.** If the change moves pixels on any page the docs
-   photograph, the zero-tolerance freshness gate fails the PR until `make docs-shots`
-   re-runs and **both** renders are committed (the clean shots and the masked
-   baselines). A new docs screenshot is a `screenshots:` frontmatter entry plus a
+   photograph, do **not** re-render the existing shots: main recaptures both renders
+   after the merge and opens the recapture PR (#2561), and a guard fails a PR that
+   edits an existing shot. A new docs screenshot is a `screenshots:` frontmatter entry plus a
    `::screenshot{#id}` directive, never a hand-added image.
 3. Paste the verdict block into the ship-review's Visual line:
 

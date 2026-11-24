@@ -3,8 +3,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
 import ConfigureFace from "./ConfigureFace";
-import EventsPanel from "./EventsPanel";
-import LogsPanel from "./LogsPanel";
+import OccurrenceList from "./OccurrenceList";
 import CommandsPanel from "./CommandsPanel";
 import DependenciesPanel from "./DependenciesPanel";
 import IdentitiesPanel from "./IdentitiesPanel";
@@ -170,8 +169,10 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
   const snoozeSurface = createUniqueId();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
-  // catalog's flag, #917), amber when they only degrade.
+  // level's declared health effect, #2558), amber when they only degrade, and
+  // neutral when every one declares no effect.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
+  const affectsHealth = createMemo(() => activeAlarms().some((a) => scale().effect(a.severity) !== "none"));
   const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
   // The component's own health rides on its alarms read, polled; the fleet
   // view's dot (read once, for the location and the path) stands in until then.
@@ -277,7 +278,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             {/* State, age, identity: the header every detail view opens with.
                 A component has no transitions read, so since-when is what
                 took it down: the worst active alarm's age (#786). */}
-            <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
+            <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-2 text-sm">
               <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the slots it fills." />
               <HealthBadge health={componentHealth() ?? undefined} size="sm" />
               <Show when={since()}>
@@ -321,17 +322,25 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                 <Show when={can(me.data, "command", "read")}>
                   <CommandsPanel component={id()} name={component()?.name ?? id()} componentId={component()?.id} open={openCommand()} productDriver={product()?.driver} onAddEndpoint={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id: component()?.id ?? id() }) : undefined} />
                 </Show>
-                <EventsPanel name={id()} />
+                <OccurrenceList
+                  kind="events"
+                  scope={{ type: "component", name: id() }}
+                  hint="Discrete occurrences a component published natively (its driver maps them to their event types) or a rule derived, as opposed to the sampled metric and state values above. Newest first, last 24 hours."
+                />
                 {/* The component's own words beside its occurrences (#1145):
                     the log lines its driver read and its listeners left
                     unclaimed. */}
-                <LogsPanel name={id()} />
+                <OccurrenceList
+                  kind="logs"
+                  scope={{ type: "component", name: id() }}
+                  hint="Raw log lines the component emitted, the ingest lane, untyped, that a rule may later derive events from: what its driver read as a log line, and anything its listeners did not claim. Newest first, last 24 hours."
+                />
               </div>
             </Show>
             <Show when={leafTab() === "overview"}>
               <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
                 <Show when={activeAlarms().length > 0}>
-                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
+                  <section data-testid="leaf-alarms" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() && affectsHealth(), "border-base-300": !affectsHealth() }}>
                     <h2 class="eyebrow">Why</h2>
                     <For each={activeAlarms()}>
                       {(a) => (
@@ -341,6 +350,9 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                               line up whatever its message's width. */}
                           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                             <SeverityBadge name={a.severity} />
+                            <Show when={scale().effect(a.severity) === "none"}>
+                              <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
+                            </Show>
                             <span class="min-w-0 flex-1">{a.message}</span>
                             <Show when={a.raised_by_rule}>
                               {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}

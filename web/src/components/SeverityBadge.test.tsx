@@ -36,6 +36,7 @@ describe("SeverityBadge", () => {
   it("says in its hint what the level does to its component", async () => {
     expect(await tipOf(mount("high").getByText("High"))).toMatch(/puts its component in outage/);
     expect(await tipOf(mount("average").getByText("Average"))).toMatch(/degrades its component/);
+    expect(await tipOf(mount("info").getByText("Info"))).toMatch(/does not affect its component's health/);
   });
 
   it("renders an operator-defined level from the catalog alone", () => {

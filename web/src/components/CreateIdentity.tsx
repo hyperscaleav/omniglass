@@ -98,6 +98,10 @@ export interface CreateIdentityProps {
   displayPen: Pen;
   namePlaceholder: string;
   displayPlaceholder: string;
+  // A submit attempt's complaint about the name (#2440), and the ref that lets
+  // the bar focus the field.
+  nameError?: () => string | undefined;
+  nameRef?: (el: HTMLInputElement) => void;
 }
 
 // What is missing when nothing will mint a name, per kind. Each names the FACT
@@ -154,7 +158,9 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
           bind="name"
           actions={<Show when={nameState() !== "unavailable"}><PenToggle pen={props.namePen} what="name" /></Show>}
           hint={
-            nameState() === "unavailable"
+            props.nameError?.()
+              ? props.nameError()
+              : nameState() === "unavailable"
               ? props.nameRefused()
                 ? NO_MINT[props.kind]
                 : AWAITING_MINT[props.kind]
@@ -164,8 +170,10 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
           }
         >
           <input
+            ref={(el) => props.nameRef?.(el)}
             class="input input-bordered join-item w-full min-w-0 font-data"
-            classList={{ "input-locked": nameState() === "generated" }}
+            classList={{ "input-locked": nameState() === "generated", "input-error": !!props.nameError?.() }}
+            aria-invalid={!!props.nameError?.()}
             value={nameState() === "generated" ? nameText() : props.namePen.value()}
             readOnly={nameState() === "generated"}
             placeholder={props.namePlaceholder}

@@ -670,7 +670,8 @@ describe("the one form, empty", () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
     const eyebrows = within(form).getAllByText(/^(Classification|Placement|Identity|Tags)$/).map((e) => e.textContent);
-    expect(eyebrows).toEqual(["Classification", "Placement", "Identity", "Tags"]);
+    // Nothing that waits for the entity to exist is drawn disabled (#2440).
+    expect(eyebrows).toEqual(["Classification", "Placement", "Identity"]);
     expect(within(form).getByRole("button", { name: /create system/i })).toBeTruthy();
   });
 
@@ -794,11 +795,32 @@ describe("the one form, empty", () => {
     expect(cancel.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("keeps Create disabled until the form is ready", async () => {
+  // A form that cannot be submitted says which field is missing (#2440): the
+  // submit stays enabled, names each gap beside the actions, marks the field
+  // and focuses the first. Component, location and system faces each.
+  it.each([
+    ["system", "Name", /create the system/i],
+    ["location", "Location type and Name", /create the location/i],
+    ["component", "Product and Name", /create the component/i],
+  ] as const)("an empty %s create names what is missing and focuses the first", async (kind, names, _re) => {
+    mountCreate(kind);
+    const form = await screen.findByTestId("entity-create-form");
+    const create = within(form).getByRole("button", { name: new RegExp(`create ${kind}`, "i") }) as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    fireEvent.click(create);
+    const said = await within(form).findByTestId("form-problems");
+    expect(said.textContent).toContain(`fill in ${names}`);
+    expect(vi.mocked(createSystem)).not.toHaveBeenCalled();
+    const first = kind === "location" ? within(form).getByRole("combobox", { name: /location type/i }) : kind === "component" ? within(form).getByRole("combobox", { name: /product/i }) : within(form).getByPlaceholderText("exec-boardroom");
+    await waitFor(() => expect(document.activeElement).toBe(first));
+  });
+
+  it("draws the action bar last, with no disabled section below it", async () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
-    const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
-    expect(create.disabled).toBe(true);
+    const create = within(form).getByRole("button", { name: /create system/i });
+    expect(form.textContent!.slice(form.textContent!.indexOf("Create system"))).not.toMatch(/Available once/);
+    expect(create.closest("form")!.lastElementChild!.contains(create) || create.parentElement!.parentElement!.parentElement === form).toBe(true);
   });
 
   it("Cancel calls onCancel", async () => {
@@ -809,17 +831,18 @@ describe("the one form, empty", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("enables Create once a name is typed, disables again when cleared (penIncomplete gate)", async () => {
+  it("stops naming the name once one is typed, and names it again when cleared (penIncomplete)", async () => {
     mountCreate("system");
     const form = await screen.findByTestId("entity-create-form");
     const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
-    expect(create.disabled).toBe(true); // penIncomplete: name is empty
+    fireEvent.click(create);
+    expect((await within(form).findByTestId("form-problems")).textContent).toContain("Name");
 
     fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "my-system" } });
-    await waitFor(() => expect(create.disabled).toBe(false));
+    await waitFor(() => expect(within(form).queryByTestId("form-problems")).toBeNull());
 
     fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "" } });
-    await waitFor(() => expect(create.disabled).toBe(true));
+    await waitFor(() => expect(within(form).getByTestId("form-problems")).toBeTruthy());
   });
 
   it("disables Create while the create call is in-flight (busy gate)", async () => {
@@ -832,7 +855,6 @@ describe("the one form, empty", () => {
     const create = within(form).getByRole("button", { name: /create system/i }) as HTMLButtonElement;
 
     fireEvent.input(within(form).getByPlaceholderText("exec-boardroom"), { target: { value: "my-system" } });
-    await waitFor(() => expect(create.disabled).toBe(false));
 
     fireEvent.click(create);
     await waitFor(() => expect(create.disabled).toBe(true)); // busy

@@ -11,8 +11,7 @@ import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 import { Check, Copy, Plus, Server } from "../components/icons";
 import KVStacked from "../components/KVStacked";
-import LogsPanel from "../components/LogsPanel";
-import { OUTPOST_LOGS_KEY, getOutpostLogs } from "../lib/logs";
+import OccurrenceList from "../components/OccurrenceList";
 import TagAdder from "../components/TagAdder";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
@@ -345,12 +344,11 @@ function OutpostBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput)
             </Show>
           </div>
 
-          <LogsPanel
-            name={props.name}
+          <OccurrenceList
+            kind="logs"
+            scope={{ type: "outpost", name: props.name }}
             title="Self-logs"
-            intro="Operational log lines the outpost emitted about itself (connected to the bus, worklist pulled, a task skipped), shipped back over the telemetry lane. The outpost's own story, not a component's. Newest first, last 24 hours."
-            queryKey={OUTPOST_LOGS_KEY(props.name)}
-            queryFn={() => getOutpostLogs(props.name)}
+            hint="Operational log lines the outpost emitted about itself (connected to the bus, worklist pulled, a task skipped), shipped back over the telemetry lane. The outpost's own story, not a component's. Newest first, last 24 hours."
           />
         </div>
       )}

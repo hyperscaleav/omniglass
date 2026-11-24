@@ -105,6 +105,7 @@ describe("Severity levels page", () => {
     const high = bodyRows().find((r) => r.querySelector('[data-severity="high"]'))!;
     expect(within(high).getByText("40")).toBeTruthy();
     expect(within(high).getByText("outage")).toBeTruthy();
+    expect(within(bodyRows().find((r) => r.querySelector('[data-severity="info"]'))!).getByText("no effect")).toBeTruthy();
     const major = bodyRows().find((r) => r.querySelector('[data-severity="major"]'))!;
     expect(within(major).getByText("35")).toBeTruthy();
     expect(within(major).getByText("degrades")).toBeTruthy();
@@ -147,16 +148,17 @@ describe("Severity levels page", () => {
     const rank = screen.getByLabelText("Rank");
     fireEvent.input(rank, { target: { value: "33" } });
     expect(screen.getByTestId("level-place").textContent).toBe("Between Average (30) and Major (35).");
-    expect(screen.getByTestId("level-effect").textContent).toMatch(/only degrade a component/);
+    // The picker starts at the effect the server would derive from the rank.
+    expect((screen.getByTestId("level-effect") as HTMLSelectElement).value).toBe("degraded");
     fireEvent.input(rank, { target: { value: "45" } });
     expect(screen.getByTestId("level-place").textContent).toBe("Between High (40) and Disaster (50).");
-    expect(screen.getByTestId("level-effect").textContent).toMatch(/take their component out \(rank 40\+\)/);
+    expect((screen.getByTestId("level-effect") as HTMLSelectElement).value).toBe("outage");
     const submit = screen.getByText("Create level").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(submit.disabled).toBe(false));
     fireEvent.click(submit);
     await waitFor(() => expect(writes).toHaveLength(1));
     expect(writes[0].method).toBe("POST");
-    expect(writes[0].body).toEqual({ name: "p2", label: "P2", color: "orange", rank: 45 });
+    expect(writes[0].body).toEqual({ name: "p2", label: "P2", color: "orange", rank: 45, health_effect: "outage" });
   });
 
   it("refuses a rank another level holds before it sends anything", async () => {

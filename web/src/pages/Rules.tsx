@@ -12,7 +12,6 @@ import InfoTip from "../components/InfoTip";
 import ExpressionField from "../components/ExpressionField";
 import ExpressionNotes from "../components/ExpressionNotes";
 import Button from "../components/Button";
-import FormProblems from "../components/FormProblems";
 import Picker, { PICKER_CLASS } from "../components/ui/Picker";
 import Collapsible from "../components/ui/Collapsible";
 import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimeline";
@@ -748,8 +747,6 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; prefill
     );
   focus.registerFinder("fireExpr", editorFor("Fires when"));
   focus.registerFinder("clearExpr", editorFor("Clears when"));
-  // A submit that found gaps says so (the sentence above the form) until none remain.
-  const [attempted, setAttempted] = createSignal(false);
   // The label follows the name until the operator writes one of their own, so a
   // rule saved without thinking about it still reads as words, not as an identifier.
   const [labelTouched, setLabelTouched] = createSignal(p.mode === "edit");
@@ -870,22 +867,25 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; prefill
     setD(withLane({ ...d, componentTypes: [...d.componentTypes], components: [...d.components] }, v.slice(sep + 1), v.slice(0, sep) as RuleLane));
   }
 
-  useFormActions().bind({
+  const actions = useFormActions();
+  actions.bind({
     submitLabel: p.mode === "create" ? "Create rule" : "Save rule",
     submitIcon: p.mode === "create" ? Plus : Save,
     submit: () => void submit(),
     busy,
+    // The bar owns the missing-field rule (#2440): it names each gap beside
+    // the actions and focuses the first; the fields show their own messages.
+    problems,
+    problemsAction: p.mode === "create" ? "create the rule" : "save the rule",
+    focusField: (k) => focus.focus(k),
+    onAttempt: () => {
+      for (const k of Object.keys(errors())) touch(k as keyof DraftErrors);
+    },
   });
 
   async function submit() {
-    if (!valid()) {
-      setAttempted(true);
-      for (const k of Object.keys(errors())) touch(k as keyof DraftErrors);
-      // After the sentence and the messages are drawn, so a field the sentence
-      // names has its message beside it when the focus lands.
-      queueMicrotask(() => focus.focusFirst(problems().map((x) => x.key)));
-      return;
-    }
+    // The bar checks first (actions.trigger); this is only the backstop.
+    if (!valid()) return;
     setBusy(true);
     setFormErr(null);
     try {
@@ -929,16 +929,9 @@ export function RuleForm(p: { mode: "create" | "edit"; rule?: EventRule; prefill
   );
 
   return (
-    <form ref={formEl} class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <form ref={formEl} class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); actions.trigger(); }}>
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
-      </Show>
-      <Show when={attempted()}>
-        <FormProblems
-          action={p.mode === "create" ? "create the rule" : "save the rule"}
-          problems={problems()}
-          onFocus={(k) => focus.focus(k)}
-        />
       </Show>
       <FieldRow bind="name" info={RULE_HINTS.name}>
         <input

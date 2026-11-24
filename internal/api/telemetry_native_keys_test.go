@@ -175,7 +175,7 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 		m, err := gw.LatestMetricInstance(ctx, "bar-1", "uptime", "ssh")
 		return err == nil && m != nil && m.Value == 4242
 	})
-	evs, err := gw.ListComponentEvents(ctx, "bar-1", 0, 100)
+	evs, err := gw.ListComponentEvents(ctx, "bar-1", 0, 100, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("events: %v", err)
 	}

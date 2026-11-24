@@ -4,8 +4,8 @@ import Tooltip from "./ui/Tooltip";
 
 // SeverityBadge is the console's one severity chip (#917). It takes a level NAME
 // as it rides an alarm and renders the catalog's label in the catalog's color,
-// with a hint that teaches what the level does to its component (an outage level
-// takes it out, any other degrades it). An unknown name, or any name while the
+// with a hint that teaches what the level declares it does to its component
+// (none, degrade it, or take it out). An unknown name, or any name while the
 // levels are still loading, renders as itself in the neutral chip.
 export default function SeverityBadge(props: { name: string; size?: "xs" | "sm"; class?: string }): JSX.Element {
   const scale = useSeverity();
@@ -13,9 +13,11 @@ export default function SeverityBadge(props: { name: string; size?: "xs" | "sm";
   const hint = () =>
     !look().known
       ? undefined
-      : look().outage
+      : look().effect === "outage"
         ? `${look().label}: an active alarm at this level puts its component in outage`
-        : `${look().label}: an active alarm at this level degrades its component`;
+        : look().effect === "none"
+          ? `${look().label}: an active alarm at this level does not affect its component's health`
+          : `${look().label}: an active alarm at this level degrades its component`;
   return (
     <Tooltip as="span" tabIndex={0}
       class={`badge badge-${props.size ?? "sm"} shrink-0 ${look().badge} ${props.class ?? ""}`}

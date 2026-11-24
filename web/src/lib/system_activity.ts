@@ -4,19 +4,20 @@
 import { api } from "../api/client";
 import type { SystemEventBody, SystemLogBody } from "../api/api.gen";
 import { logQuery, type LogFilter } from "./logs";
+import { eventQuery, type EventFilter } from "./events";
 
 export type SystemEvent = SystemEventBody;
 export type SystemLog = SystemLogBody;
 
-export const systemEventsKey = (system: string) => ["system-events", system] as const;
-export const systemLogsKey = (system: string, f: LogFilter = {}) => ["system-logs", system, f.severity ?? "", f.source ?? ""] as const;
+export const systemEventsKey = (system: string, f: EventFilter = {}) => ["system-events", system, f.key ?? "", f.source ?? "", f.q ?? ""] as const;
+export const systemLogsKey = (system: string, f: LogFilter = {}) => ["system-logs", system, f.severity ?? "", f.source ?? "", f.q ?? ""] as const;
 
 // SystemLogs is the members' lines under the filter, with the sources the
 // window carries whatever the filter (#1145).
 export type SystemLogs = { logs: SystemLog[]; sources: string[] };
 
-export async function systemEvents(system: string): Promise<SystemEvent[]> {
-  const res = await api.GET("/systems/{name}/events", { params: { path: { name: system } } });
+export async function systemEvents(system: string, f: EventFilter = {}): Promise<SystemEvent[]> {
+  const res = await api.GET("/systems/{name}/events", { params: { path: { name: system }, query: eventQuery(f) } });
   if (res.error) throw res.error;
   return (res.data?.events ?? []) as SystemEvent[];
 }

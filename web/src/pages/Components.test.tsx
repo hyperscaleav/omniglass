@@ -143,7 +143,7 @@ describe("Components create-as-route", () => {
     // Identity + Placement fields present; the binding sections are locked.
     expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("System")).toBeTruthy();
-    expect(screen.getByText(/Available once the component is created/)).toBeTruthy();
+    expect(screen.queryByText(/Available once the component is created/)).toBeNull();
   });
 
   // #627 Task 15d: the name field is optional now (the generator mints one
@@ -154,14 +154,23 @@ describe("Components create-as-route", () => {
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("Create component")).toBeTruthy());
     const submit = screen.getByText("Create component").closest("button") as HTMLButtonElement;
-    expect(submit.disabled).toBe(true); // no product chosen yet
+    expect(submit.disabled).toBe(false); // never greyed: an attempt names what is missing (#2440)
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("form-problems")).textContent).toContain("Product");
     const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
+    // Pressed while the platform is still naming it, Create does not report the
+    // name as missing: nothing is missing yet.
+    // The button holds (it is the platform's wait, not a gap), so nothing is
+    // posted without the draft's expected_name and nothing is listed missing.
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(screen.queryByTestId("form-problems")?.textContent ?? "").not.toContain("Name");
     // Enabled once the platform has ANSWERED, which is a round trip since #702
     // rather than a synchronous read of a catalog the picker had loaded. The
     // wait is the behaviour change: submitting before the answer lands would
     // post no precondition, so the gate holds until there is one.
-    await waitFor(() => expect(submit.disabled).toBe(false)); // name still blank, and that is fine
+    await waitFor(() => expect(screen.queryByTestId("form-problems")).toBeNull()); // name still blank, and that is fine
   });
 
   it("omits name from the create POST body when the field is left blank", async () => {
@@ -223,10 +232,11 @@ describe("Components create requires a product (#614)", () => {
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
     fireEvent.input(screen.getByPlaceholderText("Ceiling Mic 2"), { target: { value: "Spare Panel" } });
     const submit = screen.getByText("Create component").closest("button") as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("form-problems")).textContent).toContain("Product");
     const productSelect = screen.getByLabelText("Product") as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
-    await waitFor(() => expect(submit.disabled).toBe(false));
+    await waitFor(() => expect(screen.queryByTestId("form-problems")).toBeNull());
   });
 
   it("offers the generics as fallback choices in the Product picker", async () => {
@@ -253,9 +263,10 @@ describe("Components create requires a product (#614)", () => {
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
     fireEvent.input(screen.getByPlaceholderText("Ceiling Mic 2"), { target: { value: "Spare Panel" } });
     fireEvent.change(screen.getByLabelText("Product"), { target: { value: "generic-device" } });
-    await waitFor(() => expect((screen.getByText("Create component").closest("button") as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByText("Create component"));
-    await waitFor(() => expect(sent).toBeTruthy());
+    // The bar names the name until the platform has answered it, so the click
+    // is retried until it submits.
+    const createBtn = screen.getByText("Create component");
+    await waitFor(() => { if (!sent) fireEvent.click(createBtn); expect(sent).toBeTruthy(); });
     expect((sent as { product: string }).product).toBe("generic-device");
   });
 });
@@ -507,9 +518,10 @@ describe("Components create offers a system only to a user who may bind one", ()
     mount("/components/create", operatorMe);
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
     fireEvent.change(screen.getByLabelText("Product"), { target: { value: "generic-device" } });
-    await waitFor(() => expect((screen.getByText("Create component").closest("button") as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByText("Create component"));
-    await waitFor(() => expect(sent).toBeTruthy());
+    // The bar names the name until the platform has answered it, so the click
+    // is retried until it submits.
+    const createBtn = screen.getByText("Create component");
+    await waitFor(() => { if (!sent) fireEvent.click(createBtn); expect(sent).toBeTruthy(); });
     expect(sent).not.toHaveProperty("system");
     expect(drafted.length).toBeGreaterThan(0);
     for (const body of drafted) expect(body).not.toHaveProperty("system");

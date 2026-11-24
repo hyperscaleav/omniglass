@@ -249,7 +249,7 @@ func TestEventRuleTypeBackfillDown(t *testing.T) {
 	}
 	dsn := storagetest.NewDSN(t)
 	conn := connectDSN(t, dsn)
-	mustExec(t, conn, `insert into severity_level (name, rank) values ('info', 10), ('high', 40)`)
+	mustExec(t, conn, `insert into severity_level (name, rank, health_effect) values ('info', 10, 'none'), ('high', 40, 'outage')`)
 	mustExec(t, conn, `insert into event_type (name) values ('cond-x')`)
 	for _, r := range []struct{ name, severity string }{{"quiet", ""}, {"loud", "high"}} {
 		mustExec(t, conn, `insert into event_rule (name, sample_key, sample_lane, fire_criteria, severity, fire_event_type_id)

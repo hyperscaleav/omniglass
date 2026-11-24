@@ -41,6 +41,7 @@ const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: 
 const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], grants: [] };
 
 const DISPLAY = uuidFor("sim-display");
+const EP1 = uuidFor("sim-ep-1");
 const DSP = uuidFor("sim-dsp");
 
 const simRow = (id: string, name: string, hits: number, extra: Partial<SimComponent> = {}): SimComponent => ({
@@ -104,6 +105,7 @@ function stubFetch(answers: Record<string, unknown> = {}) {
       return json(a);
     }
     if (key === "GET /simulation") return json(current.fleet);
+    if (key === "GET /endpoints") return json({ endpoints: [] });
     if (path.endsWith("/simulation") && req.method === "GET") return json(componentSim);
     return json({ title: "Not Found", status: 404, detail: "unexpected request" }, 404);
   });
@@ -390,6 +392,33 @@ describe("the component page's Simulation section", () => {
     expect(section.querySelector("dl")?.classList.contains("items-baseline")).toBe(true);
   });
 
+  // A component aimed at a simulated device is served by that simulation, and
+  // its card says so beside the device's own address and status (#2461).
+  it("says which simulated component serves a component aimed at its address", async () => {
+    stubFetch();
+    const { qc } = mount(() => <SimulationSection componentId={DSP} />);
+    qc.setQueryData([...componentSimKey(DSP)], { ...componentSim, served_by: "display-1", served_by_id: DISPLAY });
+    const section = await screen.findByTestId("leaf-simulation");
+    expect(section.textContent).toContain("Served by");
+    expect(section.textContent).toContain("display-1");
+    // The drawer opens by the owner's uuid, not its (repeatable) name.
+    fireEvent.click(within(section).getByRole("button", { name: /Open simulation/ }));
+    const drawer = await screen.findByRole("dialog");
+    expect(drawer.textContent).toContain("127.60.0.2");
+  });
+
+  it("says what was already removed when the component delete fails after its endpoints went", async () => {
+    stubFetch({
+      "GET /endpoints": { endpoints: [{ id: EP1, name: "snmp", transport: "udp", component_id: DISPLAY }] },
+      [`DELETE /endpoints/${EP1}`]: {},
+      [`DELETE /components/${DISPLAY}`]: new Answer(409, { title: "Conflict", status: 409, detail: "still referenced" }),
+    });
+    answerConfirms(true);
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    expect((await screen.findByText(/already removed: its snmp endpoint/)).textContent).toContain("the component remains");
+  });
+
   it("says where a simulated component is served and opens its drawer", async () => {
     stubFetch();
     mount(() => <SimulationSection componentId={DISPLAY} />);
@@ -490,6 +519,29 @@ describe("the simulated component drawer's writes", () => {
     expect(keys).toContain(JSON.stringify(SIMULATION_KEY));
     expect(keys).toContain(JSON.stringify(COMPONENTS_KEY));
     expect(keys).toContain(JSON.stringify(componentSimKey(DISPLAY)));
+  });
+
+  // The server refuses to delete a component that still owns an endpoint, so
+  // Remove deletes the endpoints first, after the one confirmation that lists
+  // them (#2461).
+  it("removes the endpoints with the component, after one confirm that lists them", async () => {
+    stubFetch({
+      "GET /endpoints": { endpoints: [
+        { id: EP1, name: "tcp", transport: "tcp", component_id: DISPLAY, params: { target: "127.60.0.1:80" } },
+        { id: uuidFor("sim-ep-other"), name: "tcp", transport: "tcp", component_id: uuidFor("sim-someone") },
+      ] },
+      [`DELETE /endpoints/${EP1}`]: {},
+      [`DELETE /components/${DISPLAY}`]: {},
+    });
+    const confirm = answerConfirms(true);
+    const onClose = vi.fn();
+    mount(() => <SimComponentDrawer id={DISPLAY} onClose={onClose} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(confirm.mock.calls[0])).toContain("127.60.0.1");
+    const dels = calls.filter((c) => c.method === "DELETE").map((c) => c.path);
+    expect(dels).toEqual([`/endpoints/${EP1}`, `/components/${DISPLAY}`]);
   });
 
   it("sends nothing when the remove is not confirmed", async () => {

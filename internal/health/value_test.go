@@ -183,14 +183,25 @@ func TestRollUpAndComponentValue(t *testing.T) {
 	if got := health.ComponentValue(nil); got != health.Healthy {
 		t.Fatalf("no alarms = %v, want healthy", got)
 	}
-	if got := health.ComponentValue([]int{20}); got != health.Degraded {
-		t.Fatalf("a warning (rank 20) = %v, want degraded", got)
+	if got := health.ComponentValue([]string{"none", "none"}); got != health.Healthy {
+		t.Fatalf("only none-effect alarms = %v, want healthy", got)
 	}
-	if got := health.ComponentValue([]int{health.OutageRank - 1}); got != health.Degraded {
-		t.Fatalf("just below the outage floor = %v, want degraded", got)
+	if got := health.ComponentValue([]string{"none", "degraded"}); got != health.Degraded {
+		t.Fatalf("a degraded alarm among none = %v, want degraded", got)
 	}
-	if got := health.ComponentValue([]int{20, health.OutageRank}); got != health.Outage {
-		t.Fatalf("an alarm at the outage floor among others = %v, want outage", got)
+	if got := health.ComponentValue([]string{"degraded", "outage", "none"}); got != health.Outage {
+		t.Fatalf("an outage alarm among others = %v, want outage", got)
+	}
+	if got := health.ComponentValue([]string{"bogus"}); got != health.Degraded {
+		t.Fatalf("an unrecognized effect = %v, want degraded", got)
+	}
+}
+
+func TestDefaultEffect(t *testing.T) {
+	for rank, want := range map[int]string{1: "none", 19: "none", 20: "degraded", 39: "degraded", 40: "outage", 90: "outage"} {
+		if got := health.DefaultEffect(rank); got != want {
+			t.Errorf("DefaultEffect(%d) = %q, want %q", rank, got, want)
+		}
 	}
 }
 

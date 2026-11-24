@@ -2360,6 +2360,12 @@ components:
           type: string
         profile:
           type: string
+        served_by:
+          description: "The simulated component that answers for this one, when this component's endpoint is aimed at that component's address: it is served by that simulation and is not a simulation of its own (everything else here is that device's)."
+          type: string
+        served_by_id:
+          description: The uuid of served_by, the address the console opens it by (names repeat across locations).
+          type: string
         simulated:
           description: The component has an endpoint on an outpost and a product a profile simulates.
           type: boolean
@@ -3739,6 +3745,13 @@ components:
           type: string
         color:
           description: One of gray, blue, green, yellow, orange, red, darkred
+          type: string
+        health_effect:
+          description: What an open alarm at this level does to its component; omitted, derived from rank (below 20 none, below 40 degraded, else outage)
+          enum:
+            - none
+            - degraded
+            - outage
           type: string
         label:
           description: A human label
@@ -5715,6 +5728,13 @@ components:
           format: date-time
           type: string
         severity:
+          type: string
+        snoozed_by:
+          description: Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)
+          type: string
+        snoozed_until:
+          description: "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
+          format: date-time
           type: string
       required:
         - id
@@ -10247,7 +10267,7 @@ components:
           description: What is wrong, for the operator reading it later
           type: string
         severity:
-          description: "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage"
+          description: "How bad it is: a severity level by name (see /severity-levels); the level declares what the alarm does to the component (none, degraded or outage)"
           minLength: 1
           type: string
       required:
@@ -12161,6 +12181,13 @@ components:
             - red
             - darkred
           type: string
+        health_effect:
+          description: "What an open alarm at this level does to its own component: none (it does not affect health), degraded, or outage (the component stops filling its slots). Declared on the level, never implied by rank"
+          enum:
+            - none
+            - degraded
+            - outage
+          type: string
         id:
           description: The level's uuid, the stable form of name
           type: string
@@ -12173,7 +12200,8 @@ components:
           description: Shipped with the platform and read-only
           type: boolean
         outage:
-          description: Whether an active alarm at this level puts its component in outage (at or above the high level's rank); below it, an alarm degrades
+          deprecated: true
+          description: Deprecated alias of health_effect == outage, kept so released clients do not break; read health_effect
           type: boolean
         rank:
           description: "Compares levels: higher is more severe"
@@ -12185,6 +12213,7 @@ components:
         - color
         - rank
         - official
+        - health_effect
         - outage
       type: object
     SimBehaviorBody:
@@ -14961,6 +14990,13 @@ components:
           type: string
         color:
           description: One of gray, blue, green, yellow, orange, red, darkred
+          type: string
+        health_effect:
+          description: What an open alarm at this level does to its component; changing it recomputes every component with an open alarm at the level
+          enum:
+            - none
+            - degraded
+            - outage
           type: string
         label:
           description: A human label
@@ -17966,7 +18002,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     post:
-      description: "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Raises an alarm on this component, then recomputes health in the same transaction: the component's own health moves, and if it is now outage (an alarm at a level that declares outage), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location health with it; an alarm at a degraded level degrades the component but leaves it occupying its slots, and one at a level declaring none leaves it healthy and still listed. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: raise-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -18538,7 +18574,7 @@ paths:
       x-omniglass-permission: variable:read
   /components/{name}/events:
     get:
-      description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-events
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -18547,6 +18583,30 @@ paths:
           required: true
           schema:
             description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+        - description: Only occurrences of this event type, by name
+          explode: false
+          in: query
+          name: key
+          schema:
+            description: Only occurrences of this event type, by name
+            maxLength: 100
+            type: string
+        - description: Only occurrences from this transport
+          explode: false
+          in: query
+          name: source
+          schema:
+            description: Only occurrences from this transport
+            maxLength: 100
+            type: string
+        - description: Only occurrences whose message contains this text, case-insensitively
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: Only occurrences whose message contains this text, case-insensitively
+            maxLength: 200
             type: string
       responses:
         "200":
@@ -18841,6 +18901,14 @@ paths:
           schema:
             description: Only lines that arrived on this channel
             maxLength: 100
+            type: string
+        - description: Only lines whose message contains this text, case-insensitively
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: Only lines whose message contains this text, case-insensitively
+            maxLength: 200
             type: string
       responses:
         "200":
@@ -23616,7 +23684,7 @@ paths:
       x-omniglass-platform-permission: platform:update
   /severity-levels:
     get:
-      description: Lists the severity levels, least to most severe, each with whether an active alarm at it puts a component in outage. Gated by severity_level:read.
+      description: Lists the severity levels, least to most severe, each with its declared health effect (none, degraded or outage) on a component with an open alarm at it; outage remains as a deprecated alias of health_effect outage. Gated by severity_level:read.
       operationId: list-severity-level
       responses:
         "200":
@@ -23707,7 +23775,7 @@ paths:
       summary: Get a severity level
       x-omniglass-permission: severity_level:read
     patch:
-      description: Patches an operator level's name, label, color or rank (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
+      description: Patches an operator level's name, label, color, rank or health effect (an absent field is unchanged); a rename carries every alarm at the level with it. Official levels are read-only (409). Audited. Gated by severity_level:update, with an all-scope grant.
       operationId: update-severity-level
       parameters:
         - description: The level's name
@@ -24600,7 +24668,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/events:
     get:
-      description: Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      description: Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
       operationId: list-system-events
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -24609,6 +24677,30 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: Only occurrences of this event type, by name
+          explode: false
+          in: query
+          name: key
+          schema:
+            description: Only occurrences of this event type, by name
+            maxLength: 100
+            type: string
+        - description: Only occurrences from this transport
+          explode: false
+          in: query
+          name: source
+          schema:
+            description: Only occurrences from this transport
+            maxLength: 100
+            type: string
+        - description: Only occurrences whose message contains this text, case-insensitively
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: Only occurrences whose message contains this text, case-insensitively
+            maxLength: 200
             type: string
       responses:
         "200":
@@ -24709,6 +24801,14 @@ paths:
           schema:
             description: Only lines that arrived on this channel
             maxLength: 100
+            type: string
+        - description: Only lines whose message contains this text, case-insensitively
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: Only lines whose message contains this text, case-insensitively
+            maxLength: 200
             type: string
       responses:
         "200":

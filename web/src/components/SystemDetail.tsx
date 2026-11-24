@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -35,15 +35,13 @@ import { durationText } from "../lib/timeline";
 import { systemAlarms, systemAlarmsKey } from "../lib/alarms";
 import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
-import RuleLink from "./RuleLink";
 import SeverityBadge from "./SeverityBadge";
 import AlarmActions from "./AlarmActions";
+import { SnoozedBadge } from "./SnoozeButton";
 import { uptimeOver } from "../lib/uptime";
 import { stretchReasons, memberAlarmRows, stretchesOf, markerX, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
-import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
-import type { LogFilter } from "../lib/logs";
-import LogFilters from "./LogFilters";
+import OccurrenceList from "./OccurrenceList";
 import TimeRangePicker from "./TimeRangePicker";
 import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
@@ -137,6 +135,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const alarms = createMemo(() => (health.data ? alarmRows(health.data, scale().levels) : []));
   // Each alarm row in the Why strip opens its timeline in place (#950).
   const timelines = createTimelineToggles();
+  const snoozeSurface = createUniqueId();
   // The strip reads red when any alarm on it is at an outage level (the
   // catalog's flag, #917), amber when they only degrade.
   // An alarm on a member outside every slot moves nothing above it (ADR-2459),
@@ -189,18 +188,6 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const canViews = () => can(me.data, "view", "read");
   const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
   const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
-  const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity", refetchInterval: LEAF_POLL_MS }));
-  // The members' lines under the Logs filter (#1145): a severity threshold
-  // and a source, applied by the read.
-  const [logFilter, setLogFilter] = createSignal<LogFilter>({});
-  const logsQ = useQuery(() => ({
-    queryKey: systemLogsKey(id(), logFilter()),
-    queryFn: () => systemLogs(id(), logFilter()),
-    enabled: tab() === "activity",
-    refetchInterval: LEAF_POLL_MS,
-    placeholderData: (prev: SystemLogs | undefined) => prev,
-  }));
-  const logLines = () => logsQ.data?.logs ?? [];
   // The history's now: the coarse clock, but never behind the report's own
   // last edge, which a poll can bring in between two ticks (a stretch that
   // opened seconds ago would otherwise have a negative length and vanish).
@@ -551,58 +538,22 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
           </section>
         </Show>
         <Show when={tab() === "activity"}>
-          <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
-            <Eyebrow label="Events" hint="The system's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
-            <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
-              <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
-                <For each={eventsQ.data ?? []}>
-                  {(e) => {
-                    // Each row owns its toggle: a rule's fire and clear events
-                    // carry the same alarm, and opening one opens only that row.
-                    const eventTimelines = createTimelineToggles();
-                    return (
-                      <li class="flex flex-col gap-1.5 px-3 py-2">
-                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
-                          <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
-                          <span class="font-mono text-xs">{e.key}</span>
-                          <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
-                          {/* A rule's event names the rule and carries the alarm it moved (#951). */}
-                          <Show when={e.derived_by_rule}>{(rule) => <RuleLink name={rule()} id={e.derived_by_rule_id} />}</Show>
-                          <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id}>{eventTimelines.button(e.alarm_id!, e.message)}</Show>
-                        </div>
-                        <Show when={e.alarm_id && e.owner_kind === "component" && e.owner_id && eventTimelines.isOpen(e.alarm_id)}>
-                          <AlarmTimeline component={e.owner_id} alarmId={e.alarm_id!} id={eventTimelines.panelId(e.alarm_id!)} label={eventTimelines.label(e.message)} />
-                        </Show>
-                      </li>
-                    );
-                  }}
-                </For>
-              </ul>
-            </Show>
-          </section>
+          <div class="flex min-w-0 flex-col gap-5 p-4">
+            <OccurrenceList
+              kind="events"
+              scope={{ type: "system", name: id() }}
+              refetchMs={LEAF_POLL_MS}
+              hint="The system's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped."
+            />
+            <OccurrenceList
+              kind="logs"
+              scope={{ type: "system", name: id() }}
+              refetchMs={LEAF_POLL_MS}
+              hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; an outpost's own logs live on the outpost."
+            />
+          </div>
         </Show>
-        <Show when={tab() === "activity"}>
-          <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
-            <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; an outpost's own logs live on the outpost." />
-            <LogFilters filter={logFilter()} sources={logsQ.data?.sources ?? []} onChange={setLogFilter} />
-            <Show
-              when={logLines().length > 0}
-              fallback={<p class="text-sm text-base-content/50">{logFilter().severity || logFilter().source ? "No line matches the filter in the window." : "No lines in the window."}</p>}
-            >
-              <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
-                <For each={logLines()}>
-                  {(l) => (
-                    <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical" || l.severity === "alert" || l.severity === "emergency", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" || l.severity === "notice" || l.severity === "debug" }}>
-                      {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
-                    </div>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </section>
-        </Show>
-            <Show when={tab() === "overview" && vm()}>
+        <Show when={tab() === "overview" && vm()}>
               {(z) => (
                 <div data-testid="overview-tab" class="flex flex-col gap-5 p-4">
                   {/* Cause before arithmetic (#785): what is wrong, on which
@@ -639,10 +590,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 </span>
                               </Show>
                               <span data-testid="alarm-controls" class="ml-auto flex shrink-0 items-center gap-1">
+                                <SnoozedBadge alarm={{ id: a.id, snoozed_until: a.snoozedUntil ?? undefined, snoozed_by: a.snoozedBy }} />
                                 <AlarmActions
                                   componentId={a.componentId ?? ""}
-                                  alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged }}
-                                  show={{ ack: !!a.componentId, troubleshoot: true, command: !!a.componentId, timeline: a.componentId ? timelines : undefined }}
+                                  alarm={{ id: a.id, message: a.message, component: a.component, raised_at: a.raisedAt, acknowledged: a.acknowledged, snoozed_until: a.snoozedUntil ?? undefined, snoozed_by: a.snoozedBy }}
+                                  surface={snoozeSurface}
+                                  show={{ ack: !!a.componentId, snooze: !!a.componentId, troubleshoot: true, command: !!a.componentId, timeline: a.componentId ? timelines : undefined }}
                                 />
                               </span>
                             </div>

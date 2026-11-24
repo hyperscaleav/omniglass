@@ -211,7 +211,7 @@ capture list and the embed cannot drift, a `#id` with no frontmatter entry (or n
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
 
 Because the images track the live UI, they are refreshed like any generated artifact: a change
-to an operator surface **re-runs `make docs-shots` and commits the new PNGs**. Each capture
+to an operator surface is followed by **main re-running `make docs-shots`** after the merge (below); a PR itself commits only a new shot for a new `id`. Each capture
 writes **two renders of the same settled page**: the clean shot under
 `docs/public/screenshots/`, every region live, which is what the docs embed (a masked history
 strip teaches nothing); and its masked twin under `docs/screenshots/baseline/`, where the
@@ -228,21 +228,32 @@ passed a surface token swap. One caveat: a real UI change that falls entirely in
 region is invisible to the gate, which is the price of masking and the reason a mask names the
 smallest box that holds still around what moves.
 
-**Interim, until #2561 lands:** a PR does not re-render the docs shots. When a PR conflicts with main on a PNG it takes main's side, and the `freshness` job does not run on pull requests (it still runs on main, and `docs-shots-verify` still checks every PR's shots are declared and present). Main's shots are recaptured in one PR after a merge wave, and #2561 replaces that with a recapture on main after every merge.
+**Main refreshes the shots, a PR does not (#2561).** A PR never re-renders an existing docs shot: git
+cannot merge binaries, and every merge used to make the other open PRs conflict on the same PNGs. After a
+merge, the `recapture` job in `docs-shots.yml` recaptures both sets on main's tree; when anything changed it
+pushes the result to `claude/docs-shots-recapture` and opens (or updates) one PR titled "docs: recapture the
+docs screenshots", as the agents' App, which the architect approves like any other PR. Branch protection is
+untouched and nothing bypasses it. A concurrency group coalesces merges that land close together, and a run
+whose commit is no longer main's head stands down, so the latest main wins. What a PR commits: a **new** shot
+for a new `id` (a new file cannot conflict, and the docs build needs it), and its visual evidence under
+`.github/screenshots/<n>/`. A **guard** in the `verify` job (`scripts/docs-shots-guard.sh`) fails a PR whose
+diff modifies, deletes or renames an existing file under `docs/public/screenshots/` or
+`docs/screenshots/baseline/`; the recapture branch alone is exempt. `docs-shots-verify` still checks every
+PR's shots are declared and present. The `freshness` comparison (`make docs-shots-check`) does not run on
+pull requests, so a stale shot never reads red on a PR; `make docs-shots-check` stays the local proof that a
+recapture is stable.
 
 Capture on a committed tree. The console shows the build id it was built from, and a dirty
 tree stamps a long `-dirty-<time>` id where CI's clean checkout stamps a bare commit, which
 wraps and changes the height of the platform cards, so every shot of that page shifts. Commit
-the code, run `make docs-shots`, then commit the PNGs, and `make docs-shots-check` passes on
-the clean tree that follows.
+the code, run `make docs-shots`, then commit the PNGs (the recapture branch does this on main), and
+`make docs-shots-check` passes on the clean tree that follows.
 
 CI's runner is the canonical raster. The pinned browser picks its rasterizer's SIMD path from
 the host CPU, so a host without AVX2 (a generic virtual CPU) rounds some gradient pixels one
 level off from CI: repeatable on that host, and visible to an exact comparison (five pixels of
-the users page's avatar gradient, #774). When the freshness job fails only by such a residue on
-a PR that changed no UI there, adopt the job's own recapture, which it publishes to the
-`ci/docs-shots-recapture` ref (`git fetch origin ci/docs-shots-recapture`), instead of
-loosening the comparison or masking the element.
+the users page's avatar gradient, #774). When a local `make docs-shots-check` fails only by such a residue, adopt the CI
+recapture (the `claude/docs-shots-recapture` PR) instead of loosening the comparison or masking the element.
 
 ### A mask covers a box that holds still, and says that it is there
 

@@ -74,12 +74,19 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whether the row is absent or out of scope. A blade drilled over the root keeps its own stack and
   is not in the URL, and the param composes with the page's filter, sort and `?edit=1`. Every
   link into a drawer from another surface is `drawerHref(kind, address)`, never a hand-built string.
-- **Every page has the `Page` header.** A page opens with its title and a one-line hint, both read
-  from the nav metadata (`<Page route="/roles">`), so the sidebar, the top bar and the page say the
-  same words and a page never ships without one. A page that wraps a list takes the header like any
-  other; the full-page detail of a row renders its own heading instead. The header owns the title:
-  while a `Page` is mounted the top bar drops the title from its section label (keeping the group
-  and section, and its controls), and a route with no `Page` header keeps the full label there.
+- **The top bar is the page header: two lines.** A page's title and one-line hint are read from the
+  nav metadata (`<Page route="/roles">`) and rendered by the top bar in two lines, the same shape on
+  every page. Line 1 is the `h1` row, with the search, omnibot and notification controls at its right:
+  `Admin / Roles` on a list page, and on a detail page the kind's list as a link, the entity's label as the
+  `h1` and its primary system as a muted link in parentheses (`Components / Amplifier-1 (System ABC)`,
+  `Systems / System ABC`, `Locations / Room 201`). Line 2 is the muted hint on a list page, and on a
+  detail page the location path, each crumb a link (`HQ / Floor 2 / Room 201`), folding its middle
+  crumbs into an ellipsis menu by the measured width (`collapseTrail`, `trailBudget`,
+  `lib/breadcrumb.ts`). On a narrow window the controls stay on line 1, the `h1` truncates with an
+  ellipsis before anything wraps, and line 2 stays one line. `Page` feeds the bar its title, hint,
+  `kind`, `system` and `trail`; a route with no `Page` (Explore, Home, Profile) gets its nav label as
+  the same `h1`, so every page has exactly one `h1`, in the same place, and the body starts directly
+  under the bar. A detail page spends no body row on its breadcrumb.
 - **One drawer width rule.** A drawer is the narrow panel (`max-w-md`) unless its body carries a
   table or a timeline, which takes the wide one (`max-w-2xl`; `wide` on a `FlatList` detail or on
   `Drawer`). The alarm drawer (its timeline) and the audit drawer (its change table) are wide; a
@@ -184,6 +191,11 @@ a location holding none or several renders its own subject card,
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms draw their own inline rail through `FormActionBar` with the
   `inline` prop; a `FormActionBar inline` is the one full-page form rail the guard permits.
+  A form that cannot be submitted says why (#2440): the primary action stays enabled, and the
+  binding's `problems` make an attempt name each missing field in a sentence beside the actions
+  (`FormProblems`), mark the field and focus the first, all in TypeScript, never native `required`.
+  `disabled` is for in-flight and permission states only. `rail-ownership.test.ts` also fails a
+  form that draws its own submit button, outside a short allowlist of non-entity forms.
 - **A list page reads the same across the catalog (#2431).** One header height: the filter bar
   holds a button's height itself, so a list with no New button (templates, secret types) sits level
   with its siblings. While chips filter, the bar says `n of m`. An empty list shows its empty state
@@ -432,7 +444,7 @@ defect: a description that would not wrap was one bug in 24 fields.
 
 **A control in this console carries no `required`, `min`, `max`, `pattern` or `step`.** The rule is a
 pure function over the typed value, the surface renders its message inline beside the field, and the
-binding's `disabled` / `valid` refuses the submit
+binding's `problems` refuses the submit and names each field (`disabled` is only for in-flight and permission states)
 ([ADR-0113](/architecture/decisions/#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one)).
 `readSettleWindow` in `lib/command_types.ts` is the worked example and `lib/validate.ts` holds the
 shared ones (a handle, an email, a password floor, a token lifetime).

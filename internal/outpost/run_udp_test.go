@@ -207,7 +207,7 @@ func TestOutpostUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	s.waitFor("panel-2", ep2.Name, "endpoint-reachable", is("down"), "down")
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		evs, err := s.gw.ListComponentEvents(s.ctx, "panel-2", 0, 20)
+		evs, err := s.gw.ListComponentEvents(s.ctx, "panel-2", 0, 20, storage.EventFilter{})
 		if err != nil {
 			t.Fatal(err)
 		}
