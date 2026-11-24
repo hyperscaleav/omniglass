@@ -462,7 +462,7 @@ dropping rows silently.
 
 ## Configure
 
-Editing lives on the detail view (#800): the **Configure** tab leads with its rail (**Edit**, or **Cancel** and **Save changes** while editing, and **Delete** on the left), so the action is reachable without scrolling past the sections. It renders for anyone holding an
+Editing lives on the detail view (#800): the **Configure** tab carries its actions at the right end of the tab rail (**Edit** and a **⋯** menu holding **Delete**, or **Cancel** and **Save** while editing), so the action is reachable without scrolling past the sections. It renders for anyone holding an
 edit verb on the entity, and inside it the sections gate one by one. **Identity** carries
 the label (with the platform's pen) and the name with its advisory precheck; renaming
 breaks bookmarks and integrations by design, so the check and the consequence line sit
