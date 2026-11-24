@@ -139,7 +139,7 @@ on close), and never set Priority or the iteration: those are the architect's al
 ## House style
 
 - No em dashes in written artifacts; use commas, colons, periods, or parentheses.
-- Head-noun-last naming (`<qualifier>_<genus>`); match the [glossary](docs/src/content/docs/reference/glossary.md).
+- Head-noun-last naming (`<qualifier>_<genus>`); match the architecture glossary.
 - Any change that alters an operator-facing (UI) surface ships **live screenshots** in the PR
   body (driven against `make lab`, not mocked), per the PR template's Visual confirmation
   section. Host them with the `gh image` extension (`gh image <path>` auto-extracts the browser
