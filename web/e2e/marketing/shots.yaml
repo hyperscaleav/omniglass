@@ -153,7 +153,13 @@ shots:
         zoom: 2.2
         expect: ["Reachability lost", "Snooze"]
         hold: 500
-      - click: 'button:text-is("1 hour")'
+      # The Snooze menu opens with its first item, "15 minutes", focused. In the
+      # blade it opens behind the drawer (the menu is z-50, the blade z-61), so
+      # it is not on screen and cannot be clicked: the pick is made from the
+      # keyboard instead: the items are plain buttons, so Tab moves from "15 minutes"
+      # to "1 hour" (an arrow key does nothing here).
+      - press: Tab
+      - press: Enter
         hold: 200
       - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip] :text("snoozed until")' }
         focus: here
