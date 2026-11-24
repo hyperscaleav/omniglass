@@ -15,7 +15,7 @@ export default function TopBar(props: { section: string; title?: string | JSX.El
   const mod = shortcutModifier(hostPlatform());
   const hint = shortcutHint(hostPlatform(), "K");
   return (
-    <header class="navbar sticky top-0 z-20 min-h-14 gap-3 border-b border-base-300 bg-base-100/80 px-6 [&>*]:flex-none [&>div:first-child]:flex-initial backdrop-blur">
+    <header class="navbar sticky top-0 z-20 min-h-14 gap-3 border-b border-base-300 bg-base-100/80 px-6 backdrop-blur">
       <div data-testid="page-header" class="flex min-w-0 flex-col justify-center py-1">
         <div class="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
           <Show when={props.section}>
