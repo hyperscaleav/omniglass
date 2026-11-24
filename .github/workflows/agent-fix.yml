@@ -104,9 +104,10 @@ jobs:
           pr=$(gh pr view "$NUMBER" --repo "$REPO" --json headRefName,isCrossRepository,state,closingIssuesReferences)
           bot="${SLUG}[bot]"
           reviewer=""; [ -n "$REVIEWER_SLUG" ] && reviewer="${REVIEWER_SLUG}[bot]"
-          rounds=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate --jq '.[] | {user: .user.login, state}' \
-            | jq -s --arg bot "$bot" --arg reviewer "$reviewer" \
-              '[.[] | select((.user == $bot or .user == $reviewer) and .state == "CHANGES_REQUESTED")] | length')
+          # Rounds come from the marker each reviewer review carries (#2253): a
+          # dismissed review is no longer CHANGES_REQUESTED.
+          rounds=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate --jq '.[] | {user: .user.login, state, body: (.body // "")}' \
+            | jq -s -c . | bash trusted/scripts/agent-review.sh rounds "${bot},${reviewer}")
           case "$EVENT" in pull_request_review) kind=review ;; *) kind=comment ;; esac
           mentions=false; case "$BODY" in *@hyperscale-agent* | *@claude*) mentions=true ;; esac
           facts=$(jq -cn --argjson t "$teams" --argjson p "$pr" --arg event "$kind" --arg sender "$SENDER" \
