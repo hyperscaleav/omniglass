@@ -25,7 +25,7 @@ steps:
     caption: The label is yours now; the rule no longer rewrites it.
   - type: { target: '[data-testid="configure-face-location"] >> role=textbox[name="Label"]', text: ' Loading Dock' }
     caption: Say what the site calls it, so operators find it by that word.
-  - click: '[data-testid="configure-face-location"] >> role=button[name="Save changes"]'
+  - click: '[data-testid="configure-face-location"] >> role=button[name="Save"s]'
     caption: Save the location.
   - click: { role: tab, name: Overview }
     caption: Saved. Back on the system's overview, its title already reads the new label.

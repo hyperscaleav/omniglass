@@ -6,6 +6,7 @@ import KVStacked from "../components/KVStacked";
 import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel, channelOf } from "../lib/audit";
 import { diffFields, humanizeField, isTimestamp, type DiffRow } from "../lib/auditdiff";
 import Time from "../components/Time";
+import Tooltip from "../components/ui/Tooltip";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
 // sibling of the inventory TreeList, both wearing ListShell's chrome). Every
@@ -46,7 +47,7 @@ const CHANNEL_HINT =
 // beside an impersonator: the person is accountable, the agent is who acted.
 const AgentTag = (p: { agent?: string }) => (
   <Show when={p.agent}>
-    <span class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" title="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</span>
+    <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" content="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</Tooltip>
   </Show>
 );
 
@@ -59,7 +60,7 @@ const columns: FlatColumn<AuditEvent>[] = [
       <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <span class="font-data">{accountableLabel(e)}</span>
         <Show when={e.real_actor}>
-          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this user">as {actorLabel(e)}</span>
+          <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-warning badge-xs whitespace-nowrap" content="Acted while impersonating this user">as {actorLabel(e)}</Tooltip>
         </Show>
         <AgentTag agent={e.agent} />
       </span>
@@ -71,7 +72,7 @@ const columns: FlatColumn<AuditEvent>[] = [
         <span class="flex flex-col items-start gap-0.5">
           <span data-testid="audit-channel" class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
           <Show when={e.client}>
-            <span class="font-data text-[11px] text-base-content/50 truncate self-stretch" title={e.client}>{e.client}</span>
+            <Tooltip as="span" class="font-data text-[11px] text-base-content/50 truncate self-stretch" content={e.client}>{e.client}</Tooltip>
           </Show>
         </span>
       </Show>
@@ -79,7 +80,7 @@ const columns: FlatColumn<AuditEvent>[] = [
   },
   { key: "action", label: "Action", width: "120px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
   { key: "resource", label: "Resource", width: "170px", cell: (e) => <span class="font-data text-xs text-base-content/70">{e.resource}</span> },
-  { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40" title={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</span> },
+  { key: "id", label: "Id", cell: (e) => <Tooltip as="span" tabIndex={0} class="font-data text-[11px] text-base-content/40" content={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</Tooltip> },
 ];
 
 // The state-to-style vocabulary for a diff row: an added field tints the After
@@ -138,7 +139,7 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
           }
         />
         <KVStacked label="Action" value={<span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span>} />
-        <KVStacked label="Resource" value={<span class="font-data text-xs" title={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>} />
+        <KVStacked label="Resource" value={<Tooltip as="span" tabIndex={0} class="font-data text-xs" content={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</Tooltip>} />
         <KVStacked
           label="Channel"
           hint={CHANNEL_HINT}
@@ -197,7 +198,7 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
                 <For each={rows}>
                   {(r) => (
                     <tr>
-                      <td class="text-xs align-top" title={r.key}>{humanizeField(r.key)}</td>
+                      <td class="text-xs align-top"><Tooltip as="span" tabIndex={0} content={r.key}>{humanizeField(r.key)}</Tooltip></td>
                       <Show when={hasBefore}>
                         <td class={`${VALUE_CELL} ${diffCellClass(r, "before")}`}><DiffValue v={r.before} /></td>
                       </Show>
@@ -267,7 +268,7 @@ export default function Audit() {
           columns,
           empty: "No events yet.",
           detail: (e) => ({
-            title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
+            title: <Tooltip as="span" tabIndex={0} class="font-data text-sm" content={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</Tooltip>,
             body: <AuditDetail e={e} />,
             wide: true,
           }),

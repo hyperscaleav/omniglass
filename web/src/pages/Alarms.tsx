@@ -20,6 +20,7 @@ import Time from "../components/Time";
 import { fmtTime, rel } from "../lib/format";
 import { useSeverity } from "../lib/severity";
 import type { Chip } from "../lib/predicate";
+import Tooltip from "../components/ui/Tooltip";
 
 // Alarms (#2333): the fleet's alarm queue, the page an operator triages from.
 // Every active alarm the caller may read, worst severity first and newest first
@@ -102,9 +103,9 @@ export default function Alarms() {
         <span class="flex flex-col gap-0.5">
           <A href={`/components/${a.component_id}`} class="font-data text-sm hover:underline" onClick={(e) => e.stopPropagation()}>{a.component}</A>
           <span class="flex min-w-0 items-baseline gap-1.5 text-xs text-base-content/55">
-            <span class="max-w-40 truncate" title={a.message}>{a.message}</span>
+            <Tooltip as="span" class="max-w-40 truncate" content={a.message}>{a.message}</Tooltip>
             <Show when={a.raised_by_rule}>
-              {(rule) => <A href={drawerHref("event_rule", rule())} class="flex-none font-data text-[11px] text-base-content/50 hover:text-base-content hover:underline" title="The rule that raised this alarm" onClick={(e) => e.stopPropagation()}>{rule()}</A>}
+              {(rule) => <Tooltip as={A} href={drawerHref("event_rule", rule())} class="flex-none font-data text-[11px] text-base-content/50 hover:text-base-content hover:underline" content="The rule that raised this alarm" onClick={(e) => e.stopPropagation()}>{rule()}</Tooltip>}
             </Show>
           </span>
         </span>
@@ -128,11 +129,12 @@ export default function Alarms() {
     },
     {
       key: "location", label: "Location", cell: (a) => (
-        <span class="font-data text-xs text-base-content/70" title={a.location_path}>
-          <Show when={a.location_id} fallback={a.location}>
-            {(id) => <A href={`/locations/${id()}`} class="hover:underline" onClick={(e) => e.stopPropagation()}>{a.location}</A>}
-          </Show>
-        </span>
+        <Show
+          when={a.location_id}
+          fallback={<Tooltip as="span" tabIndex={0} class="font-data text-xs text-base-content/70" content={a.location_path}>{a.location}</Tooltip>}
+        >
+          {(id) => <Tooltip as={A} href={`/locations/${id()}`} class="font-data text-xs text-base-content/70 hover:underline" content={a.location_path} onClick={(e: MouseEvent) => e.stopPropagation()}>{a.location}</Tooltip>}
+        </Show>
       ),
     },
     {
@@ -145,9 +147,9 @@ export default function Alarms() {
     },
     {
       key: "cleared", label: "Cleared", width: "84px", sortVal: (a) => (a.cleared_at ? ms(a.cleared_at) : Number.MAX_SAFE_INTEGER), cell: (a) => (
-        <span class="inline-block w-[8ch] whitespace-nowrap text-xs tnum text-base-content/60" data-testid="alarm-cleared" title={a.cleared_at ? fmtTime(a.cleared_at) : "Still raised"}>
+        <Tooltip as="span" tabIndex={0} class="inline-block w-[8ch] whitespace-nowrap text-xs tnum text-base-content/60" data-testid="alarm-cleared" content={a.cleared_at ? fmtTime(a.cleared_at) : "Still raised"}>
           <Show when={a.cleared_at} fallback="open">{(at) => rel(at(), now())}</Show>
-        </span>
+        </Tooltip>
       ),
     },
     {
@@ -156,8 +158,8 @@ export default function Alarms() {
     {
       key: "state", label: "State", width: "160px", cell: (a) => (
         <span class="flex flex-wrap items-center gap-1">
-          <Show when={a.acknowledged} fallback={<span class="badge badge-ghost badge-xs" title="Nobody has recorded seeing this alarm">new</span>}>
-            <span class="badge badge-soft badge-success badge-xs whitespace-nowrap" title={a.acknowledged_by ? `Acknowledged by ${a.acknowledged_by}` : "Acknowledged"}>{a.acknowledged_by ? `acked by ${a.acknowledged_by}` : "acked"}</span>
+          <Show when={a.acknowledged} fallback={<Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-xs" content="Nobody has recorded seeing this alarm">new</Tooltip>}>
+            <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-success badge-xs whitespace-nowrap" content={a.acknowledged_by ? `Acknowledged by ${a.acknowledged_by}` : "Acknowledged"}>{a.acknowledged_by ? `acked by ${a.acknowledged_by}` : "acked"}</Tooltip>
           </Show>
           <SnoozedBadge alarm={a} />
         </span>

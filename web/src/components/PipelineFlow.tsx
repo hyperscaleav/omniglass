@@ -16,6 +16,7 @@ import {
   type PlatformPipelineFigure,
   type PlatformPipelineHop,
 } from "../lib/platformhealth";
+import Tooltip from "./ui/Tooltip";
 
 // Where work is lost (#1646): the path an item takes from its run to the store,
 // drawn as the hops the view returns, in the order an item crosses them. Each
@@ -175,7 +176,7 @@ function HopDetail(props: { hop: PlatformPipelineHop; pipeline: PlatformPipeline
           <KeyedFor each={props.hop.by_component} by={(c) => c.component} fallback={<li class="text-xs text-base-content/50">No component has recorded this hop yet.</li>}>
             {(c) => (
               <li data-testid={`pipeline-component-${c().name}`} class="flex flex-wrap items-baseline justify-between gap-2">
-                <A href={`/components/${c().component}`} class="font-medium hover:underline" title="Open the component, where each delivery series lives">{c().name}</A>
+                <Tooltip as={A} href={`/components/${c().component}`} class="font-medium hover:underline" content="Open the component, where each delivery series lives">{c().name}</Tooltip>
                 <Figures figure={componentFigure(c(), props.kind)} />
               </li>
             )}

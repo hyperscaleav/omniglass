@@ -7,6 +7,7 @@ import { describeError } from "../lib/format";
 import { pushToast } from "../lib/toast";
 import { applyFaultSteps, activeFaults, age, restoreSteps, skippedRestores, type HeldFault } from "../lib/simfaults";
 import { componentSimKey, getComponentSim, componentSimPollMs, toImpairment, type SimComponent } from "../lib/simulation";
+import Tooltip from "./ui/Tooltip";
 
 // SimFaultChip: what an operator has broken on a simulated device, as one chip
 // with how long it has been so and a one-click clear (#2462). It reads the
@@ -52,10 +53,10 @@ export default function SimFaultChip(props: {
 
   return (
     <Show when={faults().length > 0}>
-      <span
+      <Tooltip as="span" tabIndex={0}
         class="badge badge-soft badge-warning max-w-full min-w-0 gap-1 whitespace-nowrap pr-0.5"
         classList={{ "badge-sm": (props.size ?? "sm") === "sm", "badge-xs": props.size === "xs", "pr-2": !canClear() }}
-        title={faults().map((f) => (f.since ? `${f.label}, ${age(f.since)}` : f.label)).join("; ")}
+        content={faults().map((f) => (f.since ? `${f.label}, ${age(f.since)}` : f.label)).join("; ")}
         data-testid="sim-fault-chip"
       >
         <Plug size={12} />
@@ -83,7 +84,7 @@ export default function SimFaultChip(props: {
             />
           </span>
         </Show>
-      </span>
+      </Tooltip>
     </Show>
   );
 }

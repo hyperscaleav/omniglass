@@ -30,9 +30,11 @@ docs-shots docs-shots-check: BUILD_ID := $(SHOTS_VERSION)
 docs-shots docs-shots-check: export OMNIGLASS_LAB_IMAGE := omniglass:dev-$(SHOTS_VERSION)
 HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/windows/' -e 's/^msys.*/windows/' -e 's/^cygwin.*/windows/')
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+# The Go version comes from go.mod alone (#2596); the Dockerfile has no default.
+GO_VERSION := $(shell bash scripts/go-version.sh)
 all:
-	docker build -t omniglass:dev -t omniglass:dev-$(BUILD_ID) --build-arg VERSION=$(BUILD_ID) .
-	docker build --target hostbin --build-arg VERSION=$(BUILD_ID) \
+	docker build -t omniglass:dev -t omniglass:dev-$(BUILD_ID) --build-arg VERSION=$(BUILD_ID) --build-arg GO_VERSION=$(GO_VERSION) .
+	docker build --target hostbin --build-arg VERSION=$(BUILD_ID) --build-arg GO_VERSION=$(GO_VERSION) \
 		--build-arg HOSTOS=$(HOST_OS) --build-arg HOSTARCH=$(HOST_ARCH) --output type=local,dest=bin .
 	@echo "built omniglass:dev-$(BUILD_ID) (also tagged omniglass:dev) and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
 
@@ -121,7 +123,7 @@ IMAGE   ?= omniglass
 TAG     ?= dev
 VERSION ?= $(BUILD_ID)
 image:
-	docker build -t $(IMAGE):$(TAG) --build-arg VERSION=$(VERSION) .
+	docker build -t $(IMAGE):$(TAG) --build-arg VERSION=$(VERSION) --build-arg GO_VERSION=$(GO_VERSION) .
 
 # Regenerate the derived artifacts from the Huma API (the source of truth): the
 # OpenAPI 3.1 document (server-less, into api/openapi.{json,yaml}), the cobra
@@ -227,6 +229,7 @@ migration-check:
 # Needs Docker (make test and gen's erdgen use testcontainers) and BASE fetched:
 # git fetch origin main.
 preflight:
+	bash scripts/check-go-pin.sh
 	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).before
 	$(MAKE) gen
 	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).after

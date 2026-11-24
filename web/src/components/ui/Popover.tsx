@@ -1,5 +1,8 @@
 import { type JSX, splitProps } from "solid-js";
+import { Show } from "solid-js";
 import { Popover as K } from "@kobalte/core/popover";
+import { Tooltip as KT } from "@kobalte/core/tooltip";
+import { TOOLTIP_CLASS } from "./Tooltip";
 import type { Placement } from "./placement";
 
 // Popover: a floating panel opened by a button (#2485), over Kobalte Popover:
@@ -36,7 +39,15 @@ export default function Popover(props: PopoverProps) {
   );
   return (
     <K placement={root.placement ?? "bottom-end"} gutter={root.gutter ?? 4} open={root.open} onOpenChange={root.onOpenChange}>
-      <K.Trigger {...trigger}>{own.children}</K.Trigger>
+      <Show when={trigger.title} fallback={<K.Trigger {...trigger}>{own.children}</K.Trigger>}>
+        {/* a title is a tooltip (#2486): shown on hover and keyboard focus, not the native attribute */}
+        <KT gutter={4} openDelay={150} closeDelay={100}>
+          <KT.Trigger as={K.Trigger} {...(trigger as object)} title={undefined}>{own.children}</KT.Trigger>
+          <KT.Portal>
+            <KT.Content class={TOOLTIP_CLASS}>{trigger.title}</KT.Content>
+          </KT.Portal>
+        </KT>
+      </Show>
       <K.Portal>
         <K.Content
           class={own.contentClass ?? POPOVER_CLASS}

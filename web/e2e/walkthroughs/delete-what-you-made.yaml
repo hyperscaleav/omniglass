@@ -17,7 +17,9 @@ setup:
 steps:
   - goto: /components/pop-up-display?tab=configure
     caption: A display made for a pop-up event. Its Configure tab holds Delete, behind its own permission.
-  - click: '[data-testid="configure-face"] >> role=button[name="Delete"s]'
+  - click: '[data-testid="tab-rail"] >> role=button[name="More actions"]'
+    caption: Delete sits in the actions menu at the right of the tab rail.
+  - click: 'role=button[name="Delete"s]'
     caption: Delete it.
   - click: '[role=alertdialog] footer >> role=button[name="Delete component"]'
     caption: The console's one confirm names the thing and says what goes with it. The red button carries the verb.
@@ -36,8 +38,10 @@ steps:
     caption: The component is gone. The page leaves for Explore.
   - goto: /locations/pop-up-site?tab=configure
     caption: Now the site. It holds one system, so its address opens the system, with the site's own section first.
-  - click: '[data-testid="configure-face-location"] >> role=button[name="Delete"s]'
-    caption: The site's own Delete.
+  - click: '[data-testid="configure-face-location"] >> role=button[name="More actions"]'
+    caption: The site's own actions menu.
+  - click: 'role=button[name="Delete"s]'
+    caption: Its Delete.
   - click: '[role=alertdialog] footer >> role=button[name="Delete location"]'
     caption: Confirm.
   - wait: { selector: '[data-testid="delete-blockers"] a:has-text("Pop-up kiosk")' }

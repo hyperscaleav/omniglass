@@ -97,7 +97,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   component: relative ("4m ago") with the absolute time and the exact RFC 3339 instant on hover
   and focus (`Time absolute` where a relative age says nothing, such as a before/after pair). A
   recorded field name in the audit change table is humanized (`humanizeField`: "Last orphaned at"),
-  the recorded key kept as the hover title.
+  the recorded key kept in the field's tooltip, shown on hover and on focus.
 - **A filter bar's placeholder is lower case** ("filter by name, type…"), pinned by
   `filter-placeholder-guard.test.ts`.
 - **An empty list that has a create action teaches.** `FlatList`'s `empty` takes a function that
@@ -143,7 +143,7 @@ a location holding none or several renders its own subject card,
   title and Expand. The host holds the active tab (`lib/tabstate`: the page's `?tab=`, a blade's
   own signal, so a blade never rewrites the page beneath it; `OutlineWorkspace` takes the same
   `host` for its filter), whether Edit answers `?edit=`, and where Delete leaves to. Editing is
-  the Configure tab's `ConfigureFace` in both hosts, Delete in its footer. A body lays its
+  the Configure tab's `ConfigureFace` in both hosts, Delete in its top rail. A body lays its
   sections out by container query (the body root is `@container`; use `@3xl:` and the like,
   never `md:`), so the wide fleet blade (`BladeDef.width: "wide"`, about 720 px) reads one
   column and the page two. A body opens related entities on the ambient stack (`useBlades`),
@@ -196,6 +196,14 @@ a location holding none or several renders its own subject card,
   (`FormProblems`), mark the field and focus the first, all in TypeScript, never native `required`.
   `disabled` is for in-flight and permission states only. `rail-ownership.test.ts` also fails a
   form that draws its own submit button, outside a short allowlist of non-entity forms.
+- **An entity's actions live at the top right of its tab rail (#2439).** On a detail body (component,
+  system, location, on the page and in the blade) Configure draws its actions at the right end of the
+  `TabRail`, inline with the tabs and not in a row of their own: a small primary `Edit` and a `⋯` menu
+  (the `ui/Popover` wrapper) holding `Delete` as a destructive item; while editing, `Cancel` and
+  `Save` side by side in the same place, Save primary. Delete still asks through the confirmation
+  dialog, and a tab switch still asks through the leave guard. The host hands the rail's end element to
+  `ConfigureFace` (`TabRail`'s `endRef`); a face with no rail to draw on (a sole system's location
+  section) keeps a short row of the same actions at its head.
 - **A list page reads the same across the catalog (#2431).** One header height: the filter bar
   holds a button's height itself, so a list with no New button (templates, secret types) sits level
   with its siblings. While chips filter, the bar says `n of m`. An empty list shows its empty state
@@ -352,7 +360,7 @@ same keys and focus, and the library underneath is swappable in one directory.
 | A decision that needs reading | `ConfirmDialog` | Cancel takes the focus; the body can teach |
 | Any destructive confirm | `confirmDelete` / `confirmAction` (`lib/confirm`) | one line at the site; renders the one `ConfirmDialog`; `run` lists a refused delete's blockers |
 | A floating panel from a button | `Popover` | the column menu, Snooze, Add under |
-| Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>` |
+| Help on hover or focus | `Tooltip` | `InfoTip` is the (i) built on it; never inside a `<label>`. Never the native `title` attribute: it never shows on keyboard focus (a guard test bars it). `Button` and `Popover` take a `title` prop and render the tooltip; a truncated value is `Truncate` |
 | A short fixed list with drawn options | `Select` | `TreeSelect` is built on it |
 | Choose from a long list by typing | `Picker` | single or `multiple`; `detail` tells two same-named rows apart; `onCreate` adds the create row; works inside a `Drawer` |
 | Find by typing, results from the server | `Search` | grouped rows the caller already filtered; the palette's field. The list renders inside its dialog (never portalled out of it); the first row is the default and Enter takes it |

@@ -26,6 +26,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { pendingTriage, requestTriage } from "../lib/handover";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { clickDelete } from "./configure.testkit";
 import { answerConfirms } from "../lib/confirm.testkit";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
@@ -279,7 +280,7 @@ describe("the blade's tab and edit are its own", () => {
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
     const face = await within(blade).findByTestId("configure-face");
     expect(within(blade).queryByDisplayValue("boardroom-a")).toBeNull();
-    fireEvent.click(await within(face).findByRole("button", { name: "Edit" }));
+    fireEvent.click(await within(await within(blade).findByTestId("tab-rail")).findByRole("button", { name: "Edit" }));
     expect(await within(face).findByDisplayValue("boardroom")).toBeTruthy();
     expect(window.location.search).toBe("?edit=location");
   });
@@ -294,7 +295,7 @@ describe("the blade's tab and edit are its own", () => {
     const asked = answerConfirms(false);
     mountPage(`/web/systems/${SID}?tab=configure`, qc);
     const face = await screen.findByTestId("configure-face-location");
-    fireEvent.click(await within(face).findByRole("button", { name: "Delete" }));
+    await clickDelete(face);
     await waitFor(() => expect(asked).toHaveBeenCalledWith(expect.stringContaining('Delete location "boardroom-a"?')));
   });
 
@@ -302,7 +303,7 @@ describe("the blade's tab and edit are its own", () => {
     mountPage(`/web/systems/${SID}?tab=configure`);
     const face = await screen.findByTestId("configure-face-location");
     await within(face).findByRole("button", { name: "Edit" });
-    expect(within(face).queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(within(face).queryByRole("button", { name: "More actions" })).toBeNull();
   });
 
   it("closing the blade with unsaved drafts asks first", async () => {
@@ -311,7 +312,7 @@ describe("the blade's tab and edit are its own", () => {
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
     const face = await within(blade).findByTestId("configure-face");
-    fireEvent.click(await within(face).findByRole("button", { name: "Edit" }));
+    fireEvent.click(await within(await within(blade).findByTestId("tab-rail")).findByRole("button", { name: "Edit" }));
     fireEvent.input(await within(face).findByDisplayValue("boardroom"), { target: { value: "boardroom-2" } });
     fireEvent.click(within(blade).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(asked).toHaveBeenCalled());
@@ -324,8 +325,7 @@ describe("the blade's tab and edit are its own", () => {
     const r = mountBlade();
     const blade = await screen.findByRole("dialog");
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
-    const face = await within(blade).findByTestId("configure-face");
-    fireEvent.click(await within(face).findByRole("button", { name: "Delete" }));
+    await clickDelete(blade);
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
   });
 });

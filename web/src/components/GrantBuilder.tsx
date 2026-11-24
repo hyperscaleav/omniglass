@@ -19,6 +19,7 @@ import type { ScopeKind } from "../lib/users";
 import { describeError } from "../lib/format";
 import { Save, X } from "./icons";
 import Button from "./Button";
+import Tooltip from "./ui/Tooltip";
 
 // GrantBuilder is the filter-bar-style scope editor: a keyboard-staged combobox
 // (role -> scope kind -> entity) builds a chip, and the whole set of changes is
@@ -247,14 +248,14 @@ export default function GrantBuilder(props: {
       <div class="flex flex-wrap items-center gap-1.5">
         <For each={chipStates(props.current, draft())} fallback={<span class="text-xs text-base-content/40">No grants yet. This user can sign in but has no permissions.</span>}>
           {(c) => (
-            <span
+            <Tooltip as="span" tabIndex={0}
               class="inline-flex items-center gap-1 rounded-field border py-[3px] pl-2.5 pr-1 font-data text-[11px]"
               classList={{
                 "border-primary/40 bg-primary/10": c.kind === "unchanged",
                 "border-success/50 bg-success/10 text-success": c.kind === "added",
                 "border-base-300 bg-base-100 text-base-content/40 line-through": c.kind === "removed",
               }}
-              title={c.kind === "removed" ? "Marked for removal on save" : c.kind === "added" ? "New, applied on save" : undefined}
+              content={c.kind === "removed" ? "Marked for removal on save" : c.kind === "added" ? "New, applied on save" : undefined}
             >
               {chipLabel(c.grant)}
               <Show when={props.canRevoke || c.kind === "added"}>
@@ -274,7 +275,7 @@ export default function GrantBuilder(props: {
                   </button>
                 </Show>
               </Show>
-            </span>
+            </Tooltip>
           )}
         </For>
       </div>
@@ -319,11 +320,11 @@ export default function GrantBuilder(props: {
               <For each={suggestions()}>
                 {(s, i) => (
                   <li>
-                    <button
+                    <Tooltip
                       id={`${listId}-opt-${i()}`}
                       role="option"
                       aria-selected={sel() === i()}
-                      title={s.kind === "role" ? s.title : undefined}
+                      content={s.kind === "role" ? s.title : undefined}
                       class="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-sm"
                       classList={{ "bg-primary/15": sel() === i() }}
                       style={s.kind === "entity" ? { "padding-left": `${0.5 + (s.depth ?? 0) * 0.85}rem` } : undefined}
@@ -338,12 +339,12 @@ export default function GrantBuilder(props: {
                         <span class="font-data text-[11px] text-base-content/40">{(s as { value: string }).value}</span>
                       </Show>
                       <Show when={stage() === "role"}>
-                        <span class="ml-auto text-xs text-base-content/40" title="hover a role to see its permissions">?</span>
+                        <span aria-hidden="true" class="ml-auto text-xs text-base-content/40">?</span>
                       </Show>
                       <Show when={s.kind === "op"}>
                         <span class="ml-auto pl-2 text-right text-[11px] text-base-content/40">{(s as { hint: string }).hint}</span>
                       </Show>
-                    </button>
+                    </Tooltip>
                   </li>
                 )}
               </For>

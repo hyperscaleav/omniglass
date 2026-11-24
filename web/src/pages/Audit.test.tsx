@@ -3,6 +3,7 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import Audit from "./Audit";
 import { AUDIT_PAGE, AUDIT_LOADING_ROWS, type AuditEvent } from "../lib/audit";
 import { uuidFor } from "../lib/testids";
+import { tipOf } from "../test-tip";
 
 // The Audit page renders the trail newest-first (resolving the actor to a name and
 // marking an impersonated action), and wears the list-view standard: the shared
@@ -199,7 +200,7 @@ describe("Audit resource labels (ADR-0062)", () => {
   it("shows the handle from the row's image in the Id column, uuid on hover", async () => {
     const { findByText, getByText } = render(() => <Audit />);
     expect(await findByText("core-snmp")).toBeTruthy();
-    expect(getByText("core-snmp").getAttribute("title")).toContain("00000000-0000-4000-8000-00000000aaaa");
+    expect(await tipOf(getByText("core-snmp"))).toContain("00000000-0000-4000-8000-00000000aaaa");
   });
 
   it("falls back to the raw resource_id when no image carries a name", async () => {
@@ -364,7 +365,7 @@ describe("Audit change table, humanized (#2447)", () => {
     fireEvent.click(await findByText("update"));
     const dialog = await screen.findByRole("dialog");
     const field = within(dialog).getByText("Last orphaned at");
-    expect(field.getAttribute("title")).toBe("LastOrphanedAt");
+    expect(await tipOf(field)).toBe("LastOrphanedAt");
     expect(within(dialog).getByText("Platform component ID")).toBeTruthy();
     // No raw ISO string is printed as text anywhere in the table.
     expect(dialog.querySelector("table")!.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T/);

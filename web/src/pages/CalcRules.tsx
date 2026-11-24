@@ -58,6 +58,8 @@ import {
   withInputKey,
 } from "../lib/calc_rules";
 import { confirmDelete } from "../lib/confirm";
+import Tooltip from "../components/ui/Tooltip";
+import Truncate from "../components/ui/Truncate";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
 // calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
@@ -113,7 +115,7 @@ function ownerBadge(kind: OwnerKind): JSX.Element {
 
 function inputsCell(r: CalcRule): JSX.Element {
   return (
-    <span class="flex min-w-0 flex-col leading-snug" title={r.inputs.map((i) => `${i.alias} = ${i.key}`).join(", ")}>
+    <Tooltip as="span" tabIndex={0} class="flex min-w-0 flex-col leading-snug" content={r.inputs.map((i) => `${i.alias} = ${i.key}`).join(", ")}>
       <For each={r.inputs.slice(0, 2)}>
         {(i) => (
           <span class="truncate text-[12px]">
@@ -124,7 +126,7 @@ function inputsCell(r: CalcRule): JSX.Element {
       <Show when={r.inputs.length > 2}>
         <span class="text-[11px] text-base-content/40">and {r.inputs.length - 2} more</span>
       </Show>
-    </span>
+    </Tooltip>
   );
 }
 
@@ -133,12 +135,12 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
     <Show
       when={!p.rule.calc_error}
       fallback={
-        <span data-calc-error={p.rule.name} class="text-[12px] leading-snug text-error" title={p.rule.calc_error!.message}>
+        <Tooltip as="span" tabIndex={0} data-calc-error={p.rule.name} class="text-[12px] leading-snug text-error" content={p.rule.calc_error!.message}>
           reduce does not compile
-        </span>
+        </Tooltip>
       }
     >
-      <code class="truncate font-data text-[12px]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
+      <Truncate as="code" class="font-data text-[12px]" text={p.rule.reduce.expr} />
     </Show>
   );
 }
@@ -149,7 +151,7 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
 function CalcLive(p: { rule: CalcRule }): JSX.Element {
   const r = () => p.rule;
   return (
-    <span class="inline-flex flex-wrap items-center gap-1" data-live={r().name} title={liveWords(r())}>
+    <Tooltip as="span" tabIndex={0} class="inline-flex flex-wrap items-center gap-1" data-live={r().name} content={liveWords(r())}>
       <Show when={!r().enabled}>
         <span class="badge badge-ghost badge-sm">disabled</span>
       </Show>
@@ -168,7 +170,7 @@ function CalcLive(p: { rule: CalcRule }): JSX.Element {
       <Show when={r().enabled && r().owners_computed + r().owners_pending + r().owners_unsupported + r().owners_failed === 0}>
         <span class="text-[12px] text-base-content/40">nothing yet</span>
       </Show>
-    </span>
+    </Tooltip>
   );
 }
 
@@ -291,7 +293,7 @@ function SelectorFacts(p: { rule: CalcRule }): JSX.Element {
   return (
     <Show when={types().length + ids().length > 0} fallback={<span class="text-sm text-base-content/60">{sys() ? "Every system" : "Every component"}</span>}>
       <div class="flex flex-wrap gap-1.5">
-        <For each={types()}>{(t) => <span class="badge badge-ghost badge-sm" title={sys() ? "System type" : "Component type"}><CatalogRef kind={sys() ? "system_type" : "component_type"} name={t} /></span>}</For>
+        <For each={types()}>{(t) => <Tooltip as="span" tabIndex={0} class="badge badge-ghost badge-sm" content={sys() ? "System type" : "Component type"}><CatalogRef kind={sys() ? "system_type" : "component_type"} name={t} /></Tooltip>}</For>
         <For each={ids()}>
           {(id) => <A href={`/${sys() ? "systems" : "components"}/${id}`} class="badge badge-outline badge-sm hover:underline">{nameOf(id)}</A>}
         </For>
@@ -336,10 +338,10 @@ function StateRow(p: { o: CalcOwnerState }): JSX.Element {
         </Show>
         <span class="ml-auto flex flex-none items-center gap-2">
           <Show when={p.o.pending}>
-            <span class="badge badge-soft badge-info badge-sm" title={p.o.due_at ? `due ${fmtTime(p.o.due_at)}` : "computes on the next tick"}>pending</span>
+            <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-info badge-sm" content={p.o.due_at ? `due ${fmtTime(p.o.due_at)}` : "computes on the next tick"}>pending</Tooltip>
           </Show>
           <Show when={p.o.computed_at}>
-            {(at) => <span class="w-16 text-right text-[11px] text-base-content/50" title={`${fmtTime(at())}, version ${p.o.rule_version}`}>{rel(at())}</span>}
+            {(at) => <Tooltip as="span" tabIndex={0} class="w-16 text-right text-[11px] text-base-content/50" content={`${fmtTime(at())}, version ${p.o.rule_version}`}>{rel(at())}</Tooltip>}
           </Show>
         </span>
       </span>

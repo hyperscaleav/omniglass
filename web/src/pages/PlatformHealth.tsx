@@ -52,6 +52,7 @@ import {
   type PlatformServer,
   type PlatformView,
 } from "../lib/platformhealth";
+import Tooltip from "../components/ui/Tooltip";
 
 // Platform health (#1644): whether Omniglass itself is well. Every figure here
 // is a sample on a platform component the fleet already has (each outpost and each
@@ -156,7 +157,7 @@ function Header(props: { view: PlatformView }) {
         {(s) => (
           <>
             <Fact label="Version" sub={s().name}>
-              <span class="tnum block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={s().version ?? undefined} data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
+              <Tooltip as="span" tabIndex={0} class="tnum block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" content={s().version ?? undefined} data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</Tooltip>
             </Fact>
             <Fact label="Up for" sub={s().started_at ? `since ${fmtTime(s().started_at!)}` : "no start time written yet"}>
               <span class="tnum" data-testid="platform-uptime">{serverUptime(props.view.read_at, s().started_at) ?? NOT_REPORTED}</span>
@@ -270,7 +271,7 @@ function OutpostCards(props: { view: PlatformView }) {
                     const text = () => figureText(n(), c());
                     return (
                       <div class="flex min-w-0 items-baseline justify-between gap-2">
-                        <dt class="truncate text-base-content/60" title={c().label}>{c().label}</dt>
+                        <Tooltip as="dt" class="truncate text-base-content/60" content={c().label}>{c().label}</Tooltip>
                         <dd class="tnum whitespace-nowrap" classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(n(), c()) }}>{text()}</dd>
                       </div>
                     );
@@ -339,9 +340,9 @@ function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
         </td>
       </Show>
       <td class="text-right">
-        <A href={drawerHref("outpost", props.outpost.name)} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} title="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
+        <Tooltip as={A} href={drawerHref("outpost", props.outpost.name)} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} content="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
           <ArrowUpRight size={14} />
-        </A>
+        </Tooltip>
       </td>
     </tr>
   );
@@ -470,11 +471,11 @@ function Section(props: { section: PanelSection; server: PlatformServer; view: P
       <KeyedFor each={props.section.rows} by={(r) => r.instance}>
         {(r) => (
           <Row row={r()} server={props.server} view={props.view} live={props.live} series={props.series} indent>
-            <span class="font-mono text-[11px] [overflow-wrap:anywhere]" title={r().instance}>
+            <Tooltip as="span" tabIndex={0} class="font-mono text-[11px] [overflow-wrap:anywhere]" content={r().instance}>
               <Show when={r().instance} fallback="owner-level">
                 <PathBreaks text={r().instance} />
               </Show>
-            </span>
+            </Tooltip>
           </Row>
         )}
       </KeyedFor>

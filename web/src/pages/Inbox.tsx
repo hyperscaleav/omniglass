@@ -8,6 +8,7 @@ import { Bell, Check, Plus, RotateCcw } from "../components/icons";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime, rel } from "../lib/format";
 import { INBOX_PAGE, inboxEntryHref, inboxListKey, listInbox, useInboxMarks, type InboxEntry } from "../lib/inbox";
+import Tooltip from "../components/ui/Tooltip";
 
 // The console inbox (#1355, epic #1341): the notifications addressed to the
 // signed-in person on the inbox channel, newest first. Each entry says what
@@ -196,11 +197,11 @@ function InboxRow(props: { entry: InboxEntry; busy: boolean; disabled: boolean; 
           <p class="line-clamp-2 whitespace-pre-line text-xs text-base-content/50">{e().text}</p>
         </Show>
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/60">
-          <A href={inboxEntryHref(e())} class="link link-hover font-data text-base-content/80" onClick={props.onFollow} title="Open the component's activity, where this alarm sits">
+          <Tooltip as={A} href={inboxEntryHref(e())} class="link link-hover font-data text-base-content/80" onClick={props.onFollow} content="Open the component's activity, where this alarm sits">
             {e().component}
-          </A>
+          </Tooltip>
           <span class={TRANSITION_PILL[e().transition] ?? "badge badge-sm badge-ghost"}>{e().transition}</span>
-          <span class="tnum" title={fmtTime(e().created_at)}>{rel(e().created_at)}</span>
+          <Tooltip as="span" tabIndex={0} class="tnum" content={fmtTime(e().created_at)}>{rel(e().created_at)}</Tooltip>
           <Show when={e().action_rule}>
             <span class="text-base-content/40">
               via <span class="font-data text-base-content/60">{e().action_rule}</span>

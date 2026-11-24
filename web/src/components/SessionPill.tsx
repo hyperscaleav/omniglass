@@ -4,6 +4,7 @@ import { Ban, CircleCheck, CircleDashed, Clock, RefreshCw, WifiOff } from "./ico
 import { rel } from "../lib/format";
 import { sessionWord, type SessionWord } from "../lib/session";
 import type { ReachEndpoint } from "../lib/reachability";
+import Tooltip from "./ui/Tooltip";
 
 // SessionPill is an endpoint's held session (#1059), on HealthBadge's recipe:
 // every word wears its own glyph AND the word AND a soft hue, so the state
@@ -62,15 +63,15 @@ export default function SessionPill(props: { iface: ReachEndpoint; now: number }
     <Show when={word()}>
       {(w) => (
         <span class="inline-flex shrink-0 items-center gap-1.5">
-          <span
+          <Tooltip as="span" tabIndex={0}
             data-testid="session-pill"
             data-state={w()}
             class={`badge badge-sm shrink-0 gap-1 whitespace-nowrap ${SESSION_LOOK[w()].badge}`}
-            title={hint()}
+            content={hint()}
           >
             <Dynamic component={SESSION_LOOK[w()].icon} size={12} />
             {w() === "stale" ? props.iface.session!.state : w()}
-          </span>
+          </Tooltip>
           <span data-testid="session-age" class="whitespace-nowrap text-[11px] tabular-nums text-base-content/50">
             {rel(props.iface.session!.ts, props.now)}
           </span>

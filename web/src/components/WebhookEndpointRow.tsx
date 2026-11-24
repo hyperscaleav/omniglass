@@ -8,6 +8,7 @@ import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
 import { copySecret, revealSecret } from "../lib/secrets";
 import type { ReachEndpoint } from "../lib/reachability";
+import Tooltip from "./ui/Tooltip";
 
 // A webhook endpoint's row on the component's Endpoints panel (#1024): a push
 // endpoint, hosted by the server. Nothing is dialed, so it has no ladder and
@@ -70,26 +71,26 @@ export default function WebhookEndpointRow(p: { iface: ReachEndpoint; manageId?:
         <div class="flex shrink-0 items-center gap-2 pr-3">
           <InfoTip label="a push endpoint" text="A sender posts to this endpoint's URL on the server: nothing is dialed, so there is no ladder and no health. It reads last heard, stamped by every post that lands, and silence is never read as down." />
           <Show when={hook().refused}>
-            <span class="badge badge-soft badge-error badge-sm shrink-0" title={refusedTitle()}>{hook().refused!.count} refused</span>
+            <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-error badge-sm shrink-0" content={refusedTitle()}>{hook().refused!.count} refused</Tooltip>
           </Show>
           <Show
             when={hook().signed}
-            fallback={<span class="badge badge-soft badge-warning badge-sm shrink-0" title="Scheme none: nothing is checked, anyone holding the URL can post, and there is no replay protection">unsigned</span>}
+            fallback={<Tooltip as="span" tabIndex={0} class="badge badge-soft badge-warning badge-sm shrink-0" content="Scheme none: nothing is checked, anyone holding the URL can post, and there is no replay protection">unsigned</Tooltip>}
           >
-            <span class="badge badge-soft badge-success badge-sm shrink-0" title="The scheme that checks every post">{hook().scheme}</span>
+            <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-success badge-sm shrink-0" content="The scheme that checks every post">{hook().scheme}</Tooltip>
           </Show>
           <span class="badge badge-soft badge-ghost badge-sm shrink-0">push</span>
         </div>
         <Show when={p.manageId && p.onManage}>
-          <button
+          <Tooltip
             type="button"
             class="flex shrink-0 items-center px-2.5 text-base-content/40 hover:bg-base-content/5 hover:text-base-content"
-            title="Manage endpoint"
+            content="Manage endpoint"
             aria-label={`Manage ${label()}`}
             onClick={() => p.onManage!(p.manageId!)}
           >
             <Sliders size={15} />
-          </button>
+          </Tooltip>
         </Show>
       </div>
       <Show when={open()}>

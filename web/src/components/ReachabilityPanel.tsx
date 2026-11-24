@@ -14,6 +14,7 @@ import { endpointNotice, silentDatagram, NO_ANSWER_CAUSES } from "../lib/session
 import { entityLabel } from "../lib/entities";
 import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import { REACHABILITY_KEY, getReachability, endpointWord, pendingNotice, type ReachEndpoint } from "../lib/reachability";
+import Tooltip from "./ui/Tooltip";
 
 // The Endpoints panel on the component detail: an endpoint belongs to its
 // component, so it surfaces here (not a top-level tab). One row per endpoint (an
@@ -65,7 +66,7 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
                   and it stays visible on the row (#1035), beside the label so
                   the address keeps its whole width. */}
               <Show when={p.iface.tls?.mode === "skip"}>
-                <span class="badge badge-soft badge-warning badge-xs shrink-0" title="TLS verification is skipped: anything answering at this address is trusted">unverified</span>
+                <Tooltip as="span" tabIndex={0} class="badge badge-soft badge-warning badge-xs shrink-0" content="TLS verification is skipped: anything answering at this address is trusted">unverified</Tooltip>
               </Show>
             </span>
             <span class="truncate font-data text-[11px] text-base-content/50">
@@ -86,18 +87,18 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
               a probe endpoint no session). */}
           <div class="w-72"><ReachLadder iface={p.iface} /></div>
           <div class="w-36"><SessionPill iface={p.iface} now={now()} /></div>
-          <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`} title={pill().label === "no answer" ? NO_ANSWER_CAUSES : undefined}>{pill().label}</span>
+          <Tooltip as="span" tabIndex={0} class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`} content={pill().label === "no answer" ? NO_ANSWER_CAUSES : undefined}>{pill().label}</Tooltip>
         </div>
         <Show when={canManage()}>
-          <button
+          <Tooltip
             type="button"
             class="flex shrink-0 items-center px-2.5 text-base-content/40 hover:bg-base-content/5 hover:text-base-content"
-            title="Manage endpoint"
+            content="Manage endpoint"
             aria-label={`Manage ${entityLabel({ name: p.iface.endpoint, label: p.iface.label })}`}
             onClick={() => p.onManage!(p.manageId!)}
           >
             <Sliders size={15} />
-          </button>
+          </Tooltip>
         </Show>
       </div>
       {/* The notice beneath the row: a refusal, whatever met it (the

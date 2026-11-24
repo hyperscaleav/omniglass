@@ -3,6 +3,7 @@ import { render } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SeverityBadge from "./SeverityBadge";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
+import { tipOf } from "../test-tip";
 
 // The severity chip renders the catalog's label in the catalog's color (#917),
 // and a level name it cannot resolve as itself in the neutral chip.
@@ -32,10 +33,10 @@ describe("SeverityBadge", () => {
     expect(el.dataset.severity).toBe(name);
   });
 
-  it("says in its hint what the level does to its component", () => {
-    expect(mount("high").getByText("High").title).toMatch(/puts its component in outage/);
-    expect(mount("average").getByText("Average").title).toMatch(/degrades its component/);
-    expect(mount("info").getByText("Info").title).toMatch(/does not affect its component's health/);
+  it("says in its hint what the level does to its component", async () => {
+    expect(await tipOf(mount("high").getByText("High"))).toMatch(/puts its component in outage/);
+    expect(await tipOf(mount("average").getByText("Average"))).toMatch(/degrades its component/);
+    expect(await tipOf(mount("info").getByText("Info"))).toMatch(/does not affect its component's health/);
   });
 
   it("renders an operator-defined level from the catalog alone", () => {

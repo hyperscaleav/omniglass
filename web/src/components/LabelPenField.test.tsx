@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@solidjs/testing-library";
 import LabelPenField, { seedLabelPen } from "./LabelPenField";
 import { createPen } from "../lib/namegen";
 import { type Labelled } from "../lib/entities";
+import { tipOf } from "../test-tip";
 
 // The label pen on the EDIT BLADE (#693). The fact used to be a "Generated" chip
 // in every list cell, which an operator could read and not act on; it is now the
@@ -121,11 +122,11 @@ describe("LabelPenField", () => {
     expect(input.readOnly).toBe(false);
   });
 
-  it("carries no text on its action, only an icon and a tooltip", () => {
+  it("carries no text on its action, only an icon and a tooltip", async () => {
     const { toggle } = mount(platformLabelled);
     expect(toggle().textContent).toBe("");
     expect(toggle().className).toContain("btn-square");
-    expect(toggle().title).toBe("Override");
+    expect(await tipOf(toggle())).toBe("Override");
   });
 
   it("puts the action inside the field's join, not on the label row", () => {
