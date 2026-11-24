@@ -31,9 +31,13 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 COPY web/ ./
 RUN npm run build
 
+ARG GO_VERSION
 # ---- stage 2: compile the binary with the console embedded -----------------
 # Runs natively on the host ($BUILDPLATFORM); cross-compiles to the target arch.
-FROM --platform=$BUILDPLATFORM golang:1.26.0-bookworm AS build
+# The Go version has no default: go.mod is its only source (#2596). The Makefile and
+# CI read it with scripts/go-version.sh and pass --build-arg GO_VERSION=...; a build
+# that forgets fails here instead of compiling with a stale toolchain.
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-bookworm AS build
 WORKDIR /src
 # Module graph first for a cached download layer.
 COPY go.mod go.sum ./
