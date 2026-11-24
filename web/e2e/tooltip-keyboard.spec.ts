@@ -9,10 +9,17 @@ const PASSWORD = process.env.OG_E2E_PASSWORD;
 // focusFirst puts keyboard focus on the first matching control (after a Tab, so the
 // focus is keyboard-modal) and waits for its tooltip.
 async function focusFirst(page: Page, selector: string) {
-  await page.locator(selector).first().waitFor();
+  const el = page.locator(selector).first();
+  await el.waitFor();
   await page.keyboard.press("Tab");
-  await page.locator(selector).first().focus();
-  await expect(page.getByRole("tooltip").first()).toBeVisible();
+  await el.focus();
+  // The tip shown is the focused control's own: the trigger names it in aria-describedby.
+  await expect(el).toHaveAttribute("aria-describedby", /.+/);
+  const id = (await el.getAttribute("aria-describedby")) as string;
+  const tip = page.locator(`[id="${id}"]`);
+  await expect(tip).toBeVisible();
+  await expect(tip).toHaveAttribute("role", "tooltip");
+  await expect(tip).not.toHaveText("");
 }
 
 test.describe("keyboard tooltips", () => {
@@ -47,6 +54,7 @@ test.describe("keyboard tooltips", () => {
   test("tabbing to a control in a catalog drawer shows its tooltip", async ({ page }) => {
     await page.goto("/web/metrics");
     await page.locator("main tbody tr, main [role=row]").nth(1).click();
+    await expect(page.locator("aside.fixed")).toBeVisible();
     await focusFirst(page, "aside.fixed button");
   });
 });

@@ -107,7 +107,7 @@ export default function Button(props: {
       <Tooltip
         content={props.title}
         type={props.type ?? "button"}
-        class={`${cls()}${off() ? " btn-disabled" : ""}`}
+        class={cls()}
         onClick={(e: MouseEvent) => {
           if (off()) {
             e.preventDefault();

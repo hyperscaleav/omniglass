@@ -63,7 +63,7 @@ export function HealthGlyph(props: { health: HealthState | null }) {
   return (
     <Show when={props.health}>
       {(v) => (
-        <Tooltip as="span" tabIndex={0} data-testid="health" class={`inline-flex ${HUE[v()]}`} role="img" aria-label={WORDS[v()]} content={WORDS[v()]}>
+        <Tooltip as="span" data-testid="health" class={`inline-flex ${HUE[v()]}`} role="img" aria-label={WORDS[v()]} content={WORDS[v()]}>
           <Dynamic component={GLYPH[v()]} size={14} />
         </Tooltip>
       )}
@@ -87,7 +87,7 @@ export function HealthSlots(props: { lights?: Lights; single?: HealthState | nul
     return shown().map((v) => `${counts()[v]} ${WORDS[v]}`).join(", ");
   };
   return (
-    <Tooltip as="span" tabIndex={0} data-testid="health" class="flex items-center gap-2.5 font-data text-[12.5px] font-medium" aria-label={words() || undefined} content={words() || undefined}>
+    <Tooltip as="span" data-testid="health" class="flex items-center gap-2.5 font-data text-[12.5px] font-medium" aria-label={words() || undefined} content={words() || undefined}>
       <For each={shown()}>
         {(v) => {
           const Glyph = GLYPH[v];
@@ -295,7 +295,7 @@ export default function Outline(props: {
                             the cell) and truncates only once the path is down to its
                             ellipsis. At the narrowest the path steps aside entirely,
                             and the whole of it stays on hover. */}
-                        <Tooltip as="span" tabIndex={0} class="flex min-w-0 items-baseline" content={n().chain.map((c) => c.label).join(" / ")}>
+                        <Tooltip as="span" class="flex min-w-0 items-baseline" content={n().chain.map((c) => c.label).join(" / ")}>
                           <Show when={n().chain.length > 1}>
                             <span class="min-w-[1.25em] shrink-[999] truncate font-medium text-base-content/55 @max-[28rem]:hidden">
                               <For each={n().chain.slice(0, -1)}>
@@ -325,7 +325,7 @@ export default function Outline(props: {
                             shrinks before the name does, and in a narrow outline it is a bare
                             count whose title carries the systems. */}
                         <Show when={c().also.length > 0}>
-                          <Tooltip as="span" tabIndex={0} class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1" data-also-in content={`Also in ${c().also.join(", ")}`}>
+                          <Tooltip as="span" class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1" data-also-in content={`Also in ${c().also.join(", ")}`}>
                             <span class="@max-[56rem]:hidden">also in {c().also.join(", ")}</span>
                             <span class="hidden @max-[56rem]:inline">+{c().also.length}</span>
                           </Tooltip>
@@ -341,7 +341,7 @@ export default function Outline(props: {
                   ? (node()!.systems.length === 1 ? node()!.systems[0].standard : "")
                   : r().kind === "component" ? comp()!.product : grp()!.system!.standard}
               </span>
-              <Tooltip as="span" tabIndex={0}
+              <Tooltip as="span"
                 class={`pr-4 text-[13px] leading-4 ${NARROW_HIDDEN}`}
                 classList={{ "text-error": !!issue(), "text-base-content/55": !issue(), truncate: r().kind !== "location" }}
                 content={issue()}
