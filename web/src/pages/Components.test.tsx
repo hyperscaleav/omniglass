@@ -161,6 +161,9 @@ describe("Components create-as-route", () => {
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
     // Pressed while the platform is still naming it, Create does not report the
     // name as missing: nothing is missing yet.
+    // The button holds (it is the platform's wait, not a gap), so nothing is
+    // posted without the draft's expected_name and nothing is listed missing.
+    expect(submit.disabled).toBe(true);
     fireEvent.click(submit);
     expect(screen.queryByTestId("form-problems")?.textContent ?? "").not.toContain("Name");
     // Enabled once the platform has ANSWERED, which is a round trip since #702

@@ -732,7 +732,7 @@ export function EntityCreateForm(props: {
     if (isLocation() && !locationType().trim()) out.push({ key: "locationType", label: "Location type", message: "Choose a location type." });
     if (isComponent() && !product()) out.push({ key: "product", label: "Product", message: "Choose a product." });
     // Not while the platform is still answering the name: nothing is missing yet.
-    if (!labelDraft.isFetching && penIncomplete(!!labelDraft.data?.name, namePen)) out.push({ key: "name", label: "Name", message: "Type a name, or choose what lets the platform name it." });
+    if (!(labelDraft.isFetching && namePen.value().trim() === "") && penIncomplete(!!labelDraft.data?.name, namePen)) out.push({ key: "name", label: "Name", message: "Type a name, or choose what lets the platform name it." });
     return out;
   });
   const shown = (key: string) => (formActions.attempted() ? problems().find((x) => x.key === key)?.message : undefined);
@@ -742,6 +742,10 @@ export function EntityCreateForm(props: {
       submitIcon: Plus,
       submit: create,
       busy,
+      // Held while the platform is still naming it: a submit now would post
+      // neither a name nor the draft's expected_name. A wait, not a gap, so
+      // nothing is listed as missing.
+      disabled: () => labelDraft.isFetching && namePen.value().trim() === "",
       problems,
       problemsAction: `create the ${KIND_NOUN[props.kind]}`,
       focusField: (k) => focus.focus(k),
