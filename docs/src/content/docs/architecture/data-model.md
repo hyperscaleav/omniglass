@@ -2,7 +2,7 @@
 title: Data model
 description: "The whole platform's relational shape in one diagram, generated from the migrated schema: every table, its keys and its foreign keys, grouped by subsystem."
 sidebar:
-  order: 5
+  order: 10
   badge:
     text: Built
     variant: success
