@@ -230,9 +230,12 @@ smallest box that holds still around what moves.
 
 **Main refreshes the shots, a PR does not (#2561).** A PR never re-renders an existing docs shot: git
 cannot merge binaries, and every merge used to make the other open PRs conflict on the same PNGs. After a
-merge, the `recapture` job in `docs-shots.yml` recaptures both sets on main's tree; when anything changed it
-pushes the result to `claude/docs-shots-recapture` and opens (or updates) one PR titled "docs: recapture the
-docs screenshots", as the agents' App, which the architect approves like any other PR. Branch protection is
+merge, the `recapture` job in `docs-shots.yml` recaptures both sets on main's tree; when a masked baseline
+changed it pushes those shots and their clean twins (a clean shot alone differs on every capture, so it is
+not committed) to `claude/docs-shots-recapture` and opens (or updates) one PR titled "docs: recapture the
+docs screenshots", as the agents' App. When that PR is in the merge queue GitHub locks its branch, so the job
+pushes to `claude/docs-shots-recapture-<short sha>` and opens a new PR instead of failing main (the choice
+lives in `scripts/docs-shots-plan.sh`), which the architect approves like any other PR. Branch protection is
 untouched and nothing bypasses it. A concurrency group coalesces merges that land close together, and a run
 whose commit is no longer main's head stands down, so the latest main wins. What a PR commits: a **new** shot
 for a new `id` (a new file cannot conflict, and the docs build needs it), and its visual evidence under

@@ -10,8 +10,10 @@ name: docs-shots
 #   modifies, deletes or renames an existing shot (a new shot is fine).
 # - recapture (push to main or a release branch only): recapture against the
 #   real console (a throwaway lab with no node, built by make, and Playwright,
-#   all in Docker, #1267); when any shot changed, push the recapture to
-#   claude/docs-shots-recapture and open or update one PR as the agents' App
+#   all in Docker, #1267); when a masked baseline changed, push those shots and
+#   their clean twins to claude/docs-shots-recapture (a fresh branch named for
+#   the commit when that PR is in the merge queue, #2602) and open or update one
+#   PR as the agents' App
 #   (the same App agent-open-pr.yml opens PRs with), which the architect approves
 #   like any PR. Branch protection is untouched, no bypass. A concurrency group
 #   coalesces merges that land close together, and a run whose commit is no
@@ -102,12 +104,8 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [ "$BASE" = main ]; then
-            branch=claude/docs-shots-recapture
-          else
-            branch="claude/docs-shots-recapture-${BASE//\//-}"
-          fi
-          open=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
+          url="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          standing=$(bash scripts/docs-shots-plan.sh branch "$BASE" "$SHA" false)
           # A newer merge already moved the base: this run's tree is stale and
           # the newer run will recapture.
           head=$(gh api "repos/$REPO/git/ref/heads/$BASE" --jq .object.sha)
@@ -115,20 +113,48 @@ jobs:
             echo "$BASE moved to $head; standing down for the newer run."
             exit 0
           fi
-          git add -A docs/public/screenshots docs/screenshots/baseline
-          if git diff --cached --quiet; then
-            echo "The recapture matches the committed shots."
-            if [ -n "$open" ]; then
-              gh pr close "$open" --repo "$REPO" --comment "Superseded: $BASE's shots already match the console at ${SHA:0:7}."
-            fi
+          # Commit only the shots whose masked baseline changed, plus their clean
+          # twins: a clean shot's live regions differ on every capture, so the
+          # rest is noise (#2602). No baseline change, nothing to do.
+          mapfile -t paths < <(git status --porcelain -- docs/public/screenshots docs/screenshots/baseline | bash scripts/docs-shots-plan.sh select)
+          keep=()
+          for p in "${paths[@]}"; do
+            if [ -e "$p" ] || git ls-files --error-unmatch "$p" >/dev/null 2>&1; then keep+=("$p"); fi
+          done
+          if [ ${#keep[@]} -eq 0 ]; then
+            echo "::notice::No masked baseline changed at ${SHA:0:7}; nothing to recapture."
             exit 0
           fi
+          # GitHub locks the branch of a PR that is in the merge queue, so a push
+          # to it is refused (GH006). Use a fresh branch then, never fail main.
+          open=$(gh pr list --repo "$REPO" --head "$standing" --state open --json number --jq '.[0].number // empty')
+          fresh=false
+          if [ -n "$open" ]; then
+            queued=$(gh pr view "$open" --repo "$REPO" --json isInMergeQueue --jq .isInMergeQueue)
+            if [ "$queued" = true ]; then fresh=true; fi
+          fi
+          git add -A -- "${keep[@]}"
           git config user.name "hyperscale-agent[bot]"
           git config user.email "hyperscale-agent[bot]@users.noreply.github.com"
           git commit -q -m "docs: recapture screenshots after ${SHA:0:7}"
-          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/$branch"
+          branch=$(bash scripts/docs-shots-plan.sh branch "$BASE" "$SHA" "$fresh")
+          if [ "$fresh" = true ]; then
+            # The queued PR may already carry exactly these shots.
+            git fetch -q "$url" "refs/heads/$standing" && if git diff --quiet FETCH_HEAD HEAD -- "${keep[@]}"; then
+              echo "::notice::The queued recapture PR #$open already carries these shots; nothing new to commit."
+              exit 0
+            fi
+          fi
+          if ! git push -f "$url" "HEAD:refs/heads/$branch"; then
+            if [ "$fresh" = true ]; then exit 1; fi
+            echo "::notice::Push to $branch was refused (a queued PR locks its branch); using a fresh branch."
+            fresh=true
+            branch=$(bash scripts/docs-shots-plan.sh branch "$BASE" "$SHA" true)
+            git push -f "$url" "HEAD:refs/heads/$branch"
+          fi
+          open=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')
           body=$(printf '%s\n\n%s\n' \
-            "Main recaptures the docs screenshots after a merge (#2561). This is the recapture of \`$BASE\` at ${SHA:0:7}: both sets, the clean shots under docs/public/screenshots/ and their masked baselines under docs/screenshots/baseline/. Approve it like any PR; a later merge updates this branch in place." \
+            "Main recaptures the docs screenshots after a merge (#2561). This is the recapture of \`$BASE\` at ${SHA:0:7}: the shots whose masked baseline under docs/screenshots/baseline/ changed, with their clean twins under docs/public/screenshots/. Approve it like any PR; a later merge updates this branch in place." \
             "demo: none (docs shots only)")
           if [ -n "$open" ]; then
             gh pr edit "$open" --repo "$REPO" --body "$body"

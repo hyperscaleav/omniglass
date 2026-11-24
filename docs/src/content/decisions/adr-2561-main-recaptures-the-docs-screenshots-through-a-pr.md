@@ -27,6 +27,17 @@ refs: [2561, 2192, 1860]
      The recapture branch is exempt.
   4. **PR-time freshness stays off.** The `freshness` comparison was already off on pull requests; it
      is now the `recapture` job, push-only. A PR's visual evidence stays under `.github/screenshots/<n>/`.
+  5. **A queued recapture PR does not fail main (#2602).** GitHub locks the branch of a PR in the
+     merge queue, so a push to `claude/docs-shots-recapture` is refused (GH006). When the open
+     recapture PR is queued, or the push is refused, the job pushes to a fresh branch
+     `claude/docs-shots-recapture-<short sha>` and opens a new PR there as the App; if the queued PR
+     already carries the same shots it exits green with a notice. The job fails only for a broken
+     capture. `scripts/docs-shots-plan.sh` holds the branch choice and is unit-tested.
+  6. **Only changed baselines are committed (#2602).** A clean shot's live regions (ages, timestamps)
+     differ on every capture, so committing every changed PNG would open a PR after nearly every
+     merge. The job commits the shots whose masked baseline under `docs/screenshots/baseline/`
+     changed, plus their clean twins under `docs/public/screenshots/`; with no baseline change it
+     changes nothing and exits green.
 - **Context:** On 2026-11-23 every merge made several open PRs conflict on the same shared PNGs (#2508
   ejected from the queue twice, #2499 merging main three times, thirteen PRs holding). Git cannot merge
   binaries, so the shots needed one writer.
