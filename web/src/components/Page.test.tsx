@@ -19,6 +19,10 @@ describe("Page header from the nav metadata", () => {
     expect(screen.getByTestId("page-header").textContent).toContain("Own words.");
   });
 
+  it("the Roles hint says roles are built in", () => {
+    expect(navByPath["/roles"].hint).toMatch(/built-in/i);
+  });
+
   for (const path of ["/alarms", "/outposts", "/variables", "/secrets", "/users", "/roles", "/user-groups", "/audit", "/files"]) {
     it(`${path} has a nav label and a one-line hint`, () => {
       expect(navByPath[path]?.label).toBeTruthy();
