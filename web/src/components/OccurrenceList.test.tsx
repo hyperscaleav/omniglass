@@ -99,7 +99,7 @@ describe("OccurrenceList events", () => {
     });
     const name = getByText("old-watch");
     expect(name.closest("a")).toBeNull();
-    expect(await tipOf(name)).toMatch(/deleted/);
+    expect(await tipOf(name.parentElement)).toMatch(/deleted/);
   });
 });
 
