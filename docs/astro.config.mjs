@@ -216,7 +216,6 @@ export default defineConfig({
                 { label: 'Simulation', slug: 'architecture/simulation' },
                 { label: 'Data model', slug: 'architecture/data-model' },
                 { label: 'Workers', slug: 'architecture/workers' },
-                { label: 'Glossary', slug: 'architecture/glossary' },
                 { label: 'Scaling and deployment', slug: 'architecture/scaling' },
                 { label: 'Settings', slug: 'architecture/settings' },
                 { label: 'Identity and access', slug: 'architecture/identity-access' },
