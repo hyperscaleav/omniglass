@@ -105,6 +105,18 @@ describe("CatalogOverview page", () => {
     expect(entry(card("Metadata")!, "Tags").textContent).toContain("9");
   });
 
+  // #2431 item 1: cards in a row do not stretch to the tallest, and the copy never
+  // takes the card's surplus (daisyUI grows a card-body paragraph), so counts
+  // follow the copy and no card carries a dead gap. jsdom has no layout, so the
+  // pin is on the two classes that carry the rule.
+  it("sizes each card to its content: counts follow the copy", () => {
+    mount();
+    expect(card("Telemetry")!.parentElement!.className).toContain("items-start");
+    for (const g of CATALOG_GROUPS) {
+      expect(card(g.header)!.querySelector("p")!.className).toContain("grow-0");
+    }
+  });
+
   it("teaches each group with the table's own sentence", () => {
     mount();
     for (const g of CATALOG_GROUPS) {

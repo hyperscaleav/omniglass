@@ -33,6 +33,9 @@ export default function ListShell<T>(props: {
   // instead of growing the page. The FilterBar header (and any footer) stay
   // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
+  // Show "n of m" in the filter bar while chips filter. Opt-in: a body that
+  // filters for itself (the tree) cannot report the shell's filtered count.
+  counted?: boolean;
   // Live filtering (#2462): typed text narrows the rows as it is typed, not only
   // once Enter makes it a chip. Opt in; the default keeps the Enter contract.
   live?: boolean;
@@ -60,6 +63,7 @@ export default function ListShell<T>(props: {
   // A new filter starts the list from its first page again.
   createEffect(on([chips, draft], () => setShown(props.pageSize ?? Infinity), { defer: true }));
   const filtered = createMemo(() => (props.pageSize ? matched().slice(0, shown()) : matched()));
+  const count = () => (props.counted && chips().length > 0 ? { shown: matched().length, total: props.rows.length } : undefined);
   return (
     <div class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <Show when={props.error}>
@@ -85,6 +89,7 @@ export default function ListShell<T>(props: {
             bare
             clearable
             trailing={props.trailing}
+            count={count()}
             placeholder={props.placeholder}
             onDraft={props.live || props.onDraft ? (c) => { if (props.live) setDraft(c); props.onDraft?.(c); } : undefined}
           />

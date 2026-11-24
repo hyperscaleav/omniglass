@@ -4,13 +4,14 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import BladeField from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import KVStacked from "../components/KVStacked";
 import { NotificationTypeUsedBy } from "../components/CatalogUsage";
 import InfoTip from "../components/InfoTip";
 import Button from "../components/Button";
 import { identityColumn } from "../components/IdentityCell";
 import { Plus } from "../components/icons";
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import {
   type NotificationPreview,
   type NotificationTypeRow,
@@ -291,8 +292,8 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
 // rule rather than facing two empty boxes.
 export function CreateNotificationTypeForm(p: { onCreated: (r: NotificationTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
-  const [label, setLabel] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [description, setDescription] = createSignal("");
   const [subject, setSubject] = createSignal("[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}");
   const [text, setText] = createSignal("{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}}: {{.Message}}");
@@ -313,7 +314,7 @@ export function CreateNotificationTypeForm(p: { onCreated: (r: NotificationTypeR
     try {
       const created = await createNotificationType({
         name: name().trim(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
         subject: subject(),
         text: text(),
@@ -332,12 +333,7 @@ export function CreateNotificationTypeForm(p: { onCreated: (r: NotificationTypeR
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. page-oncall.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="page-oncall" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="Page on-call" onInput={(e) => setLabel(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Page on-call" namePlaceholder="page-oncall" />
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />
       </FieldRow>

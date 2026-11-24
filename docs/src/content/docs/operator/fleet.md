@@ -102,17 +102,22 @@ screenshots:
   - id: fleet-data
     path: /web/systems/huddle
     steps:
-      - action: click
-        selector: "[data-testid=metric-row-room-temperature]"
-    alt: "The data section inside Overview: every declared metric stacked with a sparkline and its latest value, the temperature row expanded to the full chart."
-    # The since-line ages with the capture, and every chart x-position
-    # divides seed-to-shoot latency by the window (CI proved it crosses a
-    # pixel boundary), so the plots mask in the BASELINE while the docs
-    # embed them live (the two-render pipeline).
+      # A fresh lab charts a metric once its first sample lands.
+      - action: wait
+        selector: "[data-testid=metrics-grid] [data-testid=chart-end-dot]"
+        message: no metric on the huddle system was sampled in range
+      - action: hover
+        selector: "[data-testid=metrics-grid] [data-testid=chart-end-dot] >> nth=0"
+    alt: "The metrics grid inside Overview: a card per declared metric with its latest value and its chart over the page's range, the pointer on one chart and the crosshair standing at the same instant on every other."
+    # The since-line ages with the capture. Each metric card masks whole in
+    # the BASELINE while the docs embed it live (the two-render pipeline): a
+    # chart's x-positions divide seed-to-shoot latency by the window, the
+    # latest value moves with the sim, and a fresh lab may not yet have a
+    # sample in range for every card, so a card is a chart on one capture and
+    # "No data in range" on the next.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "[data-testid=timeseries-chart]"
-      - "[data-testid=sparkline]"
+      - "[data-testid=metrics-grid] article"
   - id: fleet-location
     path: /web/locations/east
     alt: "A location holding no system of its own: its card with its type, health, since-when and tags, its tabs, and the outline of what is beneath it, counted by systems."
@@ -296,8 +301,8 @@ A location holding a system and locations beneath it lists those locations under
 outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its health, **Why**,
-the slots and who is staffing them, each component's health light, and the data section's latest
-values (a preset range's sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
+the slots and who is staffing them, each component's health light, and the metrics grid's latest
+values (a preset range's charts every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
 health and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
@@ -345,7 +350,9 @@ Cause before arithmetic:
 - The build a system did not choose never renders; choices are the standard editor's
   vocabulary, not an operator's.
 - A shared component is marked **also in** the other system; a member filling no slot reads
-  **no slot**, and that is a normal state.
+  **not in a slot**, a normal state, and the system names those members with the way to place them.
+  Its open alarms are on the **Why** strip with every other member's, marked **not in a slot**, and
+  they do not move the system's health: only a slot does.
 
 ## Overview: the map and the data
 
@@ -370,15 +377,21 @@ and health as any other marker.
 
 ::screenshot{#fleet-map}
 
-Below the map, when the standard declares metrics, the **data** section stacks every one
-of them, the only place a metric's latest value is said: a sparkline of the page's time range beside the latest value, one row per series, so
-the system's numbers read together. Click a row for the full chart, newest at the right,
-the newest bucket's last value floating on its dot. The range is drawn in a few hundred buckets
-(a day in five-minute buckets, a week or a month in hours), so however busy the metric the whole
-range is there: the line is each bucket's average and the shaded band
-behind it runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. Hover a
-point for the bucket's average, range and sample count. A series still on its contract default has
-nothing to chart yet, and says so.
+Below the map, when the standard declares metrics, the **metrics** grid charts every one of
+them over the page's time range (the picker on the tab rail; the last 24 hours unless it names another), one card
+per metric: its name, unit and latest value above its chart, newest at the right. Each chart is
+drawn in buckets sized to the range (a minute for an hour, five minutes for a day, hours for a week or a month), so however busy
+the metric the whole range is there: the line is each bucket's average and the shaded band behind it
+runs from its lowest to its highest reading, so a one-sample spike shows at any zoom. A metric with no
+sample in the range keeps its card, marked **No data in range**; a series still on its contract
+default says so beside its value. The grid answers its own width: one column in a drawer, two or
+three on a wide page.
+
+Every chart in the grid shares one cursor. Hover a chart and a crosshair stands at that instant on
+every chart at once, each reading its own bucket there (average, range and sample count), so the
+system's numbers compare at a moment without lining them up by eye. A chart with no bucket at that
+instant draws the line and no value: a gap is a gap. The keyboard does the same: Tab to a chart,
+and the arrow keys step its buckets (Home and End jump to the ends, Escape clears).
 
 ::screenshot{#fleet-data}
 
@@ -402,6 +415,13 @@ expanding to the health changes inside it and the alarms that explain them. An a
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
+Uptime is the healthy share of the time the system has been recorded inside the last 30
+days, never of days it did not exist for. A system recorded minutes ago reads over those
+minutes and the card names its window ("since Nov 23, 01:56 PM"); with no health recorded
+yet it says so instead of showing a percentage. The timeline is labelled at both ends and each
+segment's hover gives its health, from, to and duration; the red and amber triangles under it
+are alarm raises on that same axis.
+
 ::screenshot{#fleet-history}
 
 Under the health history, the **events** are the system's story on the event lane: the system's
@@ -409,6 +429,35 @@ own events and its members', newest first, each row labeled by the owner that ra
 and the **logs** are the members' raw lines merged, each naming the component that wrote
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
 Activity tab carries its own events the same way.
+
+## Timeline: what happened, in order
+
+**Timeline** lays everything a system or a component recorded over the page's time range on one
+axis, so the order of events reads straight off it: a property or metric moves, a rule raises an
+alarm, health degrades, someone sends a command, the alarm clears. Lanes stack top down, each
+collapsible:
+
+- **Health**: the health in force across the range, one span per recorded change, so a range in
+  which nothing changed is one span of the health that held. A system adds one row per member
+  component.
+- **Alarms**: every alarm raised during the range on its own row, from raise to clear (or to now
+  while still raised), in its severity's color, the bar labeled with how long it was raised. An
+  alarm raised before the range and still open in it starts at the range's left edge but keeps its
+  whole duration. Hover one for when it was raised, when it cleared, how long, the rule that raised
+  it and whether anyone acknowledged it; click it to open its own history below.
+- **Properties** and **Metrics**: the properties and metrics you pick (**Pick** on the lane). Until
+  you pick, the timeline shows what the alarming rules watch and every property that changed in
+  range, so the signal that crossed the threshold sits right above the span it raised.
+- **Events**, **Logs** and **Commands**: a marker each at its time. Markers too close to tell
+  apart become one counted marker; click any marker to list its rows, and a command's row opens its
+  arc on the Activity tab. Logs show lines at the severity you choose and worse.
+
+Hover anywhere on the lanes (or focus them and use the arrow keys) and the cursor crosses every
+lane; the line above the lanes reads them at that instant (the health, how many alarms were
+raised, each property's value and each metric's reading), and the metrics grid under the timeline
+draws its crosshair at the same instant. The time range on the tab rail governs every lane, and
+changing it reads them all again. A read that stops at its cap says so on its lane rather than
+dropping rows silently.
 
 ## Configure
 
@@ -456,6 +505,10 @@ component. Each section's explainer is
 on its label's tooltip.
 
 ::screenshot{#fleet-component}
+
+Below Vitals, the **metrics** grid charts the same metrics over the page's time range (the picker on the tab rail, as on a system), a card per
+metric, every chart on one shared cursor: it is the system view's grid, described there, for one
+component.
 
 **Collection** shows each endpoint with its reachability ladder (the ping answers the path, the
 transport answers the service, the login answers the credential; each rung teaches itself on

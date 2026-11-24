@@ -219,7 +219,7 @@ func TestDetachedSlotBecomesUnconditional(t *testing.T) {
 
 	// Alternate b is satisfied, slot-a is unstaffed but grouped: the choice
 	// is answered through b, so the system reads healthy.
-	rep, err := gw.SystemHealth(ctx, "detach-sys", storage.HealthRange{}, all)
+	rep, err := gw.SystemHealth(ctx, "detach-sys", storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestDetachedSlotBecomesUnconditional(t *testing.T) {
 		t.Fatalf("detach slot-a: %v", err)
 	}
 
-	rep, err = gw.SystemHealth(ctx, "detach-sys", storage.HealthRange{}, all)
+	rep, err = gw.SystemHealth(ctx, "detach-sys", storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatalf("system health after detach: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestEditingSlotLeavesAlternateAlone(t *testing.T) {
 	if err := gw.AssignSlot(ctx, "", "edit-sys", "conf-bar", "edit-comp", all, all, all, all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
-	before, err := gw.SystemHealth(ctx, "edit-sys", storage.HealthRange{}, all)
+	before, err := gw.SystemHealth(ctx, "edit-sys", storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatalf("system health before edit: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestEditingSlotLeavesAlternateAlone(t *testing.T) {
 		t.Fatalf("edit label: %v", err)
 	}
 
-	after, err := gw.SystemHealth(ctx, "edit-sys", storage.HealthRange{}, all)
+	after, err := gw.SystemHealth(ctx, "edit-sys", storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatalf("system health after edit: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestHealthSlotReportsChoiceAndActive(t *testing.T) {
 		t.Fatalf("assign: %v", err)
 	}
 
-	rep, err := gw.SystemHealth(ctx, "report-sys", storage.HealthRange{}, all)
+	rep, err := gw.SystemHealth(ctx, "report-sys", storage.HealthRange{}, all, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

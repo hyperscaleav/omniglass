@@ -338,7 +338,8 @@ describe("ComponentTypes page", () => {
     expect(within(pristine).queryByText("Restore default")).toBeNull();
     // A shipped row that is still pristine greys its destructive slot with the
     // official sentence: nothing to delete, nothing yet to discard.
-    expect((within(pristine).getByLabelText("Delete") as HTMLButtonElement).disabled).toBe(true);
+    expect(within(pristine).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(pristine).queryByLabelText("Delete")).toBeNull();
 
     fireEvent.click(screen.getByText("House Projector"));
     const forked = await waitFor(() => {

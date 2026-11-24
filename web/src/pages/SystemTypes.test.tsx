@@ -221,7 +221,9 @@ describe("SystemTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect((within(officialBlade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
+    expect(within(officialBlade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(officialBlade).queryByLabelText("Edit")).toBeNull();
+    expect(within(officialBlade).queryByText("Delete")).toBeNull();
 
     fireEvent.click(screen.getByText("Lab"));
     const customBlade = await waitFor(() => {

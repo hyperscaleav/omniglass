@@ -55,7 +55,7 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 		run  func() error
 	}{
 		{"a system's health transitions", func() error {
-			_, err := gw.SystemHealth(ctx, sys.ID, storage.HealthRange{Window: 30 * 24 * time.Hour}, all)
+			_, err := gw.SystemHealth(ctx, sys.ID, storage.HealthRange{Window: 30 * 24 * time.Hour}, all, all)
 			return err
 		}},
 		{"a component's property transitions", func() error {

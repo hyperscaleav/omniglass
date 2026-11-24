@@ -114,3 +114,35 @@ func TestLabFactsCarryWhatAWalkthroughsLabRuns(t *testing.T) {
 		t.Fatalf("walkthrough labs = %v, want plain none and sso the identity provider", got)
 	}
 }
+
+// A setup's fault, a command it issues and its waits (#2425: put, a :verb
+// post, until, pause) stage a moment, not
+// a thing a learner's lab can make with a create, so the facts list only the
+// creates and read the rest without failing.
+func TestSetupFactsListOnlyTheCreates(t *testing.T) {
+	fsys := fstest.MapFS{"w.yaml": {Data: []byte(`title: W
+setup:
+  - post: /components
+    body: { name: bay-2-display, product: any-product }
+  - put: /components/bay-2-display/impairment
+    body: { unplugged: true }
+  - until: { get: /components/bay-2-display/alarms, contains: raised_at }
+  - post: /components/bay-2-display/commands:issue
+    body: { command_type: reboot }
+  - pause: 30
+steps:
+  - wait: { text: x }
+    caption: x
+`)}}
+	b, err := FactsJSON(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f Facts
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Walkthroughs) != 1 || len(f.Walkthroughs[0].Setup) != 1 || !strings.Contains(f.Walkthroughs[0].Setup[0], "component create") {
+		t.Fatalf("setup facts = %+v, want the one create", f.Walkthroughs)
+	}
+}

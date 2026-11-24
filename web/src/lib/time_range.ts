@@ -1,5 +1,5 @@
 import { useSearchParams } from "@solidjs/router";
-import { createMemo, type Accessor } from "solid-js";
+import { createMemo, createSignal, type Accessor } from "solid-js";
 import { fmtTime } from "./format";
 
 // The page's one time range (#2304): every time-bound surface on a page reads
@@ -134,4 +134,14 @@ export function useTimeRange(): { range: Accessor<TimeRange>; setRange: (r: Time
       setParams(patch);
     },
   };
+}
+
+// useHostTimeRange is the range a detail body reads (#2425): a page's is the
+// address's (useTimeRange); a blade's is its own signal, opening on the
+// default, so the page's ?range= is not the blade's and a pick in a blade never
+// rewrites the page beneath it, as a blade's tab never does (lib/tabstate, ADR-2423).
+export function useHostTimeRange(host: "page" | "blade"): { range: Accessor<TimeRange>; setRange: (r: TimeRange) => void } {
+  if (host === "page") return useTimeRange();
+  const [range, setRange] = createSignal<TimeRange>(DEFAULT_RANGE, { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) });
+  return { range, setRange };
 }

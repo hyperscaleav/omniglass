@@ -4336,6 +4336,23 @@ export type HealthAlarmBody = {
   severity: string;
 };
 
+export type HealthMemberBody = {
+  /**
+     * The member's open alarms, newest first
+     * @nullable
+     */
+  alarms: HealthAlarmBody[] | null;
+  /** The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it */
+  health: string;
+  /** The component's uuid */
+  id: string;
+  name: string;
+  /** True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459) */
+  outside_slot: boolean;
+  /** The name of the slot the member fills in this system (as slots[].name); absent when outside_slot */
+  slot?: string;
+};
+
 export type HealthSlotBody = {
   /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's health */
   active: boolean;
@@ -4389,8 +4406,15 @@ export type FleetHealthOutputBody = {
   first_recorded_at?: string;
   /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   health: string;
+  /**
+     * Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location
+     * @nullable
+     */
+  members: HealthMemberBody[] | null;
   owner: string;
   owner_kind: string;
+  /** A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location */
+  reason?: string;
   /**
      * The contributing slots; empty for a location
      * @nullable
@@ -9784,6 +9808,10 @@ export type ListComponentAlarmsParams = {
   include_cleared?: boolean;
   /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended */
   unacknowledged?: boolean;
+  /** Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range */
+  since?: string;
+  /** Only the alarms raised at or before this RFC 3339 time; must not be earlier than since */
+  until?: string;
 };
 
 export type ListComponentCommandsParams = {
@@ -9989,6 +10017,13 @@ export type ListSystemsParams = {
    * @minimum 0
    */
   limit?: number;
+};
+
+export type ListSystemAlarmsParams = {
+  /** Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until */
+  since?: string;
+  /** The range's end, with since; defaults to now and must not be earlier than since */
+  until?: string;
 };
 
 export type GetSystemHealthParams = {
@@ -13336,7 +13371,7 @@ export const getListComponentAlarmsUrl = (name: string,
 }
 
 /**
- * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's alarms
  */
 export const listComponentAlarms = async (name: string,
@@ -23322,21 +23357,30 @@ export type listSystemAlarmsResponseError = (listSystemAlarmsResponseDefault) & 
 
 export type listSystemAlarmsResponse = (listSystemAlarmsResponseSuccess | listSystemAlarmsResponseError)
 
-export const getListSystemAlarmsUrl = (name: string,) => {
+export const getListSystemAlarmsUrl = (name: string,
+    params?: ListSystemAlarmsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/alarms`
+  return stringifiedParams.length > 0 ? `/systems/${name}/alarms?${stringifiedParams}` : `/systems/${name}/alarms`
 }
 
 /**
- * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's members' alarms
  */
-export const listSystemAlarms = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
+export const listSystemAlarms = async (name: string,
+    params?: ListSystemAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
 
-  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name),
+  return ogFetch<listSystemAlarmsResponse>(getListSystemAlarmsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -23427,7 +23471,7 @@ export const getGetSystemHealthUrl = (name: string,
 }
 
 /**
- * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
 export const getSystemHealth = async (name: string,

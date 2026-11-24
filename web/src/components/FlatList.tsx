@@ -58,7 +58,9 @@ export type FlatConfig<T> = {
   // body receives a small context: `close` dismisses the create Drawer; `select`
   // opens a row's detail Drawer (closing create), so a successful create can land
   // the operator straight on the new row.
-  create?: { label: string; can: () => boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
+  // openInitially opens the create Drawer on first render: a link that carries a
+  // new-row intent (an "Alarm on this" that arrives with the form's fields filled).
+  create?: { label: string; can: () => boolean; openInitially?: boolean; body: (ctx: { close: () => void; select: (row: T) => void }) => JSX.Element };
   // An extra control in the action rail, left of the create button (e.g. a "show
   // archived" toggle on the Users directory).
   railExtra?: () => JSX.Element;
@@ -105,7 +107,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
   const cfg = props.config;
   const [sort, setSort] = createSignal<SortState>(null);
   const [selected, setSelected] = createSignal<T | null>(null);
-  const [createOpen, setCreateOpen] = createSignal(false);
+  const [createOpen, setCreateOpen] = createSignal(!!cfg.create?.openInitially && cfg.create.can());
 
   // A row opens either a blade (cross-entity stack) or the single Drawer detail.
   // With a rowId the open row is the URL's `?open=` address (lib/drawer_address):
@@ -219,6 +221,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
         chips={cfg.chips}
         onChips={cfg.onChips}
         fill={cfg.fill}
+        counted
         error={cfg.error?.()}
         errorLabel={`Could not load ${cfg.entity.plural.toLowerCase()}`}
         trailing={trailing}
@@ -247,12 +250,17 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                       <Show when={openable}><col style={{ width: "40px" }} /></Show>
                     </colgroup>
                   </Show>
+                  {/* A list with nothing in it has no columns to head: the empty state
+                      stands alone (#2431). Loading keeps the head (the rows land
+                      under it), and a filter that matches nothing keeps it too. */}
+                  <Show when={cfg.loading?.() || cfg.rows().length > 0}>
                   <thead>
                     <tr>
                       <For each={cfg.columns}>{(c) => <Th col={c} />}</For>
                       <Show when={openable}><th /></Show>
                     </tr>
                   </thead>
+                  </Show>
                   <tbody>
                     <For
                       each={shown()}

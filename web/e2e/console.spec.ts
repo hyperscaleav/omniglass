@@ -42,6 +42,32 @@ test.describe("operator console", () => {
     await page.waitForURL((url) => !url.pathname.endsWith("/login"));
   });
 
+  // #2438: the need-attention chip counts what it filters. Whatever the fleet
+  // holds, the chip's two figures are the system rows and component rows its
+  // filter leaves, and Home's card says the same words.
+  test("explore: the need-attention chip's number is the rows it shows, and Home agrees", async ({ page }) => {
+    await page.goto("/web/");
+    const card = page.getByTestId("home-attention");
+    await expect(card).toBeVisible();
+    await expect(card).not.toContainText("reading the fleet");
+    const homeWords = (await card.innerText()).replace(/\s+/g, " ");
+
+    await page.goto("/web/explore");
+    const chip = page.getByTestId("explore-counts").getByRole("button", { name: /need attention/ });
+    // A fleet with nothing wrong has no chip, and Home says so.
+    if ((await chip.count()) === 0) {
+      expect(homeWords).toContain("Nothing needs attention");
+      return;
+    }
+    const words = (await chip.innerText()).replace(/\s+/g, " ");
+    expect(homeWords).toContain(words);
+    const figures = [...words.matchAll(/(\d+) (system|component)/g)].reduce((n, m) => n + Number(m[1]), 0);
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
+    await expect(chip.getByTestId("attention-dot")).toBeVisible();
+    await expect(page.getByRole("list", { name: "Matches" }).getByRole("listitem")).toHaveCount(figures);
+  });
+
   test("signs in, finds the outline, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 
@@ -250,6 +276,49 @@ test.describe("operator console", () => {
       } finally {
         await page.request.delete(`/api/v1/locations/${innerId}`);
         await page.request.delete(`/api/v1/locations/${id}`);
+      }
+    });
+  }
+
+  // #2438: a component serving two systems wears an "also in" chip; the chip
+  // gives way first, so the component's own name stays whole beside it.
+  for (const width of [1320, 1024]) {
+    test(`the outline keeps a shared component's name readable beside its also-in chip at ${width}px`, async ({ page }) => {
+      const stamp = Date.now();
+      const made: { kind: string; name: string }[] = [];
+      const post = async (kind: string, data: Record<string, unknown>) => {
+        const res = await page.request.post(`/api/v1/${kind}`, { data });
+        expect(res.ok(), `create ${kind}: ${res.status()}`).toBeTruthy();
+        made.push({ kind, name: data.name as string });
+        return (await res.json()) as { id: string };
+      };
+      try {
+        await post("locations", { name: `e2e-shared-${width}-${stamp}`, location_type: "campus" });
+        const sysA = `boardroom-conference-system-${stamp}`;
+        const sysB = `auditorium-presentation-system-${stamp}`;
+        const comp = `lifecycle-hub-${width}-${stamp}`;
+        for (const n of [sysA, sysB]) await post("systems", { name: n, location: `e2e-shared-${width}-${stamp}` });
+        const { id } = await post("components", { name: comp, product: "generic-device", location: `e2e-shared-${width}-${stamp}` });
+        for (const n of [sysA, sysB]) {
+          const put = await page.request.put(`/api/v1/systems/${n}/members/${comp}`);
+          expect(put.ok(), `bind ${n}: ${put.status()}`).toBeTruthy();
+        }
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(`/web/explore?node=${id}`);
+        // The component's label is its product's ("Generic Device"); the chip is what finds it.
+        const row = page.getByRole("treeitem").filter({ has: page.getByTitle(/^Also in/) }).first();
+        await expect(row).toBeVisible();
+        await expect(row.getByTitle(/^Also in/)).toBeVisible();
+        const name = row.locator("[data-label]");
+        const box = (await name.boundingBox())!;
+        expect(box.width, `the name is ${Math.round(box.width)}px beside the chip at ${width}px`).toBeGreaterThanOrEqual(64);
+        // Wide, the whole name fits beside the full chip; narrow, the chip is a count and the name keeps its minimum.
+        if (width >= 1320) {
+          const clipped = await name.evaluate((el) => el.scrollWidth > el.clientWidth);
+          expect(clipped, `the component's name is cut short at ${width}px`).toBe(false);
+        }
+      } finally {
+        for (const m of made.reverse()) await page.request.delete(`/api/v1/${m.kind}/${m.name}`);
       }
     });
   }

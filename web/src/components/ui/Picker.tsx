@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
-import { type ComboboxRootItemComponentProps, Content, Control, Input, Item, ItemDescription, ItemLabel, Listbox, Portal, Root, Trigger } from "@kobalte/core/combobox";
+import { type ComboboxRootItemComponentProps, type ComboboxRootSectionComponentProps, Content, Control, Input, Item, ItemDescription, ItemLabel, Listbox, Portal, Root, Section, Trigger } from "@kobalte/core/combobox";
 import { ChevronDown, Plus, X } from "../icons";
 
 // Picker: choose one or several from a list too long to scan, by typing
@@ -19,6 +19,9 @@ import { ChevronDown, Plus, X } from "../icons";
 // choice is a chip with its own remove button, Enter keeps the list open for
 // the next pick, and Backspace in an empty field removes the last chip.
 //
+// A `group` on an option draws it under a heading (the rule form's Reads: metrics,
+// then properties); the groups keep the order they are first met in.
+//
 // onCreate adds the "create the missing item" row: when the typed text names
 // no option exactly (case-insensitive), the list ends with Create "text", and
 // picking it calls onCreate with the trimmed text and selects nothing; the
@@ -30,6 +33,10 @@ export interface PickerOption {
   label: string;
   detail?: string;
   disabled?: boolean;
+  // A heading the option sits under. Options sharing a group are drawn together
+  // beneath it, groups in the order first met; an option with none stays above
+  // them. A heading with no matching option while filtering is not drawn.
+  group?: string;
 }
 
 interface PickerCommon {
@@ -52,8 +59,30 @@ export type PickerProps =
 
 // The create row is an option like any other to Kobalte, marked so the filter
 // always keeps it and a pick of it becomes onCreate instead of a value.
-type Row = PickerOption & { create?: true };
+type Row = PickerOption & { create?: true; section?: true; options?: Row[] };
 const CREATE_KEY = "\u0000create";
+const GROUP_KEY = "\u0000group:";
+
+// withGroups nests grouped options under a section row each, the shape Kobalte's
+// optionGroupChildren reads (it wants every top-level row to be a section once
+// any is): ungrouped options go first under a section with no heading.
+export const isGrouped = (options: PickerOption[]) => options.some((o) => o.group);
+
+export function withGroups(options: PickerOption[]): Row[] {
+  if (!isGrouped(options)) return options;
+  const sections = new Map<string, Row>();
+  const section = (key: string, label: string) => {
+    let s = sections.get(key);
+    if (!s) {
+      s = { value: GROUP_KEY + key, label, section: true, options: [] };
+      sections.set(key, s);
+    }
+    return s;
+  };
+  section("", "");
+  for (const o of options) section(o.group ?? "", o.group ?? "").options!.push(o);
+  return [...sections.values()].filter((s) => s.options!.length > 0);
+}
 
 // The field's shell: a daisyUI input that grows to hold chips. A caller adds
 // to it (font-data for values that are identifiers), never restyles it whole.
@@ -71,9 +100,13 @@ export default function Picker(props: PickerProps) {
   const typed = () => text().trim();
   const creatable = () =>
     !!props.onCreate && typed() !== "" && !props.options.some((o) => o.label.toLowerCase() === typed().toLowerCase());
-  const rows = createMemo<Row[]>(() =>
-    creatable() ? [...props.options, { value: CREATE_KEY, label: typed(), create: true }] : props.options,
-  );
+  const rows = createMemo<Row[]>(() => {
+    const grouped = withGroups(props.options);
+    if (!creatable()) return grouped;
+    const create: Row = { value: CREATE_KEY, label: typed(), create: true };
+    return isGrouped(props.options) ? [...grouped, { value: GROUP_KEY + CREATE_KEY, label: "", section: true, options: [create] }] : [...grouped, create];
+  });
+  const leaves = () => rows().flatMap((r) => (r.section ? (r.options ?? []) : [r]));
   const byValue = createMemo(() => new Map(props.options.map((o) => [o.value, o])));
   const pick = (r: Row) => {
     if (r.create) props.onCreate?.(r.label);
@@ -87,6 +120,14 @@ export default function Picker(props: PickerProps) {
     optionTextValue: "label" as const,
     optionLabel: "label" as const,
     optionDisabled: "disabled" as const,
+    get optionGroupChildren() {
+      return isGrouped(props.options) ? ("options" as const) : undefined;
+    },
+    sectionComponent: (p: ComboboxRootSectionComponentProps<Row>) => (
+      <Show when={p.section.rawValue.label}>
+        <Section class="px-3 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wide text-base-content/50">{p.section.rawValue.label}</Section>
+      </Show>
+    ),
     defaultFilter: (o: Row, input: string) => !!o.create || matches(o, input),
     onInputChange: setText,
     get placeholder() {
@@ -142,7 +183,7 @@ export default function Picker(props: PickerProps) {
   const list = () => (
     <Portal>
       <Content class="z-100 rounded-box border border-base-300 bg-base-100 shadow-lg">
-        <Show when={rows().some((r) => matches(r, text()) || r.create)} fallback={<p class="px-3 py-2 text-sm text-base-content/50">{props.emptyText ?? "No matches"}</p>}>
+        <Show when={leaves().some((r) => matches(r, text()) || r.create)} fallback={<p class="px-3 py-2 text-sm text-base-content/50">{props.emptyText ?? "No matches"}</p>}>
           <Listbox class="max-h-72 overflow-y-auto p-1 focus:outline-none" />
         </Show>
       </Content>

@@ -83,7 +83,8 @@ const health: FleetHealth = {
   owner_kind: "system",
   owner: "boardroom",
   health: "degraded",
-  transitions: [],
+  members: [],
+      transitions: [],
   systems: [],
   slots: [
     {

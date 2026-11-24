@@ -421,7 +421,7 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 		t.Fatalf("acknowledge: %v", err)
 	}
 
-	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", storage.HealthRange{}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

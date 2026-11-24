@@ -725,8 +725,9 @@ type Gateway interface {
 	// newest first, each row naming its owner (#793).
 	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
 	// ListSystemAlarms is the members' alarms in one read (#940): active ones
-	// whatever their age and those cleared inside window, newest first, capped.
-	ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error)
+	// whatever their age and those cleared inside the window, or those raised
+	// during an explicit range (#2425), newest first, capped.
+	ListSystemAlarms(ctx context.Context, systemID string, rng AlarmRange, limit int) ([]Alarm, error)
 	// ListFleetAlarms is the active alarms across every component in read, the
 	// Gateway injecting the scope (#2025): worst severity first, then newest,
 	// capped at limit. Unacknowledged narrows it to the queue nobody has worked;
@@ -1139,7 +1140,9 @@ type Gateway interface {
 	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions inside rng (the zero HealthRange is the whole history).
-	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read scope.Set) (*HealthReport, error)
+	// read scopes the system; compRead scopes its member list, so a member the
+	// caller may not read is never named (#2459, the fleet dots' rule).
+	SystemHealth(ctx context.Context, systemName string, rng HealthRange, read, compRead scope.Set) (*HealthReport, error)
 	// SystemHealths is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).

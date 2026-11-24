@@ -371,7 +371,7 @@ Patches a component's label or product. The name is not patchable: renaming is t
 
 List a component's alarms
 
-What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/alarms`
 - Gate: `component:read`
@@ -382,7 +382,9 @@ What is currently wrong with this component, newest first, with the component's 
 |---|---|---|---|
 | `include_cleared` | boolean | no | Include cleared alarms, so the list is the history rather than what is wrong now |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `since` | string | no | Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range |
 | `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
+| `until` | string | no | Only the alarms raised at or before this RFC 3339 time; must not be earlier than since |
 
 ## `acknowledge-component-alarm`
 
@@ -1530,7 +1532,7 @@ Patches a system's label, standard, or system_type. The name is not patchable: r
 
 List a system's members' alarms
 
-Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/alarms`
 - Gate: `system:read`
@@ -1540,6 +1542,8 @@ Every member's alarms in one read, newest first, each naming its component: the 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `since` | string | no | Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until |
+| `until` | string | no | The range's end, with since; defaults to now and must not be earlier than since |
 
 ## `list-system-events`
 
@@ -1560,7 +1564,7 @@ Returns the system's own events and its members', newest first, bounded to the l
 
 Read a system's health
 
-The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/health`
 - Gate: `system:read`

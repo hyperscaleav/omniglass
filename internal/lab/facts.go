@@ -202,6 +202,13 @@ func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
 		}
 		w := Walkthrough{ID: strings.TrimSuffix(path.Base(n), ".yaml"), Title: m.Title, Description: m.Description, Lab: append([]string{}, m.Lab...), Setup: []string{}}
 		for _, it := range m.Setup {
+			// A fault, a custom verb (a command issued) and the waits between
+			// them (put, a :verb post, until, pause, #2425) stage a moment the
+			// recorder needs, not a thing a create makes: only the creates are
+			// listed.
+			if it.Post == "" || strings.Contains(path.Base(it.Post), ":") {
+				continue
+			}
 			c, err := SetupCommand(it.Post, it.Body)
 			if err != nil {
 				return nil, fmt.Errorf("walkthrough %s: %w", n, err)

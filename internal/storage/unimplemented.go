@@ -1048,7 +1048,7 @@ func (UnimplementedGateway) EndExpiredSnoozes(context.Context, int) (int, error)
 func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemHealth(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) SystemHealth(context.Context, string, HealthRange, scope.Set, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ComponentHealthReport(context.Context, string, HealthRange, scope.Set) (*HealthReport, error) {
@@ -1091,7 +1091,7 @@ func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Durat
 	return nil, nil
 }
 
-func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Duration, int) ([]Alarm, error) {
+func (UnimplementedGateway) ListSystemAlarms(context.Context, string, AlarmRange, int) ([]Alarm, error) {
 	return nil, nil
 }
 

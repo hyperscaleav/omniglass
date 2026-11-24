@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { READ_ONLY_KIND_LOCK } from "../lib/catalog";
 import SecretTypes from "./SecretTypes";
 import { SECRET_TYPES_KEY, type SecretType } from "../lib/secret_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -67,7 +68,7 @@ describe("SecretTypes page", () => {
     expect(screen.queryByText(/New secret type/)).toBeNull();
   });
 
-  it("blade shows the declared fields and a greyed Edit / Delete pair with the official reason, even for the owner", async () => {
+  it("blade shows the declared fields and a read-only note instead of Edit / Delete, even for the owner", async () => {
     mount(admin);
     fireEvent.click(screen.getByText("snmp-community"));
     const blade = await waitFor(() => {
@@ -80,20 +81,14 @@ describe("SecretTypes page", () => {
     expect(within(blade).getByText("string")).toBeTruthy();
     expect(within(blade).getByText("secret")).toBeTruthy();
     expect(within(blade).getByText("operator")).toBeTruthy();
-    // The read-only note moved off the body into the locked pair's tooltip:
-    // both buttons sit in their usual footer spots, greyed, and the tooltip
-    // wrapper carries the shared official-row sentence (never seed language,
-    // which is not operator vocabulary).
+    // The footer carries one read-only note and no button: a kind with no write
+    // route draws no dead Edit or Delete (#2431). The tooltip holds the reason.
     expect(within(blade).queryByText(/seeded with the release and read-only/)).toBeNull();
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    const deleteBtn = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
-    expect(editBtn.disabled).toBe(true);
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
-    expect(deleteBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
-    // Greyed is not live: clicking enters no edit mode.
-    fireEvent.click(editBtn);
-    expect(within(blade).queryByText("Save")).toBeNull();
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
+    const note = within(blade).getByTestId("footer-note");
+    expect(note.textContent).toBe(READ_ONLY_KIND_LOCK);
+    expect(note.getAttribute("aria-label")).toBe(READ_ONLY_KIND_LOCK);
   });
 
   it("blade renders an empty fields list with its placeholder", async () => {

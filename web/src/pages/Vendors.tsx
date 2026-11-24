@@ -7,6 +7,7 @@ import KVStacked from "../components/KVStacked";
 import { VendorUsedBy } from "../components/CatalogUsage";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -252,7 +253,8 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
   const qc = useQueryClient();
   // Label leads and the name follows it, stopping the moment the operator
   // edits the name by hand (lib/entities).
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
@@ -294,15 +296,7 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads, e.g. Boreal.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Boreal" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow
-        bind="name"
-        hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
-      >
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="boreal" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Boreal" namePlaceholder="boreal" />
       <FieldRow label="Kind" hint="What role the vendor plays.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
           {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}

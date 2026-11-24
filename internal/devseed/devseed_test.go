@@ -1495,7 +1495,7 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 	all := scope.Set{All: true}
 	verdictOf := func(system string) string {
 		t.Helper()
-		rep, err := gw.SystemHealth(ctx, system, storage.HealthRange{}, all)
+		rep, err := gw.SystemHealth(ctx, system, storage.HealthRange{}, all, all)
 		if err != nil {
 			t.Fatalf("system health %s: %v", system, err)
 		}

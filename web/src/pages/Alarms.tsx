@@ -12,6 +12,7 @@ import { SnoozedBadge } from "../components/SnoozeButton";
 import AlarmTimeline from "../components/AlarmTimeline";
 import KVStacked from "../components/KVStacked";
 import { FLEET_ALARMS_PAGE, alarmDuration, fleetAlarms, fleetAlarmsKey, type Alarm } from "../lib/alarms";
+import { drawerHref } from "../lib/drawer_address";
 import { alarmFilterKeys, chipsFromParams, paramsFromChips, queryFromChips, stateFromParams, type AlarmState } from "../lib/alarmqueue";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { can, useMe } from "../lib/auth";
@@ -100,7 +101,12 @@ export default function Alarms() {
       key: "component", label: "Component", cell: (a) => (
         <span class="flex flex-col gap-0.5">
           <A href={`/components/${a.component_id}`} class="font-data text-sm hover:underline" onClick={(e) => e.stopPropagation()}>{a.component}</A>
-          <span class="max-w-40 truncate text-xs text-base-content/55" title={a.message}>{a.message}</span>
+          <span class="flex min-w-0 items-baseline gap-1.5 text-xs text-base-content/55">
+            <span class="max-w-40 truncate" title={a.message}>{a.message}</span>
+            <Show when={a.raised_by_rule}>
+              {(rule) => <A href={drawerHref("event_rule", rule())} class="flex-none font-data text-[11px] text-base-content/50 hover:text-base-content hover:underline" title="The rule that raised this alarm" onClick={(e) => e.stopPropagation()}>{rule()}</A>}
+            </Show>
+          </span>
         </span>
       ),
     },
@@ -216,6 +222,9 @@ export default function Alarms() {
                   <KVStacked label={a.cleared_at ? "Lasted" : "Raised for"} value={<AlarmDuration alarm={a} class="text-xs" />} />
                   <KVStacked label="Location" value={<span class="font-data text-xs">{a.location_path || "unplaced"}</span>} />
                   <KVStacked label="Systems" value={<span class="font-data text-xs">{(a.systems ?? []).join(", ") || "none"}</span>} />
+                  <Show when={a.raised_by_rule}>
+                    {(rule) => <KVStacked label="Raised by rule" value={<A href={drawerHref("event_rule", rule())} class="link font-data text-xs">{rule()}</A>} />}
+                  </Show>
                 </div>
                 <div class="flex"><AlarmActions componentId={a.component_id} alarm={a} surface={`${ACTIONS_SURFACE}:drawer`} show={actionsFor(a)} allow={{ snooze: canSnooze() }} /></div>
                 <AlarmTimeline component={a.component_id} alarmId={a.id} label={a.message} />
