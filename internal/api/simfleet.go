@@ -460,9 +460,17 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 				s.device = d
 			}
 			for _, al := range d.Aliases {
-				if al.ComponentID == id {
-					s.device, s.id, s.servedBy = d, d.ComponentID, d.Name
+				if al.ComponentID != id {
+					continue
 				}
+				// The alias resolved within the caller's action scope, but
+				// what is acted on is the owner: the same scope check must
+				// pass on it, or a caller scoped to the alias alone could
+				// drive (fire at, read) a device it was never granted.
+				if _, err := gw.ResolveActionTarget(ctx, "component", d.ComponentID, a.scopeFor(ctx, "component", "read"), action); err != nil {
+					return nil, mapComponentErr(err)
+				}
+				s.device, s.id, s.servedBy = d, d.ComponentID, d.Name
 			}
 		}
 		store, err := simCatalog()

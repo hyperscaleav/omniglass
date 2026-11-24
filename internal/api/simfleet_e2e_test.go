@@ -1,8 +1,10 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -543,5 +545,60 @@ func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
 	}
 	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.Profile != prof.Name || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
 		t.Fatalf("aimed simulation = %+v, want panel-1's device, served by it", sim)
+	}
+
+	// A caller who may read everything but update only the ALIAS must not
+	// drive the owning device through it: the action scope is re-checked on
+	// the owner the alias resolves to.
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tok, thash, tprefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pid string
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`insert into role (name, permissions) values ('alias-reader', '{"component:read","simulation:read"}'), ('alias-firer', '{"simulation:update"}')`, nil},
+		{`insert into machine (user_id, name) values ($1, 'alias-only')`, []any{pid}},
+		{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, thash, tprefix}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'alias-reader'), 'all', null)`, []any{pid}},
+		{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'alias-firer'), 'component', (select id::text from component where name = 'aimed'))`, []any{pid}},
+	} {
+		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+			t.Fatalf("%s: %v", q.sql, err)
+		}
+	}
+	// A fresh server: the role index is read once per process.
+	srv2 := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(&fakeHub{Registry: simhub.New()})))
+	defer srv2.Close()
+	fireBody, _ := json.Marshal(map[string]any{"surface": "line", "command": "GET INPUT"})
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, srv2.URL+"/api/v1/components/aimed/simulation:fire", bytes.NewReader(fireBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	_ = rb
+	// 409, 422 and 503 are answers from past the scope check (not simulated,
+	// no such surface, no simulator): reaching one is the bypass. Today a
+	// component-scoped simulation:update cannot be resolved against the
+	// component table at all (the route is all-scope in practice), so the
+	// request is refused before any of them; the owner re-check in resolve
+	// keeps it so if that ever changes.
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusServiceUnavailable:
+		t.Fatalf("a caller scoped to the alias alone got past the scope check on the owner: status %d", resp.StatusCode)
 	}
 }
