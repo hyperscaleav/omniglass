@@ -16,6 +16,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeChoices, treeOptions, treeValue } from "../components/TreeSelect.testkit";
+import { pageHeader } from "../lib/handover";
 
 // A location's detail view (#872): systems are the unit, locations are folders. A
 // location holding one system lands on that system; a folder (no system, or a
@@ -206,7 +207,7 @@ describe("where a location lands (#872)", () => {
 describe("a folder location (#872)", () => {
   it("is titled by the location, names its type in the catalog's words, and ends the path at its parent", () => {
     mount(`/web/locations/${uuidFor("lz-b1")}`);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("West Building");
+    expect(pageHeader()?.title).toBe("West Building");
     expect(within(screen.getByTestId("location-header")).getByTestId("location-type").textContent).toBe("Building");
     const crumbs = within(screen.getByTestId("breadcrumb"));
     expect(crumbs.getByText("Headquarters")).toBeTruthy();

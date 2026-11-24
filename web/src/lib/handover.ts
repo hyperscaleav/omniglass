@@ -1,3 +1,4 @@
+import type { JSX } from "solid-js";
 import { createSignal } from "solid-js";
 
 // Handing omnibot context (#2122, #2162): each prompt carries the page the
@@ -83,13 +84,15 @@ export function namePage(name: string | undefined) {
   setPageName(name);
 }
 
-const [headed, setHeaded] = createSignal(false);
+export type PageHeader = { title: string | JSX.Element; hint?: string };
+const [header, setHeader] = createSignal<PageHeader | undefined>();
 
-// pageHeaded is true while a page wearing the Page header is mounted: that header
-// owns the page title, so the top bar leaves the title out of its label.
-export const pageHeaded = headed;
-export function markPageHeaded(on: boolean) {
-  setHeaded(on);
+// pageHeader is the title and hint of the mounted Page, which the top bar renders
+// as the page's one header row (#2575); pageHeaded is true while one is mounted.
+export const pageHeader = header;
+export const pageHeaded = () => header() !== undefined;
+export function setPageHeader(h: PageHeader | undefined) {
+  setHeader(h);
 }
 
 // pageHere is the page the person is on, the context every prompt carries.

@@ -25,6 +25,7 @@ import { DRIVERS_KEY } from "../lib/drivers";
 import { uuidFor } from "../lib/testids";
 import { LOGS_KEY } from "../lib/logs";
 import { seedSeverityLevels } from "../lib/testseverity";
+import { pageHeader } from "../lib/handover";
 
 const acked: string[] = [];
 vi.mock("../lib/alarms", async (orig) => {
@@ -146,7 +147,7 @@ describe("the component leaf", () => {
     expect(within(trail).getByText("Boardroom System")).toBeTruthy();
     expect(within(trail).queryByText("Boardroom A")).toBeNull();
     expect(within(trail).queryByText("Video Bar 1")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Video Bar 1" })).toBeTruthy();
+    expect(pageHeader()?.title).toBe("Video Bar 1");
   });
 
   it("links Explore back to this component's row in the outline", async () => {

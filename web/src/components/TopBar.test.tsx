@@ -21,7 +21,7 @@ function bar(onOpenOmnibot?: () => void) {
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
-        <Route path="*" component={() => <TopBar section="Overview" onOpenPalette={() => {}} onOpenOmnibot={onOpenOmnibot} />} />
+        <Route path="*" component={() => <TopBar section="Admin" title="Overview" onOpenPalette={() => {}} onOpenOmnibot={onOpenOmnibot} />} />
       </Router>
     </QueryClientProvider>
   ));

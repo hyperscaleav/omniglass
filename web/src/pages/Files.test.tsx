@@ -7,6 +7,7 @@ import Files from "./Files";
 import { FILES_KEY } from "../lib/files";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { pageHeader } from "../lib/handover";
 
 afterEach(cleanup);
 
@@ -31,7 +32,7 @@ function mount() {
 describe("Files list chrome (#2447)", () => {
   it("wears the Page header and the lower-case filter placeholder", () => {
     mount();
-    expect(screen.getByRole("heading", { level: 1, name: "Files" })).toBeInTheDocument();
+    expect(pageHeader()?.title).toBe("Files");
     expect(screen.getByPlaceholderText(/^filter by name/)).toBeInTheDocument();
   });
 

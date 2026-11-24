@@ -74,12 +74,13 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   whether the row is absent or out of scope. A blade drilled over the root keeps its own stack and
   is not in the URL, and the param composes with the page's filter, sort and `?edit=1`. Every
   link into a drawer from another surface is `drawerHref(kind, address)`, never a hand-built string.
-- **Every page has the `Page` header.** A page opens with its title and a one-line hint, both read
-  from the nav metadata (`<Page route="/roles">`), so the sidebar, the top bar and the page say the
-  same words and a page never ships without one. A page that wraps a list takes the header like any
-  other; the full-page detail of a row renders its own heading instead. The header owns the title:
-  while a `Page` is mounted the top bar drops the title from its section label (keeping the group
-  and section, and its controls), and a route with no `Page` header keeps the full label there.
+- **The page header is the top bar: one row.** A page's title and one-line hint are read from the
+  nav metadata (`<Page route="/roles">`) and rendered by the top bar, never in a row of their
+  own: group then the page's one `h1` on the left (`Admin / Roles`), the hint as a muted line under
+  it (hidden on narrow windows), and the search, omnibot and notification controls on the right
+  of the same row. `Page` feeds the bar its title and hint; a route with no `Page` (a detail page,
+  Explore, Home, Profile) gets its nav label as the same `h1`, so every page has exactly one `h1`,
+  in the same place, and the body starts directly under the bar.
 - **One drawer width rule.** A drawer is the narrow panel (`max-w-md`) unless its body carries a
   table or a timeline, which takes the wide one (`max-w-2xl`; `wide` on a `FlatList` detail or on
   `Drawer`). The alarm drawer (its timeline) and the audit drawer (its change table) are wide; a

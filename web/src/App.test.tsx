@@ -5,9 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import App from "./App";
 import Page from "./components/Page";
 
-// The page title reads once: a page wearing the <Page> header owns it, so the
-// top bar drops the section label's title and keeps the controls. A route with
-// no <Page> header keeps its title in the top bar.
+// The page title reads once, in the top bar (#2575): a page wearing the <Page> header feeds it its title, so the
+// top bar renders it as the one h1 with the hint beside it. A route with
+// no <Page> header gets its label as the same h1.
 
 beforeEach(() => {
   window.history.pushState({}, "", "/roles");
@@ -31,17 +31,19 @@ function shell(body: () => any) {
 }
 
 describe("the page title is not repeated in the top bar", () => {
-  it("shows the title once, as the page heading, for a route with a Page header", () => {
+  it("shows the title once, as the one h1 in the top bar, for a route with a Page header", () => {
     shell(() => <Page route="/roles"><p>body</p></Page>);
-    expect(screen.getAllByRole("heading", { name: "Roles" })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     const bar = screen.getByRole("banner");
-    expect(within(bar).queryByText(/Roles/)).toBeNull();
-    expect(within(bar).getByText("Admin")).toBeTruthy();
+    expect(within(bar).getByRole("heading", { level: 1 }).textContent).toBe("Roles");
+    expect(within(bar).getByText(/Admin/)).toBeTruthy();
+    expect(within(bar).getByText(/built-in/i)).toBeTruthy();
     expect(within(bar).getByRole("button", { name: "Search and jump" })).toBeTruthy();
   });
 
   it("keeps the title in the top bar for a route with no Page header", () => {
     shell(() => <p>bare</p>);
-    expect(within(screen.getByRole("banner")).getByText(/Roles/)).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(within(screen.getByRole("banner")).getByRole("heading", { level: 1 }).textContent).toBe("Roles");
   });
 });
