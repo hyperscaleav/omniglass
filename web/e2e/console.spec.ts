@@ -1,4 +1,11 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
+
+// An entity's Delete sits in the Configure actions' ⋯ menu (#2439), whose panel
+// portals to the body: open the menu inside `scope`, then press Delete.
+async function deleteFrom(page: Page, scope: Locator) {
+  await scope.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+}
 
 // The browser-driven e2e tier for the console: drive it as an operator would, end
 // to end, against the real binary (the API, the typed client, the SPA), asserting
@@ -99,12 +106,12 @@ test.describe("operator console", () => {
     await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}$/);
     await expect(page.getByText("Location created.")).toBeVisible();
     await expect(page.getByRole("heading", { name: label })).toBeVisible();
-    await expect(page.getByRole("button", { name: /save changes/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
 
     // The edit is deep-linkable: ?edit=1 lands the Configure tab editing
     // directly, no clicks involved.
     await page.goto(page.url().split("?")[0] + "?edit=1");
-    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
     expect(trouble, "failed requests or console errors during the create").toEqual([]);
@@ -121,8 +128,7 @@ test.describe("operator console", () => {
     await row.click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
-    await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
-    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await deleteFrom(page, page.locator('aside[data-blade] [data-testid="tab-rail"]'));
     await confirmInDialog(page);
 
     // It is gone from the outline.
@@ -234,7 +240,7 @@ test.describe("operator console", () => {
     await row.first().click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
-    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await deleteFrom(page, page.locator('aside[data-blade] [data-testid="tab-rail"]'));
     await confirmInDialog(page);
     await expect(row).toHaveCount(0);
   });
@@ -436,7 +442,7 @@ test.describe("operator console", () => {
     await page.locator("aside[data-blade]").getByRole("tab", { name: "Configure" }).click();
     // The system's own face: its location's section above carries the
     // location's Delete (#2463).
-    await page.locator('aside[data-blade] [data-testid="configure-face"] button:text-is("Delete")').click();
+    await deleteFrom(page, page.locator('aside[data-blade] [data-testid="tab-rail"]'));
     await confirmInDialog(page);
     await expect(page.locator("aside[data-blade]")).toHaveCount(0);
     await expect.poll(async () => (await page.request.get(`/api/v1/systems/${systemId}`)).status()).toBe(404);
@@ -472,7 +478,7 @@ test.describe("operator console", () => {
     // The component owns an endpoint: refused, the endpoint named, deleted in
     // place, and the retry from the same dialog succeeds.
     await page.goto(`/web/components/${comp}?tab=configure`);
-    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await deleteFrom(page, page.getByTestId("tab-rail"));
     await expect(dialog).toHaveAccessibleName(`Delete component "${comp}"?`);
     await dialog.locator("footer").getByRole("button", { name: "Delete component" }).click();
     await expect(blockers.locator("[data-blocker^='endpoint:']")).toHaveCount(1);
@@ -488,7 +494,7 @@ test.describe("operator console", () => {
     // system is named as a link to its own page, deleted in place, and the
     // location goes on the retry.
     await page.goto(`/web/locations/${site}?tab=configure`);
-    await page.getByTestId("configure-face-location").getByRole("button", { name: "Delete", exact: true }).click();
+    await deleteFrom(page, page.getByTestId("configure-face-location"));
     await dialog.locator("footer").getByRole("button", { name: "Delete location" }).click();
     await expect(blockers.locator(`[data-blocker="system:${sys}"]`).getByRole("link")).toBeVisible();
     await blockers.getByRole("button", { name: /^Delete system/ }).click();
@@ -501,7 +507,7 @@ test.describe("operator console", () => {
     const lone = `e2e-del-lone-${stamp}`;
     expect((await page.request.post("/api/v1/systems", { data: { name: lone } })).ok()).toBeTruthy();
     await page.goto(`/web/systems/${lone}?tab=configure`);
-    await page.getByTestId("configure-face").getByRole("button", { name: "Delete", exact: true }).click();
+    await deleteFrom(page, page.getByTestId("tab-rail"));
     await confirmInDialog(page);
     await expect.poll(async () => (await page.request.get(`/api/v1/systems/${lone}`)).status()).toBe(404);
     await expect.poll(async () => (await page.request.get(`/api/v1/locations/${site}`)).status()).toBe(404);

@@ -33,6 +33,6 @@ steps:
     caption: The component's whole detail, what it is, the systems it serves, its vitals and how it is collected.
     poster: true
   - click: { role: tab, name: Configure }
-    caption: Configure carries the one form and every configuration panel, as on the page; Edit and Delete sit at its foot.
+    caption: Configure carries the one form and every configuration panel, as on the page; Edit and the actions menu with Delete sit at the right of the tab rail.
   - wait: { selector: 'aside[data-blade] [data-testid=entity-form]' }
     caption: Expand still opens the page, for its breadcrumb and a shareable address.

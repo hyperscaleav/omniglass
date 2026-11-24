@@ -11,7 +11,7 @@ setup:
 steps:
   - goto: /components/spare-mic?tab=configure
     caption: A spare microphone, sitting in Bay 2.
-  - click: '[data-testid="configure-face"] >> role=button[name="Edit"]'
+  - click: '[data-testid="tab-rail"] >> role=button[name="Edit"]'
     caption: Edit the device. Moving it is its own permission, component:move.
   - click: { role: button, name: Move to... }
     caption: Move to is its own action, apart from the memberships. It never rides on Save.
