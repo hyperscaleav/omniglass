@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "A held session (#816) surfaces as the `session-state` property per endpoint (establishing, up, recovering, down; transitions only, under the endpoint's standing listen task) plus the node's self-logs carrying the reasons; no `session_log` table and no `session` view. The session is held for an endpoint whose worklist carries a standing listen task over a transport with a session dialer (the line protocol over `tcp` today), polls on that endpoint borrow it, and recovery is a jittered exponential backoff with an attempt budget before down"
 ---
 
-- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [datapoints](/architecture/properties/), [glossary](/architecture/glossary/), [storage](/architecture/storage/)
+- **Date:** 2026-10-23 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [datapoints](/architecture/properties/), [glossary](/reference/glossary/), [storage](/architecture/storage/)
 - **Decision:** A stateful transport holds its connection (#816, epic #603's thin cut "no session
   table"), and its lifecycle is surfaced without a new store:
   1. **The state is a property.** `session-state` (seeded, `establishing`, `up`, `recovering`,

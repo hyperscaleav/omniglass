@@ -6,7 +6,7 @@ refs: [1110]
 summary: "A gate publishes its reason beside it (#1110, amending ADR-0158 point 5): `endpoint-rejection-reason`, the refusal's class and the component's own text, node-only, written in the same batch as `endpoint-rejection` whenever the node records a gate, held session or not; a gate adopted after a restart writes none. The reachability read serves `rejection` with its `reason` and `ts` whether or not a session is held, and the console's refusal notice keys on the gate, so a probe's refusal (a tls certificate, a udp terminal reply, an snmp authorizationError, the ssh probe's credential) shows the same reason, Retry and Trust this key as a rejected session, a retry waiting on the gate where no session exists"
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/), [nodes](/architecture/nodes/), [api](/architecture/api/), [glossary](/reference/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#1110, the architect's approval in session.)
   1. **The gate carries its reason.** The node publishes `endpoint-rejection-reason` beside
      `endpoint-rejection`, in the same batch and at the same time, whenever it records a gate

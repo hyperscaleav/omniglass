@@ -6,7 +6,7 @@ summary: "The acronym dictionary `title` consults is ONE key, `label.acronyms`, 
 ---
 
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/),
-  [core entities](/architecture/core-entities/), [glossary](/architecture/glossary/)
+  [core entities](/architecture/core-entities/), [glossary](/reference/glossary/)
 - **Decision:** The acronym dictionary a label rule's `title` consults is **one key**,
   `label.acronyms`, in a new `platform,client` settings namespace. An operator's list **replaces**
   the shipped one; the two are told apart by the settings engine's existing **provenance**

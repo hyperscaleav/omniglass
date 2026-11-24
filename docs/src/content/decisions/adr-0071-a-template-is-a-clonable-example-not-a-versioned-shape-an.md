@@ -5,7 +5,7 @@ status: "Accepted, amended by ADR-0827"
 summary: "A template is an example configuration an operator **clones**: creating from one is a one-time fork with no inheritance and no back-pointer, so templates stay **upgrade-safe because nothing remains connected to them**. The versioned-shape model retires (`component_template`, `system_template`, `*_version`, channels, the frozen BOM, instance pinning); a component's shape is its `product`, a system's is its `standard`, and a system **conforms** to that standard with live inheritance. Reverses ADR-0045's deferral and ADR-0049's \"templates stay `Design`\""
 ---
 
-- **Date:** 2026-07-31 | **Status:** Accepted | **Pages:** [templates](/architecture/templates/), [core entities](/architecture/core-entities/), [cascade](/architecture/cascade/), [glossary](/architecture/glossary/), [collection](/architecture/collection/)
+- **Date:** 2026-07-31 | **Status:** Accepted | **Pages:** [templates](/architecture/templates/), [core entities](/architecture/core-entities/), [cascade](/architecture/cascade/), [glossary](/reference/glossary/), [collection](/architecture/collection/)
 - **Decision:** A **template is an example configuration an operator clones**. Creating from one is a **one-time
   fork with no inheritance and no back-pointer**, so a template can be improved in any release without migrating
   anyone: **it is upgrade-safe precisely because nothing stays connected to it**. What an operator instantiates from

@@ -6,7 +6,7 @@ summary: "The trouble chain is event, firing, alarm, notification: a rule fires 
 refs: [2038, 2028, 606, 2082]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [alarms and actions](/architecture/alarms-actions/), [health](/architecture/health/)
 - **Decision:** (#2038.) One word per link, each verb owned by one noun.
   - **Event**, **alarm** and **notification** keep their meanings: an event is a point-in-time

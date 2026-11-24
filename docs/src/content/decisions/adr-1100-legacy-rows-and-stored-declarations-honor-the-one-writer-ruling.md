@@ -6,7 +6,7 @@ summary: "What was written or declared before the one-writer ruling is held to i
 refs: [1100]
 ---
 
-- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [metrics and properties](/architecture/properties/), [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/architecture/glossary/), [drivers](/admin/drivers/)
+- **Date:** 2026-10-24 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [metrics and properties](/architecture/properties/), [collection](/architecture/collection/), [api](/architecture/api/), [glossary](/reference/glossary/), [drivers](/admin/drivers/)
 - **Decision:** (#1100, approved in session on 2026-10-24, amending
   [ADR-0161](#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway).) The ruling held
   every new write; this holds what was written or declared before it, wherever it would still act.

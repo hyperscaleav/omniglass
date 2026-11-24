@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "Systems are the unit Omniglass monitors; places are folders and metadata; components are pieces of systems. A detail view is one per system, its place a card of context above the system card and its tabs; a place holding exactly one system lands on it, and a place holding none or several keeps its own view (a brief card per system, then the outline rooted there). The side panel is the glance (verdict, why, context, identity and tags), configuration staying on Configure, revising #826's one-form panel. The shipped system label rule leads with the place, and healthy is grey on every health pill (#872)"
 ---
 
-- **Date:** 2026-10-05 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/), [design system](/contributing/design-system/), [core entities](/architecture/core-entities/), [glossary](/architecture/glossary/), [health](/architecture/health/)
+- **Date:** 2026-10-05 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/), [design system](/contributing/design-system/), [core entities](/architecture/core-entities/), [glossary](/reference/glossary/), [health](/architecture/health/)
 - **Decision:** Systems are the unit Omniglass monitors; places are folders and metadata about
   where; components are the pieces of systems. So a detail view is one per system: the place as
   a card of context (its type, tags and its own panel), then the system card (verdict, since,

@@ -6,7 +6,7 @@ summary: "One noun for the physical grouping on every surface: location. Place r
 refs: [2030, 2028, 2039]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [glossary](/reference/glossary/),
   [core entities](/architecture/core-entities/)
 - **Decision:** (#2030.) The physical grouping is a **location**, classified by a **location
   type**, on every surface: API, schema, permissions, CLI, console and docs. **Place** retires as a

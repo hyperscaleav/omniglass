@@ -6,7 +6,7 @@ summary: "The generated ordinal becomes a stored nullable `component.ordinal`, b
 ---
 
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+  [storage](/architecture/storage/), [glossary](/reference/glossary/)
 - **Decision:** The number a generated name is minted from becomes a **stored, nullable**
   `component.ordinal`, written in the same advisory-locked transaction that already computed it.
   Nullable is the load-bearing part: a name an operator typed, and a name an operator renamed
