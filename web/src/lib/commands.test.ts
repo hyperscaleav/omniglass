@@ -95,6 +95,7 @@ describe("commandSteps", () => {
   it("anchors a redelivered command's delivered step on the first delivery and notes the last", () => {
     const steps = commandSteps(
       command({
+        status: "failed",
         phase: "failed",
         issued_at: "2026-10-25T10:00:00Z",
         first_delivered_at: "2026-10-25T10:00:06Z",
@@ -106,6 +107,10 @@ describe("commandSteps", () => {
     );
     expect(steps[1].at).toBe("2026-10-25T10:00:06Z");
     expect(steps[1].note).toBe("delivered 2 times, last +47s");
+    expect(steps[2].at).toBe("2026-10-25T10:00:16Z");
+    expect(steps[2].note).toBe("reported +50s, after it settled");
+    const ats = steps.filter((s) => s.reached).map((s) => new Date(s.at!).getTime());
+    expect(ats).toEqual([...ats].sort((a, b) => a - b));
   });
   it("notes a redelivery on the delivered step: how many times, and when the last came", () => {
     const steps = commandSteps(

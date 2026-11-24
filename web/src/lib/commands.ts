@@ -141,7 +141,17 @@ export function commandSteps(c: Command): CommandStep[] {
   const carried = !!c.endpoint && c.settled_by !== "issue";
   if (carried) {
     steps.push({ key: "delivered", label: c.outpost ? `Delivered to ${c.outpost}` : "Delivered", at: c.first_delivered_at ?? c.delivered_at, reached: !!c.delivered_at, note: deliveryNote(c) });
-    steps.push({ key: "executed", label: "Answered", at: c.executed_at, reached: !!c.executed_at });
+    // A report can land after the command settled (a timeout, then the outpost's
+    // late answer): the step is anchored on the settle so the arc reads in time
+    // order, and notes when the report came.
+    const late = !!c.executed_at && !!c.settled_at && !inFlight(c) && new Date(c.executed_at) > new Date(c.settled_at);
+    steps.push({
+      key: "executed",
+      label: "Answered",
+      at: late ? c.settled_at : c.executed_at,
+      reached: !!c.executed_at,
+      note: late ? `reported ${offsetWords(c.issued_at, c.executed_at!)}, after it settled` : undefined,
+    });
   }
   const terminal = !inFlight(c);
   steps.push({
