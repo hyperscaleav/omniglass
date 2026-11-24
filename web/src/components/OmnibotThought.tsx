@@ -1,7 +1,12 @@
-import { For, Match, Show, Switch } from "solid-js";
+import { Index, Match, Show, Switch } from "solid-js";
 import OmnibotStep from "./OmnibotStep";
 import { ChevronRight, TriangleAlert } from "./icons";
-import { stepFailed, thoughtSummary, type Thought } from "../lib/assistant";
+import { stepFailed, thoughtSummary, type Reasoning, type Step, type Thought } from "../lib/assistant";
+
+// as narrows a part to one kind, or undefined, for a Match's when.
+function as<K extends "reasoning" | "step">(p: Reasoning | Step, kind: K): Extract<Reasoning | Step, { kind: K }> | undefined {
+  return p.kind === kind ? (p as Extract<Reasoning | Step, { kind: K }>) : undefined;
+}
 
 // OmnibotThought is the reasoning and tool calls of one turn, folded into one
 // collapsed block (#2422) so the answer is what the eye lands on. Collapsed it
@@ -29,14 +34,14 @@ export default function OmnibotThought(props: { thought: Thought; live: boolean;
         </span>
       </summary>
       <div class="mt-1 flex flex-col gap-1.5 border-l-2 border-base-300 pl-2">
-        <For each={props.thought.parts}>
-          {(p) => (
+        <Index each={props.thought.parts}>
+          {(part) => (
             <Switch>
-              <Match when={p.kind === "reasoning" && p}>{(r) => <div class="whitespace-pre-wrap">{r().text}</div>}</Match>
-              <Match when={p.kind === "step" && p}>{(s) => <OmnibotStep step={s()} waiting={props.waitingId === s().id} />}</Match>
+              <Match when={as(part(), "reasoning")}>{(r) => <div class="whitespace-pre-wrap">{r().text}</div>}</Match>
+              <Match when={as(part(), "step")}>{(s) => <OmnibotStep step={s()} waiting={props.waitingId === s().id} />}</Match>
             </Switch>
           )}
-        </For>
+        </Index>
       </div>
     </details>
   );

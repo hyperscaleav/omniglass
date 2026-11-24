@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createResource, createSignal, onCleanup } from "solid-js";
+import { For, Index, Match, Show, Switch, createEffect, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import Button from "./Button";
 import Drawer from "./Drawer";
 import OmnibotThought from "./OmnibotThought";
@@ -11,6 +11,7 @@ import {
   closed,
   fail,
   groupThoughts,
+  type Block,
   initialRun,
   omnibotFacts,
   reduce,
@@ -75,8 +76,14 @@ function SubjectChip(props: { subject: Subject; onRemove?: () => void }) {
   );
 }
 
+// ofKind narrows a block to one kind, or undefined, for a Match's when.
+function ofKind<K extends Block["kind"]>(b: Block, kind: K): Extract<Block, { kind: K }> | undefined {
+  return b.kind === kind ? (b as Extract<Block, { kind: K }>) : undefined;
+}
+
 export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string; page?: Subject }) {
   const [state, setState] = createSignal<RunState>(initialRun);
+  const blocks = createMemo(() => groupThoughts(state().items));
   const [conversation, setConversation] = createSignal<string>();
   const [draft, setDraft] = createSignal("");
   const [credential, setCredential] = createSignal(false);
@@ -278,10 +285,11 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
               </p>
             </div>
           </Show>
-          <For each={groupThoughts(state().items)}>
-            {(item, idx) => (
+          {/* Index, not For: groupThoughts builds fresh blocks each event, and keying by reference would rebuild (and shut) an opened block (#2457). */}
+          <Index each={blocks()}>
+            {(block, idx) => (
               <Switch>
-                <Match when={item.kind === "user" && item}>
+                <Match when={ofKind(block(), "user")}>
                   {(u) => (
                     <div class="self-end flex max-w-[85%] flex-col items-end gap-1">
                       <Show when={u().context}>
@@ -295,21 +303,21 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
                     </div>
                   )}
                 </Match>
-                <Match when={item.kind === "text" && item}>
+                <Match when={ofKind(block(), "text")}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
                 </Match>
-                <Match when={item.kind === "thought" && item}>
+                <Match when={ofKind(block(), "thought")}>
                   {(t) => (
                     <OmnibotThought
                       thought={t()}
-                      live={busy() && idx() === groupThoughts(state().items).length - 1}
+                      live={busy() && idx === blocks().length - 1}
                       waitingId={state().interrupt?.id}
                     />
                   )}
                 </Match>
               </Switch>
             )}
-          </For>
+          </Index>
           <Show when={state().interrupt}>
             {(i) => (
               <div data-testid="omnibot-ask" class="rounded-box border border-warning/50 bg-warning/5 p-3 text-sm">

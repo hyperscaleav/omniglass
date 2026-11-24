@@ -168,6 +168,48 @@ describe("the omnibot panel", () => {
     expect(screen.getByText("Done.").closest("details")).toBeNull();
   });
 
+  it("keeps an opened thought block and call row open while the run streams on (#2457)", async () => {
+    const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`;
+    const enc = new TextEncoder();
+    let push!: (t: string) => void;
+    let end!: () => void;
+    runReply = () =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            push = (t) => c.enqueue(enc.encode(t));
+            end = () => c.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    open();
+    send("look");
+    await waitFor(() => expect(push).toBeTypeOf("function"));
+    push(
+      ev({ type: "RUN_STARTED", threadId: "conv-1", runId: "r" }) +
+        ev({ type: "REASONING_MESSAGE_START", messageId: "m1", role: "reasoning" }) +
+        ev({ type: "REASONING_MESSAGE_CONTENT", messageId: "m1", delta: "First look." }) +
+        ev({ type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "list-components" }),
+    );
+    const block = (await screen.findByTestId("omnibot-thinking")) as HTMLDetailsElement;
+    block.open = true;
+    const row = (await within(block).findByTestId("omnibot-step")) as HTMLDetailsElement;
+    row.open = true;
+    push(
+      ev({ type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: '{"limit":5}' }) +
+        ev({ type: "TOOL_CALL_RESULT", toolCallId: "c1", messageId: "t1", content: '{"components":[]}', role: "tool" }) +
+        ev({ type: "REASONING_MESSAGE_START", messageId: "m2", role: "reasoning" }),
+    );
+    await waitFor(() => expect(within(block).getByTestId("omnibot-step").textContent).toContain("limit=5"));
+    expect(screen.getByTestId("omnibot-thinking")).toBe(block);
+    expect(block.open).toBe(true);
+    expect(within(block).getByTestId("omnibot-step")).toBe(row);
+    expect(row.open).toBe(true);
+    push(ev({ type: "RUN_FINISHED", threadId: "conv-1", runId: "r", outcome: { type: "success" } }));
+    end();
+  });
+
   it("runs on a plain-http origin, where the browser has no crypto.randomUUID", async () => {
     vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
       throw new TypeError("crypto.randomUUID is not a function");

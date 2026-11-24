@@ -2,7 +2,7 @@
 title: "The omnibot panel shows each call through a renderer registry over a generic card"
 date: 2026-11-17
 status: "Accepted"
-summary: "The console's omnibot panel reads the :run AG-UI stream with a small reducer of its own, renders every tool call as a generic card unless a per-tool renderer reads its result, pauses an ask on a confirm card the next run resumes, and hands omnibot a credential by name, created through the secrets route with the person's token"
+summary: "The console's omnibot panel reads the :run AG-UI stream with a small reducer of its own, folds reasoning and calls into one collapsed thought block whose rows show a generic card unless a per-tool renderer reads its result, pauses an ask on a confirm card the next run resumes, and hands omnibot a credential by name, created through the secrets route with the person's token"
 refs: [1167, 2121, 2134, 2135, 2111, 1168]
 ---
 
