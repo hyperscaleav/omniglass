@@ -1,6 +1,6 @@
 import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import { pageHere, pendingTriage } from "./lib/handover";
+import { pageHere, pageHeaded, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import CommandPalette from "./components/CommandPalette";
@@ -8,7 +8,7 @@ import { SendCommandHost } from "./components/SendCommandButton";
 import { Toaster } from "./components/ui/Toast";
 import OmnibotPanel from "./components/OmnibotPanel";
 import { can, useMe } from "./lib/auth";
-import { sectionLabel } from "./lib/nav";
+import { sectionLabel, sectionTrail } from "./lib/nav";
 import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe } from "./lib/settings";
 
@@ -21,7 +21,9 @@ import { useSettingsMe } from "./lib/settings";
 // <html>), and the ⌘K keybinding.
 const App: ParentComponent = (props) => {
   const location = useLocation();
-  const section = createMemo(() => sectionLabel(location.pathname));
+  // A page with the Page header owns its title, so the bar keeps only the group
+  // and section the page sits in; a page without one keeps the full label.
+  const section = createMemo(() => (pageHeaded() ? sectionTrail(location.pathname) : sectionLabel(location.pathname)));
   const theme = useTheme();
   // The effective theme comes from the settings engine (/settings/me). Until it
   // resolves (or for a value it does not carry), the dark-only default holds.

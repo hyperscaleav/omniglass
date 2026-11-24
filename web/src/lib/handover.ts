@@ -83,6 +83,15 @@ export function namePage(name: string | undefined) {
   setPageName(name);
 }
 
+const [headed, setHeaded] = createSignal(false);
+
+// pageHeaded is true while a page wearing the Page header is mounted: that header
+// owns the page title, so the top bar leaves the title out of its label.
+export const pageHeaded = headed;
+export function markPageHeaded(on: boolean) {
+  setHeaded(on);
+}
+
 // pageHere is the page the person is on, the context every prompt carries.
 export function pageHere(pathname: string, search: string): Subject | undefined {
   return pageSubject(pathname, search, pageName());

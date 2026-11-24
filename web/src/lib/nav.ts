@@ -253,6 +253,14 @@ export function sectionLabel(pathname: string): string {
   return label;
 }
 
+// sectionTrail is sectionLabel without its last entry: the group and section a
+// page sits in, for the top bar of a page whose own header carries the title.
+export function sectionTrail(pathname: string): string {
+  const label = sectionLabel(pathname);
+  const i = label.lastIndexOf(" · ");
+  return i < 0 ? "" : label.slice(0, i);
+}
+
 // navPerms maps a gated route path to the permission tokens it requires, from the
 // SAME nav config that hides the sidebar button (an explicit `perm`, else
 // `<resource>:read`), plus the off-rail pages, whose gates outlive their rail

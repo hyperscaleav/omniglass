@@ -1,6 +1,6 @@
 import type { JSX } from "solid-js";
 import { createEffect, onCleanup, Show } from "solid-js";
-import { namePage } from "../lib/handover";
+import { markPageHeaded, namePage } from "../lib/handover";
 import { navByPath } from "../lib/nav";
 
 // Page scaffold: an optional breadcrumb slot, a title (string or outpost) + optional
@@ -29,6 +29,8 @@ export default function Page(props: {
   const subtitle = () => props.subtitle ?? meta()?.hint;
   createEffect(() => namePage(props.name));
   onCleanup(() => namePage(undefined));
+  markPageHeaded(true);
+  onCleanup(() => markPageHeaded(false));
   return (
     <section class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <div data-testid="page-header">
