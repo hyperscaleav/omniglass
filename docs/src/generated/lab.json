@@ -255,7 +255,7 @@
     {
       "id": "pick-a-time-range",
       "title": "Pick the time range a system page charts",
-      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the data section redrawn over the week.",
+      "description": "Open the Huddle Room, open the time range on its tab rail, pick the last 7 days, and read the metrics grid redrawn over the week.",
       "lab": [],
       "setup": []
     },

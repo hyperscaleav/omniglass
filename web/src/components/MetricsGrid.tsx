@@ -82,6 +82,10 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                 const m = () => (last = byName().get(name) ?? last);
                 const q = () => seriesQ[i()];
                 const buckets = () => q()?.data?.buckets ?? [];
+                // A preset's key is fixed while its window slides, so the chart's
+                // right edge is when its data was read, not the minute clock's
+                // last tick: a poll cannot return buckets past the edge it draws.
+                const edge = () => (win().hours === undefined ? win().to : q()?.dataUpdatedAt || win().to);
                 return (
                   <article data-testid={`metric-card-${name}`} class="flex min-w-0 flex-col gap-1 rounded-box border border-base-300 bg-base-100 p-3">
                     <header class="flex items-baseline gap-2">
@@ -124,7 +128,7 @@ export default function MetricsGrid(props: { kind: "components" | "systems"; id:
                           fluid
                           buckets={buckets()}
                           resolutionMs={win().stepSeconds * 1000}
-                          now={win().to}
+                          now={edge()}
                           windowMs={win().to - win().from}
                           unit={m().unit ? ` ${m().unit}` : ""}
                         />

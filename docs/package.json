@@ -11,12 +11,12 @@
     "test": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs scripts/lib/decision-anchors.test.mjs"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.9",
+    "@astrojs/markdown-remark": "^7.3.10",
     "@astrojs/markdown-satteri": "^0.4.10",
     "@astrojs/mdx": "^8.1.6",
-    "@astrojs/sitemap": "^3.7.5",
+    "@astrojs/sitemap": "^3.7.6",
     "@astrojs/starlight": "^0.43.1",
-    "astro": "^7.4.12",
+    "astro": "^7.4.13",
     "github-slugger": "^2.0.0",
     "remark-directive": "^4.0.0",
     "starlight-openapi": "^0.27.1",

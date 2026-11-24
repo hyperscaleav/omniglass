@@ -129,10 +129,11 @@ that describes the target:
    two-lane data plane, [time](/architecture/time/) as a primitive (#419, where those loops converge),
    and the CDC bridge on
    [storage](/architecture/storage/).
-5. **The read side, in full.** [Views](/architecture/views/) and the `ViewResult` renderer, composable
-   dashboards, and the exploration surfaces on the [UI](/architecture/ui/), plus the
-   [MCP](/architecture/api/#also-an-mcp-surface) and [AI](/architecture/ai/) seams over the same gateway
-   (the MCP server itself shipped with #1162; its view-backed tools arrive with views).
+5. **The read side, in full.** The view binding (a history read and a live tail from one cursor,
+   ADR-1830, which retired the `{columns, rows}` shape) and the run-views MCP tool have shipped on
+   [views](/architecture/views/), with the MCP server itself (#1162). Still ahead: named
+   views (#2051), the renderer library (#1826), composable dashboards, and the exploration surfaces on the
+   [UI](/architecture/ui/), plus the [AI](/architecture/ai/) seam over the same gateway.
 
 This arc is a reading order, not a schedule. Each numbered band becomes one or more epics with their own
 scope and approval before any branch; when a slice in it ships, the relevant spine page moves off
