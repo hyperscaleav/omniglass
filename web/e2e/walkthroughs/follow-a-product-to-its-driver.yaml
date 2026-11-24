@@ -1,0 +1,27 @@
+# The catalog can be followed (#2430). A product's vendor, driver and type are
+# links, its drawer says what its driver collects (distinct from the contract the
+# product declares) and how many components are that product; the driver's drawer
+# lists its products and components in turn, and a component is one click away.
+title: Follow a product to its driver and its components
+description: Open a product, read what its driver collects, follow the driver link to the driver's own drawer, and open one of the components the driver serves.
+steps:
+  - goto: /products?open=kestrel-vroom
+    caption: A product's drawer. Its vendor, driver and type are links, not text.
+    hold: 1500
+  - wait: { selector: '[data-testid=collected-by-driver] a' }
+    caption: Collected by its driver is what a component of this product will actually report, apart from the contract the product declares.
+    hold: 2000
+  - wait: { selector: '[data-testid=used-by-components] a[data-fleet-link=component]' }
+    caption: Used by counts the components that are this product, and links the first few.
+    hold: 1500
+  - click: 'aside[data-blade] a[data-entity-link=driver]'
+    caption: Follow the driver link.
+  - wait: { selector: '[data-testid=used-by-products] a[data-entity-link=product]' }
+    caption: The driver's own drawer lists the products that use it and the components it serves.
+    hold: 2000
+  - click: '[data-testid=used-by-components] a[data-fleet-link=component] >> nth=0'
+    caption: Open one of its components.
+  - wait: { selector: '[data-testid=component-card]' }
+    caption: The component itself, reached from the catalog in two clicks.
+    poster: true
+    hold: 1500

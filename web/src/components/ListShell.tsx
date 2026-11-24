@@ -1,5 +1,6 @@
-import { type Accessor, type JSX, Show, createMemo, createSignal } from "solid-js";
+import { type Accessor, type JSX, Show, createEffect, createMemo, createSignal, on } from "solid-js";
 import FilterBar from "./FilterBar";
+import Button from "./Button";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import { describeError } from "../lib/format";
 
@@ -32,6 +33,23 @@ export default function ListShell<T>(props: {
   // instead of growing the page. The FilterBar header (and any footer) stay
   // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
+  // Show "n of m" in the filter bar while chips filter. Opt-in: a body that
+  // filters for itself (the tree) cannot report the shell's filtered count.
+  counted?: boolean;
+  // Live filtering (#2462): typed text narrows the rows as it is typed, not only
+  // once Enter makes it a chip. Opt in; the default keeps the Enter contract.
+  live?: boolean;
+  // Paging (#2462): the body is handed at most this many rows, with a footer
+  // that says how many of how many and shows more. It starts over when the
+  // filter changes. Omit it for the whole list, as every other body gets.
+  pageSize?: number;
+  // The draft chip as it changes (see FilterBar), for a body that previews it
+  // itself instead of letting `live` narrow the rows.
+  onDraft?: (draft: Chip | null) => void;
+  // The `?open=` address the list could not resolve (lib/drawer_address): shows a
+  // non-disclosing not-found notice above the list. The same words for a row that
+  // does not exist and one the caller may not see; `onDismiss` clears the param.
+  missing?: { noun: string; address: string; onDismiss: () => void };
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {
   const [ownChips, setOwnChips] = createSignal<Chip[]>(props.initialChips ?? []);
@@ -39,13 +57,27 @@ export default function ListShell<T>(props: {
   const setChips = (c: Chip[]) => (props.onChips ? props.onChips(c) : setOwnChips(c));
   // Lazy: a controlled body that filters itself never reads `filtered`, so this
   // memo never runs for it (Solid memos are pull-based).
-  const filtered = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, chips())));
+  const [draft, setDraft] = createSignal<Chip | null>(null);
+  const matched = createMemo(() => props.rows.filter(buildPredicate(props.filterKeys, draft() ? [...chips(), draft()!] : chips())));
+  const [shown, setShown] = createSignal(props.pageSize ?? Infinity);
+  // A new filter starts the list from its first page again.
+  createEffect(on([chips, draft], () => setShown(props.pageSize ?? Infinity), { defer: true }));
+  const filtered = createMemo(() => (props.pageSize ? matched().slice(0, shown()) : matched()));
+  const count = () => (props.counted && chips().length > 0 ? { shown: matched().length, total: props.rows.length } : undefined);
   return (
     <div class="og-stack flex flex-col" classList={{ "h-full min-h-0": props.fill }}>
       <Show when={props.error}>
         <div role="alert" class="alert alert-error alert-soft text-sm">
           <span>{props.errorLabel ? `${props.errorLabel}: ` : ""}{describeError(props.error)}</span>
         </div>
+      </Show>
+      <Show when={props.missing}>
+        {(m) => (
+          <div role="status" data-testid="drawer-miss" class="alert alert-warning alert-soft flex items-center justify-between text-sm">
+            <span>No {m().noun} at “{m().address}”, or you cannot see it. The list is showing instead.</span>
+            <Button size="xs" onClick={m().onDismiss}>Dismiss</Button>
+          </div>
+        )}
       </Show>
       <div class="card overflow-hidden border border-base-300 bg-base-200 p-0" classList={{ "flex min-h-0 flex-1 flex-col": props.fill }}>
         <div class="border-b border-base-300 px-3 py-2.5">
@@ -57,10 +89,20 @@ export default function ListShell<T>(props: {
             bare
             clearable
             trailing={props.trailing}
+            count={count()}
             placeholder={props.placeholder}
+            onDraft={props.live || props.onDraft ? (c) => { if (props.live) setDraft(c); props.onDraft?.(c); } : undefined}
           />
         </div>
         {props.children(filtered, chips)}
+        <Show when={props.pageSize && matched().length > filtered().length}>
+          <div class="flex items-center justify-between gap-3 border-t border-base-300 px-3 py-2 text-xs text-base-content/60" data-testid="list-more">
+            <span class="tnum">Showing {filtered().length.toLocaleString()} of {matched().length.toLocaleString()}</span>
+            <Button size="xs" onClick={() => setShown(shown() + props.pageSize!)}>
+              Show {Math.min(props.pageSize!, matched().length - filtered().length).toLocaleString()} more
+            </Button>
+          </div>
+        </Show>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,6 +129,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	// The docs screenshots (#1790) photograph platform health with full
 	// sparklines: an hour of the server's figures, made up, for a capture only.
 	cmd.Flags().BoolVar(&script.platformHistory, "platform-history", false, "seed an hour of made-up platform history on the server, so platform health draws full lines in a capture (needs --ephemeral)")
+	// The single sign-on walkthrough (#2362) signs in through an identity
+	// provider on the lab network, which only a script's browser reaches.
+	cmd.Flags().BoolVar(&script.sso, "sso", false, "run Dex beside the lab as its identity provider, with single sign-on configured against it and a demo person linked (needs --ephemeral)")
 	// The lab footprint (#1277) measures a lab at a chosen cadence profile.
 	cmd.Flags().StringVar(&script.cadence, "cadence", "", "the outpost's cadence profile ("+lab.CadenceNames()+"); empty is lab, or walkthrough for a throwaway lab")
 	// The scale lab's knobs for proving it: a forced low memory limit shows
@@ -136,7 +140,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().DurationVar(&scale.timeout, "ready-timeout", defaultScaleTimeout, "a scale lab: how long its bring-up may take before it is removed, naming what is not up")
 	// The delivery table's proof that a refusal reads as loss (#1698).
 	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "cadence", "host-memory", "ready-timeout", "induce-unregistered"} {
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -149,6 +153,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest, f labFlags) error {
 	if f.keep && f.script.ephemeral {
 		return errors.New("--keep and --ephemeral contradict each other: a kept scale lab keeps its data when it stops, a throwaway one removes it")
+	}
+	if f.script.sso {
+		return errors.New("--sso is a seeded fleet's: a scale lab runs no identity provider")
 	}
 	if f.systems == 0 {
 		return fmt.Errorf("scenario %s is a scale lab scenario: say how many systems with --systems N (%d to %d)", m.Name, labscenario.MinSystems(m), labscenario.MaxSystems)
@@ -349,6 +356,7 @@ type labScript struct {
 	ephemeral       bool
 	noOutpost       bool
 	platformHistory bool
+	sso             bool
 	readyFile       string
 	whilePID        int
 	cadence         string
@@ -451,7 +459,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 			Pushers: pushers,
 			Owner:   lab.CurrentOwner(host), WorkDir: wd,
 			Ephemeral: f.script.ephemeral, NoOutpost: f.script.noOutpost, Cadence: f.script.cadence,
-			PlatformHistory: f.script.platformHistory, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
+			PlatformHistory: f.script.platformHistory, SSO: f.script.sso, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
 			ServerEnv: settingsEnv,
 		},
 		Image: choice, Fresh: f.fresh, PlantedFaults: plantedLabels(faults), Hold: true,
@@ -529,7 +537,7 @@ func dialDaemon(host string) error {
 
 func newLabSeedCmd() *cobra.Command {
 	var scenario, outpost, user, password, replay string
-	var noOutpost, induce, keep, platformHistory bool
+	var noOutpost, induce, keep, platformHistory, ssoDemo bool
 	var systems, reportSeconds int
 	cmd := &cobra.Command{
 		Use:    "seed",
@@ -550,7 +558,7 @@ func newLabSeedCmd() *cobra.Command {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
 			} else {
 				err = runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, outpost, user, password, config.Get("OMNIGLASS_LAB_OUTPOST_TOKEN_HASH"), noOutpost,
-					pushers, reportSeconds, platformHistory)
+					pushers, reportSeconds, platformHistory, ssoDemo)
 			}
 			if err != nil {
 				return err
@@ -572,6 +580,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&induce, "induce-unregistered", false, "with --systems: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	cmd.Flags().BoolVar(&keep, "keep", false, "a kept scale lab: keep the fleet a database already holds and re-enroll its site outposts")
 	cmd.Flags().StringVar(&replay, "omnibot-replay", lab.DefaultOmnibotReplay, "the omnibot recording to write for the server to play")
+	cmd.Flags().BoolVar(&ssoDemo, "sso", false, "configure single sign-on against the lab's Dex and link its demo person (#2362)")
 	return cmd
 }
 
@@ -594,7 +603,9 @@ func newLabSeedCmd() *cobra.Command {
 // the server's platform component (#1790), so a capture of platform health
 // draws full lines. Only a capture asks for it: a learner's lab reads what
 // its own server measured.
-func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, password, outpostTokenHash string, noOutpost bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory bool) error {
+// ssoDemo configures single sign-on against the lab's Dex (#2362, the lab's
+// --sso): see seedLabSSO.
+func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, password, outpostTokenHash string, noOutpost bool, pushers map[string]lab.PusherToken, reportSeconds int, platformHistory, ssoDemo bool) error {
 	sc, err := devseed.LookupScenario(scenario)
 	if err != nil {
 		return err
@@ -633,6 +644,12 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 			return err
 		}
 	}
+	if ssoDemo {
+		if err := seedLabSSO(ctx, gw); err != nil {
+			return err
+		}
+		summary += ", with single sign-on through the lab's Dex"
+	}
 	all := scope.Set{All: true}
 	// With no outpost to run, none is enrolled.
 	present := false
@@ -659,6 +676,60 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 		return err
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Outpost: present, Summary: summary}))
+	return nil
+}
+
+// seedLabSSO configures single sign-on against the lab's Dex (#2362): the
+// platform oauth2-client secret holding the lab's demo client, the sso
+// settings naming the issuer and that secret (offline_access among the
+// scopes, so the re-check has a refresh token to redeem), Dex's host in the
+// egress allow list (it answers plain http on the lab network), and the demo
+// person, a viewer, with their identity at Dex linked. The seed's trusted
+// lane writes the settings directly, as the settings file would. Idempotent:
+// what is already there is kept.
+func seedLabSSO(ctx context.Context, gw *storage.PG) error {
+	all := scope.Set{All: true}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{Name: lab.SSOClientSecret, SecretType: "oauth2-client", OwnerKind: "platform",
+		Label:  "The lab's demo client at its Dex",
+		Fields: map[string]string{"client_id": lab.DexClientID, "client_secret": lab.DexClientSecret}}, all, true); err != nil && !errors.Is(err, storage.ErrSecretExists) {
+		return fmt.Errorf("lab seed: the sso client secret: %w", err)
+	}
+	bindings, err := gw.GetSettingBindings(ctx, "platform")
+	if err != nil {
+		return err
+	}
+	allow := []any{}
+	for _, b := range bindings {
+		if b.Namespace == "notification" {
+			if l, ok := b.Doc["egress_allow"].([]any); ok {
+				allow = l
+			}
+		}
+	}
+	if !slices.Contains(allow, any(lab.DexService)) {
+		allow = append(allow, lab.DexService)
+		if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "notification", map[string]any{"egress_allow": allow}); err != nil {
+			return err
+		}
+	}
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "sso", map[string]any{
+		"issuer": lab.DexIssuer, "client_secret": lab.SSOClientSecret, "scopes": "openid email profile offline_access",
+	}); err != nil {
+		return err
+	}
+	u, err := gw.CreatePerson(ctx, "", storage.PersonSpec{Username: lab.SSODemoUser, Email: lab.SSODemoEmail, Label: lab.SSODemoLabel}, all)
+	if errors.Is(err, storage.ErrUsernameTaken) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("lab seed: the sso demo person: %w", err)
+	}
+	if _, err := gw.CreateGrant(ctx, "", u.ID, storage.GrantSpec{Role: lab.SSODemoRole, ScopeKind: "all"}, all); err != nil {
+		return fmt.Errorf("lab seed: the sso demo person's grant: %w", err)
+	}
+	if _, err := gw.LinkIdentity(ctx, "", u.ID, lab.SSODemoIdentity()); err != nil {
+		return fmt.Errorf("lab seed: link the sso demo person: %w", err)
+	}
 	return nil
 }
 

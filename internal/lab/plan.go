@@ -26,6 +26,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/simoutpost"
+	"github.com/hyperscaleav/omniglass/internal/sso"
 )
 
 // Defaults for the options a user does not set.
@@ -287,6 +288,13 @@ type Options struct {
 	// throwaway lab takes it, and never a scale lab, whose figures are the
 	// measurement.
 	PlatformHistory bool
+	// SSO runs an identity provider beside the lab (#2362), Dex with the
+	// lab's demo client and person (sso.go), and has the seed configure
+	// single sign-on against it and link the demo person, so a walkthrough
+	// signs in through the provider's own login form. A script's only: the
+	// issuer is an address on the lab network, which a learner's browser on
+	// the host cannot reach, so it needs Ephemeral.
+	SSO bool
 	// OmnibotReplay names the recording the lab's omnibot plays when no live
 	// model is configured (#2298); empty is the scenario's own (OmnibotReplayFor).
 	OmnibotReplay string
@@ -411,8 +419,10 @@ type Service struct {
 	// Container is the container's name.
 	Container string
 	Image     string
-	Cmd       []string
-	Env       []string
+	// Entrypoint overrides the image's entrypoint; empty keeps it.
+	Entrypoint []string
+	Cmd        []string
+	Env        []string
 	// User overrides the image's user; empty keeps it (the omniglass image
 	// runs nonroot).
 	User    string
@@ -465,11 +475,18 @@ type Spec struct {
 	// one per site, instead.
 	Outpost  Service
 	Outposts []Service
+	// IdP is the identity provider a lab with SSO runs (Options.SSO); empty
+	// in every other lab.
+	IdP Service
 }
 
 // Services are the project's containers in start order.
 func (s Spec) Services() []Service {
-	out := []Service{s.DB, s.Seed, s.Server}
+	out := []Service{s.DB}
+	if s.IdP.Name != "" {
+		out = append(out, s.IdP)
+	}
+	out = append(out, s.Seed, s.Server)
 	if s.Outpost.Name != "" {
 		out = append(out, s.Outpost)
 	}
@@ -556,6 +573,9 @@ func Plan(o Options) (Spec, error) {
 	if o.PlatformHistory && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab's platform figures are its measurement, so it cannot take --platform-history")
 	}
+	if o.SSO && o.Scale() {
+		return Spec{}, fmt.Errorf("--sso is a seeded fleet's: a scale lab runs no identity provider")
+	}
 	for _, e := range o.ServerEnv {
 		if name, _, _ := strings.Cut(e, "="); !strings.HasPrefix(name, settings.EnvPrefix) && !strings.HasPrefix(name, secret.EnvPrefix) {
 			return Spec{}, fmt.Errorf("lab: %s is not a server setting or secret variable (%s<NAMESPACE>__<KEY> or %s<NAME>)", name, settings.EnvPrefix, secret.EnvPrefix)
@@ -563,6 +583,9 @@ func Plan(o Options) (Spec, error) {
 	}
 	if o.PlatformHistory && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("--platform-history seeds made-up platform figures for a capture, so it needs --ephemeral: a learner's lab reads its own")
+	}
+	if o.SSO && !o.Ephemeral {
+		return Spec{}, fmt.Errorf("--sso runs an identity provider on the lab network, which a browser on this machine cannot reach, so it needs --ephemeral: a script's lab, whose browser joins that network")
 	}
 	if o.NoOutpost && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("a lab with no outpost is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
@@ -640,6 +663,9 @@ func Plan(o Options) (Spec, error) {
 	}
 	if o.PlatformHistory {
 		seedCmd = append(seedCmd, "--platform-history")
+	}
+	if o.SSO {
+		seedCmd = append(seedCmd, "--sso")
 	}
 	replay := o.OmnibotReplay
 	if replay == "" {
@@ -736,6 +762,22 @@ func Plan(o Options) (Spec, error) {
 		}
 	}
 	services := []*Service{&spec.DB, &spec.Seed, &spec.Server}
+	if o.SSO {
+		// Dex writes its configuration from its env, where Dex reads it, and
+		// serves it; the issuer and the callback are both addresses on the
+		// lab network.
+		spec.IdP = Service{
+			Name: DexService, Container: o.Project + "-" + DexService + "-1", Image: DexImage,
+			Entrypoint: []string{"sh", "-c", `printf '%s' "$` + dexConfigEnv + `" > /tmp/dex.yaml && exec dex serve /tmp/dex.yaml`},
+			Env:        []string{dexConfigEnv + "=" + DexConfig(DexIssuer, ServerURL+sso.CallbackPath)},
+			Health:     []string{"CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:" + strconv.Itoa(DexPort) + "/dex/.well-known/openid-configuration"},
+			Restart:    "on-failure",
+			Labels:     svc(DexService, false),
+			Role: "Dex, the identity provider a script's lab signs in through with single sign-on: one demo " +
+				"client (the server) and one demo person, on the lab network only.",
+		}
+		services = append(services, &spec.IdP)
+	}
 	if o.Scale() {
 		// One outpost per site, each its own container with its own loopback,
 		// where its simulator serves that site's components.
@@ -882,6 +924,9 @@ func ParsePusherTokens(s string) (map[string]PusherToken, error) {
 func configHash(s Service) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s\x00%q\x00%s\x00%q", s.Image, s.Cmd, s.User, s.CapAdd)
+	if len(s.Entrypoint) > 0 {
+		fmt.Fprintf(h, "\x00entrypoint=%q", s.Entrypoint)
+	}
 	for _, k := range SortedKeys(s.Sysctls) {
 		fmt.Fprintf(h, "\x00%s=%s", k, s.Sysctls[k])
 	}

@@ -237,6 +237,9 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qState string
+				var qSince string
+				var qUntil string
 				var qUnacknowledged bool
 				var qLimit int
 				var qSeverity []string
@@ -246,13 +249,22 @@ func generatedCommands() []*cobra.Command {
 				var qPageToken string
 				cmd := &cobra.Command{
 					Use:     "list",
-					Short:   "List the fleet's active alarms",
-					Long:    "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+					Short:   "List the fleet's alarms",
+					Long:    "What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
 					Example: "  omniglass alarm list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/alarms")
 						q := url.Values{}
+						if cmd.Flags().Changed("state") {
+							q.Set("state", fmt.Sprintf("%v", qState))
+						}
+						if cmd.Flags().Changed("since") {
+							q.Set("since", fmt.Sprintf("%v", qSince))
+						}
+						if cmd.Flags().Changed("until") {
+							q.Set("until", fmt.Sprintf("%v", qUntil))
+						}
 						if cmd.Flags().Changed("unacknowledged") {
 							q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
 						}
@@ -282,6 +294,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qState, "state", "", "Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all")
+				cmd.Flags().StringVar(&qSince, "since", "", "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it")
+				cmd.Flags().StringVar(&qUntil, "until", "", "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since")
 				cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at: the queue an operator, or an agent, works")
 				cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, the worst first; 0 or absent means 200")
 				cmd.Flags().StringSliceVar(&qSeverity, "severity", nil, "Only alarms at these severity levels, by name (see /severity-levels); repeat the parameter for several")
@@ -407,7 +422,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
 						Short:   "List your omnibot conversations",
-						Long:    "Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.",
+						Long:    "Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use.",
 						Example: "  omniglass assistant conversation list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -430,7 +445,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "run <name>",
 						Short:   "Run omnibot on one of your conversations",
-						Long:    "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.",
+						Long:    "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.",
 						Example: "  omniglass assistant conversation run <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -946,6 +961,83 @@ func generatedCommands() []*cobra.Command {
 						cmd.Flags().StringVar(&fNotificationType, "notification-type", "", "The type to send (empty returns to the official one per transition)")
 						cmd.Flags().StringVar(&fOn, "on", "", "The transitions it fires on (replaces the set)")
 						cmd.Flags().StringVar(&fWhen, "when", "", "The predicate (empty always holds)")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "identity-link",
+					Short: "Commands for the identity-link resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list",
+							Short:   "List your own identity links",
+							Long:    "Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).",
+							Example: "  omniglass auth me identity-link list",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/identity-links")
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fCurrentPassword string
+						var fProvider string
+						cmd := &cobra.Command{
+							Use:     "start",
+							Short:   "Start linking your own identity at the provider",
+							Long:    "Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409.",
+							Example: "  omniglass auth me identity-link start --current-password current_password",
+							Args:    pathArgs(0),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/identity-links:start")
+								body := map[string]any{}
+								if cmd.Flags().Changed("current-password") {
+									body["current_password"] = fCurrentPassword
+								}
+								if cmd.Flags().Changed("provider") {
+									body["provider"] = fProvider
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password: a link outlives the session that makes it, so it is confirmed as a password change is")
+						_ = cmd.MarkFlagRequired("current-password")
+						cmd.Flags().StringVar(&fProvider, "provider", "", "The identity provider to link, by name")
+						return cmd
+					}()
+					return cmd
+				}())
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var fCurrentPassword string
+						cmd := &cobra.Command{
+							Use:     "unlink <link>",
+							Short:   "Unlink one of your own identity links",
+							Long:    "Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.",
+							Example: "  omniglass auth me identity-link unlink <link> --current-password current_password",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/auth/me/identity-links/%s:unlink", pathSegment(args[0]))
+								body := map[string]any{}
+								if cmd.Flags().Changed("current-password") {
+									body["current_password"] = fCurrentPassword
+								}
+								return runAPICommand(cmd, "POST", path, body)
+							},
+						}
+						cmd.Flags().StringVar(&fCurrentPassword, "current-password", "", "Your current password, as linking asks")
+						_ = cmd.MarkFlagRequired("current-password")
 						return cmd
 					}()
 					return cmd
@@ -1790,10 +1882,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var qIncludeCleared bool
 					var qUnacknowledged bool
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's alarms",
-						Long:    "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1805,6 +1899,12 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("unacknowledged") {
 								q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
 							}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -1813,6 +1913,8 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
 					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended")
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the alarms raised at or before this RFC 3339 time; must not be earlier than since")
 					return cmd
 				}()
 				return cmd
@@ -2165,7 +2267,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a component",
-					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2377,6 +2479,44 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
+				Use:   "health",
+				Short: "Commands for the health resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "Read a component's health",
+						Long:    "The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass component health list 'hq.west.level-2.boardroom-a.$comp.videobar-1'",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/health", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
 				Use:   "identity-binding",
 				Short: "Commands for the identity-binding resource",
 			}
@@ -2515,17 +2655,41 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qProduct string
+				var qDriver string
+				var qComponentType string
+				var qLimit int
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List components in scope",
-					Long:    "Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.",
+					Long:    "Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.",
 					Example: "  omniglass component list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/components")
+						q := url.Values{}
+						if cmd.Flags().Changed("product") {
+							q.Set("product", fmt.Sprintf("%v", qProduct))
+						}
+						if cmd.Flags().Changed("driver") {
+							q.Set("driver", fmt.Sprintf("%v", qDriver))
+						}
+						if cmd.Flags().Changed("component-type") {
+							q.Set("component_type", fmt.Sprintf("%v", qComponentType))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qProduct, "product", "", "Only components of this product (name or uuid)")
+				cmd.Flags().StringVar(&qDriver, "driver", "", "Only components of a product this driver serves (name or uuid)")
+				cmd.Flags().StringVar(&qComponentType, "component-type", "", "Only components of a product classified under exactly this component type (name or uuid)")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "Cap the page at this many rows; 0 or absent is no cap. total still counts every match.")
 				return cmd
 			}()
 			return cmd
@@ -4526,7 +4690,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location",
-					Long:    "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
+					Long:    "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create.",
 					Example: "  omniglass location create --location-type location_type",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4604,7 +4768,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a location",
-					Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4640,17 +4804,31 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a location's health",
-						Long:    "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/locations/%s/health", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since")
 					return cmd
 				}()
 				return cmd
@@ -6238,7 +6416,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "simulation <name>",
 					Short:   "Get an outpost's simulator",
-					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.",
+					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.\n\nA value equal to a subcommand name (observation) runs that subcommand; put -- before it to pass it as <name>, e.g. `outpost simulation -- observation`.",
 					Example: "  omniglass outpost simulation <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6417,17 +6595,31 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qDeclaresMetric string
+				var qDeclaresProperty string
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List products",
-					Long:    "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+					Long:    "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.",
 					Example: "  omniglass product list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/products")
+						q := url.Values{}
+						if cmd.Flags().Changed("declares-metric") {
+							q.Set("declares_metric", fmt.Sprintf("%v", qDeclaresMetric))
+						}
+						if cmd.Flags().Changed("declares-property") {
+							q.Set("declares_property", fmt.Sprintf("%v", qDeclaresProperty))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qDeclaresMetric, "declares-metric", "", "Only products whose contract declares this metric (name or uuid)")
+				cmd.Flags().StringVar(&qDeclaresProperty, "declares-property", "", "Only products whose contract declares this property (name or uuid)")
 				return cmd
 			}()
 			return cmd
@@ -6837,6 +7029,44 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "search",
+			Short: "Commands for the search resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qQ string
+				var qLimit int
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "Find locations, systems, components and catalog entries by name",
+					Long:    "The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.",
+					Example: "  omniglass search list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/search")
+						q := url.Values{}
+						if cmd.Flags().Changed("q") {
+							q.Set("q", fmt.Sprintf("%v", qQ))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qQ, "q", "", "The text to find, matched case-insensitively anywhere in a name or label")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "The most hits returned for each kind")
 				return cmd
 			}()
 			return cmd
@@ -7434,6 +7664,33 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qProduct string
+				cmd := &cobra.Command{
+					Use:     "plan-component <name>",
+					Short:   "Plan a simulated component",
+					Long:    "Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409.",
+					Example: "  omniglass simulation plan-component <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/outposts/%s/simulation/components:plan", pathSegment(args[0]))
+						q := url.Values{}
+						if cmd.Flags().Changed("product") {
+							q.Set("product", fmt.Sprintf("%v", qProduct))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qProduct, "product", "", "A product a simulator profile simulates")
+				_ = cmd.MarkFlagRequired("product")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "plan-system <standard>",
 					Short:   "Plan a simulated system to a standard",
@@ -7911,17 +8168,31 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' alarms",
-						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/alarms", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until")
+					cmd.Flags().StringVar(&qUntil, "until", "", "The range's end, with since; defaults to now and must not be earlier than since")
 					return cmd
 				}()
 				return cmd
@@ -8103,7 +8374,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a system",
-					Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8173,17 +8444,31 @@ func generatedCommands() []*cobra.Command {
 			}()
 			cmd.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					var qSince string
+					var qUntil string
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/health", pathSegment(args[0]))
+							q := url.Values{}
+							if cmd.Flags().Changed("since") {
+								q.Set("since", fmt.Sprintf("%v", qSince))
+							}
+							if cmd.Flags().Changed("until") {
+								q.Set("until", fmt.Sprintf("%v", qUntil))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
+					cmd.Flags().StringVar(&qSince, "since", "", "Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent")
+					cmd.Flags().StringVar(&qUntil, "until", "", "Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since")
 					return cmd
 				}()
 				return cmd
@@ -8192,17 +8477,31 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var qStandard string
+				var qLimit int
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List systems in scope",
-					Long:    "Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.",
+					Long:    "Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.",
 					Example: "  omniglass system list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/systems")
+						q := url.Values{}
+						if cmd.Flags().Changed("standard") {
+							q.Set("standard", fmt.Sprintf("%v", qStandard))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				cmd.Flags().StringVar(&qStandard, "standard", "", "Only systems built to this standard (name or uuid)")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "Cap the page at this many rows; 0 or absent is no cap. total still counts every match.")
 				return cmd
 			}()
 			return cmd
@@ -9644,6 +9943,71 @@ func generatedCommands() []*cobra.Command {
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/users/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "identity-link",
+				Short: "Commands for the identity-link resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fIdentifier string
+					cmd := &cobra.Command{
+						Use:     "create <id>",
+						Short:   "Link a person to an identity at the provider",
+						Long:    "Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it.",
+						Example: "  omniglass user identity-link create <id> --identifier identifier",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/identity-links", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("identifier") {
+								body["identifier"] = fIdentifier
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fIdentifier, "identifier", "", "The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)")
+					_ = cmd.MarkFlagRequired("identifier")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <link>",
+						Short:   "Unlink a person from an identity at the provider",
+						Long:    "Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.",
+						Example: "  omniglass user identity-link delete <id> <link>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/identity-links/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a person's identity links",
+						Long:    "Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.",
+						Example: "  omniglass user identity-link list <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/identity-links", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
 					return cmd

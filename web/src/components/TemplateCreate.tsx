@@ -4,6 +4,7 @@ import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import FieldRow from "./FieldRow";
 import InfoTip from "./InfoTip";
+import SegmentedControl from "./ui/SegmentedControl";
 import TemplatePreview from "./TemplatePreview";
 import StartFromTemplateForm, { useHeldSlots, useHeldStandards } from "./StartFromTemplateForm";
 import { RotateCcw } from "./icons";
@@ -29,38 +30,40 @@ export function useTemplateChoice() {
 }
 
 export function CreateModeChoice(props: { mode: CreateMode; onChange: (m: CreateMode) => void }): JSX.Element {
-  // A segmented toggle, not two buttons: the form below owns the one primary
+  // A segmented choice, not two buttons: the form below owns the one primary
   // action, so the choice wears the tab chrome rather than an action intent.
-  const opt = (m: CreateMode, label: string) => (
-    <button
-      type="button"
-      class="tab"
-      classList={{ "tab-active": props.mode === m }}
-      aria-pressed={props.mode === m}
-      onClick={() => props.onChange(m)}
-    >
-      {label}
-    </button>
-  );
   return (
     <div class="flex items-center gap-2" data-testid="create-mode">
-      <div role="group" aria-label="How to start" class="tabs tabs-box tabs-sm w-fit">
-        {opt("scratch", "From scratch")}
-        {opt("template", "From a template")}
-      </div>
+      <SegmentedControl
+        label="How to start"
+        value={props.mode}
+        onChange={(v) => props.onChange(v as CreateMode)}
+        options={[
+          { value: "scratch", label: "From scratch" },
+          { value: "template", label: "From a template" },
+        ]}
+      />
       <InfoTip label="templates" text={TEMPLATE_HINT} />
     </div>
   );
 }
 
-export default function TemplateCreate(props: { kind: TemplateKind; location?: string; onDone: (href: string) => void }): JSX.Element {
+export default function TemplateCreate(props: { kind: TemplateKind; location?: string; onDone: (href: string) => void; onCancel?: () => void }): JSX.Element {
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates }));
   // byLabel stays here (#757): the template catalog is served by kind then name
   // from the binary, not by the SQL label rule, so the order is composed here.
   const options = createMemo(() => [...ofKinds(templates.data ?? [], [props.kind])].sort(byLabel));
   const [chosen, setChosen] = createSignal("");
   const picked = () => options().find((t) => t.name === chosen());
-  const { byName } = useHeldStandards();
+  const { byName, standards } = useHeldStandards();
+  // A system template is a system built to ONE standard, so only a standard that
+  // ships one is offered; the rest are not hidden, they just have no example yet.
+  const standardScope = () => {
+    if (props.kind !== "system_template" || !standards.data) return null;
+    const covered = new Set(options().map((t) => t.system?.standard).filter(Boolean)).size;
+    const total = standards.data.length;
+    return total > covered ? { covered, total } : null;
+  };
   const heldSlots = useHeldSlots(byName, () => picked()?.system?.standard ?? "");
   return (
     <div class="flex flex-col gap-4" data-testid="template-create">
@@ -80,6 +83,13 @@ export default function TemplateCreate(props: { kind: TemplateKind; location?: s
           <For each={options()}>{(t) => <option value={t.name}>{entityLabel(t)} ({templateSummary(t)})</option>}</For>
         </select>
       </FieldRow>
+      <Show when={standardScope()}>
+        {(sc) => (
+          <p class="-mt-2 text-[11px] text-base-content/50" data-testid="template-scope">
+            {sc().covered} of the {sc().total} standards ship a system template. A standard with none has no system template yet: start from scratch and choose that standard.
+          </p>
+        )}
+      </Show>
       <Show when={picked()} keyed>
         {(t) => (
           <>
@@ -88,7 +98,7 @@ export default function TemplateCreate(props: { kind: TemplateKind; location?: s
               <Show when={t.description}><p class="text-sm text-base-content/70">{t.description}</p></Show>
               <TemplatePreview template={t} all={templates.data ?? []} heldSlots={heldSlots()} />
             </section>
-            <StartFromTemplateForm template={t} all={templates.data ?? []} location={props.location} onDone={props.onDone} />
+            <StartFromTemplateForm template={t} all={templates.data ?? []} location={props.location} onDone={props.onDone} onCancel={props.onCancel} />
           </>
         )}
       </Show>

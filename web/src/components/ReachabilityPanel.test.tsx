@@ -47,10 +47,19 @@ const seed: Reachability = {
 
 function mount(data: Reachability = seed) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...REACHABILITY_KEY(data.component)], data);
+  // The expanded row is the endpoint detail body (#2436), which reads the
+  // endpoint by id: every row carries one, and the endpoints list holds it.
+  const rows = data.endpoints.map((e, i) => ({ ...e, id: e.id ?? uuidFor(`${data.component}-${e.endpoint}-${i}`) }));
+  qc.setQueryData([...REACHABILITY_KEY(data.component)], { ...data, endpoints: rows });
+  qc.setQueryData(
+    [...ENDPOINTS_KEY],
+    rows.map((e) => ({ id: e.id, name: e.endpoint, transport: e.transport, component_id: data.component, component: data.component, outpost: e.outpost })),
+  );
   return render(() => (
     <QueryClientProvider client={qc}>
-      <ReachabilityPanel name={data.component} />
+      <Router>
+        <Route path="/*" component={() => <ReachabilityPanel name={data.component} />} />
+      </Router>
     </QueryClientProvider>
   ));
 }
@@ -101,7 +110,8 @@ describe("ReachabilityPanel", () => {
     // the gate breakdown lists the layer checks and the state line
     expect(getByText("icmp-reachable")).toBeTruthy();
     expect(getByText("tcp-open")).toBeTruthy();
-    expect(getByText(/probed by/)).toBeTruthy();
+    // the outpost that probes it, in the endpoint detail body
+    expect(getByText("outpost-a")).toBeTruthy();
   });
 
   it("derives stale and unknown health results client-side", () => {
@@ -258,6 +268,17 @@ describe("a held session on the row", () => {
     expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
   });
 
+  // The expanded body renders no notice of its own in the row host (#2436): the
+  // row's own notice, above the body, is the one place a refusal reads, so
+  // expanding a rejected row must neither drop the reason nor repeat it.
+  it("keeps a rejected session's reason on an expanded row, once", () => {
+    mount({ component: compId, endpoints: [telnetRow("rejected")] });
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    expect(screen.getByTestId("endpoint-detail").dataset.host).toBe("row");
+    expect(screen.getAllByTestId("session-reason")).toHaveLength(1);
+    expect(screen.getByTestId("session-reason").textContent).toBe("auth: auth rejected");
+  });
+
   it("shows no notice for an up session", () => {
     mount({ component: compId, endpoints: [telnetRow("up")] });
     expect(screen.getByTestId("session-pill").dataset.state).toBe("up");
@@ -270,20 +291,24 @@ describe("a held session on the row", () => {
   // survive the next poll.
   it("keeps an expanded row open across a poll that hands back fresh objects", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [telnetRow("up")] });
+    const row = (ts?: string) => ({ ...telnetRow("up", ts), id: uuidFor("telnet-row") });
+    qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [row()] });
+    qc.setQueryData([...ENDPOINTS_KEY], [{ id: uuidFor("telnet-row"), name: "telnet", transport: "telnet", component_id: compId, component: "panel-1", outpost: "outpost-a" }]);
     render(() => (
       <QueryClientProvider client={qc}>
-        <ReachabilityPanel name={compId} />
+        <Router>
+          <Route path="/*" component={() => <ReachabilityPanel name={compId} />} />
+        </Router>
       </QueryClientProvider>
     ));
     const toggle = screen.getByRole("button", { expanded: false });
     fireEvent.click(toggle);
-    expect(screen.getByText(/probed by/)).toBeTruthy();
-    qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [telnetRow("up", new Date(Date.now() + 5_000).toISOString())] });
+    expect(screen.getByTestId("endpoint-detail")).toBeTruthy();
+    qc.setQueryData([...REACHABILITY_KEY(compId)], { component: compId, endpoints: [row(new Date(Date.now() + 5_000).toISOString())] });
     // The query notifies its observers asynchronously: let the poll land.
     await new Promise((r) => setTimeout(r, 20));
     expect(document.body.contains(toggle)).toBe(true);
-    expect(screen.getByText(/probed by/)).toBeTruthy();
+    expect(screen.getByTestId("endpoint-detail")).toBeTruthy();
   });
 });
 
@@ -498,7 +523,7 @@ describe("ReachabilityPanel pending reason", () => {
     });
     const notice = getByTestId("endpoint-pending-notice");
     expect(notice.textContent).toContain("edge-1");
-    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts\?n=edge-1$/);
+    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts\?open=edge-1$/);
   });
 
   it("shows no reason once the endpoint has a state", () => {

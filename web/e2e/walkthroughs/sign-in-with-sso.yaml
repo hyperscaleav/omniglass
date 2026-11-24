@@ -1,0 +1,35 @@
+# Sign in with single sign-on (#2362): the sign-in page offers the identity
+# provider beside the password form, the provider's own login form signs the
+# person in, and they land in the console as the person their identity is
+# linked to. Their profile shows the link, iss|sub, and that it just signed
+# them in.
+#
+# The lab runs Dex beside it (lab: [sso], the lab's --sso): its seed configures
+# single sign-on against that Dex and links its demo person, Avery Quinn, a
+# viewer, to the identity Dex vouches for them by (internal/lab/sso.go holds
+# the demo values). Dex's issuer is its address on the lab network, which the
+# recorder's browser reaches and a learner's browser does not, so only a
+# script's lab runs it.
+title: Sign in with single sign-on
+description: Sign in through the identity provider instead of a password, land in the console as the person your identity is linked to, and see that link on your profile.
+lab: [sso]
+steps:
+  - goto: /login
+    caption: With single sign-on configured, the sign-in page offers the identity provider beside the password form.
+  - click: { role: button, name: Sign in with SSO }
+    caption: Sign in with SSO sends the browser to the organization's identity provider.
+  - wait: { selector: '#login' }
+    caption: The provider's own login form. Omniglass never sees this password.
+  - type: { target: '#login', text: avery@example.com }
+    caption: Sign in as the person you are at the provider.
+  - type: { target: '#password', text: lab-demo-password }
+    caption: The provider checks the password.
+  - click: '#submit-login'
+    caption: It sends the browser back to Omniglass, which verifies the provider's answer.
+  - wait: { text: Avery Quinn, exact: true }
+    caption: Signed in, as the Omniglass person this identity is linked to.
+  - goto: /profile
+    caption: The profile lists the identities you sign in through.
+  - wait: { selector: '[data-testid=profile-sso] li:has-text("last sign-in")' }
+    caption: The link, the provider's subject and its issuer, and that it just signed you in.
+    poster: true

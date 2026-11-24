@@ -1,13 +1,15 @@
-import { entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
-import { CalcWriterCell, CalcWriterLine } from "../components/RuleLink";
+import { WriterCell, WriterLine } from "../components/RuleLink";
+import { KeyUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -24,6 +26,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Properties: the categorical lane of the signal catalog (Catalog > Properties),
 // the twin of the Metrics page. A property is a typed, registered non-numeric
@@ -49,7 +52,7 @@ function originBadge(official: boolean): JSX.Element {
 const columns: FlatColumn<PropertyRow>[] = [
   identityColumn<PropertyRow>(),
   { key: "data_type", label: "Type", width: "90px", sortVal: (r) => r.data_type, cell: (r) => typeBadge(r.data_type) },
-  { key: "written_by", label: "Written by", width: "130px", sortVal: (r) => r.written_by?.rule ?? "", cell: (r) => <CalcWriterCell writer={r.written_by} /> },
+  { key: "written_by", label: "Written by", width: "130px", sortVal: (r) => r.written_by?.rule ?? r.writer_class ?? "", cell: (r) => <WriterCell row={r} /> },
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
 
@@ -129,7 +132,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
   async function removeProperty() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete property "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "property", name: r.name }))) return;
     setErr(null);
     try {
       await deleteProperty(r.name);
@@ -176,7 +179,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Type" value={typeBadge(r().data_type)} />
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
-          <Show when={r().written_by}>{(w) => <CalcWriterLine writer={w()} />}</Show>
+          <WriterLine row={r()} />
           <BladeField
             bind="label"
             value={() => r().label ?? ""}
@@ -197,6 +200,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
               <span class="text-[11px] text-base-content/40">Editing the schema is a follow-up; set it via the API for now.</span>
             </div>
           </Show>
+          <KeyUsedBy lane="property" name={r().name} />
         </div>
       )}
     </Show>
@@ -207,9 +211,9 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
 // the data types are the non-numeric lane (a numeric signal is a metric type).
 export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal("");
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [dataType, setDataType] = createSignal<PropertyDataType>("string");
-  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -229,7 +233,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       const created = await createProperty({
         name: name().trim(),
         data_type: dataType(),
-        label: label().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
@@ -246,16 +250,11 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase kebab name, e.g. serial-number or interface-reachable.">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="serial-number" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Serial number" namePlaceholder="serial-number" />
       <FieldRow label="Data type">
         <select class="select select-bordered w-full" value={dataType()} onChange={(e) => setDataType(e.currentTarget.value as PropertyDataType)}>
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={label()} placeholder="Serial number" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

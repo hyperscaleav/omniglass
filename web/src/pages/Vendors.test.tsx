@@ -64,22 +64,20 @@ describe("Vendors page", () => {
     expect(unlabelled).toBe(rows.length - 1);
   });
 
-  it("lists a seeded vendor, an official row greys edit/delete, and create opens for an admin", async () => {
+  it("lists a seeded vendor, an official row shows the read-only note, and create opens for an admin", async () => {
     mount();
     expect(await screen.findByText("Crestron")).toBeInTheDocument();
 
-    // official row: the pair renders greyed with the official reason
+    // official row: one read-only note, no dead pair
     fireEvent.click(screen.getByText("Crestron"));
     const blade = await waitFor(() => {
       const el = asides()[0];
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    const deleteBtn = within(blade).getByRole("button", { name: /delete/i }) as HTMLButtonElement;
-    const editBtn = within(blade).getByLabelText("Edit") as HTMLButtonElement;
-    expect(deleteBtn.disabled).toBe(true);
-    expect(editBtn.disabled).toBe(true);
-    expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
+    expect(within(blade).getByTestId("footer-note").textContent).toBe("Official, read-only");
+    expect(within(blade).queryByLabelText("Edit")).toBeNull();
+    expect(within(blade).queryByText("Delete")).toBeNull();
 
     // create is available to an admin. Anchored, because the Name field's hint
     // mentions the label it derives from.

@@ -1,5 +1,5 @@
 import { For, createSignal } from "solid-js";
-import { Popover } from "@kobalte/core/popover";
+import Popover from "./ui/Popover";
 import { Columns, Check, GripVertical } from "./icons";
 
 // ColumnMenu: the inventory grid's column hide/show/reorder popup, lifted out of
@@ -23,12 +23,14 @@ const box = (on: boolean) =>
 export default function ColumnMenu(props: ColumnMenuProps) {
   const [drag, setDrag] = createSignal<number | null>(null);
   return (
-    <Popover placement="bottom-end" gutter={6}>
-      <Popover.Trigger class="btn btn-quiet btn-sm btn-square" title="Columns" aria-label="Columns">
-        <Columns size={15} />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content class="menu z-50 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none">
+    <Popover class="btn btn-quiet btn-sm btn-square"
+      placement="bottom-end"
+      gutter={6}
+      title="Columns"
+      aria-label="Columns"
+      contentClass="menu z-50 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none"
+      content={
+        <>
           <p class="menu-title px-2 pb-1.5 text-[10.5px]">Columns · drag to reorder</p>
           <ul class="flex flex-col">
             <For each={props.cols()}>
@@ -63,8 +65,10 @@ export default function ColumnMenu(props: ColumnMenuProps) {
               )}
             </For>
           </ul>
-        </Popover.Content>
-      </Popover.Portal>
+        </>
+      }
+    >
+      <Columns size={15} />
     </Popover>
   );
 }

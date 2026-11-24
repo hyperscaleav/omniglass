@@ -7,24 +7,27 @@ sidebar:
   badge:
     text: Partial
     variant: note
+walkthroughs:
+  - id: find-a-cleared-alarm
 screenshots:
   - id: alarm-troubleshoot
     path: /web/systems/auditorium
-    alt: "The auditorium DSP's blade: its Why strip holds the high alarm, No route to host on the control interface, with the bot button that asks omnibot to troubleshoot it."
-    # The auditorium is degraded on its DSP's high alarm; the alarm opens the
-    # DSP's blade, whose Why row carries the troubleshoot button.
+    alt: "The auditorium DSP's blade, its detail page in a side panel: the Why strip holds the high alarm the reachability rule raised, Reachability lost, with Acknowledge, Snooze, the bot button that asks omnibot to troubleshoot it and its timeline, then what it is, the systems it serves, its vitals and collection."
+    # The auditorium is degraded on its DSP's high alarm; the alarm's component
+    # opens the DSP's blade, whose Why row carries the troubleshoot button.
     steps:
       - action: click
-        selector: "[data-testid=alarm-strip] button"
+        selector: "[data-testid=alarm-strip] button:has-text('dsp-1')"
       - action: wait
-        selector: "[data-testid=blade-why] button[aria-label*='with omnibot']"
-    # The blade's since line, and behind it the system's since line and its
-    # alarm strip (the row's age), all count from the capture's own clock.
+        selector: "aside[data-blade] [data-testid=leaf-alarms] button[aria-label*='with omnibot']"
+    # The blade's since line and alarm ages, its collection
+    # ages, and behind it the system's since line and its alarm strip, all
+    # count from the capture's own clock.
     mask:
-      - selector: "[data-testid=blade-since]"
-        width: 184
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=alarm-strip]"
+      - "[data-testid=leaf-alarms]"
+      - "aside[data-blade] [data-testid=leaf-collection]"
   - id: alarm-queue
     path: /web/alarms?state=active
     alt: "The Alarms page: the fleet's active alarms, worst first, one row each with its component, system, location, when it was raised and whether it is acknowledged or snoozed, and the Acknowledge, Snooze and omnibot buttons on each row."
@@ -35,6 +38,7 @@ screenshots:
     # follows from the seed's alarms.
     mask:
       - "[data-testid=alarm-queue] td:nth-child(5)"
+      - "[data-testid=alarm-queue] td:nth-child(6)"
 ---
 
 An **alarm** says what is wrong with one component. **Health** is what that means for the systems the
@@ -89,7 +93,13 @@ That is why the two are independent, and the panel shows both facts at once:
 - a cleared alarm that was **never acknowledged** says so in the history: it came and went with
   nobody looking, which is worth spotting later.
 
-The **eye** button beside an active alarm acknowledges it. Unlike raising and clearing, it is
+Wherever an alarm is read (a component's **Why** strip, the alarms panel, the Alarms page and its drawer,
+a blade), what you can do with it is **one button group** on one line: **Acknowledge** (the eye),
+**Snooze**, **Clear** where the surface offers it, the omnibot button and the timeline clock, all the same
+height. On a narrow container the group wraps under the alarm's message as a whole, never member by member,
+and a control you may not use is simply absent.
+
+The **Acknowledge** button beside an active alarm acknowledges it. Unlike raising and clearing, it is
 available **without entering edit mode**: edit mode guards this component's own data, and an
 acknowledgement writes none of it. It needs the `alarm:acknowledge` permission, which the
 **Operator** role carries; a viewer sees the indicator and gets no button.
@@ -163,8 +173,10 @@ row has no button.
 
 **Alarms** in the sidebar is the fleet's alarm queue: every active alarm on the components you can read, one
 row each, the worst severity first and the newest first within a severity. Each row names its **component**
-(a link to its page), the **systems** it is a member of, the **location** it sits in, **when** it was raised
-(hover for the exact time) and its state: **new** until somebody acknowledges it, **acked** after, and a
+(a link to its page), the **systems** it is a member of and the **location** it sits in (each a link; a
+component placed only through its system shows that system's location), **when** it was raised
+(hover for the exact time), **how long** it has been raised (a **Duration** that counts up while it stays
+open) and its state: **new** until somebody acknowledges it, **acked by** the person who did after, and a
 snooze chip while its notifications are held back. It is the page to triage from, so an operator does not
 open a component at a time. Click a row for its **timeline**, the same one the component's panel opens.
 
@@ -174,8 +186,7 @@ open a component at a time. Click a row for its **timeline**, the same one the c
 location and everything below it), **ack** (yes or no) and **snoozed** (yes or no). The filter is the
 address: `/alarms?state=active&severity=disaster,high&ack=no` is the unacknowledged Disaster and High
 alarms, and a link to it opens the same queue (it is also how the page is handed to omnibot, as its route and
-filter, never a uuid). `state=active` is the one state the queue has; a cleared alarm is history and stays on
-its component's panel. A bare word filters the loaded rows by component, system or message.
+filter, never a uuid). A bare word filters the loaded rows by component, system or message.
 
 **Work it from the row.** **Acknowledge**, **Snooze** (or **Unsnooze**) and the omnibot button are the
 same controls as on the component's panel and need the same permissions (`alarm:acknowledge`,
@@ -187,6 +198,28 @@ The queue loads 100 alarms and offers **Load 100 more** below them, so a storm o
 of cutting off. The same read is `GET /alarms` (`omniglass alarm list`, with `--severity`, `--location`,
 `--acknowledged`, `--snoozed` and `--page-token`), and is scoped the same way: an alarm on a component
 you cannot read is never named. Acknowledging many at once is not built yet.
+
+### Cleared alarms and how long each lasted
+
+The queue shows what is wrong now. To read what was wrong, switch the **Open / Cleared / All** control
+above the list to **Cleared**: every alarm that has cleared, with **Raised**, **Cleared** and **Duration**
+columns, so "that display went dark yesterday, for how long?" is a row, not a hunt through components.
+**All** shows both, an open alarm's Duration counting up and a cleared one's fixed at raised to cleared.
+Click the Duration header to sort the long ones to the top. The state is in the address
+(`/alarms?state=cleared`), alongside the filters, so a link to it opens the same history. A cleared row opens
+the same drawer, with the alarm's timeline and **Lasted**; a cleared alarm has nothing left to acknowledge,
+but a snooze still applies.
+
+A component's own **Recently cleared** list and a system's Activity say the same, "lasted 12m", in the same
+words. It is one formatter everywhere, the coarsest two units (45s, 12m, 3h 12m, 2d 2h).
+
+Over the API it is `GET /alarms?state=cleared` (`omniglass alarm list --state cleared`), with the state parameter one of
+`active` (the default), `cleared` or `all`, and `since` and `until` (RFC 3339) bounding the **overlap** of an
+alarm's raised-to-cleared interval with the range: an alarm raised before `since` and still open in the range
+is included, one cleared before `since` or raised after `until` is not, and `since` after `until` is a 400. Permission and scope are unchanged: you only read the
+history of components you can read. The history is kept; nothing prunes it.
+
+::walkthrough{#find-a-cleared-alarm}
 
 ## Health on a system or location
 
@@ -208,7 +241,13 @@ the first state and you need to be able to see past it to the second.
 
 A location's health is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
 when one system anywhere beneath it is out. A system's health is the worst contribution among the **slots** it
-needs filled.
+needs filled, and the line beside it names the slots behind it. A component in the system that fills
+**no slot** is tracked, and its open alarms show on the system with **not in a slot** beside them, but
+it does not count toward the system's health. A system's health comes only from rules somebody
+declared, its slots and what each slot's impact says losing it costs, never from an alarm merely
+existing: an alarm that should not move the system (a touch panel's firmware being out of date, say)
+stays on the component until somebody places it in a slot. A system-level rule such as "any open alarm
+on a member degrades this system" is something you would declare, and is designed under #1002.
 
 **The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
 view names the chain instead: **Why** leads its Overview, each alarm naming the down component

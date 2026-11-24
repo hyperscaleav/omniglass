@@ -6,6 +6,7 @@ import Drawer from "../components/Drawer";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import KVStacked from "../components/KVStacked";
+import { SeverityUsedBy } from "../components/CatalogUsage";
 import InfoTip from "../components/InfoTip";
 import SeverityBadge from "../components/SeverityBadge";
 import { identityColumn } from "../components/IdentityCell";
@@ -42,6 +43,7 @@ import { bindSelectValue } from "../lib/selectvalue";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
+import { confirmDelete } from "../lib/confirm";
 
 // Severity levels (Catalog > Actions > Severity, #921): the ranked catalog an
 // event rule raises at (#917), beside the rules. Each row is a level's rank, its
@@ -174,7 +176,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
   const canDelete = () => canFleet(me.data, "severity_level", "delete");
 
   async function remove(l: SeverityLevel) {
-    if (!confirm(`Delete severity level "${l.name}"? The server refuses it while an alarm or a rule still names it.`)) return;
+    if (!(await confirmDelete({ kind: "severity level", name: l.name, consequence: "The server refuses it while an alarm or a rule still names it." }))) return;
     setErr(null);
     try {
       await deleteSeverityLevel(l.name);
@@ -238,6 +240,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
             />
             <KVStacked label="Color" value={<span class="font-data">{l().color}</span>} />
           </div>
+          <SeverityUsedBy name={l().name} />
         </div>
       )}
     </Show>
@@ -318,6 +321,9 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={d.label} placeholder="Major" onInput={(e) => setD("label", e.currentTarget.value)} />
+      </FieldRow>
       <FieldRow bind="name" info={SEVERITY_HINTS.name}>
         <input
           class="input input-bordered w-full font-data"
@@ -328,9 +334,6 @@ function LevelForm(p: { mode: "create" | "edit"; level?: SeverityLevel; onSaved:
           onInput={(e) => { setD("name", e.currentTarget.value); touch("name"); }}
         />
         {err("name")}
-      </FieldRow>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={d.label} placeholder="Major" onInput={(e) => setD("label", e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Color" info={SEVERITY_HINTS.color}>
         <select

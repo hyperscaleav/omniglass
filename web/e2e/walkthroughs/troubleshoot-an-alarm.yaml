@@ -1,7 +1,7 @@
 # Troubleshoot an alarm (#2164): one click from an alarm row hands omnibot that
 # alarm, by its component and when it was raised, and runs the triage-alarm
 # skill the server ships. The lab's server plays a recording
-# (internal/lab/omnibot-replay.yaml) that answers a triage run with a triage of
+# (internal/lab/omnibot/default.yaml) that answers a triage run with a triage of
 # the meeting 405 video bar, so the alarm is raised there, off camera, and every
 # run goes the same way.
 title: Troubleshoot an alarm

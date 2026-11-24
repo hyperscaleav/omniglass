@@ -535,6 +535,9 @@ components:
         location:
           description: The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue
           type: string
+        location_id:
+          description: That location's uuid, the stable form of location; only on the fleet queue
+          type: string
         location_path:
           description: That location's dotted ancestor path, root first (for example boi.17c)
           type: string
@@ -559,6 +562,13 @@ components:
           description: "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
           format: date-time
           type: string
+        system_ids:
+          description: Those systems' uuids, in the same order as systems; only on the fleet queue
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         systems:
           description: The names of the systems the alarm's component is a member of; only on the fleet queue
           items:
@@ -831,6 +841,27 @@ components:
         - body
         - created_at
       type: object
+    AssistantOmnibotFacts:
+      additionalProperties: false
+      properties:
+        mode:
+          description: "live: a model answers any question; replay: the server plays a recording, which answers only its prompts; none: omnibot cannot run here"
+          enum:
+            - live
+            - replay
+            - none
+          type: string
+        prompts:
+          description: The questions a recording answers, in recorded order; empty unless mode is replay
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - mode
+        - prompts
+      type: object
     AssistantSettings:
       additionalProperties: false
       properties:
@@ -954,9 +985,15 @@ components:
         lab:
           description: "Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment"
           type: boolean
+        sso_providers:
+          description: The identity providers a person may sign in through, by the name /auth/oidc/start/{provider} takes; empty when single sign-on is not configured
+          items:
+            type: string
+          type: array
       required:
         - bootstrapped
         - lab
+        - sso_providers
       type: object
     AuthorizeOAuthClientInputBody:
       additionalProperties: false
@@ -2305,6 +2342,13 @@ components:
           description: "What the simulator reports for the component: serving, hits, and its impairment."
         address:
           type: string
+        behaviors:
+          description: What the profile changes on the device by itself over time.
+          items:
+            $ref: "#/components/schemas/SimBehaviorBody"
+          type:
+            - array
+            - "null"
         connected:
           description: The outpost's simulator pulled recently.
           type: boolean
@@ -3070,6 +3114,24 @@ components:
           type: string
       required:
         - name
+      type: object
+    CreateIdentityLinkInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateIdentityLinkInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        identifier:
+          description: "The identity at the provider as iss|sub: the issuer exactly as its id_tokens carry it, a bar, and the subject verbatim (the provider's admin console shows it, and an unlinked sign-in names it)"
+          maxLength: 2048
+          minLength: 3
+          type: string
+      required:
+        - identifier
       type: object
     CreateLocationInputBody:
       additionalProperties: false
@@ -4220,6 +4282,91 @@ components:
       required:
         - slow_query_ms
       type: object
+    DeleteBlocker:
+      additionalProperties: false
+      properties:
+        id:
+          description: The blocking row's uuid.
+          format: uuid
+          type: string
+        kind:
+          description: The blocking row's own resource, so a client can link it and offer that kind's own remove.
+          enum:
+            - component
+            - endpoint
+            - system
+            - location
+          type: string
+        label:
+          description: "What an operator reads for the blocking row: its label, or its name when it has none."
+          type: string
+        name:
+          description: The blocking row's name, its operator-facing address (an endpoint's is unique within its component).
+          type: string
+      required:
+        - kind
+        - id
+        - name
+        - label
+      type: object
+    DeleteRefusal:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/DeleteRefusal.json
+          format: uri
+          readOnly: true
+          type: string
+        blockers:
+          description: The rows in the way that the caller may read, each to be removed or moved before the delete can succeed.
+          items:
+            $ref: "#/components/schemas/DeleteBlocker"
+          type:
+            - array
+            - "null"
+        blockers_hidden:
+          description: "How many more rows are in the way that are not listed: outside the caller's read scope, or past the listing cap."
+          format: int64
+          type: integer
+        detail:
+          description: A human-readable explanation specific to this occurrence of the problem.
+          examples:
+            - Property foo is required but is missing.
+          type: string
+        errors:
+          description: Optional list of individual error details
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+          type:
+            - array
+            - "null"
+        instance:
+          description: A URI reference that identifies the specific occurrence of the problem.
+          examples:
+            - https://example.com/error-log/abc123
+          format: uri
+          type: string
+        status:
+          description: HTTP status code
+          examples:
+            - 400
+          format: int64
+          type: integer
+        title:
+          description: A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
+          examples:
+            - Bad Request
+          type: string
+        type:
+          default: about:blank
+          description: A URI reference to human-readable documentation for the error.
+          examples:
+            - https://example.com/errors/example
+          format: uri
+          type: string
+      type: object
     DownloadFileOutputBody:
       additionalProperties: false
       properties:
@@ -5309,12 +5456,29 @@ components:
           format: uri
           readOnly: true
           type: string
+        carried_in:
+          description: "The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"
+          type: string
+        first_recorded_at:
+          description: When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range
+          format: date-time
+          type: string
         health:
           description: "healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"
           type: string
+        members:
+          description: Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location
+          items:
+            $ref: "#/components/schemas/HealthMemberBody"
+          type:
+            - array
+            - "null"
         owner:
           type: string
         owner_kind:
+          type: string
+        reason:
+          description: "A system's health in words: the slots behind it, worst first (for example: slot display is impaired (0 of 1 occupying)), or that no slot is impaired. It never names a member outside a slot. Absent for a location"
           type: string
         slots:
           description: The contributing slots; empty for a location
@@ -5342,6 +5506,7 @@ components:
         - owner
         - health
         - slots
+        - members
         - systems
         - transitions
       type: object
@@ -5560,6 +5725,37 @@ components:
         - raised_at
         - acknowledged
       type: object
+    HealthMemberBody:
+      additionalProperties: false
+      properties:
+        alarms:
+          description: The member's open alarms, newest first
+          items:
+            $ref: "#/components/schemas/HealthAlarmBody"
+          type:
+            - array
+            - "null"
+        health:
+          description: "The component's own health: healthy, degraded or outage from its open alarms, or unknown when nothing has ever observed it"
+          type: string
+        id:
+          description: The component's uuid
+          type: string
+        name:
+          type: string
+        outside_slot:
+          description: "True when the member fills no slot in this system. Its open alarms are listed here and move nothing above the component: only a slot decides the system's health (ADR-2459)"
+          type: boolean
+        slot:
+          description: The name of the slot the member fills in this system (as slots[].name); absent when outside_slot
+          type: string
+      required:
+        - name
+        - id
+        - health
+        - outside_slot
+        - alarms
+      type: object
     HealthOutputBody:
       additionalProperties: false
       properties:
@@ -5738,6 +5934,70 @@ components:
         - owner_name
         - owner_id
         - created_at
+      type: object
+    IdentityLinkBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/IdentityLinkBody.json
+          format: uri
+          readOnly: true
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        id:
+          description: The link's id, which unlinking names
+          type: string
+        identifier:
+          description: "The identity at the provider: its issuer and subject, iss|sub, exactly as its id_tokens carry them"
+          type: string
+        issuer:
+          description: The identifier's issuer half
+          type: string
+        last_used_at:
+          description: When the person last signed in through it
+          format: date-time
+          type: string
+        linked_by:
+          description: "The username of whoever made the link: the person themselves or an administrator; absent once that user is purged"
+          type: string
+        refresh_accepted_at:
+          description: When the provider last accepted the link's refresh token, at sign-in or at a re-check
+          format: date-time
+          type: string
+        self:
+          description: True when the person made the link themselves
+          type: boolean
+        subject:
+          description: The identifier's subject half
+          type: string
+      required:
+        - id
+        - identifier
+        - issuer
+        - subject
+        - self
+        - created_at
+      type: object
+    IdentityLinksOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/IdentityLinksOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        links:
+          items:
+            $ref: "#/components/schemas/IdentityLinkBody"
+          type: array
+      required:
+        - links
       type: object
     ImpairmentFields:
       additionalProperties: false
@@ -6028,8 +6288,12 @@ components:
           type:
             - array
             - "null"
+        omnibot:
+          $ref: "#/components/schemas/AssistantOmnibotFacts"
+          description: What omnibot is answering from, so a client can say so before the first question
       required:
         - conversations
+        - omnibot
       type: object
     ListCalcRulesOutputBody:
       additionalProperties: false
@@ -6188,8 +6452,13 @@ components:
           type:
             - array
             - "null"
+        total:
+          description: How many components matched the filters, before limit capped the page. With no filter, how many the caller may read.
+          format: int64
+          type: integer
       required:
         - components
+        - total
       type: object
     ListDriversOutputBody:
       additionalProperties: false
@@ -6915,8 +7184,13 @@ components:
           type:
             - array
             - "null"
+        total:
+          description: How many systems matched the filter, before limit capped the page. With no filter, how many the caller may read.
+          format: int64
+          type: integer
       required:
         - systems
+        - total
       type: object
     ListTagsOutputBody:
       additionalProperties: false
@@ -8286,6 +8560,38 @@ components:
         - created_at
         - updated_at
       type: object
+    PlanSimComponentOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PlanSimComponentOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        address:
+          description: The loopback address the simulated component would answer on.
+          type: string
+        endpoints:
+          description: The endpoints an add would create for the collector to reach it.
+          items:
+            $ref: "#/components/schemas/SimPlannedEndpointBody"
+          type:
+            - array
+            - "null"
+        outpost:
+          description: The outpost whose simulator would serve the component.
+          type: string
+        product:
+          description: The simulated product planned.
+          type: string
+      required:
+        - outpost
+        - product
+        - address
+        - endpoints
+      type: object
     PlatformAlarmBody:
       additionalProperties: false
       properties:
@@ -8752,12 +9058,22 @@ components:
         impaired:
           description: Whether the simulator impairs the device at the window's end.
           type: boolean
+        location_path:
+          description: The locations from the root down to the device's location, so devices that share a name read apart; empty when it has no location.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         received:
           additionalProperties:
             format: int64
             type: integer
           description: Requests the device saw over the window, by protocol.
           type: object
+        system:
+          description: The name of the device's primary system; empty when it has none.
+          type: string
         unhit:
           description: Whether it is a poll target due over the window that the simulator never saw.
           type: boolean
@@ -8767,6 +9083,8 @@ components:
         - received
         - impaired
         - unhit
+        - system
+        - location_path
       type: object
     PlatformSimulationGap:
       additionalProperties: false
@@ -11178,6 +11496,133 @@ components:
         - now
         - results
       type: object
+    SSOSettings:
+      additionalProperties: false
+      properties:
+        client_secret:
+          description: "A platform oauth2-client secret, by name: its client_id field is the client id Omniglass is registered as, its client_secret field authenticates the token exchange. Setting it from the console or API takes secret:bind on it; the settings file and environment are trusted as deployment config"
+          type: string
+        groups_claim:
+          default: groups
+          description: "The id_token claim carrying the person's groups at the provider (read by group mapping, #2363)"
+          type: string
+        issuer:
+          description: The identity provider's issuer URL exactly as its id_tokens carry it (https://login.example.com/realms/corp). Empty turns single sign-on off. An on-premises provider is reached only when the notification settings' egress_allow names it. Moving it from the console or API while client_secret is bound takes secret:bind on that secret; the settings file and environment are trusted as deployment config
+          type: string
+        recheck_grace_minutes:
+          default: 60
+          description: Minutes a link may go without a refresh the provider accepted (an outage) before its sessions and tokens are refused until one is; also the length of a session through a provider that issues no refresh token
+          format: int64
+          maximum: 10080
+          minimum: 1
+          type: integer
+        recheck_minutes:
+          default: 15
+          description: "Minutes between re-checks: each link with a live session or token through it redeems its refresh token at the provider, and a refusal revokes them"
+          format: int64
+          maximum: 1440
+          minimum: 1
+          type: integer
+        scopes:
+          default: openid email profile offline_access
+          description: The scopes a sign-in asks for, space-separated. offline_access asks for the refresh token the re-check redeems; a provider that issues none gives sessions of recheck_grace_minutes and no API tokens
+          type: string
+      required:
+        - issuer
+        - client_secret
+        - scopes
+        - groups_claim
+        - recheck_minutes
+        - recheck_grace_minutes
+      type: object
+    SearchCatalogBody:
+      additionalProperties: false
+      properties:
+        detail:
+          description: "A short qualifier: a product's vendor, a driver's version, a metric's unit"
+          type: string
+        kind:
+          description: Which catalog the entry belongs to; the console opens its drawer on that catalog's page
+          enum:
+            - product
+            - driver
+            - calc_rule
+            - event_rule
+            - metric
+          type: string
+        label:
+          description: The entry's display label
+          type: string
+        name:
+          description: The entry's name, its address in the catalog
+          type: string
+      required:
+        - kind
+        - name
+      type: object
+    SearchEntityBody:
+      additionalProperties: false
+      properties:
+        id:
+          description: The entity's uuid, the address its page opens at
+          type: string
+        label:
+          description: The entity's display label, when it has one
+          type: string
+        location_path:
+          description: The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is
+          type: string
+        name:
+          description: The entity's name; many components share one, the location_path tells them apart
+          type: string
+        system:
+          description: A component's primary system, when it has one
+          type: string
+      required:
+        - id
+        - name
+      type: object
+    SearchOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SearchOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        catalog:
+          description: Catalog hits across products, drivers, calc rules, event rules and metrics, best match first, at most limit of each kind
+          items:
+            $ref: "#/components/schemas/SearchCatalogBody"
+          type:
+            - array
+            - "null"
+        components:
+          items:
+            $ref: "#/components/schemas/SearchEntityBody"
+          type:
+            - array
+            - "null"
+        locations:
+          items:
+            $ref: "#/components/schemas/SearchEntityBody"
+          type:
+            - array
+            - "null"
+        systems:
+          items:
+            $ref: "#/components/schemas/SearchEntityBody"
+          type:
+            - array
+            - "null"
+      required:
+        - locations
+        - systems
+        - components
+        - catalog
+      type: object
     SecretBody:
       additionalProperties: false
       description: An encrypted credential set at one level of the fleet and inherited below it.
@@ -11597,6 +12042,8 @@ components:
           $ref: "#/components/schemas/NotificationSettings"
         retention:
           $ref: "#/components/schemas/RetentionSettings"
+        sso:
+          $ref: "#/components/schemas/SSOSettings"
         ui:
           $ref: "#/components/schemas/UISettings"
       required:
@@ -11610,6 +12057,7 @@ components:
         - agent
         - assistant
         - heartbeat
+        - sso
       type: object
     SettingsMeOutputBody:
       additionalProperties: false
@@ -11701,6 +12149,28 @@ components:
         - official
         - outage
       type: object
+    SimBehaviorBody:
+      additionalProperties: false
+      properties:
+        emits:
+          description: Whether it posts a webhook each time.
+          type: boolean
+        interval:
+          description: "How often it runs, as a duration: 5s, 1m."
+          type: string
+        name:
+          type: string
+        writes:
+          description: The state paths it changes each time.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - name
+        - interval
+      type: object
     SimCapabilities:
       additionalProperties: false
       properties:
@@ -11742,6 +12212,13 @@ components:
           type: string
         component_id:
           type: string
+        faults:
+          description: The device's settable state paths the simulator reports held off their profile defaults (a display powered off), each with when the server first heard it. In memory, per server process, like the hits.
+          items:
+            $ref: "#/components/schemas/SimFaultBody"
+          type:
+            - array
+            - "null"
         hits:
           description: Connections and requests the simulated device has answered since the server started.
           format: int64
@@ -11757,6 +12234,10 @@ components:
         impairment:
           $ref: "#/components/schemas/ImpairmentFields"
           description: What an operator has broken on the device; absent when healthy.
+        impairment_since:
+          description: When the impairment was last set; absent when healthy.
+          format: date-time
+          type: string
         last_hit_at:
           format: date-time
           type: string
@@ -11811,6 +12292,28 @@ components:
         - protocol
         - received
         - overlapped
+      type: object
+    SimFaultBody:
+      additionalProperties: false
+      properties:
+        default:
+          description: What the profile defaults it to.
+          type: string
+        path:
+          description: The state path, as the profile names it.
+          type: string
+        since:
+          description: When the server first heard the device hold this value.
+          format: date-time
+          type: string
+        value:
+          description: What it holds now.
+          type: string
+      required:
+        - path
+        - value
+        - default
+        - since
       type: object
     SimFleetOutputBody:
       additionalProperties: false
@@ -11900,6 +12403,14 @@ components:
           type:
             - array
             - "null"
+        served_ids:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        served_truncated:
+          type: boolean
         started:
           format: date-time
           type: string
@@ -11966,6 +12477,24 @@ components:
         - capabilities
         - impairments
         - components
+      type: object
+    SimPlannedEndpointBody:
+      additionalProperties: false
+      properties:
+        driver:
+          description: The driver the endpoint would attach; empty for a reachability probe.
+          type: string
+        inputs:
+          additionalProperties:
+            type: string
+          description: The driver's inputs the attach would send; a secret input holds the secret's NAME, never its value.
+          type: object
+        target:
+          description: The host:port a reachability probe would reach; empty for a driver attach.
+          type: string
+        transport:
+          description: The transport a reachability probe would speak; empty for a driver attach.
+          type: string
       type: object
     SimProfileBody:
       additionalProperties: false
@@ -12104,11 +12633,42 @@ components:
         private:
           description: A route the product's own web UI calls but does not advertise.
           type: boolean
+        sets:
+          description: "The state paths the route sets from a field of its body, each to a fixed list of values: what the console offers as quick sets."
+          items:
+            $ref: "#/components/schemas/SimSetBody"
+          type:
+            - array
+            - "null"
         summary:
           type: string
       required:
         - method
         - path
+      type: object
+    SimSetBody:
+      additionalProperties: false
+      properties:
+        default:
+          description: What the profile defaults the path to, when it does.
+          type: string
+        field:
+          description: The request body field its value comes from.
+          type: string
+        path:
+          description: The state path the route writes.
+          type: string
+        values:
+          description: The values the route accepts.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - path
+        - field
+        - values
       type: object
     SimSlotFillBody:
       additionalProperties: false
@@ -12415,6 +12975,42 @@ components:
         - property_type_name
         - property_type_id
         - required
+      type: object
+    StartSelfLinkInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StartSelfLinkInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        current_password:
+          description: "Your current password: a link outlives the session that makes it, so it is confirmed as a password change is"
+          type: string
+        provider:
+          default: default
+          description: The identity provider to link, by name
+          type: string
+      required:
+        - current_password
+      type: object
+    StartSelfLinkOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/StartSelfLinkOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        url:
+          description: The provider's sign-in page to send the browser to; signing in there links that identity to you and returns to your profile
+          type: string
+      required:
+        - url
       type: object
     SwapSlotPositionsInputBody:
       additionalProperties: false
@@ -13671,6 +14267,22 @@ components:
         - last_heard_at
         - count
         - last_message
+      type: object
+    UnlinkSelfInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UnlinkSelfInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        current_password:
+          description: Your current password, as linking asks
+          type: string
+      required:
+        - current_password
       type: object
     UpdateActionRuleInputBody:
       additionalProperties: false
@@ -15453,9 +16065,41 @@ paths:
       x-omniglass-permission: notification:subscribe
   /alarms:
     get:
-      description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named."
+      description: "What is wrong now across every component the caller may read, in one read: by default the active alarms (state=cleared is the history, each row carrying when it cleared, and state=all both; since and until keep the alarms whose raised-to-cleared interval overlaps that range, so one raised before it and still open in it is kept, and since after until is a 400), worst severity first and newest first within a severity, each naming its component. Each row names its component's location and the systems it belongs to that the caller may read. Narrow it with severity (repeatable), location (a subtree, by name), acknowledged and snoozed; pass unacknowledged for the queue nobody has looked at. limit is the page size (default 200, at most 1000) and next_page_token continues past it, so a queue of any size pages rather than truncating. It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named."
       operationId: list-alarms
       parameters:
+        - description: "Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all"
+          explode: false
+          in: query
+          name: state
+          schema:
+            default: active
+            description: "Which alarms: active (still raised, the default), cleared (a cleared alarm is history, with when it cleared), or all"
+            enum:
+              - active
+              - cleared
+              - all
+            type: string
+        - description: "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it"
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it"
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the alarms raised at or before this RFC 3339 time; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the alarms raised at or before this RFC 3339 time; must not be earlier than since
+            examples:
+              - "2026-11-23T12:00:00Z"
+            format: date-time
+            type: string
         - description: "Only the alarms nobody has looked at: the queue an operator, or an agent, works"
           explode: false
           in: query
@@ -15531,12 +16175,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: List the fleet's active alarms
+      summary: List the fleet's alarms
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /assistant/conversations:
     get:
-      description: Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+      description: "Your own stored conversations, most recently moved first, without their messages, and omnibot's mode: live, replay (the server plays a recording, with the prompts it answers) or none. Owner-only. Gated by assistant:use."
       operationId: list-assistant-conversations
       responses:
         "200":
@@ -15660,7 +16304,7 @@ paths:
       x-omniglass-permission: assistant:use
   /assistant/conversations/{name}:run:
     post:
-      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use."
+      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A recording answers only the prompts it was recorded for: any other question is a 422 (type urn:omniglass:omnibot-replay-unmatched) that touches nothing; the list route names the prompts. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use."
       operationId: run-assistant-conversation
       parameters:
         - description: Your conversation's name
@@ -16087,6 +16731,116 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Get your own profile picture
+  /auth/me/identity-links:
+    get:
+      description: Lists the identities at the identity provider you sign in through. Requires authentication; self-scoped (never another person's).
+      operationId: list-auth-me-identity-links
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityLinksOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List your own identity links
+  /auth/me/identity-links/{link}:unlink:
+    post:
+      description: Confirms your current password and removes one of your identity links; every session and token through it ends with it. Requires authentication; self-scoped (a link that is not yours is a 404). Refused to an agent token. Audited.
+      operationId: unlink-auth-me-identity-link
+      parameters:
+        - description: The link's id
+          in: path
+          name: link
+          required: true
+          schema:
+            description: The link's id
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnlinkSelfInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Unlink one of your own identity links
+  /auth/me/identity-links:start:
+    post:
+      description: "Confirms your current password and starts a sign-in at the identity provider bound to this session: send the browser to the returned url, and signing in there links that identity to you (an owner's only way to gain single sign-on). Requires authentication; self-scoped (it only ever links to you). Needs a session; refused to an agent token. A wrong password is a 403; single sign-on not configured is a 409."
+      operationId: start-auth-me-identity-link
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartSelfLinkInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartSelfLinkOutputBody"
+          description: OK
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Start linking your own identity at the provider
   /auth/me/notifications:
     get:
       description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read."
@@ -16947,8 +17701,39 @@ paths:
       x-omniglass-permission: component_type:update
   /components:
     get:
-      description: Lists the components the caller may read, each filtered to its scope subtree. Gated by component:read.
+      description: Lists the components the caller may read, each filtered to its scope subtree. Optional product, driver and component_type filters narrow to the components a catalog row classifies or a driver serves, and limit caps the page while total counts every match (the catalog drawers' used-by reads). Gated by component:read.
       operationId: list-components
+      parameters:
+        - description: Only components of this product (name or uuid)
+          explode: false
+          in: query
+          name: product
+          schema:
+            description: Only components of this product (name or uuid)
+            type: string
+        - description: Only components of a product this driver serves (name or uuid)
+          explode: false
+          in: query
+          name: driver
+          schema:
+            description: Only components of a product this driver serves (name or uuid)
+            type: string
+        - description: Only components of a product classified under exactly this component type (name or uuid)
+          explode: false
+          in: query
+          name: component_type
+          schema:
+            description: Only components of a product classified under exactly this component type (name or uuid)
+            type: string
+        - description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+            format: int64
+            minimum: 0
+            type: integer
       responses:
         "200":
           content:
@@ -16993,7 +17778,7 @@ paths:
       x-omniglass-permission: component:create
   /components/{name}:
     delete:
-      description: Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-component
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -17006,6 +17791,12 @@ paths:
       responses:
         "204":
           description: No Content
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DeleteRefusal"
+          description: "Refused: something still depends on the row. blockers names what the caller may see; blockers_hidden counts the rest."
         default:
           content:
             application/problem+json:
@@ -17076,7 +17867,7 @@ paths:
       x-omniglass-permission: component:update
   /components/{name}/alarms:
     get:
-      description: What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+      description: What is currently wrong with this component, newest first, with the component's own health those alarms make. Pass include_cleared for the history rather than the active set, and since/until to keep only the alarms raised during a range (still raised at since or later, raised by until), newest first and capped at 500. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404.
       operationId: list-component-alarms
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -17100,6 +17891,26 @@ paths:
           schema:
             description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended
             type: boolean
+        - description: "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range"
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: "Only the alarms still raised at or after this RFC 3339 time: active, or cleared at or after it. With include_cleared, a timeline's read of what was raised during a range"
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the alarms raised at or before this RFC 3339 time; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the alarms raised at or before this RFC 3339 time; must not be earlier than since
+            examples:
+              - "2026-11-23T12:00:00Z"
+            format: date-time
+            type: string
       responses:
         "200":
           content:
@@ -17713,6 +18524,56 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a component's recent events
+      x-omniglass-mcp: {}
+      x-omniglass-permission: component:read
+  /components/{name}/health:
+    get:
+      description: "The component's own current health (healthy, degraded or outage from its active alarms; unknown for a device nothing has observed) beside the recorded edges that got it there, in the shape the system health read returns: slots and systems are empty, transitions are one entry per change inside since..until (default the last 30 days), oldest first. since after until is a 400. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      operationId: get-component-health
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            examples:
+              - hq.west.level-2.boardroom-a.$comp.videobar-1
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FleetHealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read a component's health
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
   /components/{name}/identity-bindings:
@@ -20083,7 +20944,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: location:read
     post:
-      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+      description: "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. The parent resolves within the caller's location:read scope before its location:create scope: a parent the caller cannot read is the same 404 as one that does not exist, so the answer never discloses a location outside the caller's read, and a parent the caller can read but not create under is a 403. Gated by location:create."
       operationId: create-location
       requestBody:
         content:
@@ -20109,7 +20970,7 @@ paths:
       x-omniglass-permission: location:create
   /locations/{name}:
     delete:
-      description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-location
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -20122,6 +20983,12 @@ paths:
       responses:
         "204":
           description: No Content
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DeleteRefusal"
+          description: "Refused: something still depends on the row. blockers names what the caller may see; blockers_hidden counts the rest."
         default:
           content:
             application/problem+json:
@@ -20192,7 +21059,7 @@ paths:
       x-omniglass-permission: location:update
   /locations/{name}/health:
     get:
-      description: The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: The location's current health, worst-wins over every system placed anywhere beneath it, with those systems and their health as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges inside since..until (default the last 30 days); since after until is a 400. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: get-location-health
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -20201,6 +21068,26 @@ paths:
           required: true
           schema:
             description: The location's name, or a dotted address (e.g. boi.17c.415a)
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":
@@ -21528,6 +22415,42 @@ paths:
       summary: Add a simulated component
       x-omniglass-conditional-permission: secret:bind
       x-omniglass-permission: simulation:update
+  /outposts/{name}/simulation/components:plan:
+    get:
+      description: "Previews what adding a simulated component of a product would create (see add-outpost-simulation-component): the lowest free address in the simulated block (127.60.0.0/16) and the endpoints the collector would reach it through, a driver attach with its inputs (a secret input names the platform secret, never its value) or a reachability probe with its target, planned exactly as the add plans them. Creates nothing and reserves nothing: the address is not held, so an add or another plan in between may take it, and an add made after this plan then lands on the next free address instead. Gated by simulation:read, and needs outpost:read on the outpost. An outpost that does not exist is a 404, one with no simulator connected a 409, a product no profile simulates a 422, and a full block or a profile with no surface the collector can reach a 409."
+      operationId: plan-outpost-simulation-component
+      parameters:
+        - description: The outpost whose simulator would serve the component
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The outpost whose simulator would serve the component
+            type: string
+        - description: A product a simulator profile simulates
+          explode: false
+          in: query
+          name: product
+          required: true
+          schema:
+            description: A product a simulator profile simulates
+            minLength: 1
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlanSimComponentOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Plan a simulated component
+      x-omniglass-permission: simulation:read
   /outposts/{name}/simulation/observation:
     get:
       description: "What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503."
@@ -21745,8 +22668,23 @@ paths:
       x-omniglass-plaintext: true
   /products:
     get:
-      description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+      description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. declares_metric and declares_property narrow it to the products whose contract declares that key. Gated by product:read.
       operationId: list-products
+      parameters:
+        - description: Only products whose contract declares this metric (name or uuid)
+          explode: false
+          in: query
+          name: declares_metric
+          schema:
+            description: Only products whose contract declares this metric (name or uuid)
+            type: string
+        - description: Only products whose contract declares this property (name or uuid)
+          explode: false
+          in: query
+          name: declares_property
+          schema:
+            description: Only products whose contract declares this property (name or uuid)
+            type: string
       responses:
         "200":
           content:
@@ -22289,6 +23227,49 @@ paths:
           description: Error
       summary: List roles
       x-omniglass-permission: role:read:admin
+  /search:
+    get:
+      description: The read behind the command palette. Returns up to limit hits of each kind whose name or label holds q, case-insensitively, best match first (exact, then prefix, then the rest by name). Locations, systems and components are searched inside the caller's own read scope for each kind, so nothing outside it appears; a caller with no scope for a kind gets an empty group, not an error. Each fleet hit carries its location_path, so many components with one name are told apart. Catalog hits cover products (product:read), drivers (driver:read), calc rules and event rules (rule:read) and metrics (metric_type:read), each only for a caller who holds that permission. Gated by location:read, the floor of every fleet reader; the component group also needs component:read.
+      operationId: search
+      parameters:
+        - description: The text to find, matched case-insensitively anywhere in a name or label
+          explode: false
+          in: query
+          name: q
+          schema:
+            description: The text to find, matched case-insensitively anywhere in a name or label
+            examples:
+              - auditorium
+            maxLength: 200
+            minLength: 1
+            type: string
+        - description: The most hits returned for each kind
+          explode: false
+          in: query
+          name: limit
+          schema:
+            default: 8
+            description: The most hits returned for each kind
+            format: int64
+            maximum: 20
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Find locations, systems, components and catalog entries by name
+      x-omniglass-conditional-permission: component:read
+      x-omniglass-permission: location:read
   /secret-types:
     get:
       description: Lists the secret_type shapes a secret can take, for the create form. Gated by secret:read.
@@ -23383,8 +24364,25 @@ paths:
       x-omniglass-permission: system_type:update
   /systems:
     get:
-      description: Lists the systems the caller may read, each filtered to its scope subtree. Gated by system:read.
+      description: Lists the systems the caller may read, each filtered to its scope subtree. An optional standard filter narrows to the systems built to one standard, and limit caps the page while total counts every match. Gated by system:read.
       operationId: list-systems
+      parameters:
+        - description: Only systems built to this standard (name or uuid)
+          explode: false
+          in: query
+          name: standard
+          schema:
+            description: Only systems built to this standard (name or uuid)
+            type: string
+        - description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: Cap the page at this many rows; 0 or absent is no cap. total still counts every match.
+            format: int64
+            minimum: 0
+            type: integer
       responses:
         "200":
           content:
@@ -23427,7 +24425,7 @@ paths:
       x-omniglass-permission: system:create
   /systems/{name}:
     delete:
-      description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+      description: Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. The 409 lists what is in the way as blockers (kind, id, name, label), naming only rows the caller may read and counting the rest in blockers_hidden. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
       operationId: delete-system
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -23440,6 +24438,12 @@ paths:
       responses:
         "204":
           description: No Content
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/DeleteRefusal"
+          description: "Refused: something still depends on the row. blockers names what the caller may see; blockers_hidden counts the rest."
         default:
           content:
             application/problem+json:
@@ -23510,7 +24514,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/alarms:
     get:
-      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. With since (and optionally until) it is instead every alarm raised during that range, active or cleared, the same cap applying. It is what a system's Activity reads to explain its alarms, one request however many members the system has. since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-alarms
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -23519,6 +24523,26 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until"
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: "Read the alarms raised during since..until instead of the default (active ones, and those cleared in the last 30 days): active, or cleared at or after since, and raised at or before until"
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
+            type: string
+        - description: The range's end, with since; defaults to now and must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: The range's end, with since; defaults to now and must not be earlier than since
+            examples:
+              - "2026-11-23T12:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":
@@ -23566,7 +24590,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/health:
     get:
-      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "The system's current health and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the health. Members lists every component bound into the system, slotted or not, with its own health, its open alarms and the slot it fills; a member outside every slot is shown and not rolled up, since only slots decide the health (ADR-2459). Reason names the slots behind the health. Transitions are the recorded edges inside since..until (default the last 30 days), one entry per change; since after until is a 400. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: get-system-health
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -23575,6 +24599,26 @@ paths:
           required: true
           schema:
             description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+        - description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent
+            examples:
+              - "2026-11-01T00:00:00Z"
+            format: date-time
+            type: string
+        - description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: Only the transitions recorded at or before this RFC 3339 time. Defaults to now; must not be earlier than since
+            examples:
+              - "2026-11-23T00:00:00Z"
+            format: date-time
             type: string
       responses:
         "200":
@@ -25511,6 +26555,131 @@ paths:
           description: Error
       summary: Revoke a grant
       x-omniglass-permission: user_grant:delete
+  /users/{id}/identity-links:
+    get:
+      description: Lists the identities at the identity provider a person signs in through (single sign-on), each iss|sub with who made it and when it was last used. Gated by user:read:admin (all-scope), as the user directory is.
+      operationId: list-user-identity-links
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityLinksOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a person's identity links
+      x-omniglass-permission: user:read:admin
+    post:
+      description: "Links another person to an identity at the identity provider (iss|sub), so they sign in through single sign-on as that person. Email never links. Gated by user:link-identity (all-scope) and the takeover guard a password reset takes: refused on yourself (link from your profile), on an owner (an owner links their own identity), or on a person whose capabilities exceed yours. An identity already linked to anyone is a 409. Audited, the link recording who made it; granting the person owner later deletes it."
+      operationId: create-user-identity-link
+      parameters:
+        - description: The person, by uuid or username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The person, by uuid or username
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIdentityLinkInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityLinkBody"
+          description: Created
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Link a person to an identity at the provider
+      x-omniglass-permission: user:link-identity
+  /users/{id}/identity-links/{link}:
+    delete:
+      description: Removes one of another person's identity links; every session and token they signed in through it ends with it. Gated by user:link-identity (all-scope) and the same takeover guard as linking. Audited.
+      operationId: delete-user-identity-link
+      parameters:
+        - description: The person, by uuid or username
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The person, by uuid or username
+            type: string
+        - description: The link's id
+          in: path
+          name: link
+          required: true
+          schema:
+            description: The link's id
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Unlink a person from an identity at the provider
+      x-omniglass-permission: user:link-identity
   /users/{id}/sessions:
     get:
       description: Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another user).

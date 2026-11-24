@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { Router, Route } from "@solidjs/router";
 import Profile from "./Profile";
 import { ME_KEY, type Me } from "../lib/auth";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // The Profile page is the signed-in operator's own account surface. Its avatar
 // section renders the current picture (fetched as base64 and wrapped in a data
@@ -108,7 +109,7 @@ describe("Profile bulk revoke", () => {
       }
       return new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    answerConfirms(true);
 
     mount(false);
     // With one (current) session there is nothing else to revoke, so only the tokens
@@ -201,5 +202,22 @@ describe("Profile token lifetime", () => {
     fireEvent.input(document.querySelector("#tok-desc") as HTMLInputElement, { target: { value: "ci pipeline" } });
     fireEvent.input(ttl, { target: { value: "" } });
     expect(createBtn().disabled).toBe(false);
+  });
+});
+
+// The permission list is long for an admin, and the count is what most visits
+// want: it sits closed under a disclosure that says how many (#2485).
+describe("Profile access", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the permission count closed, and the list on opening", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }));
+    mount(false);
+    const trigger = await screen.findByRole("button", { name: "Permissions (1)" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText(">")).toBeNull();
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByText(">")).toBeTruthy());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
   });
 });
