@@ -720,10 +720,10 @@ type Gateway interface {
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
 	InsertEvents(ctx context.Context, w KeyWriter, evs []EventWrite) error
-	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int) ([]Event, error)
+	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int, filter EventFilter) ([]Event, error)
 	// ListSystemEvents merges the system's own events with its members',
 	// newest first, each row naming its owner (#793).
-	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
+	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int, filter EventFilter) ([]Event, error)
 	// ListSystemAlarms is the members' alarms in one read (#940): active ones
 	// whatever their age and those cleared inside the window, or those raised
 	// during an explicit range (#2425), newest first, capped.

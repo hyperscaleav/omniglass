@@ -9876,6 +9876,24 @@ export type EffectiveTagsParams = {
   system?: string;
 };
 
+export type ListComponentEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
 export type GetComponentHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
   since?: string;
@@ -9891,6 +9909,11 @@ export type ListComponentLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListComponentLogsSeverity = typeof ListComponentLogsSeverity[keyof typeof ListComponentLogsSeverity];
@@ -10047,6 +10070,24 @@ export type ListSystemAlarmsParams = {
   until?: string;
 };
 
+export type ListSystemEventsParams = {
+  /**
+   * Only occurrences of this event type, by name
+   * @maxLength 100
+   */
+  key?: string;
+  /**
+   * Only occurrences from this transport
+   * @maxLength 100
+   */
+  source?: string;
+  /**
+   * Only occurrences whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
+};
+
 export type GetSystemHealthParams = {
   /** Only the transitions recorded at or after this RFC 3339 time. Defaults to 30 days before until, or before now when until is absent */
   since?: string;
@@ -10062,6 +10103,11 @@ export type ListSystemLogsParams = {
    * @maxLength 100
    */
   source?: string;
+  /**
+   * Only lines whose message contains this text, case-insensitively
+   * @maxLength 200
+   */
+  q?: string;
 };
 
 export type ListSystemLogsSeverity = typeof ListSystemLogsSeverity[keyof typeof ListSystemLogsSeverity];
@@ -14135,21 +14181,30 @@ export type listComponentEventsResponseError = (listComponentEventsResponseDefau
 
 export type listComponentEventsResponse = (listComponentEventsResponseSuccess | listComponentEventsResponseError)
 
-export const getListComponentEventsUrl = (name: string,) => {
+export const getListComponentEventsUrl = (name: string,
+    params?: ListComponentEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/components/${name}/events`
+  return stringifiedParams.length > 0 ? `/components/${name}/events?${stringifiedParams}` : `/components/${name}/events`
 }
 
 /**
- * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours, narrowed by an optional event type (key), source and message text (q). Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's recent events
  */
-export const listComponentEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
+export const listComponentEvents = async (name: string,
+    params?: ListComponentEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentEventsResponse> => {
 
-  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name),
+  return ogFetch<listComponentEventsResponse>(getListComponentEventsUrl(name,params),
   {
     ...options,
     method: 'GET'
@@ -23431,21 +23486,30 @@ export type listSystemEventsResponseError = (listSystemEventsResponseDefault) & 
 
 export type listSystemEventsResponse = (listSystemEventsResponseSuccess | listSystemEventsResponseError)
 
-export const getListSystemEventsUrl = (name: string,) => {
+export const getListSystemEventsUrl = (name: string,
+    params?: ListSystemEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/systems/${name}/events`
+  return stringifiedParams.length > 0 ? `/systems/${name}/events?${stringifiedParams}` : `/systems/${name}/events`
 }
 
 /**
- * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it, narrowed by an optional event type (key), source and message text (q). A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's recent events, members included
  */
-export const listSystemEvents = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
+export const listSystemEvents = async (name: string,
+    params?: ListSystemEventsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemEventsResponse> => {
 
-  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name),
+  return ogFetch<listSystemEventsResponse>(getListSystemEventsUrl(name,params),
   {
     ...options,
     method: 'GET'

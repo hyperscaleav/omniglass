@@ -80,7 +80,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 		t.Errorf("the property did not follow its system through a rename (got %+v)", props)
 	}
 
-	evs, err := gw.ListComponentEvents(ctx, newComp, time.Hour, 10)
+	evs, err := gw.ListComponentEvents(ctx, newComp, time.Hour, 10, storage.EventFilter{})
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}

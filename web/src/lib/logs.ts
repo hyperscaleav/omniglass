@@ -27,18 +27,19 @@ void everyLevelListed;
 
 // LogFilter is the read's narrowing: a severity threshold (that level and every
 // more severe one) and an exact source, either empty for all.
-export type LogFilter = { severity?: LogSeverity | ""; source?: string };
+export type LogFilter = { severity?: LogSeverity | ""; source?: string; q?: string };
 
 const NO_FILTER: LogFilter = {};
 
-export const LOGS_KEY = (name: string, f: LogFilter = NO_FILTER) => ["logs", name, f.severity ?? "", f.source ?? ""] as const;
+export const LOGS_KEY = (name: string, f: LogFilter = NO_FILTER) => ["logs", name, f.severity ?? "", f.source ?? "", f.q ?? ""] as const;
 
 // logQuery renders a filter as the read's query parameters, leaving out what is
 // empty so an unfiltered read asks for nothing.
-export function logQuery(f: LogFilter = NO_FILTER): { severity?: LogSeverity; source?: string } {
-  const q: { severity?: LogSeverity; source?: string } = {};
+export function logQuery(f: LogFilter = NO_FILTER): { severity?: LogSeverity; source?: string; q?: string } {
+  const q: { severity?: LogSeverity; source?: string; q?: string } = {};
   if (f.severity) q.severity = f.severity;
   if (f.source) q.source = f.source;
+  if (f.q) q.q = f.q;
   return q;
 }
 

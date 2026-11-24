@@ -326,7 +326,7 @@ func TestLegacyBackfillRetiresWhatTheRulingRefuses(t *testing.T) {
 			and provenance = 'observed' order by ts desc limit 1`); got != 0 {
 		t.Errorf("the newest observed tcp-connect-time on ssh is %d, want the outpost's 0", got)
 	}
-	evs, err := f.gw.ListComponentEvents(f.ctx, "disp-1", 0, 50)
+	evs, err := f.gw.ListComponentEvents(f.ctx, "disp-1", 0, 50, storage.EventFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}

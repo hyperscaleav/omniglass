@@ -117,10 +117,10 @@ component set; the surfaces below are where they are mounted.
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
 | V38 | Rule detail "Open alarms" and "Firing" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
 | V39 | `events-tab` with `RuleLink` and alarm timeline toggles (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event | `systemEvents` | poll 5 s, only while the tab is open | event list |
-| V40 | `EventsPanel`: key badge, origin badge, time (`components/EventsPanel.tsx`) | `/components/<id>` (Activity tab) | event | `getEvents` | mount+focus | event list |
-| V41 | `logs-tab` mono block with `LogFilters`, severity-coloured lines (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | log | `systemLogs` | poll 5 s, only while the tab is open | log list |
-| V42 | `LogsPanel` (`components/LogsPanel.tsx`) | `/components/<id>` (Activity tab) | log | `getLogs` | mount+focus | log list |
-| V43 | `LogsPanel` "Self-logs" with a query override (`pages/Outposts.tsx`) | `/outposts` (outpost blade) | log | `getOutpostLogs` | mount+focus | log list |
+| V40 | `OccurrenceList` events: one `OccurrenceRow` per event, key badge, relative time, filter bar (`components/OccurrenceList.tsx`, `components/OccurrenceRow.tsx`) | `/components/<id>` (Activity tab) | event | `getEvents` | mount+focus | event list |
+| V41 | `OccurrenceList` logs and events on a system, each row labeled by the member that wrote it (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | log, event | `systemLogs`, `systemEvents` | poll 5 s, only while the tab is open | log list, event list |
+| V42 | `OccurrenceList` logs (`components/OccurrenceList.tsx`) | `/components/<id>` (Activity tab) | log | `getLogs` | mount+focus | log list |
+| V43 | `OccurrenceList` "Self-logs", unfiltered (`pages/Outposts.tsx`) | `/outposts` (outpost blade) | log | `getOutpostLogs` | mount+focus | log list |
 | V44 | Inbox list with the raised / cleared transition pill (`pages/Inbox.tsx`) | `/inbox` | event | `listInbox` (`lib/inbox.ts`) | mount+focus; the top-bar count (V11) polls 30 s | event list |
 | V45 | `RecentNotifications` with `NotificationStatusPill` (`components/RecentNotifications.tsx`) | `/action-rules`, `/notification-targets` (blades) | event | `listRecentNotifications` | poll 10 s | event list |
 | V46 | Audit log table with the verb badge and a before / after diff drawer (`pages/Audit.tsx`) | `/audit` | event | `listAuditLog` (`lib/audit.ts`), paged by cursor | mount+focus; loads older pages on demand | new: audit list |

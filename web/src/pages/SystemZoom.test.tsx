@@ -781,7 +781,7 @@ describe("the events and logs tabs (#793)", () => {
     cleanup();
     const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
     r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], { sources: [], logs: [] });
-    expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
+    expect(await screen.findByText(/No log lines in the last 24 hours/)).toBeTruthy();
   });
 });
 
