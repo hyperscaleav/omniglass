@@ -121,10 +121,6 @@ jobs:
           for p in "${paths[@]}"; do
             if [ -e "$p" ] || git ls-files --error-unmatch "$p" >/dev/null 2>&1; then keep+=("$p"); fi
           done
-          if [ ${#keep[@]} -eq 0 ]; then
-            echo "::notice::No masked baseline changed at ${SHA:0:7}; nothing to recapture."
-            exit 0
-          fi
           # GitHub locks the branch of a PR that is in the merge queue, so a push
           # to it is refused (GH006). Use a fresh branch then, never fail main.
           open=$(gh pr list --repo "$REPO" --head "$standing" --state open --json number --jq '.[0].number // empty')
@@ -132,6 +128,13 @@ jobs:
           if [ -n "$open" ]; then
             queued=$(gh pr view "$open" --repo "$REPO" --json isInMergeQueue --jq .isInMergeQueue)
             if [ "$queued" = true ]; then fresh=true; fi
+          fi
+          if [ ${#keep[@]} -eq 0 ]; then
+            echo "::notice::No masked baseline changed at ${SHA:0:7}; nothing to recapture."
+            if [ -n "$open" ] && [ "$fresh" = false ]; then
+              gh pr close "$open" --repo "$REPO" --comment "Superseded: $BASE's masked baselines already match the console at ${SHA:0:7}."
+            fi
+            exit 0
           fi
           git add -A -- "${keep[@]}"
           git config user.name "hyperscale-agent[bot]"

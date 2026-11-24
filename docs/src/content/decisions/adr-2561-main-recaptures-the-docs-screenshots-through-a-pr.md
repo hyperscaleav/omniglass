@@ -2,7 +2,7 @@
 title: "Main recaptures the docs screenshots through a PR the architect approves"
 date: 2026-11-24
 status: Accepted
-summary: "A PR no longer re-renders existing docs shots. A workflow on push to main recaptures both shot sets and, when any changed, pushes them to claude/docs-shots-recapture and opens or updates one PR as the agents' App, with no change to branch protection and no bypass. A guard fails a PR that modifies an existing shot."
+summary: "A PR no longer re-renders existing docs shots. A workflow on push to main recaptures both shot sets and, when a masked baseline changed, pushes those shots and their clean twins to claude/docs-shots-recapture and opens or updates one PR as the agents' App, with no change to branch protection and no bypass. A guard fails a PR that modifies an existing shot."
 refs: [2561, 2192, 1860]
 ---
 
@@ -10,8 +10,8 @@ refs: [2561, 2192, 1860]
 - **Decision:** (#2561, ruled by the architect in the console review)
   1. **How the recapture reaches the protected branch: a PR, not a bypass.** Branch protection and
      the ruleset are unchanged and no App is added to a bypass list. On push to `main` (and
-     `release/**`) the `recapture` job runs `make docs-shots` on the merged tree and, when either shot
-     set changed, force-pushes one commit to `claude/docs-shots-recapture` (`claude/docs-shots-recapture-<release>`
+     `release/**`) the `recapture` job runs `make docs-shots` on the merged tree and, when a masked baseline
+     changed (item 6), force-pushes one commit to `claude/docs-shots-recapture` (`claude/docs-shots-recapture-<release>`
      for a release branch) and opens the PR "docs: recapture the docs screenshots" or updates its body
      if one is open. The architect approves it like any PR. If a later recapture matches the committed
      shots the open PR is closed as superseded. The job mints the same agents' App token
