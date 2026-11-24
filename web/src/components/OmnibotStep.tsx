@@ -2,7 +2,8 @@ import { For, Show, type JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import ReachLadder from "./ReachLadder";
 import { entityLabel } from "../lib/entities";
-import type { Step } from "../lib/assistant";
+import { argSummary, stepFailed, type Step } from "../lib/assistant";
+import { ChevronRight, TriangleAlert, Wrench } from "./icons";
 import type { Reachability } from "../lib/reachability";
 
 // OmnibotStep is one tool call in the omnibot panel (#1167): the tool, its
@@ -105,7 +106,9 @@ export function StepArgs(p: { args: Record<string, unknown>; testid?: string }) 
 }
 
 // waiting marks the call the run paused on, which waits for the person's
-// answer rather than running.
+// answer rather than running. The step is one slim row (#2422): icon, tool,
+// a short argument summary and its state; a click opens its full input and
+// result. Nothing is open by default.
 export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
   const parsed = () => (props.step.result === undefined ? undefined : parse(props.step.result));
   const view = () => {
@@ -113,10 +116,16 @@ export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
     const render = STEP_RENDERERS[props.step.tool];
     return r === undefined || !render ? null : render(r);
   };
+  const failed = () => stepFailed(props.step);
   return (
-    <div data-testid="omnibot-step" class="rounded-box border border-base-300 bg-base-100 p-2.5 text-sm">
-      <div class="mb-1.5 flex items-center gap-2">
+    <details data-testid="omnibot-step" data-state={failed() ? "error" : undefined} class="group text-sm">
+      <summary class="flex cursor-pointer select-none items-center gap-2 rounded-field px-1 py-0.5 hover:bg-base-200">
+        <span class="shrink-0 transition-transform group-open:rotate-90"><ChevronRight size={12} /></span>
+        <Show when={failed()} fallback={<span class="shrink-0 text-base-content/60"><Wrench size={12} /></span>}>
+          <span class="shrink-0 text-error"><TriangleAlert size={12} /></span>
+        </Show>
         <span class="font-mono text-xs font-medium">{props.step.tool}</span>
+        <span class="min-w-0 flex-1 truncate font-mono text-xs text-base-content/60">{argSummary(props.step.args)}</span>
         <Show when={props.step.decision === "approved"}>
           <span class="badge badge-sm badge-soft badge-success">Approved</span>
         </Show>
@@ -129,17 +138,25 @@ export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
         <Show when={!props.waiting && props.step.result === undefined && props.step.decision !== "declined"}>
           <span class="badge badge-sm badge-ghost">Running</span>
         </Show>
+        <Show when={failed() && props.step.decision !== "declined"}>
+          <span class="badge badge-sm badge-soft badge-error">Error</span>
+        </Show>
+        <Show when={!failed() && props.step.result !== undefined}>
+          <span class="text-xs text-base-content/60">Done</span>
+        </Show>
+      </summary>
+      <div class="ml-4 mt-1 rounded-box border border-base-300 bg-base-100 p-2.5">
+        <StepArgs args={props.step.args} />
+        <Show when={parsed() !== undefined}>
+          <div class="mt-2">{view()}</div>
+          <details class="mt-1.5 text-xs" open={!view()}>
+            <summary class="cursor-pointer text-base-content/60">Result</summary>
+            <pre data-testid="omnibot-step-raw" class="mt-1 max-h-60 overflow-auto rounded-field bg-base-200 p-2 whitespace-pre-wrap break-all">
+              {pretty(parsed())}
+            </pre>
+          </details>
+        </Show>
       </div>
-      <StepArgs args={props.step.args} />
-      <Show when={parsed() !== undefined}>
-        <div class="mt-2">{view()}</div>
-        <details class="mt-1.5 text-xs" open={!view()}>
-          <summary class="cursor-pointer text-base-content/60">Result</summary>
-          <pre data-testid="omnibot-step-raw" class="mt-1 max-h-60 overflow-auto rounded-field bg-base-200 p-2 whitespace-pre-wrap break-all">
-            {pretty(parsed())}
-          </pre>
-        </details>
-      </Show>
-    </div>
+    </details>
   );
 }
