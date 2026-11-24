@@ -34,7 +34,7 @@ summary: "A **log**-kind observation is no longer dropped at ingest: it lands in
   occurrence owned, addressed, and traced identically to the values beside it, the primitive-first move.
 - **Deferred:** the **`datapoint` -> `sample`** rename (a naming cleanup that lands in a later slice, so the
   datapoint tables keep their current names here); **`property_value`** and the materialized current-value store
-  (the [fold-fields slice](/architecture/properties/#reads-current-value-is-a-view)); the normalized **event_type**
+  (the [fold-fields slice](/architecture/properties/#current-value-is-the-latest-series-sample)); the normalized **event_type**
   registry and the **promotion** of a raw `event` occurrence into a registered event ([events](/architecture/events/));
   a scope-wide `event` read (this ships the per-component read only); and any `calculated` / `intended` / `declared`
   event producer (the write path is `observed` collection only).

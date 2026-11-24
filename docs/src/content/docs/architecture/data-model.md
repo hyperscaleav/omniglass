@@ -1,37 +1,32 @@
 ---
 title: Data model
-description: "The platform entity-relationship diagram, generated from the live schema by make gen: every table, its keys, and its foreign keys, grouped by subsystem."
-# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+description: "The whole platform's relational shape in one diagram, generated from the migrated schema: every table, its keys and its foreign keys, grouped by subsystem."
 sidebar:
-  hidden: true
+  order: 10
+  badge:
+    text: Built
+    variant: success
 ---
 
-The whole platform's relational shape in one diagram: every table, its primary
-and foreign keys, and the references between them. It is **generated from the
-live schema** by `make gen`, so it cannot fall out of step with the tables; a
-schema change that forgets to regenerate is caught by the ERD drift test.
+Every table Omniglass stores, with its primary and foreign keys and the references between them, in
+one diagram. It is **generated from the migrated schema** by `make gen`, so it cannot fall out of
+step with the tables: a schema change that does not regenerate it fails the ERD drift test. What the
+tables mean is on the pages that own them, starting with [core entities](/architecture/core-entities/);
+how they are stored is [storage](/architecture/storage/).
 
 ## How to read it
 
-Tables are grouped into **subsystem containers**. Each table shows only its
-**primary-key and foreign-key columns**, the relational skeleton; the full
-column list lives in its migration and its Storage Gateway type. Each edge is a
-**foreign key**, drawn from the referencing column to the row it points at;
-edges that cross container borders are the seams between subsystems
+Tables are grouped into **subsystem containers**. Each table shows only its primary-key and
+foreign-key columns, the relational skeleton; the full column list of any table renders on its
+owning page from the same schema facts. Each edge is a foreign key, drawn from the referencing column
+to the row it points at. An edge that crosses a container border is a seam between subsystems
 (`fleet.component.product_id` pointing at `catalog.product.id`).
 
-A table not yet assigned to a subsystem would render in an `unclustered`
-container, but the introspection test hard-fails on any unmapped table, so the
-failure is the prompt to add the table to the cluster map in
-`internal/erd/cluster.go` (`cmd/erdgen` only calls it).
-
 :::note[Generated: do not edit the diagram]
-The D2 between the markers below is written by `cmd/erdgen` (it applies the
-embedded migrations to a throwaway Postgres, introspects the catalog, and
-renders the diagram). Edit the generator or the subsystem map, never the region;
-even the marker comment text is emitted by `cmd/erdgen`. After a schema change:
-`make gen` to redraw the D2, then `pnpm diagrams` to re-render the committed
-SVG.
+`cmd/erdgen` writes the D2 between the markers below: it applies the embedded migrations to a
+throwaway Postgres, introspects the catalog and renders the diagram. Every table must be assigned a
+subsystem in `internal/erd/cluster.go`; an unassigned one fails the introspection test, which is the
+prompt to add it. After a schema change, run `make gen`, never an edit to the region.
 :::
 
 ## The platform ERD
@@ -810,23 +805,20 @@ telemetry.property.system_id -> fleet.system.id
 
 ## The subsystems
 
-- **identity** - who can act and what they may do: users (person and
-  machine), groups, grants, roles, the typed-slot system-slot guard, and the
-  impersonation trail.
-- **fleet** - what is being monitored: locations, systems, components, and the
-  endpoints a component exposes.
-- **catalog** - the shared reference library: vendors, products, drivers,
-  component types, and standards, plus the properties they define.
-- **telemetry** - the five-lane observability model
-  ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
-  [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)):
-  the typed catalogs (`metric_type`, `property_type`, `event_type`,
-  `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
-  `command`, `log_line`) and the alarms raised off them (`alarm`).
-- **collection** - where and how telemetry is gathered: the outposts that run probes,
-  the tasks they execute, and the `outpost_log` self-log lane.
-- **config** - the settings, variables, secrets, and credentials that parameterize
-  everything above.
-- **content** - the cross-cutting attachments: blobs, files, and the tag bindings
-  that label any entity.
-- **audit** - the immutable record of every privileged mutation and auth event.
+- **identity**: who can act and with what: users (people and machine users), user groups, grants,
+  roles and the impersonation trail. System slots, their typed guards and a standard's choices render
+  here too.
+- **fleet**: what is monitored: locations and their types' contracts, systems and membership,
+  components and their dependency edges, and the endpoints a component is reached through.
+- **catalog**: what the fleet is typed by: vendors, products, drivers, component types, system types
+  and standards, their contracts, and the shadow rows an admin's fork of a shipped row lives in.
+- **telemetry**: the five lanes ([metrics and properties](/architecture/properties/),
+  [events](/architecture/events/), [commands](/architecture/commands/), log lines), their catalogs,
+  the rules and alarms raised off them, and the notification lane.
+- **collection**: where telemetry is gathered: outposts, their tasks and self-logs, webhook tokens,
+  identity bindings and the inboxes of unclaimed sources.
+- **config**: what parameterizes everything above: settings, [variables and
+  secrets](/architecture/variables/), label rules, credentials and OAuth clients.
+- **content**: blobs, [files](/architecture/files/) and [tag](/architecture/tags/) bindings.
+- **audit**: the [audit log](/architecture/audit/), every privileged mutation and sign-in, and the
+  samples a writer-class ruling retired.
