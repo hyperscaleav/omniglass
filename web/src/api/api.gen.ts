@@ -7840,7 +7840,7 @@ export type RetentionSettings = {
      */
   log_warning_days: number;
   /**
-     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
+     * Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later; at least 3, the shortest window that folds into blocks
      * @minimum 1
      * @maximum 36500
      */
@@ -8473,6 +8473,18 @@ export type SetLocationTypePropertyInputBody = {
   default_value?: unknown;
   /** Whether every location of this type must set the property; defaults to false */
   required?: boolean;
+};
+
+export type SetMetricTypeRetentionBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused
+     * @minimum 3
+     * @maximum 36500
+     * @nullable
+     */
+  days: number | null;
 };
 
 export type SetProductMetricInputBody = {
@@ -18921,18 +18933,18 @@ export const getSetMetricTypeRetentionUrl = (name: string,) => {
 }
 
 /**
- * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.
+ * Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 3 to 36,500 days (a metric day folds into blocks 48 hours after it starts, so a shorter window folds nothing). Audited as set_retention. Gated by metric_type:update and platform:update.
  * @summary Set a metric type's retention window
  */
 export const setMetricTypeRetention = async (name: string,
-    setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
+    setMetricTypeRetentionBody: NonReadonly<SetMetricTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
 
   return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
   {
     ...options,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
-    body: JSON.stringify(setTypeRetentionBody)
+    body: JSON.stringify(setMetricTypeRetentionBody)
   }
 );}
 

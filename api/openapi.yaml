@@ -10961,7 +10961,7 @@ components:
           type: integer
         metric_days:
           default: 14
-          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later
+          description: Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later; at least 3, the shortest window that folds into blocks
           format: int64
           maximum: 36500
           minimum: 1
@@ -11937,6 +11937,27 @@ components:
         required:
           description: Whether every location of this type must set the property; defaults to false
           type: boolean
+      type: object
+    SetMetricTypeRetentionBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SetMetricTypeRetentionBody.json
+          format: uri
+          readOnly: true
+          type: string
+        days:
+          description: "The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused"
+          format: int64
+          maximum: 36500
+          minimum: 3
+          type:
+            - integer
+            - "null"
+      required:
+        - days
       type: object
     SetProductMetricInputBody:
       additionalProperties: false
@@ -21701,7 +21722,7 @@ paths:
       x-omniglass-permission: metric_type:update
   /metric-types/{name}:setRetention:
     post:
-      description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update."
+      description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 3 to 36,500 days (a metric day folds into blocks 48 hours after it starts, so a shorter window folds nothing). Audited as set_retention. Gated by metric_type:update and platform:update."
       operationId: set-metric-type-retention
       parameters:
         - description: The metric type's name
@@ -21715,7 +21736,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SetTypeRetentionBody"
+              $ref: "#/components/schemas/SetMetricTypeRetentionBody"
         required: true
       responses:
         "200":

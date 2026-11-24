@@ -73,7 +73,7 @@ type metricTypeNameInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
 }
 
-// setTypeRetentionBody is the setRetention body for a metric or property type
+// setTypeRetentionBody is the setRetention body for a property type
 // (#417): a window in days, or an explicit null for the lane's. Required, so an
 // empty body is refused rather than read as a clear that would let the next
 // pass delete history the override was keeping.
@@ -81,9 +81,16 @@ type setTypeRetentionBody struct {
 	Days *int `json:"days" required:"true" nullable:"true" minimum:"1" maximum:"36500" doc:"The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused"`
 }
 
+// setMetricTypeRetentionBody is the metric type's body: the same shape, but a
+// metric's window floors at 3 days (the storage guard refuses less), so the
+// schema says so and Huma refuses 1 and 2 as a 422 before the guard runs.
+type setMetricTypeRetentionBody struct {
+	Days *int `json:"days" required:"true" nullable:"true" minimum:"3" maximum:"36500" doc:"The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused"`
+}
+
 type setMetricTypeRetentionInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
-	Body setTypeRetentionBody
+	Body setMetricTypeRetentionBody
 }
 
 type updateMetricTypeInput struct {
@@ -188,7 +195,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPost,
 		Path:        "/metric-types/{name}:setRetention",
 		Summary:     "Set a metric type's retention window",
-		Description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 1 to 36,500 days. Audited as set_retention. Gated by metric_type:update and platform:update.",
+		Description: "Sets how many days this type's samples are kept, overriding the metric lane's window (retention.metric_days), or with null returns it to the lane's. Works on an official type: a shipped type's definition is read-only, but how long an install keeps its samples is the install's, and the boot seed never resets it. A command's intended values are never removed; a series with no sample inside the window reads as no reading within retention (ADR-1275). 3 to 36,500 days (a metric day folds into blocks 48 hours after it starts, so a shorter window folds nothing). Audited as set_retention. Gated by metric_type:update and platform:update.",
 	}, "metric_type", "update"), "update"), func(ctx context.Context, in *setMetricTypeRetentionInput) (*metricTypeOutput, error) {
 		// platformGated only publishes the second permission; the handler
 		// enforces it, as every platform-tier write does.

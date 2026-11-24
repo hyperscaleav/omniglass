@@ -468,6 +468,18 @@ where b.series_id = $1 order by b.span_start, b.span;
   with no timeout, so a late batch is never dropped for it. An on-time batch never takes it and
   still costs 18 statements. A dirtied trend hour of a folded day recomputes from its block while
   the day is intact (the merge's own test), else from its raw rows.
+  A day folds only once its own close and the trend horizon (24 hours) have passed, 48 hours after
+  it starts, and is folded only while intact, so a metric window (or a type's `retention_days`) of N
+  days leaves the fold N - 2 days wide: **the shortest window that folds is 3 days**, and a window of 1
+  or 2 days folds nothing, so a write of the install's metric window (`retention.metric_days`) or a
+  metric type's own `retention_days` under 3 days is refused (the settings file, the environment, a
+  console write or `:setRetention`), naming the window and the 3-day minimum. A value stored before the
+  minimum is raised to it: a metric type's own window by a migration, the lane's window where the
+  settings load (a stored 1 or 2 reads as 3). A property type's window is not bound by it, as the
+  property lane does not fold. A series-day with at least `BlockDayMin` samples that the fold passes after
+  it left its window is counted on `BlockCompaction.Skipped` and logged at warn (`metric series-days
+  passed without folding into blocks`), never silently marked done
+  ([#2144](https://github.com/hyperscaleav/omniglass/issues/2144)).
 - **Too old is dropped.** An observed sample older than its series' window is dropped before it lands,
   with one warning line a series naming the series, the count and the oldest's age, and the rest of
   its batch lands and is acknowledged. The warning goes out when the batch commits, so a batch
