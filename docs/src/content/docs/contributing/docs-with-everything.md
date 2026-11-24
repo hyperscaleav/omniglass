@@ -251,7 +251,7 @@ resolves to is the whole contract. A `text=/…/` selector resolves to the inner
 carrying the text, the value's own `<span>`, and so does a `data-testid` hook placed on that
 span, so the painted box is the size of the value. The console does not render a
 capture-relative value at one width (a relative age in the audit trail reads 9m or 11h,
-`fmtTime` prints a month name, leaves the day bare and prints AM or PM, an age reads 9s or
+`fmtTime` prints a short absolute ("Nov 23, 01:56 PM") whose hour has no leading zero, the `Time` component adds a relative age ("4m ago"), an age reads 9s or
 17s), which means the same unchanged page paints a box seven pixels narrower at 9 o'clock than
 at 11, and every recapture rewrites the baseline on a PR that changed no UI. So a mask over
 text whose width can change paints a **box the text cannot move**, one of two ways:
