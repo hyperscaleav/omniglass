@@ -127,4 +127,11 @@ describe("ResolutionPanel", () => {
     expect(getByText("sim-snmp")).toBeTruthy();
     expect(getByText("platform-ntp")).toBeTruthy();
   });
+
+  it("says only platform values apply when nothing else resolves", () => {
+    const secrets = [{ name: "sim-snmp", owner_kind: "platform", owner_name: "", band: 0, depth: 0, winner: true }] as ResolvedSecret[];
+    const { getByText, queryByText } = mount({ members: solo, name: "solo-bar", secrets });
+    expect(getByText("Only platform values apply.")).toBeTruthy();
+    expect(queryByText("No values reach this component.")).toBeNull();
+  });
 });

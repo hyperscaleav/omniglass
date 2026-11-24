@@ -133,7 +133,7 @@ export default function ResolutionPanel(props: { component: string }): JSX.Eleme
         when={groups().length}
         fallback={
           <p class="rounded-box border border-dashed border-base-300 px-3 py-3 text-center text-[12px] text-base-content/45">
-            No values reach this component.
+            {platformCount() > 0 ? "Only platform values apply." : "No values reach this component."}
           </p>
         }
       >
