@@ -40,6 +40,7 @@ import MoveEntity from "./MoveEntity";
 import type { PickerOption } from "./ui/Picker";
 import { Plus } from "./icons";
 import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
+import { createFieldFocus, type FormProblem } from "../lib/form_problems";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import { createFormActions } from "../lib/formactions";
@@ -715,11 +716,6 @@ export function EntityCreateForm(props: {
     }
   }
 
-  const ready = () => {
-    if (isLocation()) return !!locationType().trim();
-    if (isComponent()) return !!product();
-    return true;
-  };
   const placeholders = () => {
     if (isSystem()) return { name: "exec-boardroom", display: "Executive Boardroom" };
     if (isLocation()) return { name: "boardroom", display: "Conf Room 301" };
@@ -727,13 +723,27 @@ export function EntityCreateForm(props: {
   };
 
   const formActions = createFormActions();
+  const focus = createFieldFocus();
+  // What a submit is missing, in the order the form shows it (#2440). The bar
+  // names each one beside the actions and focuses the first; the fields show
+  // their own message once an attempt was made.
+  const problems = createMemo<FormProblem[]>(() => {
+    const out: FormProblem[] = [];
+    if (isLocation() && !locationType().trim()) out.push({ key: "locationType", label: "Location type", message: "Choose a location type." });
+    if (isComponent() && !product()) out.push({ key: "product", label: "Product", message: "Choose a product." });
+    if (penIncomplete(!!labelDraft.data?.name, namePen)) out.push({ key: "name", label: "Name", message: "Type a name, or choose what lets the platform name it." });
+    return out;
+  });
+  const shown = (key: string) => (formActions.attempted() ? problems().find((x) => x.key === key)?.message : undefined);
   createEffect(() => {
     formActions.bind({
       submitLabel: `Create ${KIND_NOUN[props.kind]}`,
       submitIcon: Plus,
       submit: create,
       busy,
-      disabled: () => busy() || !ready() || penIncomplete(!!labelDraft.data?.name, namePen),
+      problems,
+      problemsAction: `create the ${KIND_NOUN[props.kind]}`,
+      focusField: (k) => focus.focus(k),
       cancel: props.onCancel,
       cancelLabel: "Cancel",
     });
@@ -745,10 +755,10 @@ export function EntityCreateForm(props: {
       class="flex flex-col gap-5"
       onSubmit={(e) => {
         // sr-only submit button below gives the form a default submit target so
-        // Enter in a text field fires this handler; the disabled check prevents
-        // submitting an incomplete form.
+        // Enter in a text field fires this handler; the bar's trigger names
+        // what is missing instead of submitting an incomplete form.
         e.preventDefault();
-        if (!formActions.binding()?.disabled?.()) void create();
+        formActions.trigger();
       }}
     >
       <div class="flex items-center gap-2">
@@ -775,18 +785,20 @@ export function EntityCreateForm(props: {
           </Show>
           <Show when={isLocation()}>
             <FieldRow label="Location type" hint="What kind of location this is. It decides which parents are legal, and whether the platform can name it.">
-              <select class="select select-bordered w-full" value={locationType()} onChange={(e) => setLocationType(e.currentTarget.value)}>
+              <select ref={focus.register("locationType")} class="select select-bordered w-full" classList={{ "select-error": !!shown("locationType") }} aria-invalid={!!shown("locationType")} value={locationType()} onChange={(e) => setLocationType(e.currentTarget.value)}>
                 <option value="" disabled>Select a type…</option>
                 <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
               </select>
+              <Show when={shown("locationType")}><p class="mt-1 text-xs text-error">{shown("locationType")}</p></Show>
             </FieldRow>
           </Show>
           <Show when={isComponent()}>
             <FieldRow label="Product" hint="What this component is an instance of. Required; use a generic until a real product is modeled.">
-              <select class="select select-bordered w-full" value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
+              <select ref={focus.register("product")} class="select select-bordered w-full" classList={{ "select-error": !!shown("product") }} aria-invalid={!!shown("product")} value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
                 <option value="" disabled>Choose a product…</option>
                 <For each={productOptions()}>{(pr) => <option value={pr.name}>{pr.label}</option>}</For>
               </select>
+              <Show when={shown("product")}><p class="mt-1 text-xs text-error">{shown("product")}</p></Show>
             </FieldRow>
           </Show>
         </div>
@@ -855,6 +867,8 @@ export function EntityCreateForm(props: {
         displayPen={displayPen}
         namePlaceholder={placeholders().name}
         displayPlaceholder={placeholders().display}
+        nameError={() => shown("name")}
+        nameRef={focus.register("name")}
       />
 
       {/* Hidden submit button: FormActionBar's buttons are type=button, so without
@@ -862,11 +876,6 @@ export function EntityCreateForm(props: {
           and Enter in a text field does nothing. */}
       <button type="submit" class="sr-only" tabIndex={-1} />
       <FormActionBar actions={formActions} inline />
-
-      <div class="flex flex-col gap-1 opacity-50">
-        <span class={EYEBROW}>Tags</span>
-        <span class="text-sm text-base-content/40">Available once the {KIND_NOUN[props.kind]} is created.</span>
-      </div>
     </form>
   );
 }

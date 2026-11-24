@@ -158,6 +158,11 @@ you pressed **+** on (`← West Building`) and goes there; opened from nowhere i
 
 ## Create, edit, delete
 
+The **Create** button is never greyed. Pressing it on a form with a gap does not submit: a line beside the
+buttons reads "To create the component, fill in Product and Name", each name a link that focuses its
+field, the fields are marked, and the first one takes the focus. The create faces end at that action
+row; anything that waits for the entity to exist (its tags) appears on the detail after you create it.
+
 - A **component** is added through its own flow, from its product to an endpoint that has answered
   ([add a component](/operator/add-a-component/)); the plain form below is its **advanced** link.
 - **New** opens a **draft** at the entity's own `/create` address, **From scratch** by default; **From a

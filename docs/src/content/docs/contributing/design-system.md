@@ -184,6 +184,11 @@ a location holding none or several renders its own subject card,
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms draw their own inline rail through `FormActionBar` with the
   `inline` prop; a `FormActionBar inline` is the one full-page form rail the guard permits.
+  A form that cannot be submitted says why (#2440): the primary action stays enabled, and the
+  binding's `problems` make an attempt name each missing field in a sentence beside the actions
+  (`FormProblems`), mark the field and focus the first, all in TypeScript, never native `required`.
+  `disabled` is for in-flight and permission states only. `rail-ownership.test.ts` also fails a
+  form that draws its own submit button, outside a short allowlist of non-entity forms.
 - **A list page reads the same across the catalog (#2431).** One header height: the filter bar
   holds a button's height itself, so a list with no New button (templates, secret types) sits level
   with its siblings. While chips filter, the bar says `n of m`. An empty list shows its empty state

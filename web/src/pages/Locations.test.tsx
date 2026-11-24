@@ -123,7 +123,7 @@ describe("Locations create-as-route", () => {
     expect(screen.getByText("Name")).toBeTruthy();
     expect(screen.getByText("Location type")).toBeTruthy();
     expect(screen.getByText("Parent")).toBeTruthy();
-    expect(screen.getByText(/Available once the location is created/)).toBeTruthy();
+    expect(screen.queryByText(/Available once the location is created/)).toBeNull();
   });
 
   it("leads back to Explore, where every location is listed now (#861)", async () => {
@@ -304,10 +304,11 @@ describe("Locations create identity", () => {
     // from the first frame, so waiting on it would pass before the route had
     // answered anything at all.
     await waitFor(() => expect(screen.getByText(/no name rule/)).toBeTruthy());
-    expect(submit.disabled).toBe(true);
+    fireEvent.click(submit);
+    expect((await screen.findByTestId("form-problems")).textContent).toContain("Name");
 
     fireEvent.change(typeSelect, { target: { value: "room" } });
-    await waitFor(() => expect(submit.disabled).toBe(false));
+    await waitFor(() => expect(screen.queryByTestId("form-problems")).toBeNull());
   });
 
   it("omits the name from the POST body when it is left blank", async () => {
