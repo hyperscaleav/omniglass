@@ -51,10 +51,10 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 		// Held: the community is refused under this fingerprint, and v2c
 		// has no request without it, so nothing is sent. The get is the
 		// only transport probe snmp has, so beneath the gate the agent is
-		// unobserved and the endpoint not collectable: the rung reads down,
-		// rejected (as udp's gated rung does), and the verdict follows
-		// rather than freezing at the last answer.
-		return []collection.Sample{responsive("down", rejectedReason+gt.class), authenticated("no", "held: "+gt.class)}, nil
+		// unobserved but the refusal that holds it was an answer: the rung
+		// reads up, held since the refusal began, never a down it did not
+		// observe. The gate takes no verdict from it (probeReachability).
+		return []collection.Sample{responsive("up", heldReading(gt)), authenticated("no", "held: "+gt.class)}, nil
 	}
 	community, ok := task.Secrets["community"]["community"]
 	if !ok || community == "" {

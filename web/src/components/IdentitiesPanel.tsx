@@ -28,6 +28,7 @@ import {
   type UnboundIdentities,
   type UnboundIdentity,
 } from "../lib/identity_bindings";
+import { confirmAction } from "../lib/confirm";
 
 // IdentitiesPanel is a conduit component's identities (#1389, ADR-1282): a
 // component that speaks for many owners collects once, and each value it
@@ -151,7 +152,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
   }
 
   async function unbind(b: IdentityBinding) {
-    if (!window.confirm(`Unbind ${b.value} from ${ownerLabel(b)}? Its values stop landing there and wait under Heard, not bound until it is bound again.`)) return;
+    if (!(await confirmAction({ title: `Unbind ${b.value} from ${ownerLabel(b)}?`, body: "Its values stop landing there and wait under Heard, not bound until it is bound again.", confirmLabel: "Unbind", tone: "danger" }))) return;
     setBusy(true);
     setUnbindRefusal(null);
     try {

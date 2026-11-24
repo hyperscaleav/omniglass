@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { Router, Route } from "@solidjs/router";
 import { CreateEndpointForm, endpointBlade } from "./endpointBlades";
 import { BladeEditContext, BladesContext, createEditSlot, type BladeController } from "../lib/blades";
 import { DRIVERS_KEY, type Driver } from "../lib/drivers";
@@ -155,7 +156,7 @@ describe("endpoint edit blade, driver-attached", () => {
       <QueryClientProvider client={qc}>
         <BladesContext.Provider value={blades}>
           <BladeEditContext.Provider value={slot}>
-            <endpointBlade.Body id={row.id} />
+            <Router><Route path="/*" component={() => <endpointBlade.Body id={row.id} />} /></Router>
           </BladeEditContext.Provider>
         </BladesContext.Provider>
       </QueryClientProvider>
@@ -254,7 +255,7 @@ describe("endpoint blade, held session", () => {
       <QueryClientProvider client={qc}>
         <BladesContext.Provider value={blades}>
           <BladeEditContext.Provider value={slot}>
-            <endpointBlade.Body id={row.id} />
+            <Router><Route path="/*" component={() => <endpointBlade.Body id={row.id} />} /></Router>
           </BladeEditContext.Provider>
         </BladesContext.Provider>
       </QueryClientProvider>
@@ -329,7 +330,7 @@ describe("endpoint blade, a probe's gate with no held session", () => {
       <QueryClientProvider client={qc}>
         <BladesContext.Provider value={blades}>
           <BladeEditContext.Provider value={slot}>
-            <endpointBlade.Body id={row.id} />
+            <Router><Route path="/*" component={() => <endpointBlade.Body id={row.id} />} /></Router>
           </BladeEditContext.Provider>
         </BladesContext.Provider>
       </QueryClientProvider>

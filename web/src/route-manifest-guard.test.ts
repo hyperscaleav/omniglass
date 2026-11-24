@@ -1,15 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { ROUTE_MANIFEST } from "./lib/routemanifest";
 import { PAGES } from "./routes";
-import { STUBS } from "./lib/nav";
-import { CATALOG_STUB_PATHS } from "./lib/catalog";
 
 // The route manifest is the single source the router renders from (routes.tsx maps
 // it into <Route> elements) and the e2e smoke spec drives from (web/e2e/routes.spec.ts
 // imports the same array), so a route cannot exist without a smoke address. These
-// pins hold the construction together: every entry resolves to a real page, the
-// stub sets stay equal to the nav's own lists (the one place stubs are declared for
-// the sidebar), and every entry carries a concrete address the spec can visit.
+// pins hold the construction together: every entry resolves to a real page, no
+// entry is a stub (nothing in the console says "soon", #2445), and every entry carries a concrete address the spec can visit.
 describe("route manifest", () => {
   it("resolves every entry to a registered page component", () => {
     for (const r of ROUTE_MANIFEST) {
@@ -17,15 +14,11 @@ describe("route manifest", () => {
     }
   });
 
-  it("keeps its stub entries equal to the nav's stub lists", () => {
-    const manifestStubs = ROUTE_MANIFEST.filter((r) => r.page === "SectionStub").map((r) => r.path).sort();
-    const navStubs = [...STUBS].sort();
-    expect(manifestStubs).toEqual(navStubs);
-    // The catalog's routed soon slots mount inside the CatalogShell; everything
-    // else stubs at the top level. The shells must agree with catalog.ts.
-    for (const r of ROUTE_MANIFEST.filter((r) => r.page === "SectionStub")) {
-      expect(r.shell, r.path).toBe(CATALOG_STUB_PATHS.includes(r.path) ? "catalog" : "protected");
-    }
+  it("carries no stub page, and the retired stub addresses fall to the not-found route", () => {
+    expect(ROUTE_MANIFEST.filter((r) => r.page === "SectionStub")).toEqual([]);
+    const paths = ROUTE_MANIFEST.map((r) => r.path);
+    for (const gone of ["/dashboards", "/learn", "/config", "/log-types"]) expect(paths).not.toContain(gone);
+    expect(ROUTE_MANIFEST.find((r) => r.path === "*")).toMatchObject({ page: "NotFound" });
   });
 
   it("gives every route a concrete smoke address the e2e spec can visit", () => {
@@ -41,6 +34,10 @@ describe("route manifest", () => {
   it("carries the Platform health page, on the protected shell (#1644)", () => {
     const r = ROUTE_MANIFEST.find((e) => e.path === "/platform");
     expect(r).toMatchObject({ shell: "protected", page: "PlatformHealth", smoke: "/platform" });
+  });
+
+  it("smokes one drawer address, an ?open= naming no row (#2429)", () => {
+    expect(ROUTE_MANIFEST.filter((r) => r.smoke.includes("?open="))).toHaveLength(1);
   });
 
   it("keeps paths unique", () => {

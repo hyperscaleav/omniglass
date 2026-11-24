@@ -37,8 +37,10 @@ export type Ask = {
 
 // idle: nothing asked yet; working: a run streams; pending: a call waits on
 // the person; done: answered; stopped: the step limit ended it unanswered;
-// refused: this person may not run omnibot here; error: it failed.
-export type RunStatus = "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "error";
+// refused: this person may not run omnibot here; unmatched: the server's
+// recording has no answer to the question, so nothing ran (#2443); error: it
+// failed.
+export type RunStatus = "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "unmatched" | "error";
 
 export type RunState = {
   items: Item[];
@@ -71,6 +73,12 @@ export function answer(s: RunState, approved: boolean): RunState {
 // fail ends the run on a failure to start or to read it.
 export function fail(s: RunState, message: string, refused = false): RunState {
   return { ...s, status: refused ? "refused" : "error", error: message, interrupt: undefined };
+}
+
+// unmatched ends the run on a question the server's recording has no answer
+// to: nothing ran, so the question stays and the reason shows.
+export function unmatched(s: RunState, message: string): RunState {
+  return { ...s, status: "unmatched", error: message, interrupt: undefined };
 }
 
 // closed settles a run whose stream has closed: a run still working never
@@ -238,6 +246,12 @@ export async function* readEvents(stream: ReadableStream<Uint8Array>): AsyncGene
 // impersonation session.
 export class RunRefused extends Error {}
 
+// RunUnmatched is a question the server's recording has no script for (a
+// 422 the server types): the server decides, where the recording is.
+export class RunUnmatched extends Error {}
+
+const unmatchedType = "urn:omniglass:omnibot-replay-unmatched";
+
 // A run is a prompt, an embedded skill the server renders as the prompt (its
 // text is the server's, not the console's), or the answer to an ask.
 export type RunInput =
@@ -283,6 +297,7 @@ export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: Ag
       // Not JSON: the reason is the body's text.
     }
     const message = typeof err === "string" && err ? err : describeError(err);
+    if (response.status === 422 && (err as { type?: unknown } | null)?.type === unmatchedType) throw new RunUnmatched(message);
     throw response.status === 403 ? new RunRefused(message) : new Error(message);
   }
   for await (const ev of readEvents(response.body)) onEvent(ev);
@@ -294,4 +309,25 @@ export async function startConversation(): Promise<string> {
   const { data, error } = await api.POST("/assistant/conversations", { body: {} });
   if (error) throw new Error(describeError(error));
   return data.name;
+}
+
+// What omnibot answers from (#2443): live, a model that takes any question;
+// replay, a recording that answers only its prompts; none, nothing. Only the
+// mode and the recorded prompts are told, never the model's configuration.
+export type OmnibotFacts = { mode: "live" | "replay" | "none"; prompts: string[] };
+
+const liveFacts: OmnibotFacts = { mode: "live", prompts: [] };
+
+// omnibotFacts reads them from the conversations list. A read that fails, or
+// a server that does not say, is treated as live: the panel then adds nothing
+// and restricts nothing, and a run says for itself what is wrong.
+export async function omnibotFacts(): Promise<OmnibotFacts> {
+  try {
+    const { data, error } = await api.GET("/assistant/conversations");
+    if (error || !data?.omnibot) return liveFacts;
+    return { mode: data.omnibot.mode, prompts: data.omnibot.prompts ?? [] };
+  } catch {
+    // A dropped connection reads like any other failed read: live.
+    return liveFacts;
+  }
 }

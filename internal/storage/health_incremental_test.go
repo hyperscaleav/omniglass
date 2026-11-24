@@ -197,7 +197,7 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 		t.Fatalf("read systems: %v", err)
 	}
 	for i, s := range systems {
-		rep, err := f.gw.SystemHealth(ctx, s.name, 0, f.all)
+		rep, err := f.gw.SystemHealth(ctx, s.name, storage.HealthRange{}, f.all, f.all)
 		if err != nil {
 			t.Fatalf("system health %s: %v", s.name, err)
 		}
@@ -244,7 +244,7 @@ func (f *healthFixture) assertMatchesFullRecompute(t *testing.T, ctx context.Con
 		if got := read(l.id); got != want {
 			t.Errorf("after %s: location %s recorded %q, a full recompute says %q", after, l.name, got, want)
 		}
-		rep, err := f.gw.LocationHealth(ctx, l.name, 0, f.all)
+		rep, err := f.gw.LocationHealth(ctx, l.name, storage.HealthRange{}, f.all)
 		if err != nil {
 			t.Fatalf("location health %s: %v", l.name, err)
 		}

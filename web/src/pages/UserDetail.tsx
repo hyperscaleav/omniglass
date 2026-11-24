@@ -25,12 +25,14 @@ import {
 } from "../lib/users";
 import { useMe, can } from "../lib/auth";
 import { useEditParam } from "../lib/editurl";
+import { firstParam } from "../lib/drawer_address";
 import { impersonate } from "../lib/impersonation";
 import { describeError } from "../lib/format";
 import { handleError, emailError, passwordError, isPasswordPolicyMessage } from "../lib/validate";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
+import { confirmAction, confirmDelete } from "../lib/confirm";
 
 // UserDetail is a user's blade body under the read -> Edit -> Save contract.
 // Read mode shows the profile facts, the user groups the user belongs to (a drill to the
@@ -198,13 +200,13 @@ export function UserDetail(props: { id: string }) {
     },
   });
 
-  // The blade's edit mode composes with its id deep link (#759): ?u=<id>&edit=1
+  // The blade's edit mode composes with its id deep link (#759): ?open=<id>&edit=1
   // opens this blade already editing once its data has loaded (and the caller can
   // update it), which is also how the create flow hands off. Gated on the URL
   // naming THIS blade: a stale ?edit=1 beside another user's id (or none) must not
   // flip a blade the operator merely clicked open into edit.
   const [searchParams] = useSearchParams();
-  const linked = () => (Array.isArray(searchParams.u) ? searchParams.u[0] : searchParams.u) === props.id;
+  const linked = () => (firstParam(searchParams.open) ?? firstParam(searchParams.u)) === props.id;
   useEditParam(edit, { ready: () => !!user.data && linked(), canUpdate });
 
   async function toggleActive(pr: User) {
@@ -219,7 +221,7 @@ export function UserDetail(props: { id: string }) {
 
   async function doArchive() {
     const pr = p();
-    if (!pr || !confirm(`Archive "${userName(pr)}"? They will be hidden and cannot sign in, reversibly. You can then purge them.`)) return;
+    if (!pr || !(await confirmDelete({ kind: "user", name: userName(pr), verb: "Archive", consequence: "They will be hidden and cannot sign in, reversibly. You can then purge them." }))) return;
     setActErr(null);
     try {
       await archiveUser(pr.id);
@@ -246,7 +248,7 @@ export function UserDetail(props: { id: string }) {
 
   async function doPurge() {
     const pr = p();
-    if (!pr || !confirm(`Purge "${userName(pr)}"? This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept.`)) return;
+    if (!pr || !(await confirmDelete({ kind: "user", name: userName(pr), verb: "Purge", consequence: "This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept." }))) return;
     setActErr(null);
     try {
       await purgeUser(pr.id);
@@ -273,7 +275,7 @@ export function UserDetail(props: { id: string }) {
   // touches the other, then the Sessions section refetches from the invalidated query.
   async function doRevokeAll(purpose: "session" | "token") {
     const noun = purpose === "session" ? "sessions" : "API tokens";
-    if (!confirm(`Revoke all ${noun} for this user? They are signed out of every ${purpose} at once.`)) return;
+    if (!(await confirmAction({ title: `Revoke all ${noun} for this user?`, body: `They are signed out of every ${purpose} at once.`, confirmLabel: `Revoke ${noun}`, tone: "danger" }))) return;
     setActErr(null);
     const r = await revokeAllSessions(purpose);
     if (!r.ok) setActErr(r.message);
@@ -483,7 +485,7 @@ function SessionsSection(props: { id: string; revocable: boolean }) {
   const sessionRows = () => (sessions.data ?? []).filter((s) => s.kind === "session");
   const tokenRows = () => (sessions.data ?? []).filter((s) => s.kind === "token");
   async function revoke(s: Session) {
-    if (!confirm("Revoke this credential? The user is signed out of it immediately.")) return;
+    if (!(await confirmAction({ title: "Revoke this credential?", body: "The user is signed out of it immediately.", confirmLabel: "Revoke credential", tone: "danger" }))) return;
     setRevoking(s.id);
     setErr(null);
     const r = await revokeSession(s.id);
@@ -543,7 +545,7 @@ function IdentityLinksSection(props: { id: string; linkable: boolean }) {
     setBusy(false);
   }
   async function onUnlink(l: IdentityLink) {
-    if (!confirm("Unlink this identity? Every session and token signed in through it ends now.")) return;
+    if (!(await confirmAction({ title: "Unlink this identity?", body: "Every session and token signed in through it ends now.", confirmLabel: "Unlink identity", tone: "danger" }))) return;
     setUnlinking(l.id);
     setErr(null);
     const r = await unlink(l.id);

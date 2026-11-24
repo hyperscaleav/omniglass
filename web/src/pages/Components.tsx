@@ -2,9 +2,11 @@ import { Show } from "solid-js";
 import { useParams } from "@solidjs/router";
 import CreatePage from "../components/CreatePage";
 import ComponentLeaf from "./ComponentLeaf";
+import AddComponentFlow from "../components/AddComponentFlow";
 
 // Components: the identity route. /components/<id> is the component's workspace (ADR-0129,
-// ADR-0132) and /components/create the one form, empty. There is no component list: the
+// ADR-0132), /components/add the guided flow from a product to a tested endpoint
+// (#2460), and /components/create the plain form, empty. There is no component list: the
 // bare /components address lands on Explore, whose outline lists every component where it
 // sits (#861).
 export default function Components() {
@@ -15,8 +17,10 @@ export default function Components() {
   // leave the create face mounted forever with an empty body (the e2e create
   // handoff walk is the regression that caught it).
   return (
-    <Show when={!!zoomParams.id && zoomParams.id !== "create"} fallback={<CreatePage kind="component" />}>
-      <ComponentLeaf />
+    <Show when={zoomParams.id !== "add"} fallback={<AddComponentFlow />}>
+      <Show when={!!zoomParams.id && zoomParams.id !== "create"} fallback={<CreatePage kind="component" />}>
+        <ComponentLeaf />
+      </Show>
     </Show>
   );
 }

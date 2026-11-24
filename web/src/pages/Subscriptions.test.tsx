@@ -6,6 +6,7 @@ import Subscriptions from "./Subscriptions";
 import { ME_KEY, type Me } from "../lib/auth";
 import { SUBSCRIPTIONS_KEY, type RuleMatch, type Subscription } from "../lib/subscriptions";
 import { severityLevelsKey } from "../lib/severity";
+import { answerConfirms } from "../lib/confirm.testkit";
 
 // My alarm subscriptions (#1355). The list is seeded into the query cache;
 // fetch answers the writes, the :test preview and the expression check a test
@@ -110,7 +111,7 @@ describe("Subscriptions", () => {
       if (r.method === "GET" && r.url.endsWith("/auth/me/action-rules")) return json({ action_rules: [outages] });
       return refuse(r);
     });
-    const ask = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const ask = answerConfirms(false, true);
     mount({ rules: [outages, everything] });
     const del = await screen.findByRole("button", { name: "Delete everything" });
     fireEvent.click(del);

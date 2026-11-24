@@ -35,19 +35,19 @@ func buildAddressFixture(t *testing.T, gw storage.Gateway) addressFixture {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	boi, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all)
+	boi, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "boi", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("create boi: %v", err)
 	}
 	c17, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "17c", LocationType: "building", ParentName: &boi.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create 17c: %v", err)
 	}
 	r415a, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "415a", LocationType: "room", ParentName: &c17.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create 415a: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestResolvePathOutOfScopeIsNonDisclosing(t *testing.T) {
 
 	// A caller scoped only to a sibling campus's own subtree: unrelated to
 	// boi/17c/415a entirely.
-	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "elsewhere", LocationType: "campus"}, scope.Set{All: true})
+	other, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "elsewhere", LocationType: "campus"}, scope.Set{All: true}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create elsewhere: %v", err)
 	}
@@ -288,23 +288,23 @@ func TestResolvePathDisambiguatesWhatABareNameCannot(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	bldgA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-a", LocationType: "campus"}, all)
+	bldgA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-a", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("bldg-a: %v", err)
 	}
-	bldgB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-b", LocationType: "campus"}, all)
+	bldgB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "bldg-b", LocationType: "campus"}, all, all)
 	if err != nil {
 		t.Fatalf("bldg-b: %v", err)
 	}
 	roomInA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "216b", LocationType: "room", ParentName: &bldgA.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("bldg-a/216b: %v", err)
 	}
 	roomInB, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "216b", LocationType: "room", ParentName: &bldgB.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("bldg-b/216b: %v", err)
 	}

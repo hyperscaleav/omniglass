@@ -47,6 +47,13 @@ describe("TemplateNotice", () => {
     expect(screen.getByTestId("template-notice")).toHaveTextContent("gone-template");
   });
 
+  // The page's time range (#2304) spells an absolute range ?from=&to= in
+  // RFC 3339: that is a window, not a template, and says nothing here.
+  it("says nothing for an absolute time range's ?from=", () => {
+    mount("/systems/abc?from=2026-11-01T08:00:00.000Z&to=2026-11-01T09:00:00.000Z");
+    expect(screen.queryByTestId("template-notice")).toBeNull();
+  });
+
   it("renders nothing without ?from=", () => {
     mount("/systems/abc");
     expect(screen.queryByTestId("template-notice")).toBeNull();

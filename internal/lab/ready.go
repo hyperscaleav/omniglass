@@ -15,7 +15,7 @@ type Progress struct {
 	Components int
 	Running    int
 	// Endpoints and Up count the simulated endpoints the outpost dials, but the
-	// planted faults; Planted counts those. A pushed endpoint (a webhook)
+	// planted faults and the impaired devices' endpoints; Planted counts those. A pushed endpoint (a webhook)
 	// carries no reachability verdict by design and is not counted.
 	Endpoints int
 	Up        int
@@ -28,8 +28,9 @@ func readProgress(ctx context.Context, c *http.Client, base string, planted map[
 	var sim struct {
 		Connected bool `json:"connected"`
 		Devices   []struct {
-			ComponentID string `json:"component_id"`
-			Status      string `json:"status"`
+			ComponentID string          `json:"component_id"`
+			Status      string          `json:"status"`
+			Impairment  json.RawMessage `json:"impairment"`
 		} `json:"devices"`
 	}
 	if err := getJSON(ctx, c, base+"/api/v1/outposts/"+OutpostName+"/simulation", &sim); err != nil {
@@ -41,7 +42,10 @@ func readProgress(ctx context.Context, c *http.Client, base string, planted map[
 			continue
 		}
 		p.Running++
-		n, err := readReach(ctx, c, base, d.ComponentID, planted)
+		// A device someone impaired (a seeded fault, #2434, or a presenter's
+		// unplug) is broken on purpose, so none of its endpoints is waited on.
+		impaired := len(d.Impairment) > 0 && string(d.Impairment) != "null"
+		n, err := readReach(ctx, c, base, d.ComponentID, planted, impaired)
 		if err != nil {
 			return Progress{}, err
 		}
@@ -61,7 +65,8 @@ type reachCount struct {
 
 // readReach reads one component's reachability and counts its endpoints. A
 // pushed endpoint (a webhook) carries no verdict by design and is not counted.
-func readReach(ctx context.Context, c *http.Client, base, componentID string, planted map[string]bool) (reachCount, error) {
+// Every endpoint of an impaired component counts as planted.
+func readReach(ctx context.Context, c *http.Client, base, componentID string, planted map[string]bool, impaired bool) (reachCount, error) {
 	var reach struct {
 		Endpoints []struct {
 			Label   string          `json:"label"`
@@ -79,7 +84,7 @@ func readReach(ctx context.Context, c *http.Client, base, componentID string, pl
 		if len(e.Webhook) > 0 && string(e.Webhook) != "null" {
 			continue
 		}
-		if planted[e.Label] {
+		if impaired || planted[e.Label] {
 			n.Planted++
 			continue
 		}

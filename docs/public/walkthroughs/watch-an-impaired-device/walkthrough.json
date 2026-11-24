@@ -11,64 +11,70 @@
     },
     {
       "n": 2,
-      "kind": "click",
-      "caption": "projector-1 is polled over snmp. Open it in its drawer on the Simulation page.",
+      "kind": "type",
+      "caption": "The device table is a page of rows behind a filter. Find projector-1 by name.",
       "still": "step-02.png"
     },
     {
       "n": 3,
-      "kind": "type",
-      "caption": "Drop every packet toward it, in the kernel, before the simulated device sees it.",
+      "kind": "click",
+      "caption": "projector-1 is polled over snmp. Open it in its drawer on the Simulation page.",
       "still": "step-03.png"
     },
     {
       "n": 4,
-      "kind": "click",
-      "caption": "Save. The simulator applies it on its next pull.",
+      "kind": "type",
+      "caption": "Drop every packet toward it, in the kernel, before the simulated device sees it.",
       "still": "step-04.png"
     },
     {
       "n": 5,
-      "kind": "goto",
-      "caption": "Back on Platform health, the loop runs on. The window is the last 10 seconds on this lab.",
+      "kind": "click",
+      "caption": "Save. The simulator applies it on its next pull.",
       "still": "step-05.png"
     },
     {
       "n": 6,
-      "kind": "wait",
-      "caption": "The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost, and projector-1 reads impaired below.",
+      "kind": "goto",
+      "caption": "Back on Platform health, the loop runs on. The window is the last 10 seconds on this lab.",
       "still": "step-06.png"
     },
     {
       "n": 7,
-      "kind": "click",
-      "caption": "Open projector-1 again.",
+      "kind": "wait",
+      "caption": "The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost, and projector-1 reads impaired below.",
       "still": "step-07.png"
     },
     {
       "n": 8,
       "kind": "click",
-      "caption": "Repair it. Every request reaches it again.",
+      "caption": "Open projector-1 again.",
       "still": "step-08.png"
     },
     {
       "n": 9,
-      "kind": "goto",
-      "caption": "The window still holds the change, so the gap still reads impaired.",
+      "kind": "click",
+      "caption": "Repair it. Every request reaches it again.",
       "still": "step-09.png"
     },
     {
       "n": 10,
+      "kind": "goto",
+      "caption": "The window still holds the change, so the gap still reads impaired.",
+      "still": "step-10.png"
+    },
+    {
+      "n": 11,
       "kind": "wait",
       "caption": "Once the window slides past the change, the gap reads 0 and the attribution clears.",
-      "still": "step-10.png"
+      "still": "step-11.png"
     }
   ],
-  "poster": "step-06.png",
+  "poster": "step-07.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 50.1,
-    "bytes": 963621,
-    "previewBytes": 877162
+    "seconds": 58.3,
+    "bytes": 1120888,
+    "previewBytes": 944394
   }
 }

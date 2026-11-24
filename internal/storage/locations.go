@@ -970,17 +970,19 @@ func (p *PG) GetLocation(ctx context.Context, name string, read scope.Set) (*Loc
 
 // CreateLocation inserts a location under an optional parent and writes the audit
 // row in the same transaction. A root location (no parent) requires an all create
-// scope; a child requires the parent to be within the create scope. The new
+// scope; a child requires the parent to be within the create scope, and a parent
+// outside the read scope is the same ErrParentNotFound as one that does not
+// exist (resolveCreateParent). The new
 // row's owner is itself, so create scope is evaluated on the parent's placement.
 // The child type's allowed_parent_types is enforced against the resolved parent
 // (or root) before the insert.
-func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSpec, create scope.Set) (*Location, error) {
+func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create location: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	l, err := p.createLocationTx(ctx, tx, actorID, spec, create)
+	l, err := p.createLocationTx(ctx, tx, actorID, spec, read, create)
 	if err != nil {
 		return nil, err
 	}
@@ -990,9 +992,47 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	return l, nil
 }
 
+// resolveCreateParent resolves a location create's parent reference: under the
+// create scope first, and, only when that refuses, under the caller's read
+// scope to decide which refusal the caller may be told (#1343, revising ruling
+// 2 of #627 for the create path).
+//
+//   - Inside create: the parent. Ambiguity is judged inside create, so an
+//     *ErrAmbiguousName's Candidates never name a location outside it.
+//   - Outside create but inside read: ErrLocationForbidden (403). The caller
+//     can already see the location, so saying it exists discloses nothing.
+//   - Outside read, or nowhere at all: ErrParentNotFound (404), one answer for
+//     both, so a location:create holder cannot probe location names it cannot
+//     read. This is the three-way split a targeted write already makes, and
+//     what POST /locations:instantiate answers for its target location.
+func resolveCreateParent(ctx context.Context, q querier, ref string, read, create scope.Set) (*Location, error) {
+	parent, err := resolveScopedRef(ctx, q, locationConfig, ref, "location", create)
+	if err == nil {
+		return parent, nil
+	}
+	if !errors.Is(err, ErrLocationNotFound) && !errors.Is(err, ErrLocationForbidden) {
+		return nil, err
+	}
+	// Not creatable here. Whether the caller may hear that the location exists is
+	// a read question, asked with the non-disclosing resolve.
+	_, rerr := scopedByNameInScope(ctx, q, locationConfig, ref, "location", read)
+	var ambig *ErrAmbiguousName
+	switch {
+	case rerr == nil, errors.As(rerr, &ambig):
+		// Readable (once, or more than once: either way none of it is
+		// creatable, and naming the readable candidates would only invite a
+		// retry that is refused the same).
+		return nil, ErrLocationForbidden
+	case errors.Is(rerr, ErrLocationNotFound):
+		return nil, ErrParentNotFound
+	default:
+		return nil, rerr
+	}
+}
+
 // createLocationTx is CreateLocation inside the caller's transaction: the
 // one create a location route and a planned subtree (CreatePlan) share.
-func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, spec LocationSpec, create scope.Set) (*Location, error) {
+func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, spec LocationSpec, read, create scope.Set) (*Location, error) {
 	// An operator-typed name is validated now, before any other resolve, so a
 	// bad slug fails fast (the existing behavior). A generated one is validated
 	// too, but later, inside generateName, the one place every generation site
@@ -1012,14 +1052,8 @@ func (p *PG) createLocationTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 			return nil, ErrLocationForbidden
 		}
 	} else {
-		// resolveScopedRef, not locationByName-then-inScope: ruling 2 (#627)
-		// requires ambiguity judged inside create, not fleet-wide. A parent
-		// that exists only outside create scope stays ErrLocationForbidden
-		// (preserved, not collapsed into not-found).
-		parent, err := resolveScopedRef(ctx, tx, locationConfig, *spec.ParentName, "location", create)
-		if errors.Is(err, ErrLocationNotFound) {
-			return nil, ErrParentNotFound
-		} else if err != nil {
+		parent, err := resolveCreateParent(ctx, tx, *spec.ParentName, read, create)
+		if err != nil {
 			return nil, err
 		}
 		parentID = &parent.ID

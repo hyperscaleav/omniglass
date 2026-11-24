@@ -4,8 +4,10 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import { VendorUsedBy } from "../components/CatalogUsage";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
@@ -22,6 +24,7 @@ import { useMe, can } from "../lib/auth";
 import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Vendors: the vendor catalog (the vendor picker on the product form), on the
 // flat FlatList surface. A vendor is addressed by its kebab name (ADR-0062:
@@ -143,7 +146,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   async function removeVendor() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete vendor "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "vendor", name: r.name }))) return;
     setErr(null);
     try {
       await deleteVendor(r.name);
@@ -236,6 +239,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
               </Show>
             }
           />
+          <VendorUsedBy name={r().name} />
         </div>
       )}
     </Show>
@@ -249,7 +253,8 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
   const qc = useQueryClient();
   // Label leads and the name follows it, stopping the moment the operator
   // edits the name by hand (lib/entities).
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
@@ -291,15 +296,7 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label" hint="What an operator reads, e.g. Boreal.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Boreal" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow
-        bind="name"
-        hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
-      >
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="boreal" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Boreal" namePlaceholder="boreal" />
       <FieldRow label="Kind" hint="What role the vendor plays.">
         <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
           {VENDOR_KINDS.map((k) => <option value={k}>{k}</option>)}

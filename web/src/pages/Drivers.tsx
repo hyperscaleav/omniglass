@@ -3,10 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
+import IdentityFields from "../components/IdentityFields";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import DriverSpecMenu from "../components/DriverSpecMenu";
+import { CollectedByDriver, DriverUsedBy } from "../components/CatalogUsage";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -22,6 +24,7 @@ import { catalogLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
+import { confirmDelete } from "../lib/confirm";
 
 // Drivers: the driver catalog (the driver picker on the product form), on the
 // flat FlatList surface. A driver is addressed by its kebab name (ADR-0062:
@@ -113,7 +116,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   async function removeDriver() {
     const r = row();
     if (!r) return;
-    if (!confirm(`Delete driver "${r.name}"?`)) return;
+    if (!(await confirmDelete({ kind: "driver", name: r.name }))) return;
     setErr(null);
     try {
       await deleteDriver(r.name);
@@ -187,6 +190,8 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
               </div>
             )}
           </Show>
+          <CollectedByDriver driver={r().name} title="Collects and offers" />
+          <DriverUsedBy name={r().name} />
         </div>
       )}
     </Show>
@@ -198,7 +203,8 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
 // takes the name over by hand. Version is optional.
 export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Element {
   const qc = useQueryClient();
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+  const identity = createIdentity();
+  const { display, name } = identity;
   const [version, setVersion] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -234,12 +240,7 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="label">
-        <input class="input input-bordered w-full" value={display()} placeholder="Generic SNMP" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="snmp-generic" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
+      <IdentityFields identity={identity} labelPlaceholder="Generic SNMP" namePlaceholder="snmp-generic" />
       <FieldRow label="Version" hint="A version string, e.g. 1.0.0. Optional.">
         <input class="input input-bordered w-full font-data" value={version()} placeholder="1.0.0" onInput={(e) => setVersion(e.currentTarget.value)} />
       </FieldRow>
