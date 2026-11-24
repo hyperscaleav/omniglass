@@ -5,7 +5,7 @@ description: Open the command palette with Ctrl-K, type part of a name, read whi
 steps:
   - goto: /
     caption: The console's home. The command palette is a keystroke away from every page.
-  - wait: { selector: 'button[title^="Search and jump"]' }
+  - wait: { selector: '[data-testid="topbar-search"]' }
     caption: The top bar's Search button is the same door, with its shortcut beside it.
   - press: Control+k
     caption: Ctrl-K (Cmd-K on a Mac) opens the command palette with the cursor already in its field.

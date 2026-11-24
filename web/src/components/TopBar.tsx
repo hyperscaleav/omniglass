@@ -22,6 +22,7 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
       <Tooltip
         class="hidden h-8 w-56 items-center gap-2 rounded-field border border-base-300 bg-base-200 px-3 text-sm text-base-content/40 sm:flex"
         onClick={props.onOpenPalette}
+        data-testid="topbar-search"
         content={`Search and jump (${hint})`}
       >
         <Search size={15} />

@@ -26,7 +26,8 @@ test.describe("keyboard tooltips", () => {
     await page.waitForURL((url) => !url.pathname.endsWith("/login"));
   });
 
-  const icon = "main button.btn-square, main [tabindex='0']:not(tr)";
+  // The page's own icon-only controls and tips; an empty page falls back to the bar's.
+  const icon = "main button.btn-square, main [tabindex='0']:not(tr), header button[aria-label='Ask omnibot']";
 
   test("tabbing to an icon-only control on the alarms page shows its tooltip", async ({ page }) => {
     await page.goto("/web/alarms");

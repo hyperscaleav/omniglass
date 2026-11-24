@@ -325,7 +325,7 @@ export default function Outline(props: {
                             shrinks before the name does, and in a narrow outline it is a bare
                             count whose title carries the systems. */}
                         <Show when={c().also.length > 0}>
-                          <Tooltip as="span" tabIndex={0} class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1" content={`Also in ${c().also.join(", ")}`}>
+                          <Tooltip as="span" tabIndex={0} class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1" data-also-in content={`Also in ${c().also.join(", ")}`}>
                             <span class="@max-[56rem]:hidden">also in {c().also.join(", ")}</span>
                             <span class="hidden @max-[56rem]:inline">+{c().also.length}</span>
                           </Tooltip>
