@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import TemplateNotice from "../components/TemplateNotice";
-import Breadcrumb from "../components/Breadcrumb";
 import DetailGate from "../components/DetailGate";
 import LocationDetail from "../components/LocationDetail";
 import BladeStack from "../components/BladeStack";
@@ -81,7 +80,7 @@ export default function LocationZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} trail={crumbs()}>
         {/* A create from a template lands here with ?from= (#1329). */}
         <TemplateNotice />
         <DetailGate

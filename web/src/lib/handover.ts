@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
 import { createSignal } from "solid-js";
+import type { Crumb } from "./breadcrumb";
 
 // Handing omnibot context (#2122, #2162): each prompt carries the page the
 // person is on as an AG-UI context entry, and a triage the alarm it is on. A
@@ -84,7 +85,8 @@ export function namePage(name: string | undefined) {
   setPageName(name);
 }
 
-export type PageHeader = { title: string | JSX.Element; hint?: string };
+// A detail page also hands the bar its trail: the path above its title, each crumb a link.
+export type PageHeader = { title: string | JSX.Element; hint?: string; trail?: Crumb[] };
 const [header, setHeader] = createSignal<PageHeader | undefined>();
 
 // pageHeader is the title and hint of the mounted Page, which the top bar renders

@@ -78,9 +78,13 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   nav metadata (`<Page route="/roles">`) and rendered by the top bar, never in a row of their
   own: group then the page's one `h1` on the left (`Admin / Roles`), the hint as a muted line under
   it (hidden on narrow windows), and the search, omnibot and notification controls on the right
-  of the same row. `Page` feeds the bar its title and hint; a route with no `Page` (a detail page,
-  Explore, Home, Profile) gets its nav label as the same `h1`, so every page has exactly one `h1`,
-  in the same place, and the body starts directly under the bar.
+  of the same row. `Page` feeds the bar its title and hint; a route with no `Page` (Explore, Home,
+  Profile) gets its nav label as the same `h1`, so every page has exactly one `h1`, in the same
+  place, and the body starts directly under the bar. A detail page (component, system, location)
+  spends no body row on its breadcrumb either: it hands the bar its `trail`, and the bar's left
+  side reads the path as links and then the entity's label as the `h1` (`HQ / Floor 2 / Room 201 /
+  Display 1`), folding the middle crumbs into an ellipsis menu when the path would crowd the
+  controls (`collapseTrail`, `lib/breadcrumb.ts`).
 - **One drawer width rule.** A drawer is the narrow panel (`max-w-md`) unless its body carries a
   table or a timeline, which takes the wide one (`max-w-2xl`; `wide` on a `FlatList` detail or on
   `Drawer`). The alarm drawer (its timeline) and the audit drawer (its change table) are wide; a

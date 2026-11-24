@@ -276,7 +276,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
             {/* State, age, identity: the header every detail view opens with.
                 A component has no transitions read, so since-when is what
                 took it down: the worst active alarm's age (#786). */}
-            <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
+            <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-2 text-sm">
               <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the slots it fills." />
               <HealthBadge health={componentHealth() ?? undefined} size="sm" />
               <Show when={since()}>

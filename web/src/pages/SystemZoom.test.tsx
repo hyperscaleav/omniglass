@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/te
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Systems from "./Systems";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemSlotsKey } from "../lib/system_slots";
@@ -148,7 +149,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
 
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/systems/:id" component={Systems} />
+        <Route path="/systems/:id" component={withTopBar(Systems)} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route

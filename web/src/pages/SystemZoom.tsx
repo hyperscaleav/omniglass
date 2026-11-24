@@ -2,7 +2,6 @@ import { Show, createEffect, createMemo } from "solid-js";
 import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import Breadcrumb from "../components/Breadcrumb";
 import DetailGate from "../components/DetailGate";
 import TemplateNotice from "../components/TemplateNotice";
 import BladeStack from "../components/BladeStack";
@@ -63,7 +62,7 @@ export default function SystemZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={title()} name={system()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={title()} name={system()?.name} trail={crumbs()}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate

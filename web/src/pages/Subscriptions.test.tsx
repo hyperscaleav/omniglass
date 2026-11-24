@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Subscriptions from "./Subscriptions";
+import { pageHeader } from "../lib/handover";
 import { ME_KEY, type Me } from "../lib/auth";
 import { SUBSCRIPTIONS_KEY, type RuleMatch, type Subscription } from "../lib/subscriptions";
 import { severityLevelsKey } from "../lib/severity";
@@ -239,10 +240,10 @@ describe("Subscriptions", () => {
     expect(await screen.findAllByTestId("sub-row")).toHaveLength(1);
   });
 
-  it("leads back to the profile from its breadcrumb", async () => {
+  it("hands the top bar a trail leading back to the profile", async () => {
     stubFetch(refuse);
     mount({ rules: [] });
-    fireEvent.click(await screen.findByRole("link", { name: "Profile" }));
-    expect(await screen.findByTestId("profile-page")).toBeTruthy();
+    await screen.findByTestId("subs-denied").catch(() => null);
+    expect(pageHeader()?.trail).toEqual([{ key: "profile", label: "Profile", href: "/profile" }]);
   });
 });

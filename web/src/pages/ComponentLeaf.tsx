@@ -2,7 +2,6 @@ import { Show, createEffect, createMemo } from "solid-js";
 import { useLocation, useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import Breadcrumb from "../components/Breadcrumb";
 import BladeStack from "../components/BladeStack";
 import DetailGate from "../components/DetailGate";
 import TemplateNotice from "../components/TemplateNotice";
@@ -78,7 +77,7 @@ export default function ComponentLeaf() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={component() ? entityLabel(component()!) : "Component"} name={component()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={component() ? entityLabel(component()!) : "Component"} name={component()?.name} trail={crumbs()}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate

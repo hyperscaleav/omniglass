@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/te
 import { A, Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { locationHealthKey, systemHealthKey, type FleetHealth } from "../lib/health";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
@@ -157,7 +158,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/locations/:id" component={Locations} />
+        <Route path="/locations/:id" component={withTopBar(Locations)} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route path="/start" component={() => <A data-testid="configure-link" href={`/locations/${uuidFor("lz-room")}?tab=configure`}>Configure location</A>} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
@@ -447,7 +448,7 @@ describe("ambiguous name addresses (#853)", () => {
     render(() => (
       <QueryClientProvider client={qc}>
         <Router base="/web">
-          <Route path="/locations/:id" component={Locations} />
+          <Route path="/locations/:id" component={withTopBar(Locations)} />
           <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         </Router>
       </QueryClientProvider>

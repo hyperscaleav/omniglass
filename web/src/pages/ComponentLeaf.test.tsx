@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/te
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-query";
 import Components from "./Components";
+import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
@@ -118,7 +119,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
-        <Route path="/components/:id" component={Components} />
+        <Route path="/components/:id" component={withTopBar(Components)} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
       </Router>
     </QueryClientProvider>
@@ -148,6 +149,21 @@ describe("the component leaf", () => {
     expect(within(trail).queryByText("Boardroom A")).toBeNull();
     expect(within(trail).queryByText("Video Bar 1")).toBeNull();
     expect(pageHeader()?.title).toBe("Video Bar 1");
+  });
+
+  // The one-row header (#2575): the path rides the top bar before the entity's
+  // label, the page body spends no row on it.
+  it("renders the location trail inside the top bar, the label as the one h1, no breadcrumb row in the body", () => {
+    mount();
+    const bar = document.querySelector("header")!;
+    const trail = within(bar).getByTestId("breadcrumb");
+    expect(within(trail).getByRole("link", { name: "Headquarters" })).toBeTruthy();
+    const h1s = screen.getAllByRole("heading", { level: 1 });
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0].textContent).toBe("Video Bar 1");
+    expect(bar.contains(h1s[0])).toBe(true);
+    expect(screen.getAllByTestId("breadcrumb")).toHaveLength(1);
+    expect(document.querySelector("section")!.querySelector('[data-testid="breadcrumb"]')).toBeNull();
   });
 
   it("links Explore back to this component's row in the outline", async () => {
