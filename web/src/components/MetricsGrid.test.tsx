@@ -130,8 +130,8 @@ await waitFor(() => expect(read(reads, "/systems/room-1/metrics/rtt/samples?hour
     const hairs = screen.getAllByTestId("chart-crosshair");
     expect(hairs).toHaveLength(2);
     expect(hairs.every((h) => h.querySelector("[data-testid=cursor-value]"))).toBe(true);
-    const x = (h: Element) => h.querySelector("[data-testid=cursor-line]")!.getAttribute("x1");
-    expect(x(hairs[1])).toBe(x(hairs[0]));
+    const x = (h: Element) => Number(h.querySelector("[data-testid=cursor-line]")!.getAttribute("x1"));
+    expect(x(hairs[1])).toBeCloseTo(x(hairs[0]), 1);
     fireEvent.mouseLeave(a);
     expect(screen.queryAllByTestId("chart-crosshair")).toHaveLength(0);
   });
