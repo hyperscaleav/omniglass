@@ -10,7 +10,9 @@
 #                            (failed-commands.txt) and the hold the pacing rule
 #                            gave each line (pace.txt); the ids that failed are listed
 #                            in out/failed.txt, out/stack-up marks that the lab
-#                            came up (the run:demo workflow reads both), and
+#                            came up, out/infra that it did not because the registry
+#                            refused an image pull for its rate limit (the run:demo
+#                            workflow reads all three, #2020), and
 #                            out/stack-logs/ keeps the lab's container logs
 #   tapes.sh selftest        the recorder's own test: a tape whose command fails, one
 #                            whose command fails inside an && list, one whose unseen
@@ -280,6 +282,7 @@ if [ "$mode" = record ]; then
   mkdir -p "$OUT"
   : >"$OUT/failed.txt"
   [ ! -e "$OUT/stack-up" ] || rm -- "$OUT/stack-up"
+  [ ! -e "$OUT/infra" ] || rm -- "$OUT/infra"
 fi
 
 lab_init ogdemo
@@ -288,7 +291,11 @@ lab_init ogdemo
 trap 'rc=$?; stop_logs; stop_prefetch; (exit "$rc"); lab__exit' EXIT
 reap_demo_images
 prefetch_images
-lab_up
+if [ "$mode" = record ]; then LAB_UP_LOG="$OUT/lab-up.log"; fi
+lab_up || {
+  [ "$mode" != record ] || lab_note_infra "$OUT/infra" "$OUT/lab-up.log"
+  exit 1
+}
 demo_image
 follow_logs
 [ "$mode" != record ] || : >"$OUT/stack-up"

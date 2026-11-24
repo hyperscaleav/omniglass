@@ -297,7 +297,16 @@ kind it touches.
 
 Each selected demo records on a runner and a lab of its own, in parallel, so a run takes as long
 as its slowest demo (about five to seven minutes) rather than the sum, and the run's summary says
-which demos it chose and why. One job then combines every demo into one result:
+which demos it chose and why. The images are built once: the select job pulls the lab's Postgres
+(from Google's Docker Hub mirror, retried, and from Docker Hub only if the mirror cannot serve it) and builds
+the omniglass image and the lab binary, then saves them as one artifact; each record job downloads it and
+loads it, so no record job pulls Postgres or builds the omniglass image. That matters because the
+nightly run starts about a hundred record jobs at once, and Docker Hub counts anonymous pulls per shared
+runner address (HTTP 429, #2020). A lab that still has to pull retries a 429 with backoff, and a pull
+still refused fails its bring-up with an error naming the rate limit; the recorder leaves an `infra` mark, and
+the run:demo comment, the clip and the freshness report list that demo as an **infrastructure failure**, apart from a
+failed demo and from one that did not run. One job then
+combines every demo into one result:
 
 - **The clip in the PR body.** Each recorded demo's clip, its GIF (a terminal demo) or animated
   preview (a walkthrough) with its **Watch (scrubbable)** link, is written into the PR body's Demo

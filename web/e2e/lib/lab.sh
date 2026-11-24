@@ -124,8 +124,9 @@ lab_up() {
   # whole process group), so the lab's lines keep a reader while it tears
   # down; the lab itself ignores INT, HUP and PIPE when held for a script.
   # The prefixer ends when the lab closes its output.
+  # LAB_UP_LOG, when set, also keeps the lab's output (lab_note_infra reads it).
   "$LAB_BIN" lab run --project "$LAB_ID" --ephemeral --port 0 --scenario "${STACK_SCENARIO:-dev}" \
-    --ready-file "$LAB_READY" --while-pid $$ "$@" > >(trap '' INT TERM HUP; sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
+    --ready-file "$LAB_READY" --while-pid $$ "$@" > >(trap '' INT TERM HUP; tee "${LAB_UP_LOG:-/dev/null}" | sed -u "s/^/lab $LAB_ID: /" >&2) 2>&1 &
   LAB_RUN_PID=$!
   until [ -s "$LAB_READY" ]; do
     if ! kill -0 "$LAB_RUN_PID" 2>/dev/null; then
@@ -150,6 +151,20 @@ lab_up() {
   if docker inspect "$LAB_OUTPOST" >/dev/null 2>&1; then
     LAB_CONTAINERS+=("$LAB_OUTPOST")
   fi
+}
+
+# lab_note_infra MARK LOG: after a lab that did not come up, leave MARK holding
+# the line of LOG that says the registry refused an image pull for its rate limit
+# (the lab's own words: internal/lab/pull.go, ErrRegistryLimit, #2020). The
+# run:demo comment then reports the demo as an infrastructure failure, not a
+# broken demo (web/e2e/walkthroughpr.mjs). Nothing is written for any other
+# reason the lab did not come up.
+lab_note_infra() {
+  local mark=$1 log=$2 line
+  [ -s "$log" ] || return 0
+  line=$(grep -m1 'registry rate limit' "$log" || true)
+  [ -n "$line" ] || return 0
+  printf '%s\n' "$line" >"$mark"
 }
 
 # True while the lab holds and every long-lived container of it runs.
