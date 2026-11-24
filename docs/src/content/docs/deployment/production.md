@@ -193,6 +193,8 @@ How soon a refusal comes depends on the provider (as each one's documentation st
 | Okta | Once the person is deactivated or suspended (reported, not in Okta's reference). The default refresh token lives without limit with a seven-day idle expiry, which the re-check keeps alive. | Deactivate or suspend the person. |
 | Google | Suspending an account is not documented to revoke a third party's refresh token, and Google sends no groups claim. | Suspend the person at Google **and** disable them in Omniglass. |
 
-The model, and what is deferred (SCIM deprovisioning, several providers at once, group mapping,
-provisioning and an enforce mode for everyone but owners), is
+The model, and what is deferred (SCIM deprovisioning, several providers at once, provisioning
+and an enforce mode for everyone but owners), is
 [ADR-2361](/architecture/decisions/#adr-2361-single-sign-on-links-a-person-to-an-identity-provider-subject-never-by-email).
+Mapping a provider's groups to Omniglass groups is built: see
+[identity provider groups](/admin/access/#identity-provider-groups).
