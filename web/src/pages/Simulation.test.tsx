@@ -40,6 +40,7 @@ const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: 
 const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], grants: [] };
 
 const DISPLAY = uuidFor("sim-display");
+const EP1 = uuidFor("sim-ep-1");
 const DSP = uuidFor("sim-dsp");
 
 const simRow = (id: string, name: string, hits: number, extra: Partial<SimComponent> = {}): SimComponent => ({
@@ -509,10 +510,10 @@ describe("the simulated component drawer's writes", () => {
   it("removes the endpoints with the component, after one confirm that lists them", async () => {
     stubFetch({
       "GET /endpoints": { endpoints: [
-        { id: "ep-1", name: "tcp", transport: "tcp", component_id: DISPLAY, params: { target: "127.60.0.1:80" } },
-        { id: "ep-other", name: "tcp", transport: "tcp", component_id: "someone-else" },
+        { id: EP1, name: "tcp", transport: "tcp", component_id: DISPLAY, params: { target: "127.60.0.1:80" } },
+        { id: uuidFor("sim-ep-other"), name: "tcp", transport: "tcp", component_id: uuidFor("sim-someone") },
       ] },
-      "DELETE /endpoints/ep-1": {},
+      [`DELETE /endpoints/${EP1}`]: {},
       [`DELETE /components/${DISPLAY}`]: {},
     });
     const confirm = answerConfirms(true);
@@ -523,7 +524,7 @@ describe("the simulated component drawer's writes", () => {
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(confirm.mock.calls[0])).toContain("127.60.0.1");
     const dels = calls.filter((c) => c.method === "DELETE").map((c) => c.path);
-    expect(dels).toEqual(["/endpoints/ep-1", `/components/${DISPLAY}`]);
+    expect(dels).toEqual([`/endpoints/${EP1}`, `/components/${DISPLAY}`]);
   });
 
   it("sends nothing when the remove is not confirmed", async () => {
