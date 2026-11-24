@@ -234,6 +234,25 @@ jobs:
       # build id, which the lab checks), so every recorder needs make first,
       # and needs only Docker for it. A failed build leaves no stack-up mark,
       # so combine names the leg as never run rather than blaming the demo.
+      # The nightly run starts about a hundred of these jobs at once, and every
+      # lab pulls its Postgres from Docker Hub anonymously, a limit counted per
+      # shared runner address: some got HTTP 429 and failed before recording
+      # anything (#2020). Pull it from Google's Docker Hub mirror first and tag it
+      # as the lab expects, so the lab finds it local and never asks Docker Hub. The
+      # name comes from the lab's own constant. If the mirror cannot serve it the
+      # lab pulls as before (and retries a 429 with backoff).
+      - name: Get the lab's Postgres from a mirror
+        run: |
+          img=$(sed -n 's/^[[:space:]]*PostgresImage = "\(.*\)"$/\1/p' internal/lab/plan.go)
+          [ -n "$img" ] || { echo "::error::cannot read PostgresImage from internal/lab/plan.go"; exit 1; }
+          for attempt in 1 2 3; do
+            if docker pull "mirror.gcr.io/library/${img}" && docker tag "mirror.gcr.io/library/${img}" "$img"; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::warning::could not pull ${img} through mirror.gcr.io; the lab pulls it from Docker Hub"
+
       - name: Build the lab
         run: make
 

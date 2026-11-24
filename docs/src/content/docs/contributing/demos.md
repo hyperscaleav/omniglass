@@ -297,7 +297,12 @@ kind it touches.
 
 Each selected demo records on a runner and a lab of its own, in parallel, so a run takes as long
 as its slowest demo (about five to seven minutes) rather than the sum, and the run's summary says
-which demos it chose and why. One job then combines every demo into one result:
+which demos it chose and why. Each job gets its lab's Postgres from Google's Docker Hub mirror
+(`mirror.gcr.io`) and tags it as the lab expects, because the nightly run starts about a hundred of
+these at once and Docker Hub counts anonymous pulls per shared runner address (HTTP 429, #2020). If
+the mirror cannot serve it the lab pulls from Docker Hub as before, retrying a 429 with backoff, and
+a pull still refused fails the job naming a registry rate limit, not a broken demo. One job then
+combines every demo into one result:
 
 - **The clip in the PR body.** Each recorded demo's clip, its GIF (a terminal demo) or animated
   preview (a walkthrough) with its **Watch (scrubbable)** link, is written into the PR body's Demo
