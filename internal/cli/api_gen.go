@@ -5616,7 +5616,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDays, "days", "", "The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused")
+				cmd.Flags().StringVar(&fDays, "days", "", "The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused")
 				_ = cmd.MarkFlagRequired("days")
 				return cmd
 			}()

@@ -4280,7 +4280,7 @@ Sets how many days this type's samples are kept, overriding the metric lane's wi
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--days` | string | (none) | The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused |
+| `--days` | string | (none) | The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused |
 
 Example:
 

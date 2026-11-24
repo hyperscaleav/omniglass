@@ -8466,6 +8466,18 @@ export type SetLocationTypePropertyInputBody = {
   required?: boolean;
 };
 
+export type SetMetricTypeRetentionBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused
+     * @minimum 3
+     * @maximum 36500
+     * @nullable
+     */
+  days: number | null;
+};
+
 export type SetProductMetricInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -18916,14 +18928,14 @@ export const getSetMetricTypeRetentionUrl = (name: string,) => {
  * @summary Set a metric type's retention window
  */
 export const setMetricTypeRetention = async (name: string,
-    setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
+    setMetricTypeRetentionBody: NonReadonly<SetMetricTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
 
   return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
   {
     ...options,
     method: 'POST',
     headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
-    body: JSON.stringify(setTypeRetentionBody)
+    body: JSON.stringify(setMetricTypeRetentionBody)
   }
 );}
 

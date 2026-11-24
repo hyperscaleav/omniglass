@@ -73,7 +73,7 @@ type metricTypeNameInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
 }
 
-// setTypeRetentionBody is the setRetention body for a metric or property type
+// setTypeRetentionBody is the setRetention body for a property type
 // (#417): a window in days, or an explicit null for the lane's. Required, so an
 // empty body is refused rather than read as a clear that would let the next
 // pass delete history the override was keeping.
@@ -81,9 +81,16 @@ type setTypeRetentionBody struct {
 	Days *int `json:"days" required:"true" nullable:"true" minimum:"1" maximum:"36500" doc:"The type's own retention window in whole days, 1 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days or retention.property_days). Required: an empty body is refused"`
 }
 
+// setMetricTypeRetentionBody is the metric type's body: the same shape, but a
+// metric's window floors at 3 days (the storage guard refuses less), so the
+// schema says so and Huma refuses 1 and 2 as a 422 before the guard runs.
+type setMetricTypeRetentionBody struct {
+	Days *int `json:"days" required:"true" nullable:"true" minimum:"3" maximum:"36500" doc:"The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused"`
+}
+
 type setMetricTypeRetentionInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
-	Body setTypeRetentionBody
+	Body setMetricTypeRetentionBody
 }
 
 type updateMetricTypeInput struct {

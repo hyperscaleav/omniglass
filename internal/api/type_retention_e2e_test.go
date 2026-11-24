@@ -3,6 +3,7 @@ package api_test
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -27,13 +28,18 @@ func TestATypesRetentionIsSetThroughItsOwnMethod(t *testing.T) {
 	// policy, held to platform:update as the retention settings are: a window an
 	// operator could set to one day would cut a shipped type to each series'
 	// latest row on the next pass.
-	f.c.do(f.operator, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{"days": 1}, http.StatusForbidden)
+	f.c.do(f.operator, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{"days": 3}, http.StatusForbidden)
 	f.c.do(f.operator, http.MethodPost, "/property-types/endpoint-reachable:setRetention", map[string]any{"days": 1}, http.StatusForbidden)
 	// An empty body is not a clear: only an explicit null returns a type to its
 	// lane's window, so a bare command never deletes history by accident.
 	f.c.do(f.admin, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{}, http.StatusUnprocessableEntity)
 	for _, bad := range []any{0, 1, 2, 36501, "3"} {
 		f.c.do(f.admin, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{"days": bad}, http.StatusUnprocessableEntity)
+	}
+	// Two days is refused by the schema's minimum (Huma validation, which names
+	// the bound), not only by the storage guard behind it.
+	if body := f.c.do(f.admin, http.MethodPost, "/metric-types/tcp-connect-time:setRetention", map[string]any{"days": 2}, http.StatusUnprocessableEntity); !strings.Contains(string(body), ">= 3") {
+		t.Fatalf("a 2-day metric retention should fail schema validation (>= 3), got %s", body)
 	}
 	f.c.do(f.admin, http.MethodPost, "/metric-types/no-such-type:setRetention", map[string]any{"days": 3}, http.StatusNotFound)
 

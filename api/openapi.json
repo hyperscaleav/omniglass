@@ -16017,6 +16017,34 @@
         },
         "type": "object"
       },
+      "SetMetricTypeRetentionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/SetMetricTypeRetentionBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "days": {
+            "description": "The type's own retention window in whole days, 3 to 36,500; null clears it, so the type is kept for its lane's window (retention.metric_days). Required: an empty body is refused",
+            "format": "int64",
+            "maximum": 36500,
+            "minimum": 3,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "type": "object"
+      },
       "SetProductMetricInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -30356,7 +30384,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetTypeRetentionBody"
+                "$ref": "#/components/schemas/SetMetricTypeRetentionBody"
               }
             }
           },
