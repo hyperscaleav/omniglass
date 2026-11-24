@@ -112,24 +112,66 @@ func (c *Client) Exchange(ctx context.Context, code, verifier, nonce string) (*S
 	return &SignIn{Claims: claims, RefreshToken: tok.RefreshToken}, nil
 }
 
-// Refresh redeems a refresh token, returning the rotated one (empty when the
-// provider kept the old). A refusal is ErrRefused.
-func (c *Client) Refresh(ctx context.Context, refresh string) (string, error) {
+// Refreshed is an accepted refresh: the rotated refresh token (empty when
+// the provider kept the old) and, when the provider answered with an
+// id_token, its verified claims, or why it did not verify.
+type Refreshed struct {
+	Rotated   string
+	Claims    *auth.JWTClaims
+	ClaimsErr error
+}
+
+// Refresh redeems a refresh token. A refusal is ErrRefused. An id_token in
+// the answer is verified (signature, issuer, audience, expiry; a refresh
+// carries no nonce); one that does not verify leaves the refresh accepted
+// and its claims unread.
+func (c *Client) Refresh(ctx context.Context, refresh string) (Refreshed, error) {
 	if refresh == "" {
-		return "", ErrRefused
+		return Refreshed{}, ErrRefused
 	}
 	tok, err := c.conf.TokenSource(c.ctx(ctx), &oauth2.Token{RefreshToken: refresh}).Token()
 	if err != nil {
 		var re *oauth2.RetrieveError
 		if errors.As(err, &re) && (re.ErrorCode == "invalid_grant" || re.ErrorCode == "unauthorized_client") {
-			return "", ErrRefused
+			return Refreshed{}, ErrRefused
 		}
-		return "", fmt.Errorf("sso: the refresh failed: %s", exchangeReason(err))
+		return Refreshed{}, fmt.Errorf("sso: the refresh failed: %s", exchangeReason(err))
 	}
-	if tok.RefreshToken == refresh {
-		return "", nil
+	var out Refreshed
+	if tok.RefreshToken != refresh {
+		out.Rotated = tok.RefreshToken
 	}
-	return tok.RefreshToken, nil
+	if raw, _ := tok.Extra("id_token").(string); raw != "" {
+		out.Claims, out.ClaimsErr = c.verifier.Verify(ctx, raw)
+	}
+	return out, nil
+}
+
+// SignInGroups is what a sign-in's id_token says of the person's groups
+// (#2363, ADR-2361 point 4): the values of claim, and a token without the
+// claim the empty set, so a provider that stops sending it removes every idp
+// membership (fail closed). Pure.
+func SignInGroups(c *auth.JWTClaims, claim string) *storage.IdPGroups {
+	values, ok := c.StringsClaim(claim)
+	if !ok {
+		values = []string{}
+	}
+	return &storage.IdPGroups{Issuer: c.Issuer, Values: values}
+}
+
+// RefreshGroups is what a re-check refresh's id_token says of the groups of
+// the link identifier names (ADR-2361 point 9): nil, so nothing is synced,
+// when the token is for another subject or carries no groups claim, since a
+// refresh answer need not repeat every claim. Pure.
+func RefreshGroups(c *auth.JWTClaims, identifier, claim string) *storage.IdPGroups {
+	if c == nil || c.Identifier() != identifier {
+		return nil
+	}
+	values, ok := c.StringsClaim(claim)
+	if !ok {
+		return nil
+	}
+	return &storage.IdPGroups{Issuer: c.Issuer, Values: values}
 }
 
 // exchangeReason words a token endpoint failure without its body, which may

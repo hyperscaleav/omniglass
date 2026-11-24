@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -40,6 +42,42 @@ type memberBody struct {
 	Kind   string `json:"kind"`
 	Name   string `json:"name,omitempty" doc:"The member's identifier: a person's username, or a machine user's name"`
 	Label  string `json:"label,omitempty" doc:"The friendly string, where the member is a human who has one"`
+	Source string `json:"source" enum:"local,idp" doc:"Where the membership comes from: local (an admin added it) or idp (synced from an identity provider's groups claim at sign-in and re-check, through a mapping)"`
+	Issuer string `json:"issuer,omitempty" doc:"The identity provider (its issuer) whose groups claim granted an idp membership"`
+}
+
+// groupMappingBody is one identity provider group mapping.
+type groupMappingBody struct {
+	ID         string    `json:"id"`
+	GroupID    string    `json:"group_id" doc:"The group's uuid, the handle"`
+	Group      string    `json:"group" doc:"The group's name, for display"`
+	Issuer     string    `json:"issuer" doc:"The identity provider's issuer the claim value is read from"`
+	ClaimValue string    `json:"claim_value" doc:"A value of the provider's groups claim"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func toGroupMappingBody(m *storage.GroupIdPMapping) groupMappingBody {
+	return groupMappingBody{ID: m.ID, GroupID: m.GroupID, Group: m.Group, Issuer: m.Issuer, ClaimValue: m.ClaimValue, CreatedAt: m.CreatedAt}
+}
+
+type listGroupMappingsOutput struct {
+	Body struct {
+		Mappings []groupMappingBody `json:"mappings"`
+	}
+}
+type groupMappingOutput struct {
+	Body groupMappingBody
+}
+type createGroupMappingInput struct {
+	Group string `path:"group" doc:"The group, by name or uuid" example:"night-shift"`
+	Body  struct {
+		ClaimValue string `json:"claim_value" minLength:"1" maxLength:"512" doc:"The value of the identity provider's groups claim that puts a person in this group"`
+		Issuer     string `json:"issuer,omitempty" maxLength:"2048" doc:"The identity provider's issuer, exactly as its tokens carry it; omit for the configured provider's"`
+	}
+}
+type groupMappingPathInput struct {
+	Group   string `path:"group" doc:"The group, by name or uuid" example:"night-shift"`
+	Mapping string `path:"mappingId" doc:"The mapping's id (uuid)"`
 }
 
 type groupPathInput struct {
@@ -215,7 +253,7 @@ func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/user-groups/{group}/members",
 		Summary:     "List a group's members",
-		Description: "The users in a group. Gated by user_group:read:admin.",
+		Description: "The users in a group, each with its source: local (an admin added it) or idp (synced from an identity provider's groups claim through a mapping, with the issuer). Gated by user_group:read:admin.",
 	}, "user_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*listMembersOutput, error) {
 		members, err := gw.ListGroupMembers(ctx, in.Group, a.scopeFor(ctx, "user_group", "read"))
 		if err != nil {
@@ -224,7 +262,8 @@ func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		out := &listMembersOutput{}
 		out.Body.Members = make([]memberBody, 0, len(members))
 		for _, m := range members {
-			out.Body.Members = append(out.Body.Members, memberBody{UserID: m.UserID, Kind: m.Kind, Name: m.Name, Label: m.Label})
+			out.Body.Members = append(out.Body.Members, memberBody{UserID: m.UserID, Kind: m.Kind, Name: m.Name, Label: m.Label,
+				Source: m.Source, Issuer: m.Issuer})
 		}
 		return out, nil
 	})
@@ -235,7 +274,7 @@ func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/user-groups/{group}/members",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Add a member to a group",
-		Description:   "Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
+		Description:   "Adds a user to a group; its members inherit the group's grants. The membership is local: a member an identity provider's groups brought (idp) becomes local, so it no longer follows the provider. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
 	}, "user_group", "update"), func(ctx context.Context, in *addMemberInput) (*struct{}, error) {
 		if err := a.groupMemberCoverOK(ctx, gw, in.Group); err != nil {
 			return nil, err
@@ -252,7 +291,7 @@ func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/user-groups/{group}/members/{user}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Remove a member from a group",
-		Description:   "Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).",
+		Description:   "Removes a user from a group; it stops inheriting the group's grants. An idp membership comes back at the person's next sign-in or re-check while a mapping still puts them in the group. Gated by user_group:update (all-scope).",
 	}, "user_group", "update"), func(ctx context.Context, in *memberPathInput) (*struct{}, error) {
 		if err := gw.RemoveGroupMember(ctx, actorID(ctx), in.Group, in.User, a.scopeFor(ctx, "user_group", "update")); err != nil {
 			return nil, mapUserErr(err)
@@ -285,7 +324,7 @@ func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/user-groups/{group}/grants",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Grant a role to a group",
-		Description:   "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
+		Description:   "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409, and so is an owner grant on a group an identity provider group mapping feeds (no provider group reaches an owner).",
 	}, "user_grant", "create"), func(ctx context.Context, in *createGroupGrantInput) (*grantOutput, error) {
 		ok, err := a.grantCoverOK(ctx, in.Body.Role)
 		if err != nil {
@@ -313,6 +352,57 @@ func registerUserGroupRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 	}, "user_grant", "delete"), func(ctx context.Context, in *revokeGroupGrantInput) (*struct{}, error) {
 		if err := gw.RevokeGroupGrant(ctx, actorID(ctx), in.Group, in.GrantID, a.scopeFor(ctx, "user_grant", "delete")); err != nil {
 			return nil, mapUserErr(err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-group-idp-mappings",
+		Method:      http.MethodGet,
+		Path:        "/user-groups/{group}/idp-mappings",
+		Summary:     "List a group's identity provider mappings",
+		Description: "The identity provider groups that put a person in this group: each a value of the provider's groups claim, keyed by its issuer. At each single sign-on sign-in, and each re-check refresh whose id_token carries the claim, a person's idp memberships from that issuer are set to exactly the mapped set. Gated by user_group:read:admin.",
+	}, "user_group", "read", "admin"), func(ctx context.Context, in *groupPathInput) (*listGroupMappingsOutput, error) {
+		ms, err := gw.ListGroupIdPMappings(ctx, in.Group, a.scopeFor(ctx, "user_group", "read"))
+		if err != nil {
+			return nil, mapGroupMappingErr(err)
+		}
+		out := &listGroupMappingsOutput{}
+		out.Body.Mappings = make([]groupMappingBody, 0, len(ms))
+		for i := range ms {
+			out.Body.Mappings = append(out.Body.Mappings, toGroupMappingBody(&ms[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID:   "create-group-idp-mapping",
+		Method:        http.MethodPost,
+		Path:          "/user-groups/{group}/idp-mappings",
+		DefaultStatus: http.StatusCreated,
+		Summary:       "Map an identity provider group to a group",
+		Description:   "Maps a value of the identity provider's groups claim to this group, so a person whose token carries it becomes an idp member at their next sign-in and inherits the group's grants. The issuer defaults to the configured provider's; with none configured and none given it is a 422. Refused (409) when the group carries an owner grant at any scope, since no provider group may reach an owner, and when the group already maps the value. Gated by user_group:update (all-scope). Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, as adding a member is.",
+	}, "user_group", "update"), func(ctx context.Context, in *createGroupMappingInput) (*groupMappingOutput, error) {
+		if err := a.groupMemberCoverOK(ctx, gw, in.Group); err != nil {
+			return nil, err
+		}
+		m, err := gw.CreateGroupIdPMapping(ctx, actorID(ctx), in.Group, in.Body.Issuer, in.Body.ClaimValue, a.scopeFor(ctx, "user_group", "update"))
+		if err != nil {
+			return nil, mapGroupMappingErr(err)
+		}
+		return &groupMappingOutput{Body: toGroupMappingBody(m)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID:   "delete-group-idp-mapping",
+		Method:        http.MethodDelete,
+		Path:          "/user-groups/{group}/idp-mappings/{mappingId}",
+		DefaultStatus: http.StatusNoContent,
+		Summary:       "Remove an identity provider group mapping",
+		Description:   "Removes one mapping. When it was the group's last mapping from its issuer, that issuer's idp memberships of the group are removed with it; otherwise they are re-judged at each person's next sign-in or re-check. Local memberships are never touched. Gated by user_group:update (all-scope).",
+	}, "user_group", "update"), func(ctx context.Context, in *groupMappingPathInput) (*struct{}, error) {
+		if err := gw.DeleteGroupIdPMapping(ctx, actorID(ctx), in.Group, in.Mapping, a.scopeFor(ctx, "user_group", "update")); err != nil {
+			return nil, mapGroupMappingErr(err)
 		}
 		return nil, nil
 	})
@@ -348,3 +438,23 @@ func (a *authenticator) groupMemberCoverOK(ctx context.Context, gw storage.Gatew
 	}
 	return nil
 }
+
+// mapGroupMappingErr maps the identity provider group mapping errors, then
+// the user-admin ones.
+func mapGroupMappingErr(err error) error {
+	switch {
+	case errors.Is(err, storage.ErrGroupMappingNotFound):
+		return huma.Error404NotFound("mapping not found")
+	case errors.Is(err, storage.ErrGroupMappingExists):
+		return huma.Error409Conflict("the group already maps that claim value from that issuer")
+	case errors.Is(err, storage.ErrGroupMappingOwner):
+		return huma.Error409Conflict(errGroupMappingOwner)
+	case errors.Is(err, storage.ErrGroupMappingNoIssuer):
+		return huma.Error422UnprocessableEntity("name the issuer: single sign-on is not configured, so there is no provider to default to")
+	default:
+		return mapUserErr(err)
+	}
+}
+
+// errGroupMappingOwner is the owner guard's refusal, from either side.
+const errGroupMappingOwner = "an identity provider group may not reach an owner: a group mapped from a provider cannot carry an owner grant, and a group with an owner grant cannot be mapped"

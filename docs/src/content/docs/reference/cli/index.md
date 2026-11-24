@@ -8089,7 +8089,7 @@ Grant a role to a group
 omniglass user-group grant create <group> [flags]
 ```
 
-Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409, and so is an owner grant on a group an identity provider group mapping feeds (no provider group reaches an owner).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -8136,6 +8136,63 @@ Example:
 omniglass user-group grant list night-shift
 ```
 
+### `omniglass user-group idp-mapping`
+
+Commands for the idp-mapping resource
+
+#### `omniglass user-group idp-mapping create`
+
+Map an identity provider group to a group
+
+```
+omniglass user-group idp-mapping create <group> [flags]
+```
+
+Maps a value of the identity provider's groups claim to this group, so a person whose token carries it becomes an idp member at their next sign-in and inherits the group's grants. The issuer defaults to the configured provider's; with none configured and none given it is a 422. Refused (409) when the group carries an owner grant at any scope, since no provider group may reach an owner, and when the group already maps the value. Gated by user_group:update (all-scope). Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, as adding a member is.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--claim-value` | string | (none) | The value of the identity provider's groups claim that puts a person in this group |
+| `--issuer` | string | (none) | The identity provider's issuer, exactly as its tokens carry it; omit for the configured provider's |
+
+Example:
+
+```sh
+omniglass user-group idp-mapping create night-shift --claim-value claim_value
+```
+
+#### `omniglass user-group idp-mapping delete`
+
+Remove an identity provider group mapping
+
+```
+omniglass user-group idp-mapping delete <group> <mappingId>
+```
+
+Removes one mapping. When it was the group's last mapping from its issuer, that issuer's idp memberships of the group are removed with it; otherwise they are re-judged at each person's next sign-in or re-check. Local memberships are never touched. Gated by user_group:update (all-scope).
+
+Example:
+
+```sh
+omniglass user-group idp-mapping delete night-shift <mappingId>
+```
+
+#### `omniglass user-group idp-mapping list`
+
+List a group's identity provider mappings
+
+```
+omniglass user-group idp-mapping list <group>
+```
+
+The identity provider groups that put a person in this group: each a value of the provider's groups claim, keyed by its issuer. At each single sign-on sign-in, and each re-check refresh whose id_token carries the claim, a person's idp memberships from that issuer are set to exactly the mapped set. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group idp-mapping list night-shift
+```
+
 ### `omniglass user-group list`
 
 List user groups
@@ -8164,7 +8221,7 @@ Add a member to a group
 omniglass user-group member create <group> [flags]
 ```
 
-Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+Adds a user to a group; its members inherit the group's grants. The membership is local: a member an identity provider's groups brought (idp) becomes local, so it no longer follows the provider. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -8184,7 +8241,7 @@ Remove a member from a group
 omniglass user-group member delete <group> <user>
 ```
 
-Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+Removes a user from a group; it stops inheriting the group's grants. An idp membership comes back at the person's next sign-in or re-check while a mapping still puts them in the group. Gated by user_group:update (all-scope).
 
 Example:
 
@@ -8200,7 +8257,7 @@ List a group's members
 omniglass user-group member list <group>
 ```
 
-The users in a group. Gated by user_group:read:admin.
+The users in a group, each with its source: local (an admin added it) or idp (synced from an identity provider's groups claim through a mapping, with the issuer). Gated by user_group:read:admin.
 
 Example:
 

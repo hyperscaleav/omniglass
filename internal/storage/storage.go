@@ -140,6 +140,12 @@ type Gateway interface {
 	CreateGroupGrant(ctx context.Context, actorID, groupRef string, spec GrantSpec, action scope.Set) (*Grant, error)
 	RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID string, action scope.Set) error
 	ListGroupGrants(ctx context.Context, groupRef string, read scope.Set) ([]Grant, error)
+	// Identity provider group mappings (#2363, ADR-2361 point 4): a groups
+	// claim value from an issuer maps to a group; an empty issuer is the
+	// configured provider's.
+	ListGroupIdPMappings(ctx context.Context, groupRef string, read scope.Set) ([]GroupIdPMapping, error)
+	CreateGroupIdPMapping(ctx context.Context, actorID, groupRef, issuer, claimValue string, action scope.Set) (*GroupIdPMapping, error)
+	DeleteGroupIdPMapping(ctx context.Context, actorID, groupRef, mappingID string, action scope.Set) error
 	// SetUserActive enables or disables a user (soft), audited. Requires
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
 	// disabled user cannot authenticate.
@@ -1292,7 +1298,7 @@ type Gateway interface {
 	ListIdentityLinks(ctx context.Context, userID string) ([]IdentityLink, error)
 	SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Time, error)
 	LinksToRecheck(ctx context.Context, issuer string) ([]LinkRecheck, error)
-	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration) error
+	AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration, groups *IdPGroups) error
 	RevokeLink(ctx context.Context, linkID, reason string) (int, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)

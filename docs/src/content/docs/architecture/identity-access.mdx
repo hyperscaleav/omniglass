@@ -94,11 +94,18 @@ and every call to the provider goes through the egress allow list. A sweep redee
 refresh token every `sso.recheck_minutes` (15 by default) and revokes the sessions and tokens made
 through it once the provider refuses. Owners keep password sign-in as break-glass.
 
-:::design[Identity provider groups, provisioning and SAML, tracked in #2363, #2364 and #2365]
-Provider groups map to Omniglass user groups so scoped grants follow the directory (#2363); a first
-sign-in provisions the person, and password sign-in can be reserved for owners (#2364); and SAML 2.0
-is a second protocol beside OpenID Connect (#2365).
+:::design[Identity provider provisioning and SAML, tracked in #2364 and #2365]
+A first sign-in provisions the person, and password sign-in can be reserved for owners (#2364); and
+SAML 2.0 is a second protocol beside OpenID Connect (#2365).
 :::
+
+Provider groups map to Omniglass user groups so scoped grants follow the directory
+([#2363](https://github.com/hyperscaleav/omniglass/issues/2363)): a groups-claim value keyed by issuer
+maps to a `user_group` (`/user-groups/{group}/idp-mappings`, gated `user_group`). The sign-in and each
+re-check refresh whose id_token carries the claim sync that issuer's `idp` memberships in their own
+transaction, audited. The owner guard refuses both a mapping to a group with an owner grant and an
+owner grant on a mapped group
+([ADR-2363](/architecture/decisions/#adr-2363-an-admins-add-makes-an-idp-membership-local-and-a-groups-last-mapping-takes-its-idp-members-with-it)).
 
 ### Agent tokens
 
@@ -418,7 +425,8 @@ scope by:
 
 A **user group** is a set of users that holds grants. Every member inherits the group's grants
 through the same loader as their own, and a group grant is bounded by the same cover check as a
-direct one. Membership is static and flat. The `/user-groups` routes manage groups, members and
+direct one. Membership is static and flat, and each row carries a `source` (`local`, or `idp` with its
+issuer when synced from a provider's groups claim). The `/user-groups` routes manage groups, members and
 grants, gated on `user_group`.
 
 ### People as notification audiences

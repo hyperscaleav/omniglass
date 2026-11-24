@@ -2709,6 +2709,22 @@ export type CreateGroupInputBody = {
   name: string;
 };
 
+export type CreateGroupMappingInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The value of the identity provider's groups claim that puts a person in this group
+     * @minLength 1
+     * @maxLength 512
+     */
+  claim_value: string;
+  /**
+     * The identity provider's issuer, exactly as its tokens carry it; omit for the configured provider's
+     * @maxLength 2048
+     */
+  issuer?: string;
+};
+
 export type CreateIdentityLinkInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4556,6 +4572,21 @@ export type GroupBody = {
   name: string;
 };
 
+export type GroupMappingBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** A value of the provider's groups claim */
+  claim_value: string;
+  created_at: string;
+  /** The group's name, for display */
+  group: string;
+  /** The group's uuid, the handle */
+  group_id: string;
+  id: string;
+  /** The identity provider's issuer the claim value is read from */
+  issuer: string;
+};
+
 export type HealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4893,6 +4924,13 @@ export type ListGroupGrantsOutputBody = {
   grants: GrantBody[] | null;
 };
 
+export type ListGroupMappingsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  mappings: GroupMappingBody[] | null;
+};
+
 export type ListGroupsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5152,12 +5190,27 @@ export type ListMeSessionsOutputBody = {
   sessions: SessionBody[] | null;
 };
 
+/**
+ * Where the membership comes from: local (an admin added it) or idp (synced from an identity provider's groups claim at sign-in and re-check, through a mapping)
+ */
+export type MemberBodySource = typeof MemberBodySource[keyof typeof MemberBodySource];
+
+
+export const MemberBodySource = {
+  local: 'local',
+  idp: 'idp',
+} as const;
+
 export type MemberBody = {
+  /** The identity provider (its issuer) whose groups claim granted an idp membership */
+  issuer?: string;
   kind: string;
   /** The friendly string, where the member is a human who has one */
   label?: string;
   /** The member's identifier: a person's username, or a machine user's name */
   name?: string;
+  /** Where the membership comes from: local (an admin added it) or idp (synced from an identity provider's groups claim at sign-in and re-check, through a mapping) */
+  source: MemberBodySource;
   user_id: string;
 };
 
@@ -25931,7 +25984,7 @@ export const getCreateGroupGrantUrl = (group: string,) => {
 }
 
 /**
- * Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+ * Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409, and so is an owner grant on a group an identity provider group mapping feeds (no provider group reaches an owner).
  * @summary Grant a role to a group
  */
 export const createGroupGrant = async (group: string,
@@ -25994,6 +26047,141 @@ export const revokeGroupGrant = async (group: string,
 
 
 
+export type listGroupIdpMappingsResponse200 = {
+  data: ListGroupMappingsOutputBody
+  status: 200
+}
+
+export type listGroupIdpMappingsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupIdpMappingsResponseSuccess = (listGroupIdpMappingsResponse200) & {
+  headers: Headers;
+};
+export type listGroupIdpMappingsResponseError = (listGroupIdpMappingsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupIdpMappingsResponse = (listGroupIdpMappingsResponseSuccess | listGroupIdpMappingsResponseError)
+
+export const getListGroupIdpMappingsUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/idp-mappings`
+}
+
+/**
+ * The identity provider groups that put a person in this group: each a value of the provider's groups claim, keyed by its issuer. At each single sign-on sign-in, and each re-check refresh whose id_token carries the claim, a person's idp memberships from that issuer are set to exactly the mapped set. Gated by user_group:read:admin.
+ * @summary List a group's identity provider mappings
+ */
+export const listGroupIdpMappings = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupIdpMappingsResponse> => {
+
+  return ogFetch<listGroupIdpMappingsResponse>(getListGroupIdpMappingsUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGroupIdpMappingResponse201 = {
+  data: GroupMappingBody
+  status: 201
+}
+
+export type createGroupIdpMappingResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGroupIdpMappingResponseSuccess = (createGroupIdpMappingResponse201) & {
+  headers: Headers;
+};
+export type createGroupIdpMappingResponseError = (createGroupIdpMappingResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGroupIdpMappingResponse = (createGroupIdpMappingResponseSuccess | createGroupIdpMappingResponseError)
+
+export const getCreateGroupIdpMappingUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/idp-mappings`
+}
+
+/**
+ * Maps a value of the identity provider's groups claim to this group, so a person whose token carries it becomes an idp member at their next sign-in and inherits the group's grants. The issuer defaults to the configured provider's; with none configured and none given it is a 422. Refused (409) when the group carries an owner grant at any scope, since no provider group may reach an owner, and when the group already maps the value. Gated by user_group:update (all-scope). Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, as adding a member is.
+ * @summary Map an identity provider group to a group
+ */
+export const createGroupIdpMapping = async (group: string,
+    createGroupMappingInputBody: NonReadonly<CreateGroupMappingInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupIdpMappingResponse> => {
+
+  return ogFetch<createGroupIdpMappingResponse>(getCreateGroupIdpMappingUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
+    body: JSON.stringify(createGroupMappingInputBody)
+  }
+);}
+
+
+
+export type deleteGroupIdpMappingResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteGroupIdpMappingResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteGroupIdpMappingResponseSuccess = (deleteGroupIdpMappingResponse204) & {
+  headers: Headers;
+};
+export type deleteGroupIdpMappingResponseError = (deleteGroupIdpMappingResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteGroupIdpMappingResponse = (deleteGroupIdpMappingResponseSuccess | deleteGroupIdpMappingResponseError)
+
+export const getDeleteGroupIdpMappingUrl = (group: string,
+    mappingId: string,) => {
+
+
+
+
+  return `/user-groups/${group}/idp-mappings/${mappingId}`
+}
+
+/**
+ * Removes one mapping. When it was the group's last mapping from its issuer, that issuer's idp memberships of the group are removed with it; otherwise they are re-judged at each person's next sign-in or re-check. Local memberships are never touched. Gated by user_group:update (all-scope).
+ * @summary Remove an identity provider group mapping
+ */
+export const deleteGroupIdpMapping = async (group: string,
+    mappingId: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteGroupIdpMappingResponse> => {
+
+  return ogFetch<deleteGroupIdpMappingResponse>(getDeleteGroupIdpMappingUrl(group,mappingId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
 export type listGroupMembersResponse200 = {
   data: ListMembersOutputBody
   status: 200
@@ -26022,7 +26210,7 @@ export const getListGroupMembersUrl = (group: string,) => {
 }
 
 /**
- * The users in a group. Gated by user_group:read:admin.
+ * The users in a group, each with its source: local (an admin added it) or idp (synced from an identity provider's groups claim through a mapping, with the issuer). Gated by user_group:read:admin.
  * @summary List a group's members
  */
 export const listGroupMembers = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupMembersResponse> => {
@@ -26066,7 +26254,7 @@ export const getAddGroupMemberUrl = (group: string,) => {
 }
 
 /**
- * Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+ * Adds a user to a group; its members inherit the group's grants. The membership is local: a member an identity provider's groups brought (idp) becomes local, so it no longer follows the provider. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
  * @summary Add a member to a group
  */
 export const addGroupMember = async (group: string,
@@ -26112,7 +26300,7 @@ export const getRemoveGroupMemberUrl = (group: string,
 }
 
 /**
- * Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+ * Removes a user from a group; it stops inheriting the group's grants. An idp membership comes back at the person's next sign-in or re-check while a mapping still puts them in the group. Gated by user_group:update (all-scope).
  * @summary Remove a member from a group
  */
 export const removeGroupMember = async (group: string,

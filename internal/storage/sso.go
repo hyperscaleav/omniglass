@@ -342,6 +342,10 @@ type SSOSignIn struct {
 	GraceExpiresAt time.Time
 	UserAgent      string
 	ClientIP       string
+	// Groups is what the id_token says of the person's groups; the sign-in
+	// syncs their idp memberships from its issuer to it (#2363). Nil skips
+	// the sync.
+	Groups *IdPGroups
 }
 
 // refreshAAD binds a sealed refresh token to the link it was sealed for.
@@ -407,6 +411,11 @@ func (p *PG) SignInByIdentity(ctx context.Context, in SSOSignIn) (*User, time.Ti
 		values ($1, 'bearer', $2, $3, 'session', $4, nullif($5,''), nullif($6,''), $7)`,
 		u.ID, in.SessionHash, in.Prefix, expiresAt, in.UserAgent, in.ClientIP, linkID); err != nil {
 		return nil, time.Time{}, fmt.Errorf("storage: issue sso session: %w", err)
+	}
+	if in.Groups != nil {
+		if err := syncIdPGroups(ctx, tx, u.ID, *in.Groups); err != nil {
+			return nil, time.Time{}, err
+		}
 	}
 	if err := writeAuthEventTx(ctx, tx, u.ID, "login", map[string]string{"method": "oidc", "identifier": in.Identifier}); err != nil {
 		return nil, time.Time{}, err
@@ -491,14 +500,38 @@ func (p *PG) LinksToRecheck(ctx context.Context, issuer string) ([]LinkRecheck, 
 
 // AcceptLinkRefresh records a refresh the provider accepted: the rotated
 // token (the old one kept when the provider rotated none) and a fresh grace.
-func (p *PG) AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration) error {
+// When the refresh's id_token carried the groups claim (groups non-nil), the
+// link's person has their idp memberships synced to it in the same
+// transaction (#2363, ADR-2361 point 9).
+func (p *PG) AcceptLinkRefresh(ctx context.Context, linkID, rotated string, grace time.Duration, groups *IdPGroups) error {
 	sealed, err := p.sealRefresh(ctx, linkID, rotated)
 	if err != nil {
 		return err
 	}
-	if _, err := p.pool.Exec(ctx, `update credential set refresh_sealed = coalesce($2, refresh_sealed), refresh_accepted_at = now(),
-			recheck_grace_until = now() + make_interval(secs => $3) where id = $1 and kind = 'oidc'`, linkID, sealed, grace.Seconds()); err != nil {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin accept link refresh: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var userID string
+	err = tx.QueryRow(ctx, `update credential set refresh_sealed = coalesce($2, refresh_sealed), refresh_accepted_at = now(),
+			recheck_grace_until = now() + make_interval(secs => $3) where id = $1 and kind = 'oidc' returning user_id::text`,
+		linkID, sealed, grace.Seconds()).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Unlinked since the sweep listed it: nothing to keep, and no reason
+		// to stop the pass over the other links.
+		return nil
+	}
+	if err != nil {
 		return fmt.Errorf("storage: accept link refresh: %w", err)
+	}
+	if groups != nil {
+		if err := syncIdPGroups(ctx, tx, userID, *groups); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit accept link refresh: %w", err)
 	}
 	return nil
 }

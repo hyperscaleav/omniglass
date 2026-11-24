@@ -3121,6 +3121,28 @@ components:
       required:
         - name
       type: object
+    CreateGroupMappingInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateGroupMappingInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        claim_value:
+          description: The value of the identity provider's groups claim that puts a person in this group
+          maxLength: 512
+          minLength: 1
+          type: string
+        issuer:
+          description: The identity provider's issuer, exactly as its tokens carry it; omit for the configured provider's
+          maxLength: 2048
+          type: string
+      required:
+        - claim_value
+      type: object
     CreateIdentityLinkInputBody:
       additionalProperties: false
       properties:
@@ -5701,6 +5723,41 @@ components:
         - member_count
         - grant_count
       type: object
+    GroupMappingBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/GroupMappingBody.json
+          format: uri
+          readOnly: true
+          type: string
+        claim_value:
+          description: A value of the provider's groups claim
+          type: string
+        created_at:
+          format: date-time
+          type: string
+        group:
+          description: The group's name, for display
+          type: string
+        group_id:
+          description: The group's uuid, the handle
+          type: string
+        id:
+          type: string
+        issuer:
+          description: The identity provider's issuer the claim value is read from
+          type: string
+      required:
+        - id
+        - group_id
+        - group
+        - issuer
+        - claim_value
+        - created_at
+      type: object
     HealthAlarmBody:
       additionalProperties: false
       properties:
@@ -6632,6 +6689,25 @@ components:
             - "null"
       required:
         - grants
+      type: object
+    ListGroupMappingsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListGroupMappingsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        mappings:
+          items:
+            $ref: "#/components/schemas/GroupMappingBody"
+          type:
+            - array
+            - "null"
+      required:
+        - mappings
       type: object
     ListGroupsOutputBody:
       additionalProperties: false
@@ -7802,6 +7878,9 @@ components:
     MemberBody:
       additionalProperties: false
       properties:
+        issuer:
+          description: The identity provider (its issuer) whose groups claim granted an idp membership
+          type: string
         kind:
           type: string
         label:
@@ -7810,11 +7889,18 @@ components:
         name:
           description: "The member's identifier: a person's username, or a machine user's name"
           type: string
+        source:
+          description: "Where the membership comes from: local (an admin added it) or idp (synced from an identity provider's groups claim at sign-in and re-check, through a mapping)"
+          enum:
+            - local
+            - idp
+          type: string
         user_id:
           type: string
       required:
         - user_id
         - kind
+        - source
       type: object
     MetricBucketBody:
       additionalProperties: false
@@ -26289,7 +26375,7 @@ paths:
       summary: List a group's grants
       x-omniglass-permission: user_group:read:admin
     post:
-      description: Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+      description: Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409, and so is an owner grant on a group an identity provider group mapping feeds (no provider group reaches an owner).
       operationId: create-group-grant
       parameters:
         - description: The group, by name or uuid
@@ -26354,9 +26440,104 @@ paths:
           description: Error
       summary: Revoke a group grant
       x-omniglass-permission: user_grant:delete
+  /user-groups/{group}/idp-mappings:
+    get:
+      description: "The identity provider groups that put a person in this group: each a value of the provider's groups claim, keyed by its issuer. At each single sign-on sign-in, and each re-check refresh whose id_token carries the claim, a person's idp memberships from that issuer are set to exactly the mapped set. Gated by user_group:read:admin."
+      operationId: list-group-idp-mappings
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListGroupMappingsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a group's identity provider mappings
+      x-omniglass-permission: user_group:read:admin
+    post:
+      description: Maps a value of the identity provider's groups claim to this group, so a person whose token carries it becomes an idp member at their next sign-in and inherits the group's grants. The issuer defaults to the configured provider's; with none configured and none given it is a 422. Refused (409) when the group carries an owner grant at any scope, since no provider group may reach an owner, and when the group already maps the value. Gated by user_group:update (all-scope). Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, as adding a member is.
+      operationId: create-group-idp-mapping
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupMappingInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupMappingBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Map an identity provider group to a group
+      x-omniglass-permission: user_group:update
+  /user-groups/{group}/idp-mappings/{mappingId}:
+    delete:
+      description: Removes one mapping. When it was the group's last mapping from its issuer, that issuer's idp memberships of the group are removed with it; otherwise they are re-judged at each person's next sign-in or re-check. Local memberships are never touched. Gated by user_group:update (all-scope).
+      operationId: delete-group-idp-mapping
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+        - description: The mapping's id (uuid)
+          in: path
+          name: mappingId
+          required: true
+          schema:
+            description: The mapping's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove an identity provider group mapping
+      x-omniglass-permission: user_group:update
   /user-groups/{group}/members:
     get:
-      description: The users in a group. Gated by user_group:read:admin.
+      description: "The users in a group, each with its source: local (an admin added it) or idp (synced from an identity provider's groups claim through a mapping, with the issuer). Gated by user_group:read:admin."
       operationId: list-group-members
       parameters:
         - description: The group, by name or uuid
@@ -26384,7 +26565,7 @@ paths:
       summary: List a group's members
       x-omniglass-permission: user_group:read:admin
     post:
-      description: Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+      description: "Adds a user to a group; its members inherit the group's grants. The membership is local: a member an identity provider's groups brought (idp) becomes local, so it no longer follows the provider. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route."
       operationId: add-group-member
       parameters:
         - description: The group, by name or uuid
@@ -26415,7 +26596,7 @@ paths:
       x-omniglass-permission: user_group:update
   /user-groups/{group}/members/{user}:
     delete:
-      description: Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+      description: Removes a user from a group; it stops inheriting the group's grants. An idp membership comes back at the person's next sign-in or re-check while a mapping still puts them in the group. Gated by user_group:update (all-scope).
       operationId: remove-group-member
       parameters:
         - description: The group, by name or uuid

@@ -221,12 +221,14 @@ func (a *authenticator) oidcCallback(w http.ResponseWriter, r *http.Request, o o
 	// A link with no refresh token gets no long-lived access (ADR-2361
 	// point 9): the session lasts the grace, which is also the link's, since
 	// nothing will re-check it. A sign-in that brings no new token keeps the
-	// link's stored one, so storage picks the lifetime.
+	// link's stored one, so storage picks the lifetime. The same transaction
+	// syncs the person's idp group memberships to the token's groups claim
+	// (#2363), absent read as none.
 	now := time.Now()
 	ua, ip := r.UserAgent(), clientIP(r, o.trustedProxies)
 	u, expires, err := a.gw.SignInByIdentity(ctx, storage.SSOSignIn{Identifier: identifier, RefreshToken: in.RefreshToken, Grace: p.Grace,
 		SessionHash: hash, Prefix: prefix, ExpiresAt: now.Add(sessionCookieLifetime), GraceExpiresAt: now.Add(p.Grace),
-		UserAgent: ua, ClientIP: ip})
+		UserAgent: ua, ClientIP: ip, Groups: sso.SignInGroups(in.Claims, p.GroupsClaim)})
 	switch {
 	case errors.Is(err, storage.ErrIdentityNotLinked):
 		// The identity is named here, in the log, for an administrator to

@@ -768,6 +768,8 @@ func mapUserErr(err error) error {
 		return huma.Error404NotFound("group not found")
 	case errors.Is(err, storage.ErrGroupExists):
 		return huma.Error409Conflict("that group name already exists")
+	case errors.Is(err, storage.ErrGroupMappingOwner):
+		return huma.Error409Conflict(errGroupMappingOwner)
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity("group name may not be a uuid")
 	case errors.Is(err, storage.ErrInvalidEntityName):

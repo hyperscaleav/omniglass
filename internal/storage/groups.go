@@ -70,6 +70,10 @@ type GroupMember struct {
 	Kind   string
 	Name   string
 	Label  string
+	// Source is local (an admin added it) or idp (synced from an identity
+	// provider's groups claim, #2363); Issuer names the provider of an idp row.
+	Source string
+	Issuer string
 }
 
 const groupCols = `id, name, coalesce(label, ''), coalesce(description, ''), created_at, updated_at`
@@ -308,15 +312,41 @@ func (p *PG) AddGroupMember(ctx context.Context, actorID, groupRef, userRef stri
 		return err
 	}
 
-	tag, err := tx.Exec(ctx,
-		`insert into user_group_member (group_id, user_id) values ($1, $2) on conflict do nothing`, groupID, userID)
-	if err != nil {
+	// An admin's add is a local membership. A row the provider brought (idp)
+	// becomes local, so it stops following the provider; a local row is a
+	// no-op (#2363).
+	var prior struct {
+		source string
+		issuer *string
+	}
+	err = tx.QueryRow(ctx, `select source, issuer from user_group_member where group_id = $1 and user_id = $2 for update`,
+		groupID, userID).Scan(&prior.source, &prior.issuer)
+	switch {
+	case err == nil && prior.source == MemberSourceLocal:
+		return tx.Commit(ctx) // already a member: nothing changed, nothing to audit
+	case err == nil:
+		if _, err := tx.Exec(ctx, `update user_group_member set source = 'local', issuer = null where group_id = $1 and user_id = $2`,
+			groupID, userID); err != nil {
+			return fmt.Errorf("storage: make member local: %w", err)
+		}
+		old := groupMemberImage{GroupID: groupID, UserID: userID, Source: prior.source}
+		if prior.issuer != nil {
+			old.Issuer = *prior.issuer
+		}
+		if err := writeAuditRes(ctx, tx, actorID, "update", "user_group_member", groupID, old,
+			groupMemberImage{GroupID: groupID, UserID: userID, Source: MemberSourceLocal}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("storage: read member: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`insert into user_group_member (group_id, user_id) values ($1, $2)`, groupID, userID); err != nil {
 		return mapMemberWriteErr(err)
 	}
-	if tag.RowsAffected() == 0 {
-		return tx.Commit(ctx) // already a member: nothing changed, nothing to audit
-	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "user_group_member", groupID, nil, map[string]string{"group_id": groupID, "user_id": userID}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user_group_member", groupID, nil,
+		groupMemberImage{GroupID: groupID, UserID: userID, Source: MemberSourceLocal}); err != nil {
 		return err
 	}
 	if err := dropForeignLinksOfOwners(ctx, tx, actorID); err != nil {
@@ -342,14 +372,20 @@ func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupRef, userRef s
 		return err
 	}
 
-	tag, err := tx.Exec(ctx, `delete from user_group_member where group_id = $1 and user_id = $2`, groupID, userID)
+	old := groupMemberImage{GroupID: groupID, UserID: userID}
+	var issuer *string
+	err = tx.QueryRow(ctx, `delete from user_group_member where group_id = $1 and user_id = $2 returning source, issuer`,
+		groupID, userID).Scan(&old.Source, &issuer)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return tx.Commit(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("storage: remove member: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return tx.Commit(ctx)
+	if issuer != nil {
+		old.Issuer = *issuer
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "user_group_member", groupID, map[string]string{"group_id": groupID, "user_id": userID}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "user_group_member", groupID, old, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -380,7 +416,7 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.S
 	// sub-selects cost 3011 buffer hits over 500 members where these joins cost
 	// 15 (user_ident.go carries the measurement).
 	rows, err := p.pool.Query(ctx,
-		`select p.id, p.kind, `+userIdentJoinedCols("pi")+`, coalesce(h.label, '')
+		`select p.id, p.kind, `+userIdentJoinedCols("pi")+`, coalesce(h.label, ''), m.source, coalesce(m.issuer, '')
 		   from user_group_member m
 		   join users p on p.id = m.user_id
 		   left join person h on h.user_id = p.id`+userIdentJoins("pi", "p.id")+`
@@ -394,7 +430,7 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.S
 	for rows.Next() {
 		var m GroupMember
 		var username, serviceName, outpostName *string
-		if err := rows.Scan(&m.UserID, &m.Kind, &username, &serviceName, &outpostName, &m.Label); err != nil {
+		if err := rows.Scan(&m.UserID, &m.Kind, &username, &serviceName, &outpostName, &m.Label, &m.Source, &m.Issuer); err != nil {
 			return nil, fmt.Errorf("storage: scan member: %w", err)
 		}
 		m.Name = userIdent(username, serviceName, outpostName)
@@ -453,7 +489,8 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 		return nil, fmt.Errorf("storage: begin create group grant: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	groupID, err := groupIDByRef(ctx, tx, groupRef)
+	// Locked, so a mapping cannot land between the owner guard and the grant.
+	groupID, err := lockGroup(ctx, tx, groupRef)
 	if err != nil {
 		return nil, err
 	}
@@ -470,6 +507,16 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 		groupID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
+	}
+	// The owner guard's grant side (ADR-2361 point 4): a group an identity
+	// provider's groups map into may not carry an owner grant, at any scope.
+	var ownerOnMapped bool
+	if err := tx.QueryRow(ctx, `select `+ownerGrantOnGroupSQL+` and exists (select 1 from user_group_idp_mapping where group_id = $1)`,
+		groupID).Scan(&ownerOnMapped); err != nil {
+		return nil, fmt.Errorf("storage: owner guard: %w", err)
+	}
+	if ownerOnMapped {
+		return nil, ErrGroupMappingOwner
 	}
 	g := Grant{ID: gid, Role: spec.Role, ScopeKind: spec.ScopeKind, ScopeOp: spec.ScopeOp, GroupID: &groupID}
 	if spec.ScopeID != "" {

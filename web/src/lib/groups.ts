@@ -11,7 +11,32 @@ export type Group = { id: string; name: string; label?: string; description?: st
 // (a person's username, a machine user's name) and `label` is the
 // friendly string, which only a person has. They used to arrive as one field
 // carrying either, which is what #563 ended.
-export type GroupMember = { user_id: string; kind: string; name?: string; label?: string };
+// `source` says where the membership comes from: local (an admin added it) or
+// idp (synced from an identity provider's groups claim, #2363), with the
+// provider's `issuer`.
+export type GroupMember = { user_id: string; kind: string; name?: string; label?: string; source?: "local" | "idp"; issuer?: string };
+
+// A mapping puts a person in the group when their identity provider's groups
+// claim carries `claim_value` (#2363): keyed by the provider's issuer.
+export type GroupMapping = { id: string; group_id: string; issuer: string; claim_value: string };
+
+// memberSource is what a roster says of where a membership comes from: an idp
+// row names the provider's host, so an operator sees why removing it here
+// lasts only until the person's next sign-in.
+export function memberSource(m: GroupMember): string | undefined {
+  if (m.source !== "idp") return undefined;
+  return `from SSO${m.issuer ? ` (${issuerHost(m.issuer)})` : ""}`;
+}
+
+// issuerHost is an issuer URL's host, the short form a roster or a mapping
+// row shows; the full issuer is kept for anything that is not a URL.
+export function issuerHost(issuer: string): string {
+  try {
+    return new URL(issuer).host || issuer;
+  } catch {
+    return issuer;
+  }
+}
 
 export const GROUPS_KEY = ["user-groups"] as const;
 
@@ -89,5 +114,22 @@ export async function createGroupGrant(id: string, body: CreateGrant): Promise<G
 
 export async function revokeGroupGrant(id: string, grantId: string): Promise<void> {
   const { error } = await api.DELETE("/user-groups/{group}/grants/{grantId}", { params: { path: { group: id, grantId } } });
+  if (error) throw error;
+}
+
+export async function listGroupMappings(id: string): Promise<GroupMapping[]> {
+  const { data, error } = await api.GET("/user-groups/{group}/idp-mappings", { params: { path: { group: id } } });
+  if (error) throw error;
+  return (data?.mappings ?? []) as GroupMapping[];
+}
+
+export async function createGroupMapping(id: string, claimValue: string): Promise<GroupMapping> {
+  const { data, error } = await api.POST("/user-groups/{group}/idp-mappings", { params: { path: { group: id } }, body: { claim_value: claimValue } });
+  if (error) throw error;
+  return data as GroupMapping;
+}
+
+export async function deleteGroupMapping(id: string, mappingId: string): Promise<void> {
+  const { error } = await api.DELETE("/user-groups/{group}/idp-mappings/{mappingId}", { params: { path: { group: id, mappingId } } });
   if (error) throw error;
 }

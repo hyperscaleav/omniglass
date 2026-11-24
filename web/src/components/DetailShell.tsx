@@ -24,8 +24,10 @@ export function RelatedList(props: {
   onOpen?: (item: RelatedItem) => void;
   // Present -> each row carries a remove (Trash) button.
   onRemove?: (item: RelatedItem) => void;
-  // Present -> an add-a-member picker under the list.
-  add?: { placeholder: string; options: { id: string; label: string }[]; onAdd: (id: string) => void; canAdd: boolean };
+  // Present -> an add picker under the list: a select over options, or, with
+  // no options, a free-text entry (a value typed, not picked: an identity
+  // provider's group name).
+  add?: { placeholder: string; options?: { id: string; label: string }[]; onAdd: (id: string) => void; canAdd: boolean };
 }): JSX.Element {
   const [toAdd, setToAdd] = createSignal("");
   const rowBase = "flex items-center justify-between gap-2 rounded-field border border-base-300 bg-base-100 px-2.5 py-1.5";
@@ -73,11 +75,25 @@ export function RelatedList(props: {
       </div>
       <Show when={props.add?.canAdd}>
         <div class="mt-1 flex items-center gap-2">
-          <select class="select select-bordered select-sm min-w-0 flex-1 font-data" value={toAdd()} onChange={(e) => setToAdd(e.currentTarget.value)}>
-            <option value="">{props.add!.placeholder}</option>
-            <For each={props.add!.options}>{(o) => <option value={o.id}>{o.label}</option>}</For>
-          </select>
-          <Button intent="action" icon={Plus} disabled={!toAdd()} onClick={() => { props.add!.onAdd(toAdd()); setToAdd(""); }}>Add</Button>
+          <Show
+            when={props.add!.options}
+            fallback={
+              <input
+                class="input input-bordered input-sm min-w-0 flex-1 font-data"
+                aria-label={props.add!.placeholder}
+                placeholder={props.add!.placeholder}
+                value={toAdd()}
+                onInput={(e) => setToAdd(e.currentTarget.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && toAdd().trim()) { e.preventDefault(); props.add!.onAdd(toAdd().trim()); setToAdd(""); } }}
+              />
+            }
+          >
+            <select class="select select-bordered select-sm min-w-0 flex-1 font-data" value={toAdd()} onChange={(e) => setToAdd(e.currentTarget.value)}>
+              <option value="">{props.add!.placeholder}</option>
+              <For each={props.add!.options}>{(o) => <option value={o.id}>{o.label}</option>}</For>
+            </select>
+          </Show>
+          <Button intent="action" icon={Plus} disabled={!toAdd().trim()} onClick={() => { props.add!.onAdd(toAdd().trim()); setToAdd(""); }}>Add</Button>
         </div>
       </Show>
     </div>

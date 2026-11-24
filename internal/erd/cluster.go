@@ -8,7 +8,7 @@ package erd
 var Subsystems = []Cluster{
 	{Name: "identity", Tables: []string{
 		"users", "person", "machine", "user_grant", "user_group",
-		"user_group_member", "impersonation_session",
+		"user_group_member", "user_group_idp_mapping", "impersonation_session",
 		"role", "system_slot", "system_slot_assignment",
 		"system_slot_type", "system_slot_product",
 		"slot_choice", "choice_alternate",
