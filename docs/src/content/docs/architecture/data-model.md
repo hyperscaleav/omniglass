@@ -27,6 +27,11 @@ to the row it points at. An edge that crosses a container border is a seam betwe
 throwaway Postgres, introspects the catalog and renders the diagram. Every table must be assigned a
 subsystem in `internal/erd/cluster.go`; an unassigned one fails the introspection test, which is the
 prompt to add it. After a schema change, run `make gen`, never an edit to the region.
+
+The page shows a committed SVG rendered from that source, and `make gen` does not re-render it (the docs
+build has no `d2` binary). `internal/erd` compares the two by the tables and columns each names and
+fails `make test` when they disagree, so after a schema change also run `cd docs && corepack pnpm diagrams`
+and commit the SVG.
 :::
 
 ## The platform ERD
