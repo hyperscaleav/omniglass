@@ -230,6 +230,23 @@ describe("what a demo's recording says happened", () => {
     expect(legOutcome({ ...base, manifest: null, stackUp: false })).toBe("unstarted");
   });
 
+  // The registry's rate limit (#2020): its lab never came up because an image
+  // pull was refused, which the recorder marks. That is the registry's fault, not
+  // the demo's, and not a lab that merely never came up.
+  it("is infra when its lab never came up because the registry refused a pull", () => {
+    expect(legOutcome({ ...base, manifest: null, stackUp: false, infra: true })).toBe("infra");
+  });
+
+  it("is not infra when the lab came up, or when it never came up for another reason", () => {
+    expect(legOutcome({ ...base, manifest: null, stackUp: true, infra: true })).toBe("failed");
+    expect(legOutcome({ ...base, manifest: null, stackUp: false, infra: false })).toBe("unstarted");
+    expect(legOutcome({ ...base, manifest: null, stackUp: false })).toBe("unstarted");
+  });
+
+  it("never reads an earlier attempt's infra mark as this run's", () => {
+    expect(legOutcome({ ...base, manifest: null, stackUp: false, infra: true, legHead: SHA })).toBe("unstarted");
+  });
+
   it("never ran when its leg recorded another commit, or says none: an earlier attempt's recording is not this run's", () => {
     expect(legOutcome({ ...base, legHead: SHA })).toBe("unstarted");
     expect(legOutcome({ ...base, legHead: "" })).toBe("unstarted");
@@ -490,6 +507,41 @@ describe("the demo comment", () => {
   });
 });
 
+describe("the demo comment's infrastructure failures", () => {
+  const withInfra = (tapesInfra: string[], walksInfra: string[], extra: { failed?: string[] } = {}) =>
+    commentBody({
+      repo: REPO,
+      pr: 925,
+      sha: SHA,
+      headSha: HEAD,
+      runUrl: RUN,
+      artifactUrl: ARTIFACT,
+      walkthroughs: { recorded: [], failed: extra.failed ?? [], unstarted: [], infra: walksInfra },
+      tapes: { recorded: [], failed: [], unstarted: [], infra: tapesInfra },
+    });
+
+  it("lists a demo the registry refused as an infrastructure failure, apart from a failed demo and one that did not run", () => {
+    const text = withInfra(["t"], ["w"], { failed: ["f"] });
+    expect(text).toContain("**Infrastructure failure**");
+    expect(text).toContain("rate limit");
+    expect(text).toContain("nothing is wrong with the demo");
+    expect(text).toContain("- `t` (terminal demo)");
+    expect(text).toContain("- `w` (walkthrough)");
+    expect(text).toContain("2 hit an infrastructure failure");
+    expect(text.indexOf("**Failed**")).toBeLessThan(text.indexOf("**Infrastructure failure**"));
+    expect(text).not.toContain("**Did not run**");
+    expect(text).not.toContain("Nothing was recorded.");
+  });
+
+  it("says nothing of infrastructure when no demo hit it", () => {
+    expect(body([manifest("a")])).not.toContain("Infrastructure");
+  });
+
+  it("refuses an infra id that is not a safe path segment", () => {
+    expect(() => withInfra(["../x"], [])).toThrow();
+  });
+});
+
 describe("the demo comment's terminal demos", () => {
   const raw = `https://raw.githubusercontent.com/${REPO}/${SHA}`;
   const cdn = `https://cdn.jsdelivr.net/gh/${REPO}@${SHA}`;
@@ -614,6 +666,20 @@ describe("the clip the PR body's Demo section carries", () => {
   });
 });
 
+describe("the clip's infrastructure failures", () => {
+  it("names a demo the registry refused as an infrastructure failure, not a failure", () => {
+    const text = clipBody({
+      repo: REPO,
+      sha: SHA,
+      headSha: HEAD,
+      tapes: { recorded: [], failed: [], unstarted: [], infra: ["t"] },
+      walkthroughs: { recorded: [], failed: [], unstarted: [], infra: [] },
+    });
+    expect(text).toContain("**Infrastructure failure (registry rate limit, not the demo):** `t` (terminal demo).");
+    expect(text).not.toContain("**Failed:**");
+  });
+});
+
 describe("the freshness report the nightly run files", () => {
   const RUN_URL = "https://github.com/hyperscaleav/omniglass/actions/runs/7";
   const report = (tapes: { recorded: TapeManifest[]; failed: string[]; unstarted: string[] }, walks: { recorded: Manifest[]; failed: string[]; unstarted: string[] }) =>
@@ -625,6 +691,21 @@ describe("the freshness report the nightly run files", () => {
     expect(r.summary).toContain("All 3 demos recorded green");
     expect(r.summary).toContain(`\`${HEAD.slice(0, 7)}\``);
     expect(r.summary).toContain(`](${RUN_URL})`);
+  });
+
+  it("is red when the registry refused a demo's pull, naming it as infrastructure, not as the demo's failure", () => {
+    const r = freshnessReport({
+      runUrl: RUN_URL,
+      headSha: HEAD,
+      tapes: { recorded: [], failed: [], unstarted: [], infra: ["t"] },
+      walkthroughs: { recorded: [manifest("a")], failed: [], unstarted: [] },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.summary).toContain("1 of 2 demos did not record green");
+    expect(r.body).toContain("**Infrastructure failure**");
+    expect(r.body).toContain("- `t` (terminal demo)");
+    expect(r.body).not.toContain("**Failed**");
+    expect(r.body).toContain("make demo ID=t");
   });
 
   it("is red when any demo failed or never ran, and its body names each with its kind", () => {

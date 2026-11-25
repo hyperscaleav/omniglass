@@ -481,8 +481,10 @@ server that restarts starts it over, and nothing of it is stored.
 - **impaired**: the outpost's simulator has an [impairment](/operator/simulation/#break-it-on-purpose)
   applied, which loses traffic on purpose below the simulator's view. The gap is expected, not a
   fault, and reads blue. The attribution is outpost-wide: every gap on that outpost reads impaired while
-  any device on it is. Once the window slides past the repair,
-  it clears.
+  any device on it is. A fresh lab plants two faults as impairments (see
+  [two faults the lab starts with](/operator/simulation/#two-faults-the-lab-starts-with)), so on one
+  every gap carries the label and the faulted devices' own drops keep their protocol's gap above 0
+  until a presenter lifts them. Once the window slides past the repair, it clears.
 - **restarted**: a counter went backwards inside the window, because the outpost or its simulator started
   again, or the fleet the simulator serves changed (a device added or removed, or the simulator's
   first sync of its fleet). A request sent to a device the simulator had not bound yet is never
@@ -545,7 +547,7 @@ row in the outpost hop to its delivery series.
 ::walkthrough{#find-where-work-is-lost}
 
 On a lab with a simulator, drop every packet toward one snmp device from its drawer, watch its gap
-open on Platform health read as impaired, then repair it and watch the attribution clear as the window
+open on Platform health read as impaired, then repair it and watch the gap return to 0 as the window
 slides past.
 
 ::walkthrough{#watch-an-impaired-device}

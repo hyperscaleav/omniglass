@@ -517,7 +517,7 @@ describe("PlatformHealth with a simulator", () => {
   it("links each device to its drawer on the Simulation page and and carries no unfinished marker", () => {
     mount(full, { fleet: connected, body: simBody([measured]) });
     const device = screen.getByTestId("platform-sim-device");
-    expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/web/simulation?c=${uuidFor("display")}`);
+    expect(within(device).getByRole("link", { name: "lobby-display" })).toHaveAttribute("href", `/web/simulation?c=${uuidFor("display")}&tab=impairments`);
     expect(within(device).getByText("impaired")).toBeInTheDocument();
     expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-accepted", "9");
     expect(screen.getByTestId("platform-sim-protocol")).toHaveAttribute("data-received", "90");

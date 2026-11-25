@@ -24,6 +24,10 @@ steps:
     caption: The video bar has a High alarm. Its row offers omnibot, for a person who may ask it.
   - click: { role: button, name: Troubleshoot Video feed lost with omnibot }
     caption: Troubleshoot hands omnibot this alarm by its component and when it was raised, never what the screen shows.
+  - wait: { selector: '[data-testid=omnibot-thinking]', timeout: 30000 }
+    caption: Omnibot runs the triage skill. Its reasoning and its calls fold into one line, so the answer is what you read.
+  - click: '[data-testid=omnibot-thinking] > summary'
+    caption: Open it to read the calls.
   - wait: { selector: '[data-testid=omnibot-step] >> nth=2', timeout: 30000 }
     caption: Omnibot runs the triage skill. It reads the component, its alarms and its reachability, under your grants.
   - wait: { text: the fault is on the device, timeout: 30000 }

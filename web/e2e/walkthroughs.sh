@@ -8,8 +8,11 @@
 #                                 preview.webp, poster.png, step-NN.png,
 #                                 walkthrough.json; the ids
 #                                 that failed are listed in out/failed.txt, and
-#                                 out/stack-up marks that the lab came up (the
-#                                 run:demo workflow reads both, #925, #1132)
+#                                 out/stack-up marks that the lab came up, and
+#                                 out/infra that it did not because the registry
+#                                 refused an image pull for its rate limit (the
+#                                 run:demo workflow reads all three, #925, #1132,
+#                                 #2020)
 #   walkthroughs.sh selftest      the recorder's own test: a broken step fails naming the
 #                                 step and its wait, keeping its stills; an over-budget
 #                                 walkthrough (or preview) fails naming which limit,
@@ -177,6 +180,7 @@ if [ "$mode" = record ]; then
   mkdir -p "$OUT"
   : >"$OUT/failed.txt"
   [ ! -e "$OUT/stack-up" ] || rm -- "$OUT/stack-up"
+  [ ! -e "$OUT/infra" ] || rm -- "$OUT/infra"
 fi
 
 lab_init ogwalk
@@ -185,7 +189,11 @@ lab_init ogwalk
 # recorded on a lab without one.
 lab_flags=()
 if [ "$mode" = record ] && grep -qE '^lab:.*\bsso\b' "${files[@]}"; then lab_flags+=(--sso); fi
-lab_up ${lab_flags[@]+"${lab_flags[@]}"}
+if [ "$mode" = record ]; then LAB_UP_LOG="$OUT/lab-up.log"; fi
+lab_up ${lab_flags[@]+"${lab_flags[@]}"} || {
+  [ "$mode" != record ] || lab_note_infra "$OUT/infra" "$OUT/lab-up.log"
+  exit 1
+}
 [ "$mode" != record ] || : >"$OUT/stack-up"
 
 if [ "$mode" = record ]; then

@@ -44,10 +44,12 @@ import { checkTapeId } from './tapelib.mjs';
 /** @typedef {import('./tapelib.mjs').TapeManifest} TapeManifest */
 /**
  * One recorder's results: the manifests of the demos that passed, the ids of
- * those that ran and failed, and the ids of those that never ran (their lab
- * never came up, or their job ended before recording).
+ * those that ran and failed, the ids of those that never ran (their lab
+ * never came up, or their job ended before recording), and the ids whose lab
+ * could not get an image because its registry refused the pull for its rate
+ * limit (infrastructure, not the demo's fault, #2020; absent means none).
  * @template M
- * @typedef {{ recorded: M[], failed: string[], unstarted: string[] }} Results
+ * @typedef {{ recorded: M[], failed: string[], unstarted: string[], infra?: string[] }} Results
  */
 /**
  * What a PR body's demo tag says: the demos it names, or none, with why.
@@ -212,7 +214,9 @@ export function everyDemo(tapes, walkthroughs) {
 
 // What a selected demo's recording says happened: recorded (a manifest with
 // the budget mark only a pass writes, not listed as failed), failed (it ran
-// and did not pass), or unstarted (its lab never came up, or its job ended
+// and did not pass), infra (its lab never came up because the registry
+// refused an image pull for its rate limit: the recorder leaves an `infra`
+// mark, #2020), or unstarted (its lab never came up, or its job ended
 // first). In the run:demo workflow each demo's leg marks the commit it
 // checked out (`legHead`) before anything can fail, and a leg that marked
 // another commit than the run's (`headSha`), or none, is an earlier attempt's
@@ -220,13 +224,14 @@ export function everyDemo(tapes, walkthroughs) {
 // With no leg (make demo on this machine) there is no commit to compare.
 /**
  * @param {{ manifest: { budget?: unknown } | null, listedFailed: boolean, stackUp: boolean,
- *   legHead?: string, headSha?: string }} rec
- * @returns {'recorded' | 'failed' | 'unstarted'}
+ *   infra?: boolean, legHead?: string, headSha?: string }} rec
+ * @returns {'recorded' | 'failed' | 'infra' | 'unstarted'}
  */
-export function legOutcome({ manifest, listedFailed, stackUp, legHead, headSha }) {
+export function legOutcome({ manifest, listedFailed, stackUp, infra, legHead, headSha }) {
   if (headSha !== undefined && legHead !== headSha) return 'unstarted';
   if (manifest && manifest.budget && !listedFailed) return 'recorded';
-  return stackUp ? 'failed' : 'unstarted';
+  if (stackUp) return 'failed';
+  return infra ? 'infra' : 'unstarted';
 }
 
 // The ref PR `pr`'s evidence is committed to. Each run commits a fresh tree on
@@ -375,11 +380,12 @@ function section(repo, sha, m) {
 /**
  * @param {Results<TapeManifest>} tapes
  * @param {Results<Manifest>} walkthroughs
- * @returns {{ failed: string[], unstarted: string[] }}
+ * @returns {{ failed: string[], unstarted: string[], infra: string[] }}
  */
 function misses(tapes, walkthroughs) {
   const item = (/** @type {string} */ id, /** @type {string} */ kind) => `- \`${id}\` (${kind})`;
   return {
+    infra: [...(tapes.infra ?? []).map((id) => item(checkTapeId(id), 'terminal demo')), ...(walkthroughs.infra ?? []).map((id) => item(checkId(id), 'walkthrough'))],
     failed: [...tapes.failed.map((id) => item(checkTapeId(id), 'terminal demo')), ...walkthroughs.failed.map((id) => item(checkId(id), 'walkthrough'))],
     unstarted: [...tapes.unstarted.map((id) => item(checkTapeId(id), 'terminal demo')), ...walkthroughs.unstarted.map((id) => item(checkId(id), 'walkthrough'))],
   };
@@ -387,18 +393,21 @@ function misses(tapes, walkthroughs) {
 
 // The tally of a run: what it recorded by kind, then how many failed and how
 // many never ran.
-/** @param {Results<TapeManifest>} tapes @param {Results<Manifest>} walkthroughs @param {number} failed @param {number} unstarted */
-function tally(tapes, walkthroughs, failed, unstarted) {
+/** @param {Results<TapeManifest>} tapes @param {Results<Manifest>} walkthroughs @param {number} failed @param {number} unstarted @param {number} [infra] */
+function tally(tapes, walkthroughs, failed, unstarted, infra = 0) {
   const kinds = [
     ...(tapes.recorded.length ? [plural(tapes.recorded.length, 'terminal demo')] : []),
     ...(walkthroughs.recorded.length ? [plural(walkthroughs.recorded.length, 'walkthrough')] : []),
   ];
-  return `${kinds.length ? kinds.join(' and ') : '0 demos'} recorded${failed ? `, ${failed} failed` : ''}${unstarted ? `, ${unstarted} did not run` : ''}`;
+  return `${kinds.length ? kinds.join(' and ') : '0 demos'} recorded${failed ? `, ${failed} failed` : ''}${infra ? `, ${infra} hit an infrastructure failure` : ''}${unstarted ? `, ${unstarted} did not run` : ''}`;
 }
 
 const FAILED_NOTE =
   '**Failed** (a demo is a test: a terminal demo fails when a command it typed exited non-zero or a wait ran out, a walkthrough when a ' +
   "step's result never appeared, and either when its recording is over budget; the run log names the cause, and the artifact keeps the partial output):";
+const INFRA_NOTE =
+  "**Infrastructure failure** (the demo's lab could not get an image because its registry refused the pull for its rate limit: " +
+  'nothing is wrong with the demo, re-run the workflow, and that demo\'s record job log shows the refused pull):';
 const UNSTARTED_NOTE =
   '**Did not run** (its lab never came up, or its record job ended before recording: this is the lab or the runner, not the demo, ' +
   "and that demo's record job log says why):";
@@ -417,21 +426,22 @@ const UNSTARTED_NOTE =
  * @returns {string}
  */
 export function commentBody({ repo, pr, sha, headSha, runUrl, artifactUrl, tapes, walkthroughs }) {
-  const { failed, unstarted } = misses(tapes, walkthroughs);
+  const { failed, unstarted, infra } = misses(tapes, walkthroughs);
   const lines = [
     DEMO_MARKER,
     '### Demos',
     '',
-    `${tally(tapes, walkthroughs, failed.length, unstarted.length)} from \`${String(headSha).slice(0, 7)}\` in [this run](${runUrl}). ` +
+    `${tally(tapes, walkthroughs, failed.length, unstarted.length, infra.length)} from \`${String(headSha).slice(0, 7)}\` in [this run](${runUrl}). ` +
       `Each demo's files are committed to \`${evidenceRef(pr)}\` (off the PR branch, so none of it reaches main) ` +
       `and reached by that commit's SHA; the [workflow artifacts](${artifactUrl}) also keep a failed demo's partial output.`,
     '',
   ];
   if (failed.length) lines.push(FAILED_NOTE, '', ...failed, '');
+  if (infra.length) lines.push(INFRA_NOTE, '', ...infra, '');
   if (unstarted.length) lines.push(UNSTARTED_NOTE, '', ...unstarted, '');
   for (const m of tapes.recorded) lines.push(...tapeSection(repo, sha, m));
   for (const m of walkthroughs.recorded) lines.push(...section(repo, sha, m));
-  if (!tapes.recorded.length && !walkthroughs.recorded.length && !failed.length && !unstarted.length) lines.push('Nothing was recorded.', '');
+  if (!tapes.recorded.length && !walkthroughs.recorded.length && !failed.length && !unstarted.length && !infra.length) lines.push('Nothing was recorded.', '');
   lines.push(
     "The PR body's Demo section carries each recording's clip. Re-run the workflow, or remove and re-add the `run:demo` label, " +
       'to record the current head again; this comment and the clip are updated in place.',
@@ -473,9 +483,10 @@ export function clipBody({ repo, sha, headSha, tapes, walkthroughs }) {
       '',
     );
   }
-  const { failed, unstarted } = misses(tapes, walkthroughs);
+  const { failed, unstarted, infra } = misses(tapes, walkthroughs);
   const inline = (/** @type {string[]} */ items) => items.map((i) => i.slice(2)).join(', ');
   if (failed.length) lines.push(`**Failed:** ${inline(failed)}.`, '');
+  if (infra.length) lines.push(`**Infrastructure failure (registry rate limit, not the demo):** ${inline(infra)}.`, '');
   if (unstarted.length) lines.push(`**Did not run:** ${inline(unstarted)}.`, '');
   return lines.join('\n').trimEnd() + '\n';
 }
@@ -489,14 +500,14 @@ export function clipBody({ repo, sha, headSha, tapes, walkthroughs }) {
  * @returns {{ ok: boolean, summary: string, body: string }}
  */
 export function freshnessReport({ runUrl, headSha, tapes, walkthroughs }) {
-  const { failed, unstarted } = misses(tapes, walkthroughs);
-  const total = tapes.recorded.length + walkthroughs.recorded.length + failed.length + unstarted.length;
+  const { failed, unstarted, infra } = misses(tapes, walkthroughs);
+  const total = tapes.recorded.length + walkthroughs.recorded.length + failed.length + unstarted.length + infra.length;
   const head = `\`${String(headSha).slice(0, 7)}\``;
-  const ok = failed.length + unstarted.length === 0;
+  const ok = failed.length + unstarted.length + infra.length === 0;
   const summary = ok
     ? `All ${plural(total, 'demo')} recorded green on \`main\` at ${head} in [this run](${runUrl}).`
-    : `${failed.length + unstarted.length} of ${plural(total, 'demo')} did not record green on \`main\` at ${head} in [this run](${runUrl}).`;
-  const first = [...tapes.failed, ...walkthroughs.failed, ...tapes.unstarted, ...walkthroughs.unstarted][0];
+    : `${failed.length + unstarted.length + infra.length} of ${plural(total, 'demo')} did not record green on \`main\` at ${head} in [this run](${runUrl}).`;
+  const first = [...tapes.failed, ...walkthroughs.failed, ...(tapes.infra ?? []), ...(walkthroughs.infra ?? []), ...tapes.unstarted, ...walkthroughs.unstarted][0];
   const lines = [
     FRESHNESS_MARKER,
     'The freshness run re-records every demo on `main` each night, since a PR records only the demos it tags (#1180), so a change ' +
@@ -506,6 +517,7 @@ export function freshnessReport({ runUrl, headSha, tapes, walkthroughs }) {
     '',
   ];
   if (failed.length) lines.push(FAILED_NOTE, '', ...failed, '');
+  if (infra.length) lines.push(INFRA_NOTE, '', ...infra, '');
   if (unstarted.length) lines.push(UNSTARTED_NOTE, '', ...unstarted, '');
   if (!ok) {
     lines.push(

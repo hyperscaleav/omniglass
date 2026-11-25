@@ -435,7 +435,7 @@
     {
       "id": "watch-an-impaired-device",
       "title": "Watch an impaired device",
-      "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+      "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the gap return to 0 as the window slides.",
       "lab": [],
       "setup": []
     },

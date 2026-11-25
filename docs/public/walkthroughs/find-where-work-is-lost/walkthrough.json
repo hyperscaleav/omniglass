@@ -42,63 +42,69 @@
     {
       "n": 7,
       "kind": "click",
-      "caption": "Unplug it. Every poll of it now fails.",
+      "caption": "Impairments are set on their own tab.",
       "still": "step-07.png"
     },
     {
       "n": 8,
       "kind": "click",
-      "caption": "Save. The simulator applies it on its next pull.",
+      "caption": "Unplug it. Every poll of it now fails.",
       "still": "step-08.png"
     },
     {
       "n": 9,
-      "kind": "press",
-      "caption": "Close the simulation.",
+      "kind": "click",
+      "caption": "Save. The simulator applies it on its next pull.",
       "still": "step-09.png"
     },
     {
       "n": 10,
-      "kind": "wait",
-      "caption": "The failed polls land on the panel's own component, as its poll failures.",
+      "kind": "press",
+      "caption": "Close the simulation.",
       "still": "step-10.png"
     },
     {
       "n": 11,
-      "kind": "goto",
-      "caption": "Back on Platform health, Where work is lost still open.",
+      "kind": "wait",
+      "caption": "The failed polls land on the panel's own component, as its poll failures.",
       "still": "step-11.png"
     },
     {
       "n": 12,
-      "kind": "wait",
-      "caption": "Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
+      "kind": "goto",
+      "caption": "Back on Platform health, Where work is lost still open.",
       "still": "step-12.png"
     },
     {
       "n": 13,
-      "kind": "click",
-      "caption": "Open the outpost hop. Each outpost's own share is a row.",
+      "kind": "wait",
+      "caption": "Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
       "still": "step-13.png"
     },
     {
       "n": 14,
       "kind": "click",
-      "caption": "Follow the outpost's row to its platform component.",
+      "caption": "Open the outpost hop. Each outpost's own share is a row.",
       "still": "step-14.png"
     },
     {
       "n": 15,
+      "kind": "click",
+      "caption": "Follow the outpost's row to its platform component.",
+      "still": "step-15.png"
+    },
+    {
+      "n": 16,
       "kind": "wait",
       "caption": "The outpost's delivery series live on its component, one per kind, like any other metric.",
-      "still": "step-15.png"
+      "still": "step-16.png"
     }
   ],
-  "poster": "step-12.png",
+  "poster": "step-13.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 54.9,
-    "bytes": 906636,
-    "previewBytes": 651444
+    "seconds": 55.3,
+    "bytes": 919849,
+    "previewBytes": 653454
   }
 }

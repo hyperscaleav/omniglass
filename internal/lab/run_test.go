@@ -45,6 +45,10 @@ type fakeEngine struct {
 	cmds map[string][]string
 	// seedHangs makes the seed run until its context ends.
 	seedHangs bool
+	// pullErrs are the errors the next pulls return, one each, before a pull
+	// succeeds (a registry's rate limit, #2020).
+	pullErrs []error
+	pulls    map[string]int
 }
 
 // retagTo is the image a reference is re-pointed to.
@@ -99,6 +103,17 @@ func (f *fakeEngine) InspectImage(_ context.Context, ref string) (ImageInfo, boo
 	return ImageInfo{ID: id, Labels: l}, ok, nil
 }
 func (f *fakeEngine) PullImage(_ context.Context, ref string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pulls == nil {
+		f.pulls = map[string]int{}
+	}
+	f.pulls[ref]++
+	if len(f.pullErrs) > 0 {
+		err := f.pullErrs[0]
+		f.pullErrs = f.pullErrs[1:]
+		return err
+	}
 	f.images[ref] = map[string]string{}
 	return nil
 }
@@ -366,6 +381,65 @@ func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
 	}
 	if got := eng.ran["server"]; got != "sha256:released" {
 		t.Fatalf("the server was created from %q, want the pulled image's ID", got)
+	}
+}
+
+// A demo run builds the omniglass image and pulls Postgres once and loads both
+// into every record job (#2020): a lab that finds both images already local
+// pulls and builds nothing, so a hundred labs never ask Docker Hub.
+func TestRunPullsNothingWhenTheImagesAreAlreadyLoaded(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	cfg := testConfig()
+	eng.images[cfg.Image.Ref] = map[string]string{VersionLabel: "abc123"}
+	eng.images[PostgresImage] = map[string]string{}
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if len(eng.pulls) != 0 {
+		t.Fatalf("pulled %v with both images already loaded, want no pull", eng.pulls)
+	}
+	if strings.Contains(out.String(), "pulling") {
+		t.Fatalf("the lab announced a pull:\n%s", out.String())
+	}
+}
+
+// A rate limited pull of the lab's Postgres is retried, not fatal (#2020): the
+// nightly demo run starts a hundred labs at once against Docker Hub's anonymous
+// limit.
+func TestRunRetriesARateLimitedPostgresPull(t *testing.T) {
+	fastBackoff(t)
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	delete(eng.images, PostgresImage)
+	eng.pullErrs = []error{errTooMany, errTooMany}
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), testConfig()); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if got := eng.pulls[PostgresImage]; got != 3 {
+		t.Fatalf("%d pulls of %s, want 3 (two rate limited, then one that works)", got, PostgresImage)
+	}
+	if !strings.Contains(out.String(), "rate limited by its registry; retrying") {
+		t.Fatalf("the retries were not announced:\n%s", out.String())
+	}
+}
+
+// A pull the registry keeps refusing fails the lab naming a registry limit, so
+// a caller reports infrastructure and not a broken demo.
+func TestRunNamesARegistryLimitWhenPullRetriesRunOut(t *testing.T) {
+	fastBackoff(t)
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	delete(eng.images, PostgresImage)
+	for range 10 {
+		eng.pullErrs = append(eng.pullErrs, errTooMany)
+	}
+	var out bytes.Buffer
+	_, err := testRunner(eng, &out).Run(context.Background(), testConfig())
+	if !errors.Is(err, ErrRegistryLimit) {
+		t.Fatalf("err %v, want a registry limit\n%s", err, out.String())
 	}
 }
 

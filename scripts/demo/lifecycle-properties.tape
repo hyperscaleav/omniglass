@@ -4,23 +4,32 @@
 # of life, what replacing it costs and how long it is expected to last. A new display of that product
 # reads them as its own effective values with nothing set on it. One display was installed on a known
 # day, so it declares its own install date; a date that is not a date is refused (#2366).
+#
+# The product is a custom one made off camera: a shipped (official) product's defaults are
+# read-only, so the demo cannot set them on one.
+
+Hide
+Type `demo_hush 'omniglass product create --name lobby-display --label "Lobby display" --component-type display --kind device'`
+Enter
+Wait
+Show
 
 Type "# The product sets its lifecycle defaults once"
 Enter
 Wait
-Type `omniglass product property update boreal-edge-55 end-of-life --default-value 2031-06-30 | jq -c '{property_type_name, default_value}'`
+Type `omniglass product property update lobby-display end-of-life --default-value 2031-06-30 | jq -c '{property_type_name, default_value}'`
 Enter
 Wait
-Type `omniglass product metric update boreal-edge-55 replacement-cost --default-value 4200 | jq -c '{metric_type_name, default_value}'`
+Type `omniglass product metric update lobby-display replacement-cost --default-value 4200 | jq -c '{metric_type_name, default_value}'`
 Enter
 Wait
-Type `omniglass product metric update boreal-edge-55 expected-life-years --default-value 7 | jq -c '{metric_type_name, default_value}'`
+Type `omniglass product metric update lobby-display expected-life-years --default-value 7 | jq -c '{metric_type_name, default_value}'`
 Enter
 Wait
 Type "# A new display of that product inherits them, with nothing set on it"
 Enter
 Wait
-Type `c=$(omniglass component createFromTemplate --template boreal-edge-55 --location hq.west | jq -r .component)`
+Type `c=$(omniglass component create --name lobby-display-1 --product lobby-display --location hq.west | jq -r .name)`
 Enter
 Wait
 Type `omniglass component property list "$c" | jq -c '.properties[] | select(.property_type_name == "end-of-life") | {property_type_name, value, is_set}'`

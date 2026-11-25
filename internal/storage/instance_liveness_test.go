@@ -149,3 +149,28 @@ func TestANativeProbeKeyStaysLiveWhateverTheDriverEmits(t *testing.T) {
 		t.Fatalf("a native probe key on a driver that does not emit it: want 4.8 from tcp, count 1; got %+v (present %v)", m, ok)
 	}
 }
+
+// The webhook receiver's counts (#1369) are the server's own, written under the
+// endpoint's name, not a driver's emit: they stay live on their endpoint whatever
+// the spec emits, as a native probe key does. Without this a component's
+// webhook-post-count and webhook-refusal-count vanished from its metrics once
+// liveness began to ask the driver (#1217), and the collection telemetry demo
+// never saw them.
+func TestTheWebhookReceiversCountsStayLiveWhateverTheDriverEmits(t *testing.T) {
+	t.Parallel()
+	r := newLivenessRig(t)
+	all := scope.Set{All: true}
+	r.emits(t, "power-state")
+	posts, refusals := 3, 1
+	if err := r.gw.RecordWebhookCounts(r.ctx, []storage.WebhookCount{{
+		ComponentID: r.comp.ID, Endpoint: "tcp", Posts: &posts, Refusals: &refusals, At: r.base,
+	}}); err != nil {
+		t.Fatalf("record webhook counts: %v", err)
+	}
+	ms := metricsByName(mustEffectiveMetrics(t, r.gw, "component", "panel-1", all))
+	for _, key := range []string{"webhook-post-count", "webhook-refusal-count"} {
+		if m, ok := ms[key]; !ok || m.Instance != "tcp" || m.InstanceCount != 1 {
+			t.Errorf("%s on an endpoint whose driver does not emit it: want it live from tcp, count 1; got %+v (present %v)", key, m, ok)
+		}
+	}
+}

@@ -261,7 +261,7 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 			return nil, fmt.Errorf("the image %s is not built; run `make`", ref)
 		}
 		r.step("image", "pulling "+ref+" (a one-time download)")
-		if err := r.Engine.PullImage(ctx, ref); err != nil {
+		if err := pullImage(ctx, ref, r.Engine.PullImage, func(m string) { r.step("image", m) }); err != nil {
 			return nil, fmt.Errorf("pull %s: %w", ref, err)
 		}
 	}

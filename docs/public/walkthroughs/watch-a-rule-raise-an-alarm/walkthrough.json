@@ -18,45 +18,51 @@
     {
       "n": 3,
       "kind": "click",
-      "caption": "Unplug it. The simulated panel goes dark on every protocol, as if its cable were pulled.",
+      "caption": "Impairments are set on their own tab.",
       "still": "step-03.png"
     },
     {
       "n": 4,
       "kind": "click",
-      "caption": "Save. The panel is marked unplugged, and the simulator applies it on its next pull.",
+      "caption": "Unplug it. The simulated panel goes dark on every protocol, as if its cable were pulled.",
       "still": "step-04.png"
     },
     {
       "n": 5,
-      "kind": "press",
-      "caption": "Close the simulation. The panel's page lists the systems it serves.",
+      "kind": "click",
+      "caption": "Save. The panel is marked unplugged, and the simulator applies it on its next pull.",
       "still": "step-05.png"
     },
     {
       "n": 6,
-      "kind": "click",
-      "caption": "Open the system it serves. It still reads healthy; the official rule waits for a down to hold 15s, so one failed probe never pages.",
+      "kind": "press",
+      "caption": "Close the simulation. The panel's page lists the systems it serves.",
       "still": "step-06.png"
     },
     {
       "n": 7,
-      "kind": "wait",
-      "caption": "The down held, so the rule opened a High alarm on the panel. The system's view refreshes on its own, so Why names it with no reload.",
+      "kind": "click",
+      "caption": "Open the system it serves. It still reads healthy; the official rule waits for a down to hold 15s, so one failed probe never pages.",
       "still": "step-07.png"
     },
     {
       "n": 8,
       "kind": "wait",
-      "caption": "The alarm takes the panel out, so Touch Control is short and the system reads degraded.",
+      "caption": "The down held, so the rule opened a High alarm on the panel. The system's view refreshes on its own, so Why names it with no reload.",
       "still": "step-08.png"
+    },
+    {
+      "n": 9,
+      "kind": "wait",
+      "caption": "The alarm takes the panel out, so Touch Control is short and the system reads degraded.",
+      "still": "step-09.png"
     }
   ],
-  "poster": "step-07.png",
+  "poster": "step-08.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 52.9,
-    "bytes": 687904,
-    "previewBytes": 429650
+    "seconds": 50.7,
+    "bytes": 731714,
+    "previewBytes": 473624
   }
 }

@@ -42,7 +42,8 @@
 // workflow, which records each demo on a runner of its own and downloads each
 // runner's out/ as LEGS/demo-leg-<id>/), that directory; else its recorder's
 // out/ (make demo). Either holds the recorder's <id>/ directory, its
-// failed.txt and its stack-up mark; a leg also holds head, the commit it
+// failed.txt, its stack-up mark and, when its lab never came up because the
+// registry refused an image pull for its rate limit, an infra mark (#2020); a leg also holds head, the commit it
 // recorded, and one marking another commit than HEAD_SHA (an earlier
 // attempt's, left in the run) counts as never run. A selected demo counts as recorded only if
 // failed.txt does not list it and its manifest carries the budget mark the
@@ -132,10 +133,11 @@ function legHead(id) {
 }
 
 // Every selected demo's result, by recorder (walkthroughpr.mjs legOutcome):
-// recorded (its manifest), failed, or never ran.
+// recorded (its manifest), failed, infra (its lab never came up because the
+// registry refused a pull for its rate limit, #2020), or never ran.
 function results() {
-  /** @type {Record<'tape' | 'walkthrough', { recorded: any[], failed: string[], unstarted: string[] }>} */
-  const r = { tape: { recorded: [], failed: [], unstarted: [] }, walkthrough: { recorded: [], failed: [], unstarted: [] } };
+  /** @type {Record<'tape' | 'walkthrough', { recorded: any[], failed: string[], unstarted: string[], infra: string[] }>} */
+  const r = { tape: { recorded: [], failed: [], unstarted: [], infra: [] }, walkthrough: { recorded: [], failed: [], unstarted: [], infra: [] } };
   for (const id of selected()) {
     const kind = kindOf(id);
     const head = legHead(id);
@@ -143,6 +145,7 @@ function results() {
       manifest: passed(id),
       listedFailed: listedFailed(id).includes(id),
       stackUp: existsSync(join(outOf(id), 'stack-up')),
+      infra: existsSync(join(outOf(id), 'infra')),
       legHead: head,
       headSha: head === undefined ? undefined : env('HEAD_SHA'),
     });

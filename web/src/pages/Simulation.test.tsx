@@ -275,6 +275,52 @@ describe("the Simulation page", () => {
     expect(await screen.findByTestId("sim-status")).toBeTruthy();
   });
 
+  // Platform health's device link names the tab it is for (#2019): impairing a
+  // device is what it opens the drawer to do, and the drawer opens on Info, so a
+  // link that carries ?tab= lands on it with no extra step.
+  it("lands on the tab a link names in its ?tab= parameter", async () => {
+    sessionStorage.removeItem("og-sim-drawer-tab");
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}&tab=impairments`);
+    const tab = await screen.findByRole("tab", { name: "Impairments" });
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+  });
+
+  // The tab is a one-shot hint: once applied it leaves the address, so a later
+  // device opened by hand follows the user's own tab, not the stale link's (#2019).
+  it("takes ?tab= out of the address once it has landed on that tab", async () => {
+    sessionStorage.removeItem("og-sim-drawer-tab");
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}&tab=impairments`);
+    const tab = await screen.findByRole("tab", { name: "Impairments" });
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+    await waitFor(() => expect(window.location.search).not.toContain("tab="));
+    expect(window.location.search).toContain(`c=${DISPLAY}`);
+  });
+
+  it("does not force the tab again when another device is opened afterwards", async () => {
+    sessionStorage.removeItem("og-sim-drawer-tab");
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}&tab=impairments`);
+    expect((await screen.findByRole("tab", { name: "Impairments" })).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "Info" }));
+    expect(screen.getByRole("tab", { name: "Info" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("tab", { name: "Info" })).toBeNull());
+    const rows = await screen.findAllByTestId("sim-row");
+    fireEvent.click(rows.find((r) => r.dataset.component === DSP)!);
+    const info = await screen.findByRole("tab", { name: "Info" });
+    expect(info.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("ignores a ?tab= that names no tab, and opens on the drawer's own", async () => {
+    sessionStorage.removeItem("og-sim-drawer-tab");
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}&tab=nonsense`);
+    const info = await screen.findByRole("tab", { name: "Info" });
+    expect(info.getAttribute("aria-selected")).toBe("true");
+  });
+
   it("opens the drawer from the keyboard: a focused row and Enter", async () => {
     stubFetch();
     mount(() => <Simulation />);

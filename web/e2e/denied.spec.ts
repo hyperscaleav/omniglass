@@ -13,7 +13,7 @@ async function signIn(page: Page, username: string, password: string) {
   await page.goto("/web/login");
   await page.locator("#login-username").fill(username);
   await page.locator("#login-password").fill(password);
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.endsWith("/login"));
 }
 
