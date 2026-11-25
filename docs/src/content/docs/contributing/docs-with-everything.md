@@ -256,8 +256,9 @@ The capture pins the raster path (#1860). The pinned browser would pick its rast
 the host CPU (Skia dispatches at runtime between SSE2, AVX2 and AVX-512), and the paths round a gradient pixel one
 level apart: a host without AVX2 (a generic virtual CPU) differed from CI by five pixels of the users page's
 avatar gradient (#774), repeatable on each host and invisible to a loose comparison. So the capture browser runs
-with `--disable-skia-runtime-opts` (`web/e2e/docs-shots.mjs`), which turns the runtime dispatch off: every host
-takes the same baseline path, and a baseline is the same bytes whatever CPU captured it. The comparison stays exact.
+with `--disable-skia-runtime-opts` (`web/e2e/docs-shots.mjs`), which asks Skia to turn the runtime dispatch off so every host takes the baseline path. That this makes a baseline
+byte-identical across CPUs is not yet demonstrated: the AVX2 against non-AVX2 recapture comparison is still owed on #1860.
+The comparison stays exact.
 Each capture logs the host's CPU model and whether AVX2 and AVX-512 are present (`capture: cpu ...` from
 `docs/screenshots/capture.sh`), so a baseline's hosts are in the run log. The baselines committed before the pin came
 from the unpinned path, so the first recapture after it lands (the `claude/docs-shots-recapture` PR) rewrites a few
