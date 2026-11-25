@@ -368,17 +368,21 @@ jobs:
           pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
           if [ -z "$pr" ] && [ -s "$left/title" ] && [ -s "$left/body.md" ]; then
             # The body the agent left must carry a valid demo tag (#2345). The lint
-            # runs from main's copy, never the agent's checkout. A body that fails
-            # it is not opened: the step after this one opens the branch as a draft
-            # with the rescue body, which tags its demo.
-            if PR_BODY="$(cat "$left/body.md")" node "${RUNNER_TEMP}/demolint/web/e2e/walkthrough-pr.mjs" tag; then
-              gh pr create --repo "$REPO" --draft --base main --head "$branch" \
-                --title "$(head -n 1 "$left/title")" --body-file "$left/body.md" \
-                || { echo "::error::could not open the PR for ${branch}"; exit 1; }
-              pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
-            else
-              echo "::warning::the body the agent left for ${branch} has no valid demo tag, so the rescue draft is opened instead"
+            # runs from main's copy, never the agent's checkout, so a demo id this
+            # PR adds is unknown to it. A body that fails keeps everything the agent
+            # wrote and only has its demo tag lines made demo: none (<reason>), so
+            # the PR opens as a draft whose tag a person or the next run sets.
+            body="$left/body.md"
+            lint="${RUNNER_TEMP}/demolint/web/e2e/walkthrough-pr.mjs"
+            if ! PR_BODY="$(cat "$body")" node "$lint" tag; then
+              echo "::warning::the demo tag in the body the agent left for ${branch} could not be checked against main's demos; opening with demo: none"
+              PR_BODY="$(cat "$body")" node "$lint" retag "the agent's demo tag could not be checked against main's demos; set it before marking ready" \
+                > "${RUNNER_TEMP}/body-retagged.md" && body="${RUNNER_TEMP}/body-retagged.md"
             fi
+            gh pr create --repo "$REPO" --draft --base main --head "$branch" \
+              --title "$(head -n 1 "$left/title")" --body-file "$body" \
+              || { echo "::error::could not open the PR for ${branch}"; exit 1; }
+            pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
           fi
           [ -n "$pr" ] || echo "::warning::pushed ${branch}, but the agent left no PR title and body to open it with"
           if [ -n "$pr" ] && [ -e "$left/ready" ]; then

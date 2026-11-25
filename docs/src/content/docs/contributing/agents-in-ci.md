@@ -71,7 +71,8 @@ Demo section (`demo: <id>` or `demo: none (<reason>)`), runs the demo tag lint o
 (`PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag`) and opens the PR with
 `--body-file`. The workflow-written bodies carry a tag too: the rescue body says `demo: none`, and
 a body left for the expired-token path is linted by the workflow, from main's copy of the lint,
-before it opens the PR; one that fails opens the rescue draft instead.
+before it opens the PR; a body that fails keeps everything the agent wrote and has only its demo
+tag lines rewritten to `demo: none (<reason>)`, since main's copy does not know a demo this PR adds.
 
 The App's token lasts an hour, and a build can run longer. When the agent's push or `gh` call
 fails for that, it leaves the branch name, and the PR's title and body if none is open yet, in
