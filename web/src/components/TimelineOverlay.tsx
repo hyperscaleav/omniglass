@@ -119,9 +119,11 @@ type Group = "health" | "alarms" | "properties" | "metrics" | "events" | "logs" 
 export default function TimelineOverlay(props: { kind: TimelineKind; id: string; range: TimeRange }): JSX.Element {
   // A minute's tick slides a preset, and every lane's key moves with it, so
   // each lane re-reads once a minute without a poll of its own; an absolute
-  // range holds still and is read once.
+  // range holds still and is read once. A preset ends at the next whole
+  // minute, not the last one, so what happened seconds ago (the command just
+  // sent, the alarm it cleared) is inside the window the moment it opens.
   const now = createClock(60_000);
-  const win = createMemo<TimeWindow>(() => resolveRange(props.range, Math.floor(now() / 60_000) * 60_000), resolveRange(props.range, now()), {
+  const win = createMemo<TimeWindow>(() => resolveRange(props.range, Math.ceil(now() / 60_000) * 60_000), resolveRange(props.range, now()), {
     equals: (a, b) => a.from === b.from && a.to === b.to,
   });
   const isComponent = () => props.kind === "components";
