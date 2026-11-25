@@ -1242,9 +1242,6 @@ func TestAgentReviewReplyResult(t *testing.T) {
 	}
 }
 
-// A thread the reviewer verified fixed is resolved in the same run, an
-// advisory one included; the thread id is found from the comment when the
-// open-thread list has none.
 // Advisory findings stay inline but never block a merge (#2222): after a review
 // posts, the reviewer resolves its own unresolved advisory threads, and only
 // those. A blocking thread, an already resolved one and a person's stay as they
@@ -1275,6 +1272,56 @@ func TestAgentReviewAdvisoryThreadsListsOnlyTheReviewersOwnAdvisories(t *testing
 	}
 }
 
+// A resolved advisory thread still dedupes (#2222): resolving advisories on
+// posting drops them out of the open threads, so without this an advisory no one
+// fixed would be posted again as a new resolved thread on every rerun. Only an
+// advisory finding is deduped against them; a blocking finding on the same line
+// is new and still posts, and a different rule or line is new.
+func TestAgentReviewDoesNotRepostAResolvedAdvisory(t *testing.T) {
+	const resolved = `"resolved_advisories":[{"path":"x.go","line":5,"start_line":3,"rule":"r1","severity":"advisory","comment_id":31,"thread_id":"T31"}]`
+	lens := func(findings string) string {
+		return `{"head_sha":"abcdef1234","expected":["a"],` + resolved + `,"lenses":[{"name":"a","findings":[` + findings + `]}]}`
+	}
+	f := func(sev, path string, line int, rule string) string {
+		return `{"severity":"` + sev + `","path":"` + path + `","line":` + strconv.Itoa(line) + `,"rule":"` + rule + `","failure":"f","fix":"x"}`
+	}
+	r := reviewOf(t, lens(f("advisory", "x.go", 4, "r1")))
+	if len(r.Comments) != 0 || strings.Contains(r.Body, "1 advisory") {
+		t.Fatalf("a resolved advisory was posted again: %+v", r)
+	}
+	for name, finding := range map[string]string{
+		"blocking on the same line": f("blocking", "x.go", 4, "r1"),
+		"another rule":              f("advisory", "x.go", 4, "r2"),
+		"outside its lines":         f("advisory", "x.go", 9, "r1"),
+		"another file":              f("advisory", "y.go", 4, "r1"),
+	} {
+		if r := reviewOf(t, lens(finding)); len(r.Comments) != 1 {
+			t.Errorf("%s: got %d inline comments, want 1: %+v", name, len(r.Comments), r)
+		}
+	}
+	// A resolved advisory is not an open thread: it is not carried or rechecked.
+	out, _ := agentReview(t, lens(""), "followups")
+	if out != "[]" {
+		t.Errorf("followups on a resolved advisory = %s, want []", out)
+	}
+	// resolved-advisories lists the reviewer's resolved advisory threads in the open-thread shape.
+	in := `{"bots":["hyperscale-reviewer[bot]"],"threads":[
+		{"id":"T1","isResolved":true,"isOutdated":false,"path":"x.go","line":5,"comments":{"nodes":[{"databaseId":11,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=advisory lens=a rule=r1 -->"}]}},
+		{"id":"T2","isResolved":true,"isOutdated":false,"path":"x.go","line":7,"comments":{"nodes":[{"databaseId":12,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=blocking lens=a rule=r2 -->"}]}},
+		{"id":"T3","isResolved":false,"isOutdated":false,"path":"x.go","line":8,"comments":{"nodes":[{"databaseId":13,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=advisory lens=a rule=r3 -->"}]}}]}`
+	out, code := agentReview(t, in, "resolved-advisories")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil || len(got) != 1 || got[0]["rule"] != "r1" || got[0]["severity"] != "advisory" {
+		t.Fatalf("resolved-advisories = %s (%v)", out, err)
+	}
+}
+
+// A thread the reviewer verified fixed is resolved in the same run, an
+// advisory one included; the thread id is found from the comment when the
+// open-thread list has none.
 func TestAgentReviewVerifiedFixedAdvisoryThreadResolves(t *testing.T) {
 	r := `{"head_sha":"abcdef1234","expected":["recheck"],
 		"open_threads":[{"path":"w.yml","line":135,"rule":"r","severity":"advisory","comment_id":21,"thread_id":"T21"}],

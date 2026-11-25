@@ -146,7 +146,10 @@ The reviewer talks on the threads it opened, and its newest review is the one th
   (`advisory-threads`): they stay readable on the diff, collapsed as resolved, and a review with only
   advisory findings leaves no unresolved thread. A blocking finding keeps its thread open and the review
   still requests changes. A resolved advisory is no longer carried forward or rechecked, which is the
-  point: it never made the review request changes.
+  point: it never made the review request changes. It still keeps a repeat from being posted: an
+  advisory finding on the lines of one of the reviewer's resolved advisory threads, with the same
+  rule, is not posted again (`resolved-advisories`), so an advisory nobody fixes does not come back as a
+  new resolved thread on each rerun. A blocking finding there is new and posts.
 - **Verified fixed resolves.** A thread the reviewer replies "Verified fixed" on is resolved in the same run,
   advisory threads included; `thread-of` finds a thread from its comment when the open list has no id.
 - **Supersede.** Each review's first line carries the head it covers (`... · head <sha>`). After posting,

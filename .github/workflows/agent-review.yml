@@ -827,16 +827,21 @@ jobs:
           # followups exits 2 on bad input in the #2224 script and 64 (unknown)
           # in older copies, which have no threads either.
           probe=0; printf '{}' | bash "$script" followups >/dev/null 2>&1 || probe=$?
+          # The reviewer's resolved advisory threads only keep an advisory no one
+          # fixed from being posted again (#2222): advisories are resolved as they
+          # are posted, so they are not in the open threads.
+          resolved='[]'
           if [ "$probe" -eq 2 ]; then
-            open=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+            all=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
                 -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
-              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
-              | bash "$script" threads)
+              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}')
+            open=$(bash "$script" threads <<<"$all")
             echo "$(jq length <<<"$open") open finding(s) carried forward"
+            resolved=$(bash "$script" resolved-advisories <<<"$all" 2>/dev/null) || resolved='[]'
           fi
           results=$(jq -s -c --arg sha "$HEAD_SHA" --argjson expected "$EXPECTED" \
-            --arg poster "$POSTER" --arg author "$AUTHOR" --argjson open "$open" \
-            '{head_sha: $sha, expected: $expected, lenses: ., open_threads: $open,
+            --arg poster "$POSTER" --arg author "$AUTHOR" --argjson open "$open" --argjson resolved "$resolved" \
+            '{head_sha: $sha, expected: $expected, lenses: ., open_threads: $open, resolved_advisories: $resolved,
               own_pr: (($poster | ascii_downcase) == ($author | ascii_downcase))}' "$RUNNER_TEMP"/lens/*.json)
           bash "$script" review <<<"$results" > "$RUNNER_TEMP/review.json"
           jq -r '"\(.event): \(.comments | length) inline, body \(.body | length) chars"' "$RUNNER_TEMP/review.json"
