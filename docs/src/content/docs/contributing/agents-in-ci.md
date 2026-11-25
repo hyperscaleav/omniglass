@@ -65,6 +65,14 @@ moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.
 
+The PR body is the template filled in, never a free-form one: `gh` ignores the template when it
+is given a body, so the agent copies `.github/pull_request_template.md` to `body.md`, fills the
+Demo section (`demo: <id>` or `demo: none (<reason>)`), runs the demo tag lint on it
+(`PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag`) and opens the PR with
+`--body-file`. The workflow-written bodies carry a tag too: the rescue body says `demo: none`, and
+a body left for the expired-token path is linted by the workflow, from main's copy of the lint,
+before it opens the PR; one that fails opens the rescue draft instead.
+
 The App's token lasts an hour, and a build can run longer. When the agent's push or `gh` call
 fails for that, it leaves the branch name, and the PR's title and body if none is open yet, in
 files under the runner's temp folder and keeps working. After it stops, the workflow mints a
