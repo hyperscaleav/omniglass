@@ -19,6 +19,11 @@ import {
   lapseBadges,
   spotFor,
   MAX_FAST,
+  LOOP_TOLERANCE,
+  PACE,
+  authoredSeconds,
+  lapseSpeed,
+  overrunReport,
   frameFor,
   frameRect,
   missingText,
@@ -161,8 +166,16 @@ describe("budgetProblems", () => {
 
   it("names the shot and the limit for a loop too short, too long or too big", () => {
     expect(budgetProblems("quick", { seconds: 4.2, bytes: 1000 })).toEqual(["shot quick: loop is 4.2s, under the 5s minimum"]);
-    expect(budgetProblems("slow", { seconds: 9.5, bytes: 1000 })).toEqual(["shot slow: loop is 9.5s, over the 9s maximum"]);
+    expect(budgetProblems("slow", { seconds: 10.5, bytes: 1000 })).toEqual(["shot slow: loop is 10.5s, over the 9s maximum and its 15% allowance for the lab's speed (10.35s)"]);
     expect(budgetProblems("fat", { seconds: 7, bytes: 1_500_001 })).toEqual(["shot fat: loop is 1500001 bytes, over the 1500000-byte limit"]);
+  });
+
+  it("lets a loop run up to LOOP_TOLERANCE past its maximum, since the lab sets how long its waits take", () => {
+    expect(LOOP_TOLERANCE).toBe(0.15);
+    expect(budgetProblems("a", { seconds: 9.5, bytes: 1000 })).toEqual([]);
+    expect(budgetProblems("a", { seconds: 10.35, bytes: 1000 })).toEqual([]);
+    expect(budgetProblems("a", { seconds: 10.36, bytes: 1000 })).toHaveLength(1);
+    expect(budgetProblems("a", { seconds: 16, bytes: 1000 }, 14)).toEqual([]);
   });
 
   it("reports every limit a loop is over, and an unmeasured duration", () => {
@@ -462,6 +475,10 @@ describe("the spotlight and the sped-up badge", () => {
       { from: 4, to: 5.875, speed: 32 },
     ]);
   });
+
+  it("reads a lapse's derived speed as a whole number on its badge", () => {
+    expect(lapseBadges([{ from: 0, to: 28.5, speed: 31.67 }])).toEqual([{ from: 0, to: 0.9, speed: 32 }]);
+  });
 });
 
 describe("the camera's tail and time-lapsed waits", () => {
@@ -489,13 +506,68 @@ describe("the camera's tail and time-lapsed waits", () => {
     expect(retime(10, lapses)).toBeCloseTo(6);
   });
 
-  it("takes fast on a wait only, as a speed-up over 1 and at most MAX_FAST", () => {
-    const ok = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - wait: { text: Done }\n        fast: 4\n`);
+  it("takes lapse on a wait only, as the seconds of clip it plays in", () => {
+    const ok = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - wait: { text: Done }\n        lapse: 1.2\n`);
     expect(ok.problems).toEqual([]);
-    expect(ok.list?.shots[0].steps[0]).toMatchObject({ fast: 4 });
-    const bad = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - click: a\n        fast: 2\n      - wait: { text: Done }\n        fast: 1\n      - wait: { text: Done }\n        fast: ${MAX_FAST + 1}\n`);
-    expect(bad.problems).toContain("shot s: step 1 (click): fast belongs on a wait");
-    expect(bad.problems.filter((p: string) => p.includes("fast is a speed-up"))).toHaveLength(2);
+    expect(ok.list?.shots[0].steps[0]).toMatchObject({ lapse: 1.2 });
+    const bad = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - click: a\n        lapse: 1\n      - wait: { text: Done }\n        lapse: 0\n      - wait: { text: Done }\n        lapse: 9.5\n`);
+    expect(bad.problems).toContain("shot s: step 1 (click): lapse belongs on a wait");
+    expect(bad.problems.filter((p: string) => p.includes("lapse is the seconds"))).toHaveLength(2);
+  });
+
+  it("refuses the retired fast, pointing at lapse", () => {
+    const { problems } = parseShots(`${LAB}shots:\n  - id: s\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n      - wait: { text: Done }\n        fast: 4\n`);
+    expect(problems).toEqual(["shot s: step 1 (wait): fast is retired; lapse: <seconds> plays the wait in that many seconds of the clip"]);
+  });
+
+  it("speeds a lapse up as much as its wait needs, never slows one down, and caps it at MAX_FAST", () => {
+    expect(lapseSpeed(28.5, 0.9)).toBeCloseTo(31.67);
+    expect(lapseSpeed(0.4, 0.9)).toBe(1);
+    expect(lapseSpeed(0, 0.9)).toBe(1);
+    expect(lapseSpeed(120, 0.9)).toBe(MAX_FAST);
+  });
+});
+
+describe("a loop's authored length", () => {
+  const shot = (steps: string, extra = "") => parseShots(LOOP(steps).replace("    kind: loop\n", `    kind: loop\n${extra}`));
+
+  it("is what the shot list spends: holds, the recorder's pace, each lapse and the closing settle", () => {
+    const { list, problems } = shot("      - goto: /b\n        hold: 500\n      - click: a\n      - type: { target: a, text: abcd }\n      - wait: { text: Done }\n        lapse: 1.5\n      - wait: { text: Done }\n      - press: Enter\n        hold: 1000\n");
+    expect(problems).toEqual([]);
+    const s = list!.shots[0];
+    const want = (PACE.load + 500 + PACE.glide + PACE.glide + 4 * PACE.key + 1500 + 1000 + PACE.settle) / 1000;
+    expect(authoredSeconds(s)).toBeCloseTo(want);
+  });
+
+  it("adds the camera's ease back out when the last focus leaves it zoomed", () => {
+    const zoomed = shot("      - click: a\n        focus: here\n").list!.shots[0];
+    const out = shot("      - click: a\n        focus: here\n      - press: Enter\n        focus: out\n").list!.shots[0];
+    expect(authoredSeconds(zoomed) - authoredSeconds(out)).toBeCloseTo(CAMERA.ease + 0.15);
+  });
+
+  it("fails the parse when the steps alone are over the maximum, before any lab is started", () => {
+    const { problems } = shot("      - click: a\n        hold: 8000\n      - click: b\n        hold: 2000\n");
+    expect(problems).toEqual(["shot a-loop: its steps spend 10.8s before the lab adds any, over the 9s maximum"]);
+  });
+});
+
+describe("where an overrun's seconds went", () => {
+  it("names the steps the lab stretched most past what the shot list spends on them", () => {
+    const steps = [
+      { n: 1, kind: "click", target: "a", clip: 0.45, authored: 0.45 },
+      { n: 2, kind: "wait", target: "text Done", clip: 3.2, authored: 0 },
+      { n: 3, kind: "click", target: "b", clip: 1.7, authored: 0.5 },
+      { n: 4, kind: "press", target: "", clip: 1.0, authored: 1.0 },
+    ];
+    expect(overrunReport("s", 9.6, 9, steps)).toEqual([
+      "shot s: loop is 9.6s, past its 9s maximum; the lab's speed added 4.4s, most in:",
+      "  step 2 (wait text Done): 3.2s, 3.2s past its 0.0s",
+      "  step 3 (click b): 1.7s, 1.2s past its 0.5s",
+    ]);
+  });
+
+  it("says nothing for a loop inside its maximum", () => {
+    expect(overrunReport("s", 8.9, 9, [])).toEqual([]);
   });
 });
 
@@ -519,7 +591,7 @@ describe("a loop's own maximum", () => {
 
   it("is the limit the budget holds the loop to", () => {
     expect(budgetProblems("long", { seconds: 12, bytes: 1000 }, 14)).toEqual([]);
-    expect(budgetProblems("long", { seconds: 14.5, bytes: 1000 }, 14)).toEqual(["shot long: loop is 14.5s, over the 14s maximum"]);
+    expect(budgetProblems("long", { seconds: 16.5, bytes: 1000 }, 14)).toEqual(["shot long: loop is 16.5s, over the 14s maximum and its 15% allowance for the lab's speed (16.1s)"]);
   });
 
   it("earns a byte budget at the same rate past 15 seconds, and only past it", () => {

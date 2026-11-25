@@ -20,7 +20,7 @@ import { load } from 'js-yaml';
 /** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, fast?: number, expect?: string[] }} Step */
+/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, lapse?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -32,6 +32,12 @@ export const LOOP_MAX_SECONDS = 9;
 // faster without lying about it: omnibot's answer takes as long as inference
 // does, and the page's teaser runs from the fleet to a room back to healthy.
 export const LOOP_MAX_SECONDS_CAP = 30;
+// How far past its maximum a recorded loop may run before the run fails. A
+// loop's length is the lab's as much as the shot list's: each wait lasts as
+// long as the console takes, and a scale lab on a busy host takes longer. The
+// shot list's own spend is held to the maximum exactly, at parse time
+// (authoredSeconds); the recording gets this much room for the lab's speed.
+export const LOOP_TOLERANCE = 0.15;
 // The byte budget of a loop at up to 15 seconds; a longer one earns the same
 // rate for its length (loopMaxBytes), so the teaser may weigh twice the clip.
 export const LOOP_MAX_BYTES = 1_500_000;
@@ -43,7 +49,9 @@ export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
 export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait', 'call'];
-const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'expect'];
+const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'lapse', 'expect'];
+// The longest a lapse may play: past this, a wait is the story, not a pause in it.
+const MAX_LAPSE_SECONDS = 5;
 
 // The camera (a loop only): a step's `focus` eases the frame onto a box, so a
 // clip draws the eye to what changed. `here` is the step's own target, `out`
@@ -58,10 +66,14 @@ const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'expect'];
 // spotPad is the lit margin round a focus box, in viewport pixels; dim is how
 // dark the rest of the frame goes while the camera is on a box.
 export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
-// A wait played faster runs at up to MAX_FAST times real speed: an alarm that
-// takes a minute to raise plays in a couple of seconds, under a badge that says
-// the clip is sped up (render.mjs).
+// A wait played as a lapse runs at up to MAX_FAST times real speed: an alarm
+// that takes a minute to raise plays in a couple of seconds, under a badge that
+// says the clip is sped up (render.mjs).
 export const MAX_FAST = 40;
+// The recorder's own pace on a loop, in milliseconds: the pointer's glide to a
+// target before it acts, each key typed, the settle after a page loads, and the
+// moment the last state settles before the clip ends.
+export const PACE = { glide: 250, key: 35, load: 350, settle: 300 };
 const ID = /^[a-z0-9][a-z0-9-]*$/;
 const isObj = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isStr = (/** @type {unknown} */ v) => typeof v === 'string' && v.length > 0;
@@ -220,13 +232,16 @@ function parseStep(raw, n, label = 'step') {
     else if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: expect goes with a focus on a target`);
     else step.expect = e;
   }
-  // fast: N plays a wait N times faster, the quiet seconds before something
-  // changes (a loop has 9 to spend, and a console that needs 5 to recover is not
-  // one to sit through). The clip is a time-lapse there, and says so in the docs.
-  if ('fast' in o) {
-    if (kind !== 'wait') problems.push(`${where}: fast belongs on a wait`);
-    else if (!(typeof o.fast === 'number' && o.fast > 1 && o.fast <= MAX_FAST)) problems.push(`${where}: fast is a speed-up over 1 and at most ${MAX_FAST}`);
-    else step.fast = o.fast;
+  // lapse: N plays a wait in N seconds of the clip, the quiet seconds before
+  // something changes (a loop has 9 to spend, and a console that needs 5 to
+  // recover is not one to sit through). The clip is a time-lapse there, sped up
+  // as much as that run's wait needs (lapseSpeed), and badged as one. Its length
+  // in the clip is the shot list's, not the lab's.
+  if ('fast' in o) problems.push(`${where}: fast is retired; lapse: <seconds> plays the wait in that many seconds of the clip`);
+  if ('lapse' in o) {
+    if (kind !== 'wait') problems.push(`${where}: lapse belongs on a wait`);
+    else if (!(typeof o.lapse === 'number' && o.lapse > 0 && o.lapse <= MAX_LAPSE_SECONDS)) problems.push(`${where}: lapse is the seconds of clip the wait plays in, over 0 and at most ${MAX_LAPSE_SECONDS}`);
+    else step.lapse = o.lapse;
   }
   const v = o[kind];
   switch (kind) {
@@ -443,6 +458,10 @@ export function parseShots(text) {
         else if (!(typeof s.max_seconds === 'number' && s.max_seconds > LOOP_MAX_SECONDS && s.max_seconds <= LOOP_MAX_SECONDS_CAP)) problems.push(`${at}: max_seconds is over ${LOOP_MAX_SECONDS} and at most ${LOOP_MAX_SECONDS_CAP}`);
         else maxSeconds = s.max_seconds;
       }
+      if (s.kind === 'loop') {
+        const spend = authoredSeconds({ steps });
+        if (spend > maxSeconds) problems.push(`${at}: its steps spend ${spend.toFixed(1)}s before the lab adds any, over the ${maxSeconds}s maximum`);
+      }
       shots.push({
         id: s.id, kind: s.kind, alt: s.alt, viewport: vpShot ?? defaultViewport ?? DEFAULT_VIEWPORT,
         start: s.start, ready, setup: ssetup, prep, steps, maxSeconds,
@@ -471,10 +490,77 @@ export function budgetProblems(id, { seconds, bytes }, max = LOOP_MAX_SECONDS) {
   /** @type {string[]} */
   const out = [];
   const maxBytes = loopMaxBytes(max);
+  const allowed = round(max * (1 + LOOP_TOLERANCE));
   if (!(seconds >= LOOP_MIN_SECONDS)) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, under the ${LOOP_MIN_SECONDS}s minimum`);
-  if (seconds > max) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, over the ${max}s maximum`);
+  if (seconds > allowed) out.push(`shot ${id}: loop is ${seconds.toFixed(1)}s, over the ${max}s maximum and its ${Math.round(LOOP_TOLERANCE * 100)}% allowance for the lab's speed (${allowed}s)`);
   if (bytes > maxBytes) out.push(`shot ${id}: loop is ${bytes} bytes, over the ${maxBytes}-byte limit`);
   return out;
+}
+
+/**
+ * What one step spends of a loop's clip, in seconds, before the lab adds any:
+ * its hold, the recorder's pace for its kind, and a wait's lapse. A wait with
+ * no lapse spends nothing of its own: it lasts as long as the lab takes.
+ * @param {Step} step
+ * @returns {number}
+ */
+export function stepAuthoredSeconds(step) {
+  let ms = step.hold ?? 0;
+  if (step.kind === 'goto') ms += PACE.load;
+  if (['click', 'hover', 'type', 'select'].includes(step.kind)) ms += PACE.glide;
+  if (step.kind === 'type') ms += PACE.key * (step.text ?? '').length;
+  if (step.kind === 'wait') ms += (step.lapse ?? 0) * 1000;
+  return ms / 1000;
+}
+
+/**
+ * What a loop's steps spend of its clip before the lab adds any: each step's
+ * own (stepAuthoredSeconds), the settle before the clip ends, and the camera's
+ * ease back out when the last focus leaves it zoomed. The parse holds this to
+ * the loop's maximum exactly; the recording gets LOOP_TOLERANCE on top.
+ * @param {{ steps: Step[] }} shot
+ * @returns {number}
+ */
+export function authoredSeconds({ steps }) {
+  const last = steps.filter((st) => st.focus !== undefined).at(-1);
+  const tail = last && last.focus !== 'out' ? CAMERA.ease + TAIL_PAD : 0;
+  return steps.reduce((sum, st) => sum + stepAuthoredSeconds(st), PACE.settle / 1000 + tail);
+}
+
+/** @typedef {{ n: number, kind: string, target: string, clip: number, authored: number }} StepTime */
+
+/**
+ * Where an overrun loop's seconds went: for a loop past its maximum, the steps
+ * the lab stretched most past what the shot list spends on them, so the fix
+ * (a lapse on a slow wait, a shorter hold) is plain. Nothing for a loop inside it.
+ * @param {string} id
+ * @param {number} seconds the loop's length
+ * @param {number} max its maximum
+ * @param {StepTime[]} steps each step's seconds in the clip and its authored seconds
+ * @returns {string[]}
+ */
+export function overrunReport(id, seconds, max, steps) {
+  if (!(seconds > max)) return [];
+  const over = steps.map((st) => ({ ...st, extra: Math.max(0, st.clip - st.authored) }));
+  const added = over.reduce((sum, st) => sum + st.extra, 0);
+  const worst = over.filter((st) => st.extra >= 0.2).sort((a, b) => b.extra - a.extra).slice(0, 3);
+  return [
+    `shot ${id}: loop is ${seconds.toFixed(1)}s, past its ${max}s maximum; the lab's speed added ${added.toFixed(1)}s, most in:`,
+    ...worst.map((st) => `  step ${st.n} (${st.kind}${st.target ? ` ${st.target}` : ''}): ${st.clip.toFixed(1)}s, ${st.extra.toFixed(1)}s past its ${st.authored.toFixed(1)}s`),
+  ];
+}
+
+/**
+ * How much faster a lapse plays: as much as its wait needs to fit the seconds
+ * the shot list gives it, never slower than real time, and at most MAX_FAST. A
+ * wait past MAX_FAST times its lapse plays longer than the lapse, and the
+ * loop's budget is what catches it.
+ * @param {number} real the wait's seconds in real time
+ * @param {number} lapse the seconds of clip the shot list gives it
+ * @returns {number}
+ */
+export function lapseSpeed(real, lapse) {
+  return Math.min(MAX_FAST, Math.max(1, real / lapse));
 }
 
 /**
@@ -725,7 +811,7 @@ export function spotFor(box, vp) {
  */
 export function lapseBadges(lapses) {
   return lapses
-    .map((w) => ({ from: round(retime(w.from, lapses)), to: round(retime(w.to, lapses)), speed: w.speed }))
+    .map((w) => ({ from: round(retime(w.from, lapses)), to: round(retime(w.to, lapses)), speed: Math.round(w.speed) }))
     .filter((w) => w.to - w.from >= MIN_LAPSE_BADGE);
 }
 export const MIN_LAPSE_BADGE = 0.6;
@@ -783,5 +869,7 @@ export function retime(t, lapses) {
  */
 export function cameraTail(events) {
   const last = [...events].sort((a, b) => a.t - b.t).at(-1);
-  return last && last.box ? CAMERA.ease + 0.15 : 0;
+  return last && last.box ? CAMERA.ease + TAIL_PAD : 0;
 }
+// The beat past the camera's last ease before the loop's seam.
+const TAIL_PAD = 0.15;

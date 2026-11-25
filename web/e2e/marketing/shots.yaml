@@ -193,7 +193,7 @@ shots:
         hold: 1300
       # Its next poll reads hdmi1, sped up under the badge.
       - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity] dt:text-is("Video Input") + dd:has-text("hdmi1")', timeout: 120000 }
-        fast: 30
+        lapse: 0.6
         focus: 'aside[data-blade] [data-testid=leaf-identity]'
         expect: ["Video Input", "hdmi1"]
         zoom: 2.4
@@ -212,7 +212,7 @@ shots:
       - press: Escape
         hold: 200
       - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 120000 }
-        fast: 30
+        lapse: 0.6
         focus: 'aside[data-blade] [data-testid=system-header]'
         expect: ["healthy"]
         zoom: 2.4
@@ -232,7 +232,6 @@ shots:
   # in their slots.
   - id: fleet-explore
     kind: loop
-    max_seconds: 10
     alt: "Expanding Headquarters in the Omniglass fleet outline to its building, a floor and its rooms, then opening a meeting room to its system: a display, panels and a video bar, each product in its slot."
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
@@ -280,7 +279,6 @@ shots:
   # every poll), so the endpoint reads rejected and the outpost stops asking.
   - id: credential-fix
     kind: loop
-    max_seconds: 10
     alt: "A video bar whose login the device refuses: the endpoint reads rejected with the device's 401, the login is corrected in place on the endpoint, and it reads reachable, responsive and authenticated again."
     setup:
       - post: /secrets
@@ -322,9 +320,9 @@ shots:
         hold: 400
       - click: 'aside[data-blade] footer button:has-text("Save")'
       # Beat 3: the ladder passes. The outpost asks again at its next check-in,
-      # about five quiet seconds on the lab, played at 4x.
+      # about five quiet seconds on the lab, played in 1.4.
       - wait: { selector: 'aside[data-blade] [data-testid=endpoint-detail]:not(:has([data-testid=session-notice])):has([data-testid=ladder-rung][data-rung=authenticated][data-status=pass])', timeout: 30000 }
-        fast: 4
+        lapse: 1.4
         focus: 'aside[data-blade] [data-field=ladder]'
         expect: ["reachable", "responsive", "authenticated"]
         zoom: 1.7
@@ -361,7 +359,7 @@ shots:
       # Beat 2: the alarm arrives. The wait for it plays sped up, under a badge
       # that says so; the frame holds on the Why strip as it appears.
       - wait: { selector: '[data-testid=alarm-strip]', timeout: 180000 }
-        fast: 32
+        lapse: 0.9
         focus: here
         expect: ["Why", "Reachability lost", "display-1", "Main Display"]
         zoom: 1.3
@@ -401,7 +399,7 @@ shots:
   # this loop runs past the usual maximum.
   - id: omnibot-ask
     kind: loop
-    max_seconds: 15
+    max_seconds: 14
     alt: "Asking Omniglass's assistant why a degraded boardroom is degraded: it thinks, reads the room's health and the display's reachability, shown as calls, then names the display as the cause and the next step, and says it will ask before changing anything."
     start: /systems/hq-mr86-1
     ready: { text: Reachability lost }

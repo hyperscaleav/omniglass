@@ -25,14 +25,13 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, loopMaxBytes, missingText, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
-// Pacing, in milliseconds: how long the cursor glides to a target before it acts,
-// and the delay between typed keys.
-const PACE = { glide: 250, key: 35, load: 350 };
+// Pacing (PACE, marketinglib.mjs) is shared with the parse, which holds a loop's
+// own spend to its maximum.
 
 /** @param {string} file @returns {import('./marketinglib.mjs').ShotList} */
 function readList(file) {
@@ -75,8 +74,14 @@ async function main() {
   } else if (mode === 'ids') {
     for (const s of readList(args[0]).shots) console.log(s.id, s.kind, s.maxSeconds);
   } else if (mode === 'budget') {
-    const [id, seconds, bytes, max] = args;
-    const problems = budgetProblems(id, { seconds: Number(seconds), bytes: Number(bytes) }, max ? Number(max) : undefined);
+    const [id, seconds, bytes, max, stepsFile] = args;
+    const limit = max ? Number(max) : LOOP_MAX_SECONDS;
+    const problems = budgetProblems(id, { seconds: Number(seconds), bytes: Number(bytes) }, limit);
+    // A loop past its maximum says where its seconds went, whether or not it is
+    // inside the allowance for the lab's speed: the next fix starts there.
+    if (stepsFile && existsSync(stepsFile)) {
+      for (const line of overrunReport(id, Number(seconds), limit, JSON.parse(readFileSync(stepsFile, 'utf8')).steps)) console.error(`marketing: ${line}`);
+    }
     for (const p of problems) console.error(`marketing: ${p}`);
     process.exit(problems.length ? 1 : 0);
   } else if (mode === 'max-bytes') {
@@ -334,11 +339,14 @@ async function record(browser, base, storageState, shot, out, api) {
     cam.now = () => (Date.now() - t0) / 1000;
     const frames = loop ? await startFrames(ctx, page, t0) : null;
     if (loop) await page.mouse.move(cursor.x, cursor.y);
+    /** @type {{ n: number, kind: string, target: string, from: number, to: number, authored: number }[]} */
+    const timed = [];
     for (const step of shot.steps) {
       current = `step ${step.n} (${step.kind}${step.target ? ` ${describeTarget(step.target)}` : ''})`;
-      const t = Date.now();
+      const from = cam.now();
       await play(page, base, step, cursor, loop, cam, api);
-      if (process.env.MARKETING_TRACE) console.log(`  ${shot.id} ${current}: ${((Date.now() - t) / 1000).toFixed(1)}s`);
+      timed.push({ n: step.n, kind: step.kind, target: step.target ? describeTarget(step.target) : '', from, to: cam.now(), authored: stepAuthoredSeconds(step) });
+      if (process.env.MARKETING_TRACE) console.log(`  ${shot.id} ${current}: ${(cam.now() - from).toFixed(1)}s`);
     }
     if (loop) {
       current = 'last beat';
@@ -346,7 +354,7 @@ async function record(browser, base, storageState, shot, out, api) {
     }
     // Let the last state settle and the stills' data finish arriving.
     current = 'final frame';
-    await page.waitForTimeout(shot.kind === 'still' ? 1500 : 300);
+    await page.waitForTimeout(shot.kind === 'still' ? 1500 : PACE.settle);
     await page.screenshot({ path: join(out, `${shot.id}.png`) });
     if (frames) {
       // Keep recording while the camera eases back out, so the clip ends on the
@@ -368,6 +376,10 @@ async function record(browser, base, storageState, shot, out, api) {
       const at = (/** @type {number} */ t) => round3(retime(t, cam.lapses));
       const beats = beatEnds(cam.beats, cam.events).map((b) => ({ ...b, from: at(b.from), at: at(b.at), to: at(b.to) }));
       writeFileSync(join(out, `${shot.id}.beats.json`), JSON.stringify({ viewport: { width, height }, beats }, null, 2));
+      // Each step's seconds in the clip beside what the shot list spends on it,
+      // so a loop over its maximum can say which steps the lab stretched.
+      const steps = timed.map(({ from, to, ...t }) => ({ ...t, clip: round3(at(to) - at(from)), authored: round3(t.authored) }));
+      writeFileSync(join(out, `${shot.id}.steps.json`), JSON.stringify({ steps }, null, 2));
       // A beat whose frame misses its expected text does not stop the run: every
       // shot is still recorded and encoded, with its storyboard, so one pass
       // shows them all. marketing.sh fails the run at its end, listing them.
@@ -580,7 +592,12 @@ async function play(page, base, step, cursor, loop, cam, api) {
       const el = locate(page, step.target).filter({ visible: true }).first();
       const from = cam.now();
       await el.waitFor({ state: 'visible', timeout: step.timeout });
-      if (step.fast) cam.lapses.push({ from, to: cam.now(), speed: step.fast });
+      // A lapse plays in the seconds the shot list gives it, however long this
+      // run's wait took: the speed is the run's, the length is the shot's.
+      if (step.lapse) {
+        const speed = lapseSpeed(cam.now() - from, step.lapse);
+        if (speed > 1) cam.lapses.push({ from, to: cam.now(), speed });
+      }
       await logFocus(page, step, cam, el);
       break;
     }

@@ -478,7 +478,17 @@ A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `st
 omnibot's answer that cannot be told faster without faking it, or the page's teaser) and at most 1.5 MB (a
 loop allowed past 15 seconds earns that rate for its length, so a 30 second one may weigh 3 MB), with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
-naming the shot and the limit. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
+naming the shot and the limit.
+
+A loop's length is two budgets, because only part of it is the shot list's. What the steps **spend**
+(each `hold`, the recorder's pace: a 250 ms glide before a pointer acts, 35 ms a typed key, 350 ms after a
+page loads, each `lapse`, the 300 ms settle at the end and the camera's last ease out) is held to the
+maximum exactly, when the list is parsed, so a shot that cannot fit fails before any lab starts
+(`authoredSeconds`). Everything else is the lab's: how long a click takes to answer and a wait takes to
+see its target, which a 1,000-system lab on a busy host stretches. The recording may run 15% past the
+maximum for that (`LOOP_TOLERANCE`), and a loop past its maximum at all prints the steps the lab
+stretched most, beside what the list spends on each, so the fix (a `lapse` on a slow wait, a shorter
+hold) is plain rather than a raised maximum (`overrunReport`). Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
 `select`, `press`, `wait`, and `hold` to linger), plus `call`, with no captions: a capture speaks for itself, and the
 page that hosts it writes the words. A step that never finds its target fails the run, naming the shot,
 the step and what it waited for, and keeps the frame it failed on.
@@ -512,12 +522,15 @@ half, so the eye lands on what changed, and the box (with a 12-pixel margin) sta
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
 
-A `wait` may take `fast: N` (a speed-up over 1, up to 40): the quiet seconds before something changes play
-N times faster, a time-lapse. A loop has 9 seconds to spend and a console that needs five to recover (an
-outpost's next check-in after a credential is fixed) is not one to sit through. The clip says nothing
-false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N× speed"
-(`lapseBadges`), so an alarm that takes a minute to raise arrives on camera in two seconds and is never
-taken for real time.
+A `wait` may take `lapse: N` (seconds, up to 5): the quiet seconds before something changes play in N
+seconds of the clip, a time-lapse, sped up as much as that run's wait needs, up to 40 times
+(`lapseSpeed`), and never slowed down. A loop has 9 seconds to spend and a console that needs five to
+recover (an outpost's next check-in after a credential is fixed) is not one to sit through. The lapse
+fixes the wait's length in the clip, not its speed, so a slower lab makes a faster lapse rather than a
+longer loop; a wait past 40 times its lapse plays longer, and the budget catches it. The clip says
+nothing false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N×
+speed" with that run's speed (`lapseBadges`), so an alarm that takes a minute to raise arrives on camera
+in a second and is never taken for real time.
 
 Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
 part of a path is one address, percent-encoded whole, so a component's path address names one route
@@ -525,13 +538,13 @@ segment), and `wait` polls a GET until a dotted field equals a value. This is ho
 fleet: the main display of `hq-mr86-1` unplugged through the impairment route, a video bar's login
 repointed at a secret the device refuses. The shipped reachability rule needs about a minute to hold its
 alarm. A loop that shows the fault arriving (`alarm-outage`) unplugs the display as its last setup item and
-waits for the alarm on camera at `fast: 32`; the others record the console reading a fault that is already
+waits for the alarm on camera in a `lapse: 0.9`; the others record the console reading a fault that is already
 true. The shots run in the order listed on one lab, and a later shot relies on the state an earlier setup
 left.
 
 A `call` step is the same request in the middle of a clip, off camera: `call: { put: <path>, body: {...} }`.
 It is what happens in the room while the console shows what it makes of it: the teaser
-(`omniglass-teaser`) plugs the boardroom's display back in with one, then waits at `fast: 40` for the room
+(`omniglass-teaser`) plugs the boardroom's display back in with one, then waits in a `lapse: 0.6` for the room
 to read healthy. It takes no focus, since nothing on screen moves for it, and the preflight checks the
 resource it names as it does a setup item's.
 

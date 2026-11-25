@@ -25,8 +25,10 @@
 # the loop at the viewport's size, and ffmpeg encodes that to H.264, smaller until
 # it fits the byte budget (1.5 MB, at that rate past 15 seconds). The loop's
 # length and size are then checked against
-# the budget (marketinglib.mjs), and any shot over it fails the run, naming the
-# shot and the limit. Each loop also gets a storyboard (one still per beat,
+# the budget (marketinglib.mjs: the length may run LOOP_TOLERANCE past the
+# maximum, for the lab's speed), and any shot over it fails the run, naming the
+# shot and the limit; a loop past its maximum at all names the steps the lab
+# stretched (from $OUT/<id>.steps.json). Each loop also gets a storyboard (one still per beat,
 # $OUT/storyboard/), and a beat whose frame misses the text its step `expect`s
 # fails the run at its end, after everything is written.
 #
@@ -124,7 +126,7 @@ encode_shot() {
   done
   seconds=$(ffmpeg_in "$OUT" --entrypoint ffprobe "$FFMPEG_IMG" -v error -show_entries format=duration \
     -of default=noprint_wrappers=1:nokey=1 "/o/$id.mp4") || return 1
-  mk budget "$id" "$seconds" "$bytes" "$max" || return 1
+  mk budget "$id" "$seconds" "$bytes" "$max" "${OUT#web/}/$id.steps.json" || return 1
   ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.png" \
     -c:v libwebp -quality "$WEBP_QUALITY" -compression_level 6 "/o/$id.webp" || return 1
   cp -- "$OUT/$id.mp4" "$dest/$id.mp4"
