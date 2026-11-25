@@ -140,6 +140,10 @@ jobs:
           cp scripts/agent-transcript.sh "${RUNNER_TEMP}/agent-transcript.sh"
           cp scripts/agent-rescue.sh "${RUNNER_TEMP}/agent-rescue.sh"
           cp scripts/agent-sync.sh "${RUNNER_TEMP}/agent-sync.sh"
+          # The demo tag lint, from main's tree, for the step that opens a PR with a
+          # token: the agent's checkout is not trusted to run code there (#2345).
+          mkdir -p "${RUNNER_TEMP}/demolint"
+          git archive HEAD 'web/e2e/*.mjs' web/e2e/walkthroughs scripts/demo | tar -x -C "${RUNNER_TEMP}/demolint"
           body=$(jq -cn --arg run "$RUN_URL" '{workflow: "agent-build", state: "working", run_url: $run}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
           # A bare assignment, so a failed post fails this step and the final edit is skipped.
@@ -241,9 +245,16 @@ jobs:
             required checks run (make gen with a drift check, make test, the docs build, the
             migration check) and fails if the branch commits the agents' own config.
 
-            Open the draft PR (gh pr create --draft, the repo's template, its body saying
-            "Closes #${{ github.event.issue.number }}") once, at the end, after the last push.
-            Until then push to the branch only. Before you mark the PR ready,
+            Open the draft PR once, at the end, after the last push. Until then push to the
+            branch only. gh ignores .github/pull_request_template.md when it is given a
+            body, so build the body yourself: copy the template to body.md (outside the
+            repo), fill every section, write "Closes #${{ github.event.issue.number }}"
+            under Outcome, and fill Demo with a line of its own, "demo: <id>" for the
+            tape or walkthrough this PR is about, or "demo: none (<reason>)" when there is
+            nothing to demo. Then run the tag lint on it:
+            PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag
+            Fix the body until it passes, and open the PR with
+            gh pr create --draft --body-file body.md. Never pass --body. Before you mark the PR ready,
             git fetch origin main and run scripts/agent-sync.sh merge origin/main, resolve
             any conflicts it lists, and run make preflight again. When it passes and
             /ship-slice is clean, mark it ready with gh pr ready: that starts agent-review,
@@ -356,8 +367,20 @@ jobs:
             || { echo "::error::could not push ${branch} with a fresh token"; exit 1; }
           pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
           if [ -z "$pr" ] && [ -s "$left/title" ] && [ -s "$left/body.md" ]; then
+            # The body the agent left must carry a valid demo tag (#2345). The lint
+            # runs from main's copy, never the agent's checkout, so a demo id this
+            # PR adds is unknown to it. A body that fails keeps everything the agent
+            # wrote and only has its demo tag lines made demo: none (<reason>), so
+            # the PR opens as a draft whose tag a person or the next run sets.
+            body="$left/body.md"
+            lint="${RUNNER_TEMP}/demolint/web/e2e/walkthrough-pr.mjs"
+            if ! PR_BODY="$(cat "$body")" node "$lint" tag; then
+              echo "::warning::the demo tag in the body the agent left for ${branch} could not be checked against main's demos; opening with demo: none"
+              PR_BODY="$(cat "$body")" node "$lint" retag "the agent's demo tag could not be checked against main's demos; set it before marking ready" \
+                > "${RUNNER_TEMP}/body-retagged.md" && body="${RUNNER_TEMP}/body-retagged.md"
+            fi
             gh pr create --repo "$REPO" --draft --base main --head "$branch" \
-              --title "$(head -n 1 "$left/title")" --body-file "$left/body.md" \
+              --title "$(head -n 1 "$left/title")" --body-file "$body" \
               || { echo "::error::could not open the PR for ${branch}"; exit 1; }
             pr=$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // ""')
           fi

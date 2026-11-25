@@ -65,6 +65,15 @@ moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.
 
+The PR body is the template filled in, never a free-form one: `gh` ignores the template when it
+is given a body, so the agent copies `.github/pull_request_template.md` to `body.md`, fills the
+Demo section (`demo: <id>` or `demo: none (<reason>)`), runs the demo tag lint on it
+(`PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag`) and opens the PR with
+`--body-file`. The workflow-written bodies carry a tag too: the rescue body says `demo: none`, and
+a body left for the expired-token path is linted by the workflow, from main's copy of the lint,
+before it opens the PR; a body that fails keeps everything the agent wrote and has only its demo
+tag lines rewritten to `demo: none (<reason>)`, since main's copy does not know a demo this PR adds.
+
 The App's token lasts an hour, and a build can run longer. When the agent's push or `gh` call
 fails for that, it leaves the branch name, and the PR's title and body if none is open yet, in
 files under the runner's temp folder and keeps working. After it stops, the workflow mints a
@@ -149,7 +158,9 @@ The reviewer talks on the threads it opened, and its newest review is the one th
   point: it never made the review request changes. It still keeps a repeat from being posted: an
   advisory finding on the lines of one of the reviewer's resolved advisory threads, with the same
   rule, is not posted again (`resolved-advisories`), so an advisory nobody fixes does not come back as a
-  new resolved thread on each rerun. A blocking finding there is new and posts.
+  new resolved thread on each rerun. A blocking finding there is new and posts, and so does one that comes back on a thread resolved
+  after a reply ("Verified fixed", or a person's): only a thread resolved on posting, which still has
+  just the reviewer's one comment, counts.
 - **Verified fixed resolves.** A thread the reviewer replies "Verified fixed" on is resolved in the same run,
   advisory threads included; `thread-of` finds a thread from its comment when the open list has no id.
 - **Supersede.** Each review's first line carries the head it covers (`... · head <sha>`). After posting,
@@ -208,6 +219,19 @@ review. The `plan` job waits for the PR's other checks, 15 minutes at most, then
 holds: the check goes red and says why. Push a fix that turns the PR green, and that push is
 reviewed. A `review:deep` label is never held.
 
+### A reviewed head is not reviewed twice
+
+agent-review runs on opened, synchronize, reopened, ready_for_review, labeled and a manual dispatch,
+so the same head commit can come up more than once. Before any wait or model call, `plan` asks
+`agent-review.sh seen` (#2277): is there a completed review on this head by an App bot (not pending,
+not dismissed, carrying the round marker every review ends with)? If so the run makes no model call
+and says so in its job summary, naming the review. A PR run then re-reads the reviewer's ruling, so the
+required check still reports what the earlier review said; a manual run just stops.
+
+A push of a new commit always reviews, since the new head has no review of its own. So do the
+`review:deep` label and a manual run started with `force: true`. A draft that was skipped as a draft
+has no review, so marking it ready reviews it.
+
 ## Asking for a fix
 
 Mention `@hyperscale-agent` in a PR comment or a review comment, or submit a review that requests
@@ -219,10 +243,25 @@ too. The agent reads only the comment or review that started it. Write the ask t
 ```
 
 agent-fix answers each point on one line in its status comment, `✅ <point> · Fixed in <sha>`
-or `↩️ <point> · Not changed`, with its reasons collapsed under them, and replies
-`✅ Fixed in <sha>` on each review thread a commit it pushed fixed. A point counts as fixed only
-when its commit is one the run pushed. It never resolves a thread: the reviewer's recheck does
-that once it has seen the fix.
+or `↩️ <point> · Not changed`, with its reasons collapsed under them. A point counts as fixed
+only when its commit is one the run pushed.
+
+agent-fix also answers each review thread it read, as the agent App, never a person (#2217). The
+agent gives every thread its own point, including the open threads from earlier reviews, and the
+workflow does the rest after the run:
+
+- **Fixed.** A thread a commit this run pushed fixed gets `✅ Fixed in <sha>` and is resolved. A
+  thread an earlier commit already fixed is not this run's to claim: it is left open, and the
+  reviewer resolves it once a re-review no longer raises it.
+- **Not changed.** A thread the agent read and left gets `↩️ Not changed: <reason>` and stays open
+  for a person. The exception is an advisory finding (the reviewer's comment says
+  `severity=advisory`) where the agent marks no change as the right answer: it gets
+  `↩️ No change needed: <reason>` and is resolved. A blocking finding is never resolved this way.
+- **One reply per thread.** Several points on one thread make one reply, and a fixed point wins.
+
+A PR whose agent-review says ship and whose threads agents addressed can merge without anyone
+resolving a thread by hand. The reviewer still resolves its own threads that a later review no
+longer raises, as [above](#the-reviewer-on-its-threads).
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a

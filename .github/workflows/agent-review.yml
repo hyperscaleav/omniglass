@@ -40,6 +40,12 @@ name: agent-review
 # review in either mode. A manual run (workflow_dispatch) reviews one PR head in
 # shadow mode: it records the findings and the cost and posts nothing.
 #
+# A head commit that already has a completed review is not reviewed again
+# (#2277): a reopen, a relabel, a draft marked ready after a review, or a manual
+# run on it costs no model call, and a PR run re-reads the verdict instead. A
+# push of a new commit, the review:deep label, and a manual run with force: true
+# always review. The decision is scripts/agent-review.sh seen, in plan.
+#
 # A push to a PR that conflicts with its base, or whose other checks already
 # failed, gets no new review: plan waits for the other checks, and for the test
 # checks to exist and finish, on that same head commit (#2597), and the check
@@ -77,6 +83,11 @@ on:
         required: false
         type: string
         default: ""
+      force:
+        description: Review even when that head already has a review (#2277)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -92,7 +103,7 @@ env:
             pageInfo { hasNextPage endCursor }
             nodes {
               id isResolved isOutdated path line startLine originalLine originalStartLine
-              comments(first: 1) { nodes { databaseId url body author { login } } }
+              comments(first: 1) { totalCount nodes { databaseId url body author { login } } }
             }
           }
         }
@@ -158,6 +169,16 @@ jobs:
           permission-pull-requests: read
           permission-issues: read
 
+      # The default branch's scripts, before the decision: whether a head was
+      # already reviewed is decided by its script (#2277), and the lenses and the
+      # verdict below use the same copy.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          path: trusted
+          sparse-checkout: scripts
+
       - name: Decide what to do
         id: what
         env:
@@ -176,6 +197,7 @@ jobs:
           SETTING: ${{ vars.AGENT_REVIEW_MODE }}
           INPUT_PR: ${{ inputs.pr }}
           INPUT_SHA: ${{ inputs.head_sha }}
+          FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
           why=""
@@ -205,6 +227,30 @@ jobs:
             NUMBER=$(printf '%s' "$QUEUE_REF" | sed -nE 's#^(refs/heads/)?gh-readonly-queue/.+/pr-([0-9]+)-[0-9a-f]{40}$#\2#p')
             [ -n "$NUMBER" ] || { echo "::error::agent-review: cannot read the PR from the queue ref $QUEUE_REF"; exit 1; }
             HEAD_SHA=$(gh pr view "$NUMBER" --repo "$REPO" --json headRefOid --jq .headRefOid)
+          fi
+          # A head that already has a completed review is not reviewed again
+          # (#2277), before any wait or model call. A PR run re-reads the verdict
+          # instead of passing, since a skipped check would turn green; a manual
+          # run just stops. The push of a new commit, force: true and the
+          # review:deep label always review. Until main's script has `seen`, review.
+          if [ "$mode" = review ] || [ "$mode" = shadow ]; then
+            script=$GITHUB_WORKSPACE/trusted/scripts/agent-review.sh
+            if grep -q '^  seen)' "$script" 2>/dev/null; then
+              said=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate \
+                  --jq '.[] | {id, user: .user.login, type: .user.type, state, commit_id, body: (.body // "")}' \
+                | jq -s -c --arg sha "$HEAD_SHA" --arg event "$EVENT" --arg action "$ACTION" --arg label "$LABEL" --argjson force "${FORCE:-false}" \
+                    '{head_sha: $sha, event: $event, action: $action, label: $label, force: $force, reviews: .}' \
+                | bash "$script" seen)
+              case "$said" in
+                "seen: "*)
+                  why="head ${HEAD_SHA:0:7} already has review ${said#seen: }; no model call"
+                  [ "$mode" = shadow ] && mode=skip || mode=verdict
+                  echo "$why"
+                  { echo "### agent-review: nothing to review"; echo
+                    echo "Head \`${HEAD_SHA:0:7}\` was already reviewed (review ${said#seen: }), so this run makes no model call."
+                    echo "A push of a new commit, the \`review:deep\` label or a manual run with \`force: true\` reviews again."; } >> "$GITHUB_STEP_SUMMARY" ;;
+              esac
+            fi
           fi
           echo "mode: $mode${why:+ ($why)}, reviewer: $reviewer"
           {
@@ -243,14 +289,6 @@ jobs:
           sparse-checkout: |
             .claude/skills/adversarial-review
             scripts
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.what.outputs.mode == 'review' || steps.what.outputs.mode == 'shadow'
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: false
-          path: trusted
-          sparse-checkout: scripts
 
       # A push to a PR that conflicts with its base or whose other checks
       # already failed gets no new review (#2250): wait for the other checks and

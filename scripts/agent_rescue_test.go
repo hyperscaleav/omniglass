@@ -369,6 +369,12 @@ func TestRescueBodyIsADraftThatClosesTheIssueAndQuotesTheLastMessage(t *testing.
 	if strings.Contains(body, "\u2014") {
 		t.Errorf("body has an em dash")
 	}
+	// The workflow-written body passes the demo tag lint a PR must (#2345).
+	lint := exec.Command("node", filepath.Join("..", "web", "e2e", "walkthrough-pr.mjs"), "tag")
+	lint.Env = append(os.Environ(), "PR_BODY="+body)
+	if out, err := lint.CombinedOutput(); err != nil {
+		t.Errorf("the rescue body fails the demo tag lint: %v\n%s", err, out)
+	}
 }
 
 // A push to a branch that has no PR must not start agent-review (or burn CI):

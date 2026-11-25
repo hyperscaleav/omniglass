@@ -150,10 +150,13 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
     enabled: !!component(),
     refetchInterval: LEAF_POLL_MS,
   }));
+  // Polled like the vitals beside it: a property a poll or a command moves
+  // (an input switched, firmware updated) lands without a reload.
   const propsQ = useQuery(() => ({
     queryKey: effectivePropertiesKey(id()),
     queryFn: () => effectiveProperties(id()),
     enabled: !!component(),
+    refetchInterval: LEAF_POLL_MS,
   }));
   const metricsQ = useQuery(() => ({
     queryKey: effectiveMetricsKey(id()),
