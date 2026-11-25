@@ -40,6 +40,20 @@
 #                                       threads from GraphQL) on stdin and print
 #                                       the reviewer's open threads as the
 #                                       open_threads that review reads
+#   agent-review.sh resolved-advisories read {bots, threads} like threads and print
+#                                       the reviewer's resolved advisory threads in
+#                                       the open_threads shape, for review's
+#                                       resolved_advisories (#2222)
+#   agent-review.sh advisory-threads    read {bots, threads} like threads and print
+#                                       [{thread_id, comment_id}] for the
+#                                       reviewer's unresolved advisory threads,
+#                                       which the workflow resolves once it has
+#                                       posted its review (#2222)
+#   agent-review.sh seen                read {head_sha, event, action, label, force,
+#                                       reviews: [{id, user, type, state,
+#                                       commit_id, body}]} and print "seen: <id>"
+#                                       when the head already has a completed
+#                                       review by an App bot, or "review" (#2277)
 #   agent-review.sh followups           read what review reads and print what to
 #                                       do on each thread the recheck lens
 #                                       judged, as [{comment_id, thread_id,
@@ -82,7 +96,9 @@
 # rechecks?: [{comment_id, status: "fixed" or "open", note}]}],
 # inline (bool, default true), own_pr (bool, default false),
 # open_threads ([{path, line, start_line?, rule, severity, lens?, title?,
-# url?, comment_id?, thread_id?, detail?}], default [])}.
+# url?, comment_id?, thread_id?, detail?}], default []), resolved_advisories
+# (the same shape: the reviewer's resolved advisory threads, which only keep an
+# advisory finding from being posted again, #2222)}.
 # A blocking finding, or one whose severity is not "advisory", makes the review
 # REQUEST_CHANGES; otherwise it is COMMENT. It never approves. With own_pr true
 # (the App posting the review also wrote the PR, and GitHub refuses Request
@@ -216,7 +232,7 @@ case "$mode" in
   review | followups)
     [ $# -eq 1 ] || { printf 'usage: agent-review.sh %s < results.json\n' "$mode" >&2; exit 64; }
     facts=$(cat)
-    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.head_sha | type == "string") and (.head_sha | length > 0) and (.expected | type == "array") and ((.lenses // []) | type == "array") and ((.open_threads // []) | type == "array")' >/dev/null 2>&1; then
+    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.head_sha | type == "string") and (.head_sha | length > 0) and (.expected | type == "array") and ((.lenses // []) | type == "array") and ((.open_threads // []) | type == "array") and ((.resolved_advisories // []) | type == "array")' >/dev/null 2>&1; then
       printf 'agent-review: stdin is not a lens result set\n' >&2
       exit 2
     fi
@@ -239,6 +255,7 @@ case "$mode" in
         and .line >= ($t.start_line // $t.line) and .line <= $t.line;
       def sorted:
         [(.open_threads // [])[] | select(type == "object")] as $open
+        | [(.resolved_advisories // [])[] | select(type == "object")] as $resolved
         # The recheck lens'"'"'s word on each open thread, or the one-shot
         # reviewer'"'"'s, which rechecks in the same call; no other lens'"'"'s counts.
         | ([.lenses[] | select(.name == "recheck" or .name == "oneshot") | .name as $by | (.rechecks // [])[]
@@ -264,8 +281,13 @@ case "$mode" in
             open: $judged,
             verified: [$judged[] | select(.fixed)],
             carried: [$judged[] | select(.fixed | not)],
-            # A finding an open thread already carries is not posted again.
-            new: [$raw[] | . as $f | select([$open[] | . as $t | $f | matches($t)] | any | not)]
+            # A finding an open thread already carries is not posted again, and an
+            # advisory one that a resolved advisory thread of the reviewer carries
+            # is not either (#2222): advisories are resolved as they are posted, so
+            # without this an advisory no one fixed would come back as a new thread
+            # on every rerun. A blocking finding is new whatever resolved.
+            new: [$raw[] | . as $f | select([$open[] | . as $t | $f | matches($t)] | any | not)
+                | select(($f | blocking) or ([$resolved[] | . as $t | $f | matches($t)] | any | not))]
           };
     '
     if [ "$mode" = followups ]; then
@@ -419,6 +441,62 @@ case "$mode" in
               detail: ($body | gsub("<!--[^>]*-->|</?(details|summary)>"; "") | gsub("\\s+"; " ") | .[:1200])
             }
         ]'
+    ;;
+
+  resolved-advisories)
+    # Advisories are resolved as they are posted, so they leave the open threads.
+    # Listing the resolved ones lets review keep an advisory no one fixed from
+    # being posted again on every rerun (#2222).
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh resolved-advisories < threads.json\n' >&2; exit 64; }
+    facts=$(cat)
+    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.bots | type == "array") and (.threads | type == "array")' >/dev/null 2>&1; then
+      printf 'agent-review: stdin is not {bots, threads}\n' >&2
+      exit 2
+    fi
+    # threads lists unresolved threads: read the resolved ones as if they were not.
+    # Only a thread resolved on posting counts: it has the reviewer's one comment.
+    # A thread with a reply was resolved by a "Verified fixed" or by a person, and
+    # a finding that comes back on those lines is a regression, so it posts.
+    printf '%s' "$facts" | jq -c '.threads |= map(select(type == "object" and .isResolved == true
+          and ((.comments.totalCount // (.comments.nodes | length)) <= 1)) | .isResolved = false)' \
+      | bash "$0" threads | jq -c '[.[] | select(.severity == "advisory")]'
+    ;;
+
+  advisory-threads)
+    # An advisory finding stays inline for a reader but must not hold the merge
+    # open, since "Protect main" counts every unresolved thread (#2222). The
+    # workflow resolves what this lists after it posts a review; a blocking
+    # finding, and anything unreadable (which counts as blocking), is left open.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh advisory-threads < threads.json\n' >&2; exit 64; }
+    facts=$(cat)
+    open=$(bash "$0" threads <<<"$facts") || exit $?
+    jq -c '[.[] | select(.severity == "advisory" and (.thread_id // "") != "") | {thread_id, comment_id}]' <<<"$open"
+    ;;
+
+  seen)
+    # Do not pay for a second review of a head that was already reviewed (#2277):
+    # a reopen, a relabel, a draft flipped to ready, or a manual run. A completed
+    # review is one by an App bot (a person's cannot be mistaken for it) on this
+    # head, carrying the round marker every review ends with, and neither pending
+    # nor dismissed. A push (synchronize), force, and the review:deep label
+    # always review; a new commit has no review of its own anyway.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh seen < facts.json\n' >&2; exit 64; }
+    facts=$(cat)
+    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.head_sha | type == "string") and (.head_sha | length) > 0 and (.reviews | type == "array")' >/dev/null 2>&1; then
+      printf 'agent-review: stdin is not {head_sha, reviews}\n' >&2
+      exit 2
+    fi
+    printf '%s' "$facts" | jq -r '
+      if .force == true or .action == "synchronize" or .label == "review:deep" then "review"
+      else
+        .head_sha as $head
+        | [.reviews[]? | select(type == "object")
+            | select(.commit_id == $head)
+            | select(.type == "Bot")
+            | select(.state == "COMMENTED" or .state == "CHANGES_REQUESTED" or .state == "APPROVED")
+            | select((.body // "") | contains("<!-- agent-review round"))]
+        | if length == 0 then "review" else "seen: \(last.id)" end
+      end'
     ;;
 
   context)

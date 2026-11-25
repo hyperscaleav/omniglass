@@ -8,6 +8,9 @@
 //       those its body (env PR_BODY) tags with demo: <id>, plus any tape or
 //       walkthrough script among the changed paths (one per line on stdin);
 //       a tag naming no demo in the tree fails, naming it
+//   node web/e2e/walkthrough-pr.mjs retag <reason>
+//       the PR body (env PR_BODY) with each demo tag line rewritten to
+//       demo: none (<reason>), the rest kept
 //   node web/e2e/walkthrough-pr.mjs every
 //       every demo in the tree, the same JSON: what the freshness run records
 //   node web/e2e/walkthrough-pr.mjs tag
@@ -63,6 +66,7 @@ import {
   evidenceRefsToPrune,
   freshnessReport,
   legOutcome,
+  retagBody,
   selectDemos,
   tapeEvidenceFiles,
 } from './walkthroughpr.mjs';
@@ -195,6 +199,10 @@ function main([cmd, ...args]) {
       console.log(`demo tag: ${picked.map((d) => `${d.id} (${d.kind === 'tape' ? 'terminal demo' : 'walkthrough'})`).join(', ')}`);
       return 0;
     }
+    case 'retag':
+      // The PR body (env PR_BODY) with its demo tag lines made demo: none (args[0]).
+      process.stdout.write(retagBody(body(), args[0] || 'its demo could not be checked here'));
+      return 0;
     case 'ref':
       console.log(evidenceRef(Number(args[0])));
       return 0;
