@@ -6,9 +6,12 @@
 //
 //   pnpm diagrams        (needs the `d2` binary on PATH: go install oss.terrastruct.com/d2@latest)
 //
+// Each SVG ends with a comment naming the SHA-256 of its source block.
+//
 // Output path and the d2 flags mirror astro-d2 so the committed SVG matches what the
 // integration expects (it reads the file, checks the d2 version attribute, inlines it).
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +49,11 @@ for (const file of mdFiles(contentDir)) {
       console.error(`\nFailed to render ${path.relative(root, file)} block #${i}`);
       process.exit(1);
     }
+    // Record the hash of the source this SVG was rendered from, after the
+    // drawing, so a check can tell a stale render by every edit, including one
+    // that reuses names the SVG already draws (internal/erd's RenderStale, #2625).
+    const hash = createHash('sha256').update(m[1]).digest('hex');
+    fs.appendFileSync(outPath, `<!-- d2-source-sha256: ${hash} -->\n`);
     count++;
     i++;
   }

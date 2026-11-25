@@ -29,9 +29,9 @@ subsystem in `internal/erd/cluster.go`; an unassigned one fails the introspectio
 prompt to add it. After a schema change, run `make gen`, never an edit to the region.
 
 The page shows a committed SVG rendered from that source, and `make gen` does not re-render it (the docs
-build has no `d2` binary). `internal/erd` compares the two by the tables and columns each names and
-fails `make test` when they disagree, so after a schema change also run `cd docs && corepack pnpm diagrams`
-and commit the SVG.
+build has no `d2` binary). `pnpm diagrams` ends each SVG with a hash of the source it drew, and `internal/erd` fails `make test`
+when the page's source no longer hashes to it, so after a schema change also run
+`cd docs && corepack pnpm diagrams` and commit the SVG.
 :::
 
 ## The platform ERD
