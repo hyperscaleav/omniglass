@@ -201,7 +201,7 @@ case "$mode" in
     fi
 
     if ! $has_code; then
-      jq -c -n --argjson recheck "$recheck" '[{name: "neighbor", task: "Run the neighbor check (procedure step 5): for every behavior the diff flips, grep the docs pages (docs/src/content/docs, not the build log, the decision files or the generated pages) for the claims it falsifies, and check that the docs the diff touches agree with the code. The anti-pattern catalog and the invariants belong to other lenses."}] + $recheck'
+      jq -c -n --argjson recheck "$recheck" '[{name: "neighbor", task: "Run the neighbor check (procedure step 5): for every behavior the diff flips, grep the docs pages and the decision files (docs/src/content/docs and docs/src/content/decisions, not the build log or the generated pages; a stale claim in a decision file is an advisory finding) for the claims it falsifies, and check that the docs the diff touches agree with the code. The anti-pattern catalog and the invariants belong to other lenses."}] + $recheck'
       exit 0
     fi
 
@@ -240,10 +240,11 @@ case "$mode" in
       + [
           {name: "neighbor",
            task: ("Run the neighbor check (procedure step 5): for every behavior the diff flips, "
-            + "grep the docs pages (docs/src/content/docs, not the build log, the decision files "
-            + "or the generated pages, which are history or output) for the claims it falsifies, "
-            + "and check that the docs the diff touches agree with the code. The anti-pattern "
-            + "catalog and the invariants belong to other lenses.")}
+            + "grep the docs pages and the decision files (docs/src/content/docs and "
+            + "docs/src/content/decisions) for the claims it falsifies, not the build log or the "
+            + "generated pages, which are history or output; a decision file still stating the "
+            + "old behavior is an advisory finding. Check that the docs the diff touches agree "
+            + "with the code. The anti-pattern catalog and the invariants belong to other lenses.")}
         ]
       + $recheck'
     ;;

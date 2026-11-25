@@ -103,7 +103,7 @@ and a read-only token:
 | `catalog-1`, `catalog-2`, ... | the [anti-pattern catalog](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review/references/anti-patterns), dealt into even shards in name order (`SHARDS` in `scripts/agent-review.sh` sets how many), so a new entry joins a shard without a workflow change |
 | `invariants` | the skill's invariants for the code outside `web/src`: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test; not dealt when the diff touches nothing outside `web/src` |
 | `invariants-web` | the invariants that apply to `web/src`, with the solidjs skill loaded; not dealt when the diff touches no `web/src` code (#2216) |
-| `neighbor` | the docs claims the diff falsifies, grepped in the docs pages only (`docs/src/content/docs`, not the build log, the decision files or the generated pages) |
+| `neighbor` | the docs claims the diff falsifies, grepped in the docs pages and the decision files (`docs/src/content/docs` and `docs/src/content/decisions`; not the build log or the generated pages), where a decision file still stating the old behavior is an advisory finding |
 
 Splitting `invariants` by area and scoping the `neighbor` grep keep any one lens from judging the whole of a
 mixed diff. The lens jobs check out one commit, and read the PR's whole diff from `.agent-review/pr.diff`

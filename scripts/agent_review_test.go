@@ -255,8 +255,8 @@ func TestAgentReviewLensesFilterByDiff(t *testing.T) {
 // The invariants lens is split by area so no one lens judges the whole of a
 // mixed diff (#2216): `invariants` takes the code outside web/src, and
 // `invariants-web` takes web/src and carries the solidjs skill. A lens whose
-// area the diff does not touch is not dealt, and the neighbor lens greps only
-// the docs pages, never the build log, decisions or generated files.
+// area the diff does not touch is not dealt, and the neighbor lens greps the
+// docs pages and the decision files, never the build log or generated files.
 func TestAgentReviewLensesSplitInvariantsByArea(t *testing.T) {
 	dir := catalog(t, "a-entry.md", "b-entry.md")
 	names := func(diff string) (map[string]string, string) {
@@ -313,9 +313,16 @@ func TestAgentReviewLensesSplitInvariantsByArea(t *testing.T) {
 	if !strings.Contains(all, `"invariants"`) || !strings.Contains(all, `"invariants-web"`) {
 		t.Errorf("no diff: lenses %s, want both invariants lenses", all)
 	}
-	// The neighbor lens greps the docs pages only.
-	if !strings.Contains(both["neighbor"], "docs/src/content/docs") || !strings.Contains(both["neighbor"], "not the build log") {
-		t.Errorf("neighbor task does not scope its grep to the docs pages: %s", both["neighbor"])
+	// The neighbor lens greps the docs pages and the decision files (an ADR can
+	// still state behavior a diff flips), and skips only the build log and the
+	// generated pages.
+	for _, want := range []string{"docs/src/content/docs", "docs/src/content/decisions", "not the build log or the generated pages", "advisory"} {
+		if !strings.Contains(both["neighbor"], want) {
+			t.Errorf("neighbor task lacks %q: %s", want, both["neighbor"])
+		}
+	}
+	if strings.Contains(both["neighbor"], "not the build log, the decision files") {
+		t.Errorf("neighbor task still skips the decision files: %s", both["neighbor"])
 	}
 }
 
