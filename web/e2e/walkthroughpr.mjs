@@ -117,6 +117,20 @@ export function visibleLines(body) {
   return out;
 }
 
+// `body` with every tag line a reader sees rewritten to `demo: none (<reason>)`,
+// the rest of the body untouched (a tag in a comment or a fence is not one); a
+// body with no tag line gets one appended. For a body whose tag the lint could
+// not check where it ran (#2345).
+/** @param {string} body @param {string} reason @returns {string} */
+export function retagBody(body, reason) {
+  const lines = String(body ?? '').split('\n');
+  const tagged = visibleLines(body).filter(([, line]) => TAG_LINE.test(line)).map(([i]) => i);
+  const none = `demo: none (${reason})`;
+  if (!tagged.length) return `${String(body ?? '').replace(/\s*$/, '')}\n\n${none}\n`;
+  for (const i of tagged) lines[i] = none + (lines[i].endsWith('\r') ? '\r' : '');
+  return lines.join('\n');
+}
+
 // The demo tag `body` (a PR body) carries, or null when no line is one. A tag
 // is a line of its own in the Demo section: `demo: <id> [<id>...]` (spaces or
 // commas between), or `demo: none (<reason>)`. Every tag line counts, ids
