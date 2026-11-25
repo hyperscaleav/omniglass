@@ -275,6 +275,25 @@ describe("the Simulation page", () => {
     expect(await screen.findByTestId("sim-status")).toBeTruthy();
   });
 
+  // Platform health's device link names the tab it is for (#2019): impairing a
+  // device is what it opens the drawer to do, and the drawer opens on Info, so a
+  // link that carries ?tab= lands on it with no extra step.
+  it("lands on the tab a link names in its ?tab= parameter", async () => {
+    sessionStorage.removeItem("og-sim-drawer-tab");
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}&tab=impairments`);
+    const tab = await screen.findByRole("tab", { name: "Impairments" });
+    expect(tab.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("ignores a ?tab= that names no tab, and opens on the drawer's own", async () => {
+    sessionStorage.removeItem("og-sim-drawer-tab");
+    stubFetch();
+    mount(() => <Simulation />, admin, `/simulation?c=${DISPLAY}&tab=nonsense`);
+    const info = await screen.findByRole("tab", { name: "Info" });
+    expect(info.getAttribute("aria-selected")).toBe("true");
+  });
+
   it("opens the drawer from the keyboard: a focused row and Enter", async () => {
     stubFetch();
     mount(() => <Simulation />);
