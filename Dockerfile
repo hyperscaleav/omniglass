@@ -26,7 +26,7 @@ ARG GO_VERSION
 
 # ---- stage 1: build the console (Vite -> internal/webui/dist) --------------
 # Arch-independent JS bundle: build on the native host regardless of target.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
+FROM --platform=$BUILDPLATFORM node:26-bookworm-slim AS web
 WORKDIR /src/web
 # Install against the lockfile first so the deps layer caches across source-only
 # changes.

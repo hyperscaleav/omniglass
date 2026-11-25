@@ -12,10 +12,12 @@
 set -u
 
 # Keep these in step with .github/workflows/gen-drift.yml (the same pins CI
-# regenerates with) and setup-node's node-version.
+# regenerates with). The Node major is read from .nvmrc, which setup-node reads
+# too (scripts/check-node-pin.sh holds every pin to it).
 PROTOC_PIN="34.1"
 PROTOC_GEN_GO_PIN="v1.36.11"
-NODE_MAJOR_PIN="22"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NODE_MAJOR_PIN=$(tr -d '[:space:]' < "$root/.nvmrc" 2>/dev/null)
 
 warn() { printf 'env-check: %s\n' "$1"; }
 
