@@ -85,43 +85,47 @@ func TestOutpostRunOnce(t *testing.T) {
 	}
 
 	// The heartbeat landed: last_heartbeat_at is set.
-	deadline := time.Now().Add(3 * time.Second)
-	for {
+	awaitLanded(t, "last_heartbeat_at after the outpost run", func() bool {
 		n, err := gw.GetOutpost(ctx, "site-a", all)
 		if err != nil {
 			t.Fatalf("get outpost: %v", err)
 		}
-		if n.LastHeartbeatAt != nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("last_heartbeat_at not set after outpost run")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+		return n.LastHeartbeatAt != nil
+	})
 
 	// The outpost's self-logs landed (ADR-0066): its own operational records
 	// ("connected to bus", "worklist pulled") rode the telemetry lane as LogLines
 	// and the ingest consumer wrote them to outpost_log (#589: the origin-true
 	// self-log home, not any component's log_line). This closes the raw-log-lane
 	// producer loop end to end.
-	deadline = time.Now().Add(3 * time.Second)
-	for {
+	awaitLanded(t, "the outpost self-log 'worklist pulled' in outpost_log", func() bool {
 		logs, err := gw.ListOutpostLogs(ctx, "site-a", time.Hour, 50)
 		if err != nil {
 			t.Fatalf("list outpost logs: %v", err)
 		}
-		var pulled bool
 		for _, l := range logs {
 			if l.Message == "worklist pulled" && l.Facility == "collection" {
-				pulled = true
+				return true
 			}
 		}
-		if pulled {
-			break
-		}
+		return false
+	})
+}
+
+// awaitLanded polls cond until a write that rides the telemetry lane and the
+// ingest consumer has landed. How long that takes is the machine's speed, so the
+// bound is the test's own deadline (two minutes when it has none), not a few
+// seconds a loaded run can exceed: a self-log missed after 5.46 s under a full
+// make preflight (#2378).
+func awaitLanded(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	if d, ok := t.Deadline(); ok && d.Before(deadline) {
+		deadline = d.Add(-5 * time.Second)
+	}
+	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatalf("outpost self-log 'worklist pulled' never landed in outpost_log")
+			t.Fatalf("%s never landed", what)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
