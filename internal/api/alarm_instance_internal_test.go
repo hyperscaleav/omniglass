@@ -10,6 +10,7 @@ import (
 // alarm names), so a list showing two alarms of one rule on one component can
 // tell them apart; a hand-raised alarm carries none.
 func TestAlarmBodiesCarryInstance(t *testing.T) {
+	t.Parallel()
 	alarms := []storage.Alarm{
 		{ID: "a1", Message: "Reachability lost", DedupKey: "rule:01a2133c-0270-7888-aad8-4dd37246c331:http"},
 		{ID: "a2", Message: "Bezel cracked", DedupKey: "Bezel cracked"},

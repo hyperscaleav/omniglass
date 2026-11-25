@@ -6,6 +6,7 @@ import "testing"
 // for reachability-lost), under either rule segment the key may carry; a
 // hand-raised alarm and a rule over one series name none.
 func TestAlarmInstance(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ key, want string }{
 		{"rule:01a2133c-0270-7888-aad8-4dd37246c331:snmp", "snmp"},
 		{"rule:01a2133c-0270-7888-aad8-4dd37246c331:http", "http"},
