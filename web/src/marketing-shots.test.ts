@@ -27,7 +27,9 @@ import {
   expandAddress,
   parseShots,
   pick,
+  pointerX,
   referencedResources,
+  replayProblems,
   shotFiles,
 } from "../e2e/marketinglib.mjs";
 
@@ -559,5 +561,45 @@ describe("a call step", () => {
   it("addresses the lab the way a setup item does, so the preflight checks it", () => {
     const refs = referencedResources([{ kind: "call", method: "PUT", path: "/components/{a.$comp.display-1}/impairment", body: {} }], null);
     expect(refs).toEqual([{ kind: "component", id: "a.$comp.display-1", path: "/components/{a.$comp.display-1}" }]);
+  });
+});
+
+describe("where the pointer rests on a step's target", () => {
+  const box = { x: 100, y: 50, width: 360, height: 36 };
+  it("clicks and hovers in the middle", () => {
+    expect(pointerX("click", box)).toBe(280);
+    expect(pointerX("hover", box)).toBe(280);
+  });
+  it("types at the field's start", () => {
+    expect(pointerX("type", box)).toBe(124);
+  });
+  it("picks a select's value from its chevron end, so the value stays in sight", () => {
+    expect(pointerX("select", box)).toBe(444);
+    // A narrow select still rests no further left than its middle.
+    expect(pointerX("select", { x: 0, y: 0, width: 20, height: 20 })).toBe(10);
+  });
+});
+
+describe("the questions a shot asks the lab's recorded omnibot (#2526)", () => {
+  const ask = (text: string) => ({ id: "omnibot-ask", steps: [{ kind: "click" }, { kind: "type", target: 'textarea[aria-label="Ask omnibot"]', text }] });
+  const prompts = ["Why is the 86-inch meeting room degraded?", undefined as unknown as string, "What is wrong with the main display?"];
+  it("passes a question that holds one of the recording's prompts, as the replay compares them", () => {
+    expect(replayProblems([ask("why is the 86-inch   meeting room degraded")], prompts)).toEqual([]);
+    expect(replayProblems([ask("So: what is wrong with the main display?")], prompts)).toEqual([]);
+  });
+  it("names a question the recording would refuse, by shot and step", () => {
+    const got = replayProblems([ask("Why is this room degraded?")], prompts);
+    expect(got).toHaveLength(1);
+    expect(got[0]).toContain('omnibot-ask step 2 asks omnibot "Why is this room degraded?"');
+  });
+  it("leaves other typing alone", () => {
+    expect(replayProblems([{ id: "search", steps: [{ kind: "type", target: "input[type=search]", text: "lobby" }] }], prompts)).toEqual([]);
+  });
+  it("the shipped shot list asks only what its recording answers", () => {
+    const list = parseShots(readFileSync(join(__dirname, "../e2e/marketing/shots.yaml"), "utf8")).list!;
+    const rec = readFileSync(join(__dirname, `../../internal/lab/omnibot/${list.lab.omnibotReplay}.yaml`), "utf8");
+    const recorded = [...rec.matchAll(/^\s*-?\s*prompt:\s*(.+)$/gm)].map((m) => m[1].trim());
+    expect(recorded).toContain("Why is the 86-inch meeting room degraded?");
+    expect(replayProblems(list.shots as never, recorded)).toEqual([]);
   });
 });

@@ -397,7 +397,7 @@ shots:
       - click: 'button[aria-label="Ask omnibot"]'
         hold: 200
       # Beat 1: the question.
-      - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "Why is this room degraded?" }
+      - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "Why is the 86-inch meeting room degraded?" }
         focus: here
         zoom: 1.7
         hold: 300

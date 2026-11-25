@@ -23,11 +23,9 @@
 // waited for, and keeps the frame it failed on beside the captures.
 
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import {
-  CAPTURE_CSS, beatEnds, beatStill, buildManifest, cameraTail, concatList, retime, budgetProblems, conditionMet, destProblem,
-  expandAddress, frameFor, frameRect, missingText, parseShots, pick, shotFiles, referencedResources, loopMaxBytes, LOOP_MAX_SECONDS,
-} from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, loopMaxBytes, missingText, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -62,6 +60,13 @@ async function main() {
     if (replay && !existsSync(new URL(`../../internal/lab/omnibot/${replay}.yaml`, import.meta.url))) {
       console.error(`marketing: omnibot_replay "${replay}" is not a recording the lab ships (internal/lab/omnibot/)`);
       process.exit(2);
+    }
+    if (replay) {
+      const rec = /** @type {any} */ (load(readFileSync(new URL(`../../internal/lab/omnibot/${replay}.yaml`, import.meta.url), 'utf8')));
+      const prompts = [rec?.prompt, ...(rec?.conversations ?? []).map((/** @type {any} */ c) => c?.prompt)];
+      const asked = replayProblems(list.shots, prompts);
+      for (const p of asked) console.error(`marketing: ${file}: ${p}`);
+      if (asked.length) process.exit(2);
     }
     console.log(`marketing: ${list.shots.length} shots, destination ${dest}`);
   } else if (mode === 'lab-args') {
@@ -566,7 +571,7 @@ async function play(page, base, step, cursor, loop, cam, api) {
       if (!later) await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');
-      const x = step.kind === 'click' || step.kind === 'hover' ? box.x + box.width / 2 : Math.min(box.x + 24, box.x + box.width / 2);
+      const x = pointerX(step.kind, box);
       const y = box.y + box.height / 2;
       await page.mouse.move(x, y, { steps: 6 });
       Object.assign(cursor, { x, y });

@@ -76,6 +76,52 @@ export const CAPTURE_CSS = [
 ].join('\n');
 
 /**
+ * A question as the lab's omnibot recording compares it: lower case, runs of
+ * space as one, trailing punctuation dropped (internal/assistant/provider/replay.go, normal).
+ * @param {string} s
+ */
+export const replayNormal = (s) => s.toLowerCase().split(/\s+/).filter(Boolean).join(' ').replace(/[?.! ]+$/, '');
+
+/**
+ * The questions a shot types into omnibot that the lab's recording would refuse
+ * (#2526: a recording answers only a message holding one of its prompts), each
+ * named by its shot and step. A refused question never thinks, so its shot would
+ * stall at its first wait; this names it before any lab starts.
+ * @param {{ id: string, steps: { kind: string, target?: unknown, text?: string }[] }[]} shots
+ * @param {string[]} prompts the recording's prompts
+ * @returns {string[]}
+ */
+export function replayProblems(shots, prompts) {
+  const asks = prompts.filter(Boolean).map(replayNormal);
+  /** @type {string[]} */
+  const out = [];
+  for (const shot of shots) {
+    shot.steps.forEach((step, i) => {
+      if (step.kind !== 'type' || !JSON.stringify(step.target ?? '').includes('Ask omnibot')) return;
+      const said = replayNormal(step.text ?? '');
+      if (!asks.some((a) => said.includes(a))) {
+        out.push(`${shot.id} step ${i + 1} asks omnibot "${step.text}", which the recording does not answer (it answers: ${prompts.filter(Boolean).map((p) => `"${p}"`).join(', ')})`);
+      }
+    });
+  }
+  return out;
+}
+
+/**
+ * Where the pointer rests on a step's target: the middle of what it clicks or
+ * hovers; the start of a field it types into; and the chevron end of a select,
+ * so the value it picks stays in sight for the frame that checks it.
+ * @param {string} kind
+ * @param {{ x: number, y: number, width: number, height: number }} box
+ * @returns {number}
+ */
+export function pointerX(kind, box) {
+  if (kind === 'click' || kind === 'hover') return box.x + box.width / 2;
+  if (kind === 'select') return Math.max(box.x + box.width - 16, box.x + box.width / 2);
+  return Math.min(box.x + 24, box.x + box.width / 2);
+}
+
+/**
  * A console address in a request path: every {braced} part is percent-encoded
  * whole, so a component's path address (dots and a `$comp` segment) names the
  * one route segment it is. `/components/{a.$comp.b}/impairment` becomes
