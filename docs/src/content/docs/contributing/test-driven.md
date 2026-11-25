@@ -26,7 +26,8 @@ do not lean on CI to find what a local run would.
 fails rather than rewrite it, so `git status` stays clean. `web/package.json`'s `packageManager`
 names the pnpm version, and pnpm 10 switches to it on its own. A dependency's install script runs
 only when `web/pnpm-workspace.yaml` lists the package under `allowBuilds`; a new dependency that
-needs one fails loudly until it is added there, with the reason, in `scripts/web_pnpm_test.go`.
+needs one is skipped (pnpm 10 only warns, and `pnpm ignored-builds` names it) until it is added there, and
+`scripts/web_pnpm_test.go` fails on any change to that list that does not record the reason.
 
 ## The spike carve-out
 
