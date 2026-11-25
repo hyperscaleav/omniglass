@@ -101,12 +101,18 @@ export default function Simulation(): JSX.Element {
   const open = () => (Array.isArray(params.c) ? params.c[0] : params.c) || null;
   const setOpen = (id: string | null) => setParams({ c: id ?? undefined });
   // A link may also name the drawer's tab (?tab=impairments): Platform health's
-  // device link is there to impair the device, so it lands on that tab.
+  // device link is there to impair the device, so it lands on that tab. It is a
+  // one-shot hint: once applied it leaves the address, so a device opened later
+  // follows the user's own tab and not the link's.
   const tabParam = () => {
     const t = Array.isArray(params.tab) ? params.tab[0] : params.tab;
     return isDrawerTab(t) ? t : null;
   };
-  createEffect(on([open, tabParam], ([id, t]) => { if (id && t) chooseDrawerTab(t); }));
+  createEffect(on([open, tabParam], ([id, t]) => {
+    if (!id || !t) return;
+    chooseDrawerTab(t);
+    setParams({ tab: undefined }, { replace: true });
+  }));
   // The filter is the address's ?chips= too (#2462), beside ?c=, so a link
   // carries the view it was copied from: the same filter, the same open device.
   const chips = createMemo<Chip[]>(() => parseChips(Array.isArray(params.chips) ? params.chips[0] : params.chips));
