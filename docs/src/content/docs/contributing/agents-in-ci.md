@@ -101,8 +101,14 @@ and a read-only token:
 | Lens | Sweeps |
 | --- | --- |
 | `catalog-1`, `catalog-2`, ... | the [anti-pattern catalog](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review/references/anti-patterns), dealt into even shards in name order (`SHARDS` in `scripts/agent-review.sh` sets how many), so a new entry joins a shard without a workflow change |
-| `invariants` | the skill's invariants: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test |
-| `neighbor` | the docs claims the diff falsifies |
+| `invariants` | the skill's invariants for the code outside `web/src`: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test; not dealt when the diff touches nothing outside `web/src` |
+| `invariants-web` | the invariants that apply to `web/src`, with the solidjs skill loaded; not dealt when the diff touches no `web/src` code (#2216) |
+| `neighbor` | the docs claims the diff falsifies, grepped in the docs pages only (`docs/src/content/docs`, not the build log, the decision files or the generated pages) |
+
+Splitting `invariants` by area and scoping the `neighbor` grep keep any one lens from judging the whole of a
+mixed diff. The lens jobs check out one commit, and read the PR's whole diff from `.agent-review/pr.diff`
+(and, in a re-review, the changes since the last reviewed head from `.agent-review/review.diff`), both computed
+once in `plan`, where the history is, so no lens fetches it.
 
 A lens posts nothing. It returns its surviving findings as JSON, and the `agent-review` job,
 which waits for every lens, posts them as one review: a finding on a diff line becomes an inline
@@ -120,7 +126,7 @@ sit in collapsed `<details>` blocks under them.
 
 A re-review starts from what changed. After the first review, a push is reviewed from the head the
 reviewer last reviewed: the PR's own commits since, with what a merge from `main` brought in left
-out. That diff is where the lenses look first, not a fence: they read any code, pull up the whole
+out. That diff is where the lenses look first, not a fence: they read any code, read the whole
 PR diff, and run `go build`, `go vet` and `go test` when a finding turns on what the code does, and
 they raise a finding wherever the new changes cause or expose a problem. A force push that
 rewrites that history, or a last review that left a blocking finding in its body rather than on a

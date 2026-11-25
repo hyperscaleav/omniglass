@@ -184,22 +184,29 @@ case "$mode" in
     # runs the neighbor lens alone: the catalog and the invariants judge code.
     # Code is Go, web, shell, SQL (migrations) and the workflows; a deleted
     # file counts by its old path. An empty diff touches no code.
-    has_code=true
+    # The invariants are split by area (#2216): `invariants` judges the code outside
+    # web/src, `invariants-web` judges web/src, and a lens whose area the diff does
+    # not touch is not dealt. Without a diff, both run.
+    has_code=true has_web=true has_other=true
     if [ -n "$difffile" ] && [ -f "$difffile" ]; then
-      has_code=false
-      if grep -E '^(diff --git a/|--- a/|\+\+\+ b/)' "$difffile" \
+      has_code=false has_web=false has_other=false
+      code_paths=$(grep -E '^(diff --git a/|--- a/|\+\+\+ b/)' "$difffile" \
         | sed -E 's#^diff --git a/(.*) b/.*$#\1#; s#^(--- a/|\+\+\+ b/)##' \
-        | grep -qE '(\.(go|ts|tsx|js|jsx|mjs|cjs|sh|bash|sql)$|^\.github/workflows/)'; then
+        | grep -E '(\.(go|ts|tsx|js|jsx|mjs|cjs|sh|bash|sql)$|^\.github/workflows/)' || true)
+      if [ -n "$code_paths" ]; then
         has_code=true
+        if grep -q '^web/src/' <<<"$code_paths"; then has_web=true; fi
+        if grep -qv '^web/src/' <<<"$code_paths"; then has_other=true; fi
       fi
     fi
 
     if ! $has_code; then
-      jq -c -n --argjson recheck "$recheck" '[{name: "neighbor", task: "Run the neighbor check (procedure step 5): for every behavior the diff flips, grep the docs tree for the claims it falsifies, and check that the docs the diff touches agree with the code. The anti-pattern catalog and the invariants belong to other lenses."}] + $recheck'
+      jq -c -n --argjson recheck "$recheck" '[{name: "neighbor", task: "Run the neighbor check (procedure step 5): for every behavior the diff flips, grep the docs pages (docs/src/content/docs, not the build log, the decision files or the generated pages) for the claims it falsifies, and check that the docs the diff touches agree with the code. The anti-pattern catalog and the invariants belong to other lenses."}] + $recheck'
       exit 0
     fi
 
-    printf '%s\n' "${entries[@]}" | jq -R -s -c --argjson shards "$SHARDS" --argjson recheck "$recheck" '
+    printf '%s\n' "${entries[@]}" | jq -R -s -c --argjson shards "$SHARDS" --argjson recheck "$recheck" \
+      --argjson web "$has_web" --argjson other "$has_other" '
       split("\n") | map(select(length > 0)) as $all
       | ($all | length) as $n
       | [range(0; $shards) as $i
@@ -213,18 +220,30 @@ case "$mode" in
             + (.value | join(", ")) + ". The other entries, the invariants and the neighbor "
             + "check belong to other lenses.")
         })
-      + [
+      + (if $other then [
           {name: "invariants",
            task: ("Interrogate the diff against the invariants (procedure step 3): every route "
             + "gated, every applicable query scoped, every privileged mutation audited "
             + "in-transaction, migrations idempotent and never edited, no fixed test ports, "
-            + "tests prove behavior fresh. Load the solidjs skill before judging anything under "
-            + "web/src. The anti-pattern catalog and the neighbor check belong to other lenses.")},
+            + "tests prove behavior fresh."
+            + (if $web then " Judge the files outside web/src; the invariants-web lens judges web/src." else "" end)
+            + " The anti-pattern catalog and the neighbor check belong to other lenses.")}
+        ] else [] end)
+      + (if $web then [
+          {name: "invariants-web",
+           task: ("Interrogate the diff under web/src against the invariants that apply to it "
+            + "(procedure step 3): tests prove behavior fresh, no fixed test ports, no mocked "
+            + "system under test, the permission and scope rules the console must not bypass. "
+            + "Load the solidjs skill before judging anything under web/src. The files outside "
+            + "web/src, the anti-pattern catalog and the neighbor check belong to other lenses.")}
+        ] else [] end)
+      + [
           {name: "neighbor",
            task: ("Run the neighbor check (procedure step 5): for every behavior the diff flips, "
-            + "grep the docs tree for the claims it falsifies, and check that the docs the diff "
-            + "touches agree with the code. The anti-pattern catalog and the invariants belong "
-            + "to other lenses.")}
+            + "grep the docs pages (docs/src/content/docs, not the build log, the decision files "
+            + "or the generated pages, which are history or output) for the claims it falsifies, "
+            + "and check that the docs the diff touches agree with the code. The anti-pattern "
+            + "catalog and the invariants belong to other lenses.")}
         ]
       + $recheck'
     ;;
