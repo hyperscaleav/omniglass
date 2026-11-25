@@ -25,6 +25,6 @@ steps:
     caption: Point the login at the secret holding the rotated password.
   - click: 'aside[data-blade] button:has-text("Save")'
     caption: Save. What the endpoint connects with changed, so the refusal no longer holds.
-  - wait: { selector: 'aside[data-blade] [data-testid=endpoint-session]:has([data-testid=session-pill][data-state=up])', timeout: 20000 }
+  - wait: { selector: 'aside[data-blade] [data-testid=endpoint-detail]:has([data-testid=session-pill][data-state=up])', timeout: 20000 }
     caption: The outpost logs in at its next check-in, and the session reads up.
     poster: true
