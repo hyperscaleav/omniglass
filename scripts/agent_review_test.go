@@ -67,7 +67,7 @@ func TestAgentReviewLensesDealEveryCatalogEntryOnce(t *testing.T) {
 	for _, l := range lenses {
 		got = append(got, l.Name)
 	}
-	if strings.Join(got, ",") != "catalog-1,catalog-2,catalog-3,catalog-4,catalog-5,catalog-6,invariants,neighbor" {
+	if strings.Join(got, ",") != "catalog-1,catalog-2,catalog-3,catalog-4,catalog-5,catalog-6,invariants,invariants-web,neighbor" {
 		t.Fatalf("lenses = %v", got)
 	}
 	for _, c := range "abcdefg" {
@@ -249,6 +249,80 @@ func TestAgentReviewLensesFilterByDiff(t *testing.T) {
 	}
 	if !strings.Contains(out4, "invariants") {
 		t.Fatalf("no diff: invariants lens missing: %s", out4)
+	}
+}
+
+// The invariants lens is split by area so no one lens judges the whole of a
+// mixed diff (#2216): `invariants` takes the code outside web/src, and
+// `invariants-web` takes web/src and carries the solidjs skill. A lens whose
+// area the diff does not touch is not dealt, and the neighbor lens greps the
+// docs pages and the decision files, never the build log or generated files.
+func TestAgentReviewLensesSplitInvariantsByArea(t *testing.T) {
+	dir := catalog(t, "a-entry.md", "b-entry.md")
+	names := func(diff string) (map[string]string, string) {
+		f := filepath.Join(t.TempDir(), "x.diff")
+		if err := os.WriteFile(f, []byte(diff), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, code := agentReview(t, "", "lenses", dir, f)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+		var ls []lens
+		if err := json.Unmarshal([]byte(out), &ls); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		m := map[string]string{}
+		for _, l := range ls {
+			m[l.Name] = l.Task
+		}
+		return m, out
+	}
+	// Go only: invariants, no web lens, and no solidjs skill to load.
+	goOnly, _ := names("+++ b/internal/x.go\n")
+	if _, ok := goOnly["invariants"]; !ok {
+		t.Fatalf("go diff: no invariants lens")
+	}
+	if _, ok := goOnly["invariants-web"]; ok {
+		t.Errorf("go diff: invariants-web dealt with no web/src in the diff")
+	}
+	if strings.Contains(goOnly["invariants"], "solidjs") {
+		t.Errorf("go diff: the invariants lens loads the solidjs skill with no web/src in the diff")
+	}
+	// Web only: invariants-web, and no invariants lens with nothing outside web/src.
+	webOnly, _ := names("+++ b/web/src/App.tsx\n")
+	if _, ok := webOnly["invariants-web"]; !ok {
+		t.Fatalf("web diff: no invariants-web lens")
+	}
+	if _, ok := webOnly["invariants"]; ok {
+		t.Errorf("web diff: an invariants lens with nothing outside web/src to judge")
+	}
+	if !strings.Contains(webOnly["invariants-web"], "solidjs") {
+		t.Errorf("web diff: invariants-web does not load the solidjs skill")
+	}
+	// Both: two lenses that split the work, each naming the other's area.
+	both, _ := names("+++ b/internal/x.go\n+++ b/web/src/App.tsx\n")
+	if both["invariants"] == "" || both["invariants-web"] == "" {
+		t.Fatalf("mixed diff: lenses %v, want invariants and invariants-web", both)
+	}
+	if !strings.Contains(both["invariants"], "outside web/src") {
+		t.Errorf("mixed diff: invariants does not leave web/src to the other lens: %s", both["invariants"])
+	}
+	// No diff at all (a full run): every lens, including both invariants lenses.
+	all, _ := agentReview(t, "", "lenses", dir)
+	if !strings.Contains(all, `"invariants"`) || !strings.Contains(all, `"invariants-web"`) {
+		t.Errorf("no diff: lenses %s, want both invariants lenses", all)
+	}
+	// The neighbor lens greps the docs pages and the decision files (an ADR can
+	// still state behavior a diff flips), and skips only the build log and the
+	// generated pages.
+	for _, want := range []string{"docs/src/content/docs", "docs/src/content/decisions", "not the build log or the generated pages", "advisory"} {
+		if !strings.Contains(both["neighbor"], want) {
+			t.Errorf("neighbor task lacks %q: %s", want, both["neighbor"])
+		}
+	}
+	if strings.Contains(both["neighbor"], "not the build log, the decision files") {
+		t.Errorf("neighbor task still skips the decision files: %s", both["neighbor"])
 	}
 }
 

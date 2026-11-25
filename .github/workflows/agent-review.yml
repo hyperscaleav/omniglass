@@ -434,12 +434,20 @@ jobs:
             echo "turns=$turns"
           } >> "$GITHUB_OUTPUT"
           jq -r '.[] | "\(.name): \(.task)"' <<<"$lenses"
+          # The PR's whole diff, for the lenses: their checkout is one commit deep
+          # (#2216), so they read this instead of diffing against the base.
+          (cd head && git diff "origin/$BASE_REF...HEAD") > "$RUNNER_TEMP/review/pr.diff"
 
+      # The lenses' diffs (#2216): the whole PR's, and in a re-review the PR's own
+      # changes since the last reviewed head. Both are computed here, where the
+      # checkout has the history; the lenses check out one commit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: steps.lenses.outputs.mode == 'incremental' && steps.what.outputs.reviewer == 'lens'
+        if: steps.lenses.outcome == 'success' && steps.what.outputs.reviewer == 'lens'
         with:
           name: agent-review-diff
-          path: ${{ runner.temp }}/review/review.diff
+          path: |
+            ${{ runner.temp }}/review/review.diff
+            ${{ runner.temp }}/review/pr.diff
           if-no-files-found: error
           retention-days: 1
           overwrite: true
@@ -493,10 +501,12 @@ jobs:
           permission-contents: read
           permission-pull-requests: read
 
+      # One commit deep: a lens reads the diffs plan computed (below) and the code
+      # at the head, so the full history fetch (#2216) bought it nothing.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       # A lens may build and test the PR's Go code to settle a finding.
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
@@ -504,9 +514,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # A re-review starts from the PR's own changes since the last reviewed head.
+      # The whole PR's diff (pr.diff) and, in a re-review, the PR's own changes
+      # since the last reviewed head (review.diff).
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: needs.plan.outputs.review_mode == 'incremental'
         with:
           name: agent-review-diff
           path: .agent-review
@@ -539,11 +549,12 @@ jobs:
             ${{ matrix.lens.task }}
 
             Load the adversarial-review skill (.claude/skills/adversarial-review) for its
-            posture and procedure. The PR is checked out here; the base is
-            origin/${{ github.event.pull_request.base.ref }}, so the PR's diff is
-            git diff origin/${{ github.event.pull_request.base.ref }}...HEAD.
+            posture and procedure. The PR's head is checked out here, one commit deep, so
+            there is no history to diff against the base: the PR's whole diff is
+            .agent-review/pr.diff (git diff origin/${{ github.event.pull_request.base.ref }}...HEAD,
+            computed for you).
 
-            ${{ needs.plan.outputs.review_mode == 'incremental' && format('This is a re-review. Start from .agent-review/review.diff: the PR''s own changes since {0}, the head the reviewer last reviewed, with what a merge from the base brought in left out. It is where to look first, not a fence: read any code and the whole PR diff as you need, and raise a finding wherever those changes cause or expose a problem. Findings from earlier reviews are on their own threads, and the recheck lens judges each of them. If the file is empty, nothing of the PR''s own changed since then: unless you are the recheck lens, return no findings.', needs.plan.outputs.review_base) || 'Review the whole diff.' }}
+            ${{ needs.plan.outputs.review_mode == 'incremental' && format('This is a re-review. Start from .agent-review/review.diff: the PR''s own changes since {0}, the head the reviewer last reviewed, with what a merge from the base brought in left out. It is where to look first, not a fence: read any code and .agent-review/pr.diff as you need, and raise a finding wherever those changes cause or expose a problem. Findings from earlier reviews are on their own threads, and the recheck lens judges each of them. If the file is empty, nothing of the PR''s own changed since then: unless you are the recheck lens, return no findings.', needs.plan.outputs.review_base) || 'Review the whole diff.' }}
 
             Read the diff and the code. You may run go build, go vet and go test on the
             packages involved when a finding turns on what the code does. Do not read the
