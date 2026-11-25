@@ -48,6 +48,14 @@ cd "$ROOT"
 # drift (#771, #855). See web/e2e/lib/lab.sh.
 . web/e2e/lib/lab.sh
 
+# The capturing host's CPU, in the log (#1860): the raster path is pinned in the
+# capture browser (docs-shots.mjs), and this line is the evidence of which hosts
+# a baseline was byte-compared on, in CI and on a laptop alike.
+cpu_model="$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//' || true)"
+cpu_flags=" $(grep -m1 '^flags' /proc/cpuinfo 2>/dev/null || true) "
+yn() { case "$cpu_flags" in *" $1 "* | *" $1"[[:space:]]*) echo yes ;; *) echo no ;; esac; }
+echo "capture: cpu '${cpu_model:-unknown}' avx2=$(yn avx2) avx512f=$(yn avx512f)" >&2
+
 OUT="${DOCS_SHOTS_OUT:-docs/public/screenshots}"
 BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 
