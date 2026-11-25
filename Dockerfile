@@ -29,13 +29,16 @@ ARG GO_VERSION
 FROM --platform=$BUILDPLATFORM node:26-bookworm-slim AS web
 WORKDIR /src/web
 # Install against the lockfile first so the deps layer caches across source-only
-# changes.
-COPY web/package.json web/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+# changes. Node ships no corepack, so pnpm is installed at the version
+# package.json's packageManager names (#2705), and pnpm-workspace.yaml's
+# allowBuilds is the only list of dependencies whose install scripts run.
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+RUN npm install -g --silent "$(node -p "require('./package.json').packageManager")"
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 # Then the sources. vite.config.ts writes the build to ../internal/webui/dist,
 # i.e. /src/internal/webui/dist, which the Go stage copies into its context.
 COPY web/ ./
-RUN npm run build
+RUN pnpm run build
 
 # ---- stage 2: compile the binary with the console embedded -----------------
 # Runs natively on the host ($BUILDPLATFORM); cross-compiles to the target arch.

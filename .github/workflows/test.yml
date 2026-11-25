@@ -135,11 +135,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 10
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Test (make test-web)
         run: make test-web
@@ -278,6 +282,11 @@ jobs:
 
       # Playwright runs in the pinned container against the repo mounted from the
       # runner, so it needs the web deps installed here.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: steps.gate.outputs.run == 'true'
+        with:
+          version: 10
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.gate.outputs.run == 'true'
         with:
@@ -285,7 +294,7 @@ jobs:
 
       - name: Install web deps
         if: steps.gate.outputs.run == 'true'
-        run: cd web && npm ci
+        run: cd web && pnpm install --frozen-lockfile
 
       - name: Browser e2e (CRUD round-trips + route smoke)
         if: steps.gate.outputs.run == 'true'

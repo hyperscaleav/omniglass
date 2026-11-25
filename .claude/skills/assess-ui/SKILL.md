@@ -48,7 +48,7 @@ and `kobalte` cover the reactivity and primitive mechanics.
 **Bring it up.** Full fidelity is `make lab`: Postgres, the server with the embedded build
 at `http://127.0.0.1:8080/web`, and an outpost collecting from the simulated fleet, boot seed
 plus the dev fleet, login `dev`/`dev` (`make lab LAB_ARGS=--fresh` starts over from the
-seed). While iterating, keep the lab up and run `cd web && npm run dev` on :5173 (Vite
+seed). While iterating, keep the lab up and run `cd web && pnpm run dev` on :5173 (Vite
 proxies `/api` to the lab; no rebuild per change), but **PR captures come from the embedded build**,
 per the PR template. Permission-variant states use the seeded users `operator`,
 `viewer` (fleet-wide read-only, the one who sees a component and may act on nothing),

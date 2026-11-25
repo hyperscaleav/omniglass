@@ -8,7 +8,7 @@ name: gen-drift
 # regeneration; this fails the PR instead of leaving it to the reviewer.
 #
 # The diff is scoped to the generated paths (not the whole tree) so an
-# incidental lockfile refresh from `npm install` can never false-positive the
+# incidental lockfile refresh from a package install can never false-positive the
 # gate.
 
 # Selective (#2597): the generated artifacts span Go, web and the generated docs
@@ -83,6 +83,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: steps.gate.outputs.run == 'true'
+        with:
+          version: 10
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.gate.outputs.run == 'true'

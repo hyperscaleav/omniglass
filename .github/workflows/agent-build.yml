@@ -185,12 +185,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: steps.gate.outputs.decision == 'run'
+        with:
+          version: 10
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.gate.outputs.decision == 'run'
         with:
           node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       # protoc, pnpm and the ICMP sysctl, so make preflight runs what the
       # required checks run (#2231). The guard in make preflight is a gate for

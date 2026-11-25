@@ -53,11 +53,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 10
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Install web deps
-        run: cd web && npm ci
+        run: cd web && pnpm install --frozen-lockfile
       - name: Verify screenshots are declared and present
         run: make docs-shots-verify
       - name: Guard existing shots against a PR's edit
@@ -90,11 +93,14 @@ jobs:
           persist-credentials: false
       # make docs-shots builds the lab (make: the image and the binary, with only
       # Docker), so the job needs no Go toolchain.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 10
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
       - name: Install web deps
-        run: cd web && npm ci
+        run: cd web && pnpm install --frozen-lockfile
       - name: Recapture both shot sets on the merged tree
         run: make docs-shots
       - name: Mint the agent App token

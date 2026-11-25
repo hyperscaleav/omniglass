@@ -64,7 +64,7 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
    ListView derivations are already covered by `listmodel.test.ts`; add tests only for the page's
    own pure helpers, or component-test a bespoke interaction.
 
-6. **Verify live**: `make lab` (or `npm run dev` on :5173 with `/api` proxied to the running
+6. **Verify live**: `make lab` (or `pnpm run dev` on :5173 with `/api` proxied to the running
    lab). Seed a few rows via the API/CLI, drive the page, screenshot to the
    ticket. The browser-driven e2e gate (full stack) is the remaining tier; until it lands,
    live-verify is by hand/Playwright and is not a committed gate.

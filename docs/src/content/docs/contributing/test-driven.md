@@ -19,14 +19,14 @@ user-facing behavior. Bug fixes start with a failing regression test that stays 
 suite. `make test` is the gate: green before commit and before merge. Validate locally;
 do not lean on CI to find what a local run would.
 
-## npm version requirement
+## The console's package manager
 
-`make test`, `make gen`, and other build targets use `npm ci` (clean install) to keep
-`web/package-lock.json` stable across npm versions. `npm ci` respects the pinned versions
-in the lockfile and never rewrites it. The web console's `package.json` declares a minimum
-npm version (`engines.npm`); if your environment's npm does not meet it, `npm ci` will
-fail with a clear error. Upgrade npm to the version `package.json` specifies (or newer),
-and the lockfile will remain untouched across runs, so `git status` stays clean.
+`make test`, `make gen`, and the other build targets install the console's dependencies with
+`pnpm install --frozen-lockfile`, which installs exactly what `web/pnpm-lock.yaml` records and
+fails rather than rewrite it, so `git status` stays clean. `web/package.json`'s `packageManager`
+names the pnpm version, and pnpm 10 switches to it on its own. A dependency's install script runs
+only when `web/pnpm-workspace.yaml` lists the package under `allowBuilds`; a new dependency that
+needs one fails loudly until it is added there, with the reason, in `scripts/web_pnpm_test.go`.
 
 ## The spike carve-out
 

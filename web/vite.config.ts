@@ -5,7 +5,7 @@ import { labProxyTarget } from "./src/dev/labProxy";
 
 // The console is served by the Go binary under /web (api.go nests it there;
 // Solid Router's base matches). base makes Vite emit asset URLs as /web/assets/*
-// so they resolve both embedded and under `npm run dev`. The build writes into
+// so they resolve both embedded and under `pnpm run dev`. The build writes into
 // the Go module's embed target (internal/webui/dist), which spa_embed.go embeds
 // under the `web` build tag. In dev, server.proxy forwards API calls to a lab
 // running on this machine (./bin/omniglass lab run; OMNIGLASS_LAB_URL moves it),
@@ -17,7 +17,7 @@ import { labProxyTarget } from "./src/dev/labProxy";
 // remain unchanged to be resolved at runtime" line per file for that, which is the
 // intended outcome rather than a warning to fix: public/ is copied verbatim and the
 // URL is already the final one. Dropping the base to `/fonts/...` silences the
-// lines and builds identical output, but then `npm run dev` 404s every face,
+// lines and builds identical output, but then `pnpm run dev` 404s every face,
 // because the dev server serves public/ only under the base.
 export default defineConfig({
   base: "/web/",

@@ -36,7 +36,8 @@ updates:
       go:
         update-types: [minor, patch]
 
-  # The operator console (npm, web/package-lock.json).
+  # The operator console (pnpm, web/pnpm-lock.yaml; Dependabot's npm ecosystem
+  # reads a pnpm lockfile).
   - package-ecosystem: npm
     directory: /web
     schedule:
