@@ -63,7 +63,11 @@ that commits the agents' own config. Then work through the list for what it cann
    land in the same PR (the rename ripple, like `/storage-schema-change`'s gateway ripple).
 5. **The neighbor check.** A slice that flips a behavior greps the docs for the claim it
    falsified, not just its own page: search the whole docs tree for the key nouns of the
-   changed behavior and list the hits in the ship-review's Docs line. The two shipped
+   changed behavior and list the hits in the ship-review's Docs line. It also covers what the
+   diff renamed or removed: list every UI label, user-facing term, flag, route or identifier
+   the diff added, renamed or removed, and grep the whole docs tree for each old and new
+   spelling (a lint catches a label that a docs page quotes, not a term it teaches), listing
+   the hits and how each was resolved. The two shipped
    lessons: the alarms-actions cycle-safety premise died on a health slice, and the vendors
    guide died on the products slice; in both, a neighboring page kept teaching the falsified
    claim because only the slice's own page was updated.

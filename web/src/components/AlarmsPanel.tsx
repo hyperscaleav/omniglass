@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
+import AlarmInstance from "./AlarmInstance";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Siren } from "./icons";
@@ -156,7 +157,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <Show when={scale().effect(a.severity) === "none"}>
                     <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
                   </Show>
-                  <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
+                  <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}<AlarmInstance instance={a.instance} /></span>
                   <Tooltip as="span" tabIndex={0} class="shrink-0 text-[11px] text-base-content/45" content={a.raised_at}>
                     raised {rel(a.raised_at)}
                   </Tooltip>
@@ -250,7 +251,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <div class="flex flex-wrap items-start gap-x-2 gap-y-1.5">
                     <span class="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-2 opacity-70">
                       <SeverityBadge name={a.severity} />
-                      <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}</span>
+                      <span class="min-w-0 flex-1 text-[12.5px] text-base-content/70">{a.message || "(no message)"}<AlarmInstance instance={a.instance} /></span>
                       <span class="shrink-0 text-[11px] text-base-content/45">
                         raised {rel(a.raised_at)}
                         <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)} · lasted <AlarmDuration alarm={a} /></Show>

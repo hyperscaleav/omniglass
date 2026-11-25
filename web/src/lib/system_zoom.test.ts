@@ -221,6 +221,29 @@ describe("alarmRows", () => {
     expect(rows.filter((r) => r.id === "al-1")).toHaveLength(1);
   });
 
+  // One rule raises one alarm per endpoint, so a display unplugged from both
+  // its endpoints carries two alarms that read alike but for their instance.
+  it("carries each alarm's instance, so two alarms of one rule on one component tell apart", () => {
+    const twoEndpoints = {
+      ...health,
+      slots: [{
+        name: "display", label: "Main Display", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
+        impaired: true, active: true, assigned_to: ["display-1"], down: ["display-1"],
+        alarms: [
+          { id: "al-snmp", component: "display-1", component_id: uuidFor("sz-c-disp"), severity: "high", message: "Reachability lost", instance: "snmp", raised_at: "2026-08-15T14:20:01Z" },
+          { id: "al-http", component: "display-1", component_id: uuidFor("sz-c-disp"), severity: "high", message: "Reachability lost", instance: "http", raised_at: "2026-08-15T14:20:00Z" },
+          { id: "al-hand", component: "display-1", component_id: uuidFor("sz-c-disp"), severity: "warning", message: "Bezel cracked", raised_at: "2026-08-15T14:00:00Z" },
+        ],
+      }],
+    } as never;
+    const rows = alarmRows(twoEndpoints, SEEDED_LEVELS);
+    expect(rows.map((r) => [r.message, r.instance])).toEqual([
+      ["Reachability lost", "snmp"],
+      ["Reachability lost", "http"],
+      ["Bezel cracked", ""],
+    ]);
+  });
+
   it("names the component by the wire's name and links it by component_id, even off the projection", () => {
     const off = {
       ...health,

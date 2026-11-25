@@ -40,6 +40,22 @@ describe("memberAlarmRows", () => {
     expect(r[1].ongoing).toBe(false);
   });
 
+  // One rule raises one alarm per endpoint, so two alarms of one rule on one
+  // component read apart only by their instance.
+  it("carries each alarm's instance, none for an alarm without one", () => {
+    const r = memberAlarmRows(
+      [alarms("display-1", "c-disp", [
+        { id: "snmp", severity: "high", message: "Reachability lost", instance: "snmp", raised_at: iso(2), active: true },
+        { id: "http", severity: "high", message: "Reachability lost", instance: "http", raised_at: iso(3), active: true },
+        { id: "hand", severity: "warning", message: "Bezel cracked", raised_at: iso(4), active: true },
+      ])],
+      now,
+      24,
+      SEEDED_LEVELS,
+    );
+    expect(r.map((x) => [x.id, x.instance])).toEqual([["snmp", "snmp"], ["http", "http"], ["hand", ""]]);
+  });
+
   it("keeps an alarm raised before the window when it was still active inside it", () => {
     const r = memberAlarmRows(
       [alarms("x", "cx", [{ id: "old", severity: "high", message: "m", raised_at: iso(31 * 24), cleared_at: iso(29 * 24), active: false }])],

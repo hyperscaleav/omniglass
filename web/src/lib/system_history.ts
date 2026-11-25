@@ -15,6 +15,9 @@ export type MemberAlarmRow = {
   id: string;
   severity: string;
   message: string;
+  // What the alarm is about within its component (the endpoint a
+  // reachability alarm names), "" when it has none.
+  instance: string;
   component: string;
   componentId: string;
   raisedAt: string;
@@ -35,6 +38,7 @@ export function memberAlarmRows(members: MemberAlarms[], now: number, windowHour
         id: a.id,
         severity: a.severity,
         message: a.message,
+        instance: a.instance ?? "",
         component: m.component,
         componentId: m.componentId,
         raisedAt: a.raised_at,
