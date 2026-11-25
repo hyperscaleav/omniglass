@@ -1130,9 +1130,10 @@ which the lab's token has), or an alarm history cut at the API's 500-alarm cap. 
 reaches back 30 days, so `--since` may be no older than that. The thresholds are named in
 `internal/lab/soak.go` (`SoakMinWindow`, `SoakAlarmTolerance`, `SoakLossCeiling`).
 
-`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A release needs a
-passing record for its build: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the
-record format and the rule.
+`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A final release
+from 1.0 on needs a passing record for its build; a 0.x release does not, though a 0.x candidate may
+be soaked by choice: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the record format
+and the rule.
 
 ### The manifest format
 
