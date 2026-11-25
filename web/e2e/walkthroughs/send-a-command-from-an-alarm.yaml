@@ -20,6 +20,8 @@ steps:
     caption: The alarm is listed with the controls that act on it.
   - click: { role: button, name: Send command }
     caption: Send command is on the alarm's own row, offered because a driver on this display's endpoints binds a command. It opens the Activity tab's form with this display filled in.
+  - select: { target: { role: combobox, name: Command }, value: set-power }
+    caption: The display has more than one command, so pick the one to send. Set power takes a value from a list.
   - select: { target: { role: combobox, name: Value }, value: 'off' }
     caption: The value is a list of what set-power accepts, so nothing has to be known or typed.
   - click: { role: button, name: Issue, exact: true }
