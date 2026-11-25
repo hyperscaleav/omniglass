@@ -462,6 +462,106 @@ Only a leaf directive alone on its line embeds (`::walkthrough{#id}`, attributes
 directive quoted in code or inside an HTML comment, an inline `:walkthrough`, or a `:::` container
 is not counted as using the declaration.
 
+## Marketing captures
+
+The stills and loops on the hyperscaleav.com Omniglass page are recorded from a real corporate lab, not
+mocked, so a UI change is one command away from a reshoot (#2299). `make marketing-shots
+MARKETING_DEST=<dir>` brings up a corporate lab (`omniglass lab run --scenario corporate --systems 1000`,
+playing the `corporate-outage` omnibot recording, so no capture does live inference), plays every shot in
+[`web/e2e/marketing/shots.yaml`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/marketing/shots.yaml),
+and writes the files and a `shots.json` manifest into the directory. The landing repo points it at
+`public/images/omniglass/shots/` and reads only the manifest, so a reshoot that keeps the shot ids updates
+every image, loop, poster and alt text with no code change there.
+
+A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
+`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 30, for a story such as
+omnibot's answer that cannot be told faster without faking it, or the page's teaser) and at most 1.5 MB (a
+loop allowed past 15 seconds earns that rate for its length, so a 30 second one may weigh 3 MB), with a WebP poster; the recorder re-encodes
+a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
+naming the shot and the limit.
+
+A loop's length is two budgets, because only part of it is the shot list's. What the steps **spend**
+(each `hold`, the recorder's pace: a 250 ms glide before a pointer acts, 35 ms a typed key, 350 ms after a
+page loads, each `lapse`, the 300 ms settle at the end and the camera's last ease out) is held to the
+maximum exactly, when the list is parsed, so a shot that cannot fit fails before any lab starts
+(`authoredSeconds`). Everything else is the lab's: how long a click takes to answer and a wait takes to
+see its target, which a 1,000-system lab on a busy host stretches. The recording may run 15% past the
+maximum for that (`LOOP_TOLERANCE`), and a loop past its maximum at all prints the steps the lab
+stretched most, beside what the list spends on each, so the fix (a `lapse` on a slow wait, a shorter
+hold) is plain rather than a raised maximum (`overrunReport`). A wait on the lab's recorded omnibot spends
+the recording's own `think` pauses, which the parse does not count, so the report shows them as the
+lab's; omnibot-ask's maximum leaves room for them. The recorder copies nothing to the destination until
+every shot has encoded within budget, so a failed run publishes nothing. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
+`select`, `press`, `wait`, and `hold` to linger), plus `call`, with no captions: a capture speaks for itself, and the
+page that hosts it writes the words. A step that never finds its target fails the run, naming the shot,
+the step and what it waited for, and keeps the frame it failed on.
+
+A loop has a camera. A step's `focus` moves it: `here` frames the step's own target, a target of its own
+(`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
+(1 to 3) sets how close; without it the camera fits the target with a margin, never past 3x. A loop is
+watched on a phone too, where the console's 13-pixel text needs 2x or more to read. The camera
+eases over 0.6 s and centres the target, even near the capture's edge, where the frame shows the console's
+own dark base past it; so focus the thing the beat is about, not the panel around it. A target bigger than
+the frame at its `zoom` (a whole card) keeps its top and left edges in view instead, so its heading shows. It eases back to the whole frame before the loop
+ends, so the loop's seam lands on the full view: the recorder keeps recording for that last ease when the
+final step leaves the camera zoomed. A focus on a still, or on a loop's prep, fails the parse.
+
+A focus opens a **beat**, which runs until the next focus or the clip's end. A step's `expect` lists the
+text its beat's frame must show: once that step has played (its `hold` included), the recorder reads the text on screen inside the frame
+(each text node wholly inside it, and not covered by a backdrop or dialog) and checks every string. A
+miss does not stop the run: every shot is still written, and the run fails at its end, naming the shot,
+the step, what was missing and what the frame held. Each loop also gets a **storyboard**, one still per
+beat taken from the finished clip at that moment, in the storyboard folder of the run's output, with each
+beat's in-frame text in `<id>.beats.json` beside the clip. A loop's beats (when each opens, is checked and ends, and
+the part of the capture it frames) ride along in `shots.json`. Write an `expect` from the words the
+page's bullet rests on, as the console renders them (an input's value is not text on screen).
+The recorder takes the loop's frames as screenshots at twice the viewport, as fast as the page allows
+(Playwright's own video has CSS-pixel frames, so a "2x video" is the 1x frame padded with gray), so a 2x zoom
+is still crisp (past 2x the frame is upscaled, a little soft), and writes where each focused target sat on screen. ffmpeg joins the frames, each held for
+as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
+project in `web/e2e/marketing/compose/` then renders the pans and zooms over it, offline, with its
+telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
+half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a click shows a
+teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
+are the framing, the move list, the lit box and the frame timing, unit tested.
+
+A `wait` may take `lapse: N` (seconds, up to 5): the quiet seconds before something changes play in N
+seconds of the clip, a time-lapse, sped up as much as that run's wait needs, up to 40 times
+(`lapseSpeed`), and never slowed down. A loop has 9 seconds to spend and a console that needs five to
+recover (an outpost's next check-in after a credential is fixed) is not one to sit through. The lapse
+fixes the wait's length in the clip, not its speed, so a slower lab makes a faster lapse rather than a
+longer loop; a wait past 40 times its lapse plays longer, and the budget catches it. The clip says
+nothing false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N×
+speed" with that run's speed (`lapseBadges`), so an alarm that takes a minute to raise arrives on camera
+in a second and is never taken for real time.
+
+Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
+part of a path is one address, percent-encoded whole, so a component's path address names one route
+segment), and `wait` polls a GET until a dotted field equals a value. This is how a fault is staged on the
+fleet: the main display of `hq-mr86-1` unplugged through the impairment route, a video bar's login
+repointed at a secret the device refuses. The shipped reachability rule needs about a minute to hold its
+alarm. A loop that shows the fault arriving (`alarm-outage`) unplugs the display as its last setup item and
+waits for the alarm on camera in a `lapse: 0.9`; the others record the console reading a fault that is already
+true. The shots run in the order listed on one lab, and a later shot relies on the state an earlier setup
+left.
+
+A `call` step is the same request in the middle of a clip, off camera: `call: { put: <path>, body: {...} }`.
+It is what happens in the room while the console shows what it makes of it: the teaser
+(`omniglass-teaser`) plugs the boardroom's display back in with one, then waits in a `lapse: 0.6` for the room
+to read healthy. It takes no focus, since nothing on screen moves for it, and the preflight checks the
+resource it names as it does a setup item's.
+
+One thing is hidden and nothing else: the lab banner. The capture-only stylesheet (`CAPTURE_CSS` in
+[`web/e2e/marketinglib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/marketinglib.mjs))
+removes placeholders, never data: no rule reaches a table, a row, a figure or a state.
+
+`MARKETING_DEST` must be set, absolute and an existing directory, and the shot list must parse, with an
+omnibot recording the lab ships; all of that is checked before the lab starts. Once the lab is up and
+before the first shot plays, every component, system and endpoint the list names is checked on that
+lab, so a typo or a fleet that changed fails in seconds, naming the shot. `make test-marketing-shots`
+proves each of those failures, and the shot list's parsing, budget and manifest are unit tested in
+`web/src/marketing-shots.test.ts`.
+
 ## Recording details
 
 Each recorder runs on a lab of its own. `make demo ID=<id>` records one demo of either kind
