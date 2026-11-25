@@ -1242,9 +1242,6 @@ func TestAgentReviewReplyResult(t *testing.T) {
 	}
 }
 
-// A thread the reviewer verified fixed is resolved in the same run, an
-// advisory one included; the thread id is found from the comment when the
-// open-thread list has none.
 // A head the reviewer has already reviewed costs no second review (#2277): a
 // reopen, a relabel, a draft flipped to ready or a manual run on a head that
 // has a completed review by an App bot with the round marker says "seen". A new
@@ -1294,6 +1291,9 @@ func TestAgentReviewSeenSkipsAReviewedHead(t *testing.T) {
 	}
 }
 
+// A thread the reviewer verified fixed is resolved in the same run, an
+// advisory one included; the thread id is found from the comment when the
+// open-thread list has none.
 func TestAgentReviewVerifiedFixedAdvisoryThreadResolves(t *testing.T) {
 	r := `{"head_sha":"abcdef1234","expected":["recheck"],
 		"open_threads":[{"path":"w.yml","line":135,"rule":"r","severity":"advisory","comment_id":21,"thread_id":"T21"}],
