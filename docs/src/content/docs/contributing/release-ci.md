@@ -1,6 +1,6 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR and the release cut from a release branch, by hand or by the one-dispatch 0.x cut."
+description: "The CI gates on every PR and the release cut from a release branch, by hand, and the planned one-command 0.x cut."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
@@ -212,27 +212,41 @@ notes live on the GitHub Release.
 
 `v0.1.0` is the first public build, cut by hand as above once the release App is set up and
 `RELEASES_ENABLED` is on (#1940). After it, a `0.x` release is cut whenever the work calls for
-one, roughly weekly, and cutting one takes a single action (ADR-2652):
+one, roughly weekly, and the version bumps by the conventional commits since the newest final, as
+semantic-release would (ADR-2652). Say the newest final is `v0.4.2`:
 
-- **One dispatch, no inputs.** Dispatching the cut workflow makes the next minor's branch from
-  `main`'s tip: after `v0.4.0`, `release/0.5`. It dispatches a candidate (`v0.5.0-rc.1`) and,
-  once that branch push's CI is green, the final on the same commit (`v0.5.0`). Nobody picks the
-  version, the branch or the commit.
-- **It refuses** when `main` has no commit since the last cut, or `RELEASES_ENABLED` is off.
-- **It never cuts `1.0`.** `1.0` is a hand cut, and it needs [the soak](#the-soak-gate).
+- **A feat or a breaking change** since it makes the next minor: `release/0.5` from `main`'s tip,
+  then `v0.5.0`. Before `1.0`, breaking bumps the minor.
+- **Only fixes and the rest** (`fix`, `perf`, `docs`, `chore` and the like) make the next patch:
+  `release/0.4` fast-forwards to `main`'s tip, then `v0.4.3`. That tip is the commit `main`
+  already ran CI on, so nothing new is committed and nothing can conflict.
+- **Never `1.0`.** `1.0` is a hand cut, and it needs [the soak](#the-soak-gate).
+- **A fix that must ship without `main`'s features** goes by cherry-pick to the release branch
+  and a hand dispatch, which makes it that line's patch (`v0.4.3-rc.1`, then `v0.4.3`). Any other
+  fix waits for the next cut.
+
+Until the one-command cut below is built, each `0.x` cut is these steps by hand: make or
+fast-forward the branch, then dispatch a candidate and a final as above.
+
+:::design[Target design: the one-command 0.x cut, tracked in #2652]
+- **One command.** `make release` fetches `main` and the tags, and prints the next version, the
+  kind of bump (a new branch, or a patch on the current line) and the commits that drove it, then
+  asks to confirm. `make release DRY_RUN=1` previews and stops.
+- **The workflow cuts, not the laptop.** On a yes, `make release` dispatches the cut workflow with
+  the version it showed. The workflow works the bump out again and refuses if `main` moved since
+  the preview, makes or fast-forwards the branch with the release App's token (so the branch push
+  runs CI and the tag ruleset holds), dispatches the candidate and, once that branch push's CI is
+  green, the final on the same commit. Nobody picks the version, the branch or the commit, and the
+  laptop pushes nothing.
+- **It refuses** when `main` has no commit since the newest final, when `RELEASES_ENABLED` is
+  off, or when a patch cannot fast-forward because the branch has a commit `main` lacks.
 - **A nudge, not a schedule.** When the newest final is a week old and `main` has commits since
   it, a scheduled check opens one "a cut is due" issue, and the next cut closes it. Nothing
   scheduled cuts a release.
-- **The version is still the branch's.** The cut only chooses the branch name, and
-  `cmd/releaseversion` works out the tag as it does for a hand dispatch. semantic-release stays
-  out of the path: it would number the first release `1.0.0` from breaking changes made before
-  any release, and cut a release for every merge.
-- **A fix that cannot wait** for the next cut goes by cherry-pick to the newest release branch
-  and a hand dispatch, which makes it that line's patch (`v0.5.1-rc.1`, then `v0.5.1`).
-
-:::note[Not built yet]
-Neither the cut workflow nor the nudge exists yet, so until they land each `0.x` release is cut
-by hand, the same way. The follow-up work is listed on #2652.
+- **The tag is still the branch's.** The cut only chooses between a new branch and a
+  fast-forward, and `cmd/releaseversion` works out the tag as it does for a hand dispatch. The
+  semantic-release tool stays out of the path: it would cut a release for every merge, with no
+  click to approve it.
 :::
 
 Until `1.0`, Omniglass is pre-production software: breaking changes can land in any release,

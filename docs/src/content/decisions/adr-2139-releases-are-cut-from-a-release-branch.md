@@ -30,5 +30,8 @@ refs: [2139, 1940, 1988, 1257, 64]
   The PR title no longer sets the version, only the line it writes in the notes.
 - **Amended by [ADR-2652](#adr-2652-the-soak-gates-10-and-0x-releases-are-cut-on-demand-from-main):** the soak
   in decision 2 gates a final release from `v1.0.0` on; a `0.x` final needs only the CI its
-  release-branch push ran. After `v0.1.0`, each cut, made when wanted by one dispatch, makes the
-  next minor from `main` as a new release branch, and the version rule of decision 4 is unchanged.
+  release-branch push ran. After `v0.1.0`, each cut, made when wanted by `make release`, bumps by
+  the conventional commits since the newest final: a feat or a breaking change makes the next
+  minor's branch from `main`, and fixes alone fast-forward the current branch to `main` for its
+  next patch. The tag rule of decision 4 is unchanged, and decision 3's cherry-pick stays for a fix
+  that must ship without `main`'s features.
