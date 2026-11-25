@@ -29,10 +29,7 @@ git add docs/public/d2                       # commit the artifacts with the dia
 `pnpm diagrams` (`scripts/gen-diagrams.mjs`) reads the raw `d2` blocks from the Markdown and
 shells out to the binary with the same flags as the integration, so the committed SVG is what
 the build expects. A diagram edit that forgets this ships a stale SVG; the build will not catch
-it (it does not render), so the regenerate-and-commit step is the discipline. The generated ERD on
-the data-model page is the exception that is checked: `internal/erd`'s `TestCommittedERDRenderMatchesItsSource`
-compares the committed SVG's text with the D2 source and fails `make test` when a table or column
-differs, so a schema change that regenerates the source but not the render cannot merge.
+it (it does not render), so the regenerate-and-commit step is the discipline.
 
 ## Where it is wired
 
