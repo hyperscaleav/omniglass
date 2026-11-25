@@ -11,6 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // An owner-level question over an instanced key (ADR-0456). `instance` names
@@ -118,9 +119,13 @@ func driverEmitsSQL(driverID, key string) string {
 		driverID, key)
 }
 
-// nativeKeys is every key a native probe writes (probekeys.Native), the keys
-// liveInstanceSQL keeps live on their own endpoint whatever its driver emits.
-func nativeKeys() []string { return probekeys.Native() }
+// nativeKeys is every key liveInstanceSQL keeps live on its own endpoint
+// whatever the driver emits: the keys a native probe writes
+// (probekeys.Native), and the webhook receiver's counts (#1369), which the
+// server writes under the endpoint's name and no driver spec emits.
+func nativeKeys() []string {
+	return append(probekeys.Native(), writerclass.WebhookPostCount, writerclass.WebhookRefusalCount)
+}
 
 // transportNames is every registered transport's name, the vocabulary an
 // endpoint's name is drawn from (latestObservedPerInstanceSQL's $4).
