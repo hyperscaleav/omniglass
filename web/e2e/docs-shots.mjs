@@ -85,7 +85,12 @@ for (const s of specs) {
 
 await mkdir(OUT, { recursive: true });
 await mkdir(BASELINE, { recursive: true });
-const browser = await chromium.launch();
+// Skia picks its raster pipeline per CPU at runtime (SSE2, AVX2, AVX-512), and the
+// paths round a gradient pixel differently by a level (#1860: the users page's
+// avatar, #774). --disable-skia-runtime-opts turns the runtime dispatch off, so
+// every host rasterizes through the one baseline path and a baseline is the same
+// bytes on whatever CPU the capture runs. The exact comparison is never loosened.
+const browser = await chromium.launch({ args: ['--disable-skia-runtime-opts'] });
 
 for (const spec of specs) {
   const ctx = await browser.newContext({
