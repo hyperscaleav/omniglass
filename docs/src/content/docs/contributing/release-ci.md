@@ -1,6 +1,6 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR and the manual release cut from a release branch."
+description: "The CI gates on every PR and the release cut from a release branch, by hand or by the weekly 0.x cut."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
@@ -146,13 +146,16 @@ that branch from its "Run workflow" button (#2139). A dispatch on any other ref 
 first step.
 
 - **A candidate.** A dispatch tags the branch tip as the next candidate, `v0.1.0-rc.1`, and
-  publishes it as a GitHub prerelease with its image and binaries (below). That candidate is
-  what [the soak gate](#the-soak-gate) runs.
+  publishes it as a GitHub prerelease with its image and binaries (below). From `1.0` on, that
+  candidate is what [the soak gate](#the-soak-gate) runs; a `0.x` candidate needs only the CI
+  its branch push already ran (ADR-2652).
 - **A fix.** A fix lands on `main` first, by its own PR, and reaches the branch by a cherry-pick
-  PR into `release/<major>.<minor>`. The next dispatch tags `rc.2`, and its soak starts over.
-- **The release.** Once a candidate has passed the soak, a dispatch with **final** ticked tags
-  that same commit `v0.1.0`, a full release. It is refused unless the commit is the newest
-  candidate, so what ships is exactly what soaked.
+  PR into `release/<major>.<minor>`. The next dispatch tags `rc.2`, and from `1.0` on its soak
+  starts over.
+- **The release.** Once a candidate is ready (its branch push's CI green; from `1.0` on, its
+  soak passed too), a dispatch with **final** ticked tags that same commit `v0.1.0`, a full
+  release. It is refused unless the commit is the newest candidate, so what ships is exactly what
+  was tested.
 - **A patch.** The branch lives on: after `v0.1.0`, the next candidate is `v0.1.1-rc.1`.
 
 The version comes from the branch name and the tags already cut
@@ -205,10 +208,40 @@ make release-plan FINAL=1    # the final release of the newest candidate
 No changelog is ever committed back, so a release never writes to `main` or the branch. The
 notes live on the GitHub Release.
 
+## The weekly 0.x cut
+
+`v0.1.0` is the first public build, cut by hand as above once the release App is set up and
+`RELEASES_ENABLED` is on (#1940). After it, `0.x` releases come on a schedule rather than when
+one feels ready (ADR-2652):
+
+- **Once a week**, a scheduled run makes the next minor's branch from `main`'s tip: after
+  `v0.4.0`, `release/0.5`. It dispatches a candidate (`v0.5.0-rc.1`) and, once that branch push's
+  CI is green, the final on the same commit (`v0.5.0`).
+- **It skips a week** in which `main` has no commit since the last cut, and does nothing while
+  `RELEASES_ENABLED` is off.
+- **It never cuts `1.0`.** `1.0` is a hand cut, and it needs [the soak](#the-soak-gate).
+- **The version is still the branch's.** The run only chooses the branch name, and
+  `cmd/releaseversion` works out the tag as it does for a hand dispatch. semantic-release stays
+  out of the path: it would number the first release `1.0.0` from breaking changes made before
+  any release, and cut a release for every merge.
+- **A fix that cannot wait** for the next week goes by cherry-pick to the newest release branch
+  and a hand dispatch, which makes it that line's patch (`v0.5.1-rc.1`, then `v0.5.1`).
+
+:::note[Not built yet]
+The schedule is not in `release.yml` yet, so until it lands each `0.x` release is cut by hand, the
+same way. The follow-up work is listed on #2652.
+:::
+
+Until `1.0`, Omniglass is pre-production software: breaking changes can land in any release,
+without notice, and it is not for production use. The README and the docs home page say so, and
+every release's notes will too; the notice comes off in the PR that cuts `1.0`.
+
 ## The soak gate
 
-No release ships unless the build has run a week under the 3,000-system corporate soak without
-failing silently (#1988). This is a release blocker run by hand on a test host, never a CI job: a
+From `1.0` on, no final release ships unless the build has run a week under the 3,000-system
+corporate soak without failing silently (#1988). A `0.x` final needs no soak record (ADR-2652):
+the soak can still be run on a `0.x` candidate by choice, and its record is committed the same
+way. The soak is run by hand on a test host, never a CI job: a
 week-long run on a dedicated machine does not belong on a runner, and its scheduling is not
 automated. The steps, between a candidate and its final release:
 
@@ -223,8 +256,8 @@ automated. The steps, between a candidate and its final release:
    omniglass lab soak verdict --since <start> --record-dir docs/src/content/soak-records
    ```
 
-4. Commit the record the command wrote, by a PR to `main`. **No passing record for the
-   candidate's build, no final release.** A failing soak verdict exits 1, names every reason, and is also
+4. Commit the record the command wrote, by a PR to `main`. **From `1.0` on, no passing record
+   for the candidate's build, no final release.** A failing soak verdict exits 1, names every reason, and is also
    recorded; fix the build and run a new week.
 
 The soak verdict is the platform's own, not a harness's figures derived again: it reads through the API
