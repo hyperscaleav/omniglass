@@ -28,6 +28,8 @@ steps:
     caption: Touch Panel 2 is simulated, so it can be broken on purpose.
   - click: { role: button, name: Open simulation }
     caption: Open its simulation.
+  - click: { role: tab, name: Impairments }
+    caption: Impairments are set on their own tab.
   - click: '#sim-unplugged'
     caption: Unplug it. Every poll of it now fails.
   - click: { role: button, name: Save impairment }

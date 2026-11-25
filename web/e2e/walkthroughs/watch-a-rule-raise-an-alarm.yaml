@@ -28,6 +28,8 @@ steps:
     caption: Touch Panel 2 fills the Touch Control slot of Media Lab Teaching 2. It reads healthy.
   - click: { role: button, name: Open simulation }
     caption: The panel is simulated, so it can be broken on purpose from its own page.
+  - click: { role: tab, name: Impairments }
+    caption: Impairments are set on their own tab.
   - click: '#sim-unplugged'
     caption: Unplug it. The simulated panel goes dark on every protocol, as if its cable were pulled.
   - click: { role: button, name: Save impairment }
