@@ -25,6 +25,8 @@ name: docs-shots
 
 on:
   pull_request:
+    # ready_for_review runs a draft's skipped checks; labeled starts a draft's opt-in (run:test).
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - docs/**
       - web/**
@@ -39,6 +41,13 @@ permissions:
 
 jobs:
   verify:
+    # A draft runs none of this (#2309): marking it ready runs it on the current
+    # head, and a run:test label on a draft opts in. The job reports skipped on a
+    # draft, so the check is not missing. Pushes and queue entries always run.
+    if: >-
+      github.event_name != 'pull_request'
+      || ((!github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run:test'))
+        && (github.event.action != 'labeled' || github.event.label.name == 'run:test'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
