@@ -17,6 +17,7 @@ import {
   buildManifest,
   cameraTrack,
   lapseBadges,
+  MIN_LAPSE_BADGE,
   spotFor,
   MAX_FAST,
   LOOP_TOLERANCE,
@@ -270,11 +271,10 @@ describe("addresses and conditions", () => {
 });
 
 describe("the capture-only stylesheet", () => {
-  it("hides the lab banner and a soon nav item, and nothing else", () => {
+  it("hides the lab banner, and nothing else", () => {
     expect(CAPTURE_CSS).toContain('[data-testid="lab-banner"]');
-    expect(CAPTURE_CSS).toContain("li:has(> a > [data-soon])");
     // Placeholders go; data never does: no rule reaches a table, a row or a figure.
-    expect(CAPTURE_CSS.split("\n")).toHaveLength(2);
+    expect(CAPTURE_CSS.split("\n")).toHaveLength(1);
     expect(CAPTURE_CSS).not.toMatch(/table|tr\b|treeitem|health|alarm/i);
   });
 });
@@ -474,6 +474,13 @@ describe("the spotlight and the sped-up badge", () => {
       { from: 1, to: 2, speed: 2 },
       { from: 4, to: 5.875, speed: 32 },
     ]);
+  });
+
+  it("badges a lapse that plays exactly the shortest badged length, whatever rounding does", () => {
+    for (const [from, real] of [[12.345, 3.333], [4.2, 5.7], [0.1, 9.9]]) {
+      const lapses = [{ from, to: from + real, speed: lapseSpeed(real, MIN_LAPSE_BADGE) }];
+      expect(lapseBadges(lapses)).toHaveLength(1);
+    }
   });
 
   it("reads a lapse's derived speed as a whole number on its badge", () => {

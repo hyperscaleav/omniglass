@@ -79,12 +79,11 @@ const isObj = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null 
 const isStr = (/** @type {unknown} */ v) => typeof v === 'string' && v.length > 0;
 
 // The capture-only stylesheet: it removes placeholders, never data. The lab
-// banner says the instance is a lab, and a `soon` nav item is a destination that
-// has not landed; neither belongs in a picture of the product. Everything else
-// the console renders stays, the figures and the states included.
+// banner says the instance is a lab, which does not belong in a picture of the
+// product. Everything else the console renders stays, the figures and the
+// states included.
 export const CAPTURE_CSS = [
   '[data-testid="lab-banner"] { display: none !important; }',
-  'li:has(> a > [data-soon]) { display: none !important; }',
 ].join('\n');
 
 /**
@@ -810,9 +809,13 @@ export function spotFor(box, vp) {
  * @returns {Lapse[]}
  */
 export function lapseBadges(lapses) {
+  // A lapse plays exactly its seconds, so one given the shortest badged length
+  // sits on the line: the comparison allows for floating-point error, or half
+  // of them would lose their badge to rounding.
   return lapses
-    .map((w) => ({ from: round(retime(w.from, lapses)), to: round(retime(w.to, lapses)), speed: Math.round(w.speed) }))
-    .filter((w) => w.to - w.from >= MIN_LAPSE_BADGE);
+    .map((w) => ({ from: retime(w.from, lapses), to: retime(w.to, lapses), speed: w.speed }))
+    .filter((w) => w.to - w.from >= MIN_LAPSE_BADGE - 1e-6)
+    .map((w) => ({ from: round(w.from), to: round(w.to), speed: Math.round(w.speed) }));
 }
 export const MIN_LAPSE_BADGE = 0.6;
 

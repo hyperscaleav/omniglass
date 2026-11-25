@@ -333,7 +333,8 @@ shots:
   #   2. One click opens the component behind it.
   #   3. Its outage and vitals, beside the rooms it serves.
   # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
-  # rule needs about a minute to hold its alarm, and that minute plays at 32x.
+  # rule needs about a minute to hold its alarm, and that minute plays as a
+  # lapse, sped up as far as 40x.
   - id: alarm-outage
     kind: loop
     max_seconds: 12

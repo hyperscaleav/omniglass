@@ -488,7 +488,10 @@ maximum exactly, when the list is parsed, so a shot that cannot fit fails before
 see its target, which a 1,000-system lab on a busy host stretches. The recording may run 15% past the
 maximum for that (`LOOP_TOLERANCE`), and a loop past its maximum at all prints the steps the lab
 stretched most, beside what the list spends on each, so the fix (a `lapse` on a slow wait, a shorter
-hold) is plain rather than a raised maximum (`overrunReport`). Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
+hold) is plain rather than a raised maximum (`overrunReport`). A wait on the lab's recorded omnibot spends
+the recording's own `think` pauses, which the parse does not count, so the report shows them as the
+lab's; omnibot-ask's maximum leaves room for them. The recorder copies nothing to the destination until
+every shot has encoded within budget, so a failed run publishes nothing. Steps use the walkthrough grammar (`goto`, `click`, `hover`, `type`,
 `select`, `press`, `wait`, and `hold` to linger), plus `call`, with no captions: a capture speaks for itself, and the
 page that hosts it writes the words. A step that never finds its target fails the run, naming the shot,
 the step and what it waited for, and keeps the frame it failed on.
@@ -548,11 +551,9 @@ It is what happens in the room while the console shows what it makes of it: the 
 to read healthy. It takes no focus, since nothing on screen moves for it, and the preflight checks the
 resource it names as it does a setup item's.
 
-Two things are hidden and nothing else: the lab banner, and a sidebar item still marked `soon`. The
-capture-only stylesheet (`CAPTURE_CSS` in
+One thing is hidden and nothing else: the lab banner. The capture-only stylesheet (`CAPTURE_CSS` in
 [`web/e2e/marketinglib.mjs`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/marketinglib.mjs))
-removes placeholders, never data: no rule reaches a table, a row, a figure or a state. The sidebar marks
-each `soon` badge with `data-soon` so the rule has a stable hook.
+removes placeholders, never data: no rule reaches a table, a row, a figure or a state.
 
 `MARKETING_DEST` must be set, absolute and an existing directory, and the shot list must parse, with an
 omnibot recording the lab ships; all of that is checked before the lab starts. Once the lab is up and

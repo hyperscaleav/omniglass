@@ -167,7 +167,7 @@ func TestReplayThinksBeforeATurn(t *testing.T) {
 	t.Parallel()
 	r, err := ParseReplay([]byte(`
 turns:
-  - think: 60ms
+  - think: 1s
     reasoning: Read the components first.
     tool_calls:
       - name: list-components
@@ -185,14 +185,16 @@ turns:
 	if first.Reasoning != "Read the components first." {
 		t.Errorf("first turn's reasoning = %q, want the recorded thinking", first.Reasoning)
 	}
-	if d := time.Since(start); d < 60*time.Millisecond {
-		t.Errorf("first turn arrived after %s, want at least its 60ms think", d)
+	if d := time.Since(start); d < time.Second {
+		t.Errorf("first turn arrived after %s, want at least its 1s think", d)
 	}
 	start = time.Now()
 	if _, err := r.Next(ctx, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d > 50*time.Millisecond {
+	// Half the think: wide enough that a loaded host does not flake it, and
+	// still well short of a think wrongly applied to this turn.
+	if d := time.Since(start); d > 500*time.Millisecond {
 		t.Errorf("a turn with no think took %s", d)
 	}
 
@@ -200,8 +202,8 @@ turns:
 	if _, err := r.Positioned().Next(ctx, []Message{{Role: RoleUser, Text: "hi"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if d := time.Since(start); d < 60*time.Millisecond {
-		t.Errorf("positioned first turn arrived after %s, want at least 60ms", d)
+	if d := time.Since(start); d < time.Second {
+		t.Errorf("positioned first turn arrived after %s, want at least 1s", d)
 	}
 
 	cancelled, cancel := context.WithCancel(ctx)

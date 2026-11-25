@@ -99,14 +99,14 @@ compose_shot() {
   return "$rc"
 }
 
-# Encode shot $1 of kind $2 from $OUT into $3 (the destination), fitting the
-# budget; prints nothing on success.
+# Encode shot $1 of kind $2 in $OUT, fitting the budget ($3, its maximum); prints
+# its line on success. Nothing reaches the destination here: publish copies every
+# shot at once, and only when all of them encoded within budget.
 encode_shot() {
-  local id=$1 kind=$2 dest=$3 max=$4 seconds bytes crf
+  local id=$1 kind=$2 max=$3 seconds bytes crf
   if [ "$kind" = still ]; then
     ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.png" \
       -c:v libwebp -quality "$WEBP_QUALITY" -compression_level 6 "/o/$id.webp" || return 1
-    cp -- "$OUT/$id.webp" "$dest/$id.webp"
     return 0
   fi
   # The frames at twice the viewport, held for as long as each was on screen, at a
@@ -129,9 +129,15 @@ encode_shot() {
   mk budget "$id" "$seconds" "$bytes" "$max" "${OUT#web/}/$id.steps.json" || return 1
   ffmpeg_in "$OUT" "$FFMPEG_IMG" -hide_banner -loglevel error -y -i "/o/$id.png" \
     -c:v libwebp -quality "$WEBP_QUALITY" -compression_level 6 "/o/$id.webp" || return 1
-  cp -- "$OUT/$id.mp4" "$dest/$id.mp4"
-  cp -- "$OUT/$id.webp" "$dest/$id.webp"
   printf '  %s: %ss, %s bytes (crf %s)\n' "$id" "$(printf '%.1f' "$seconds")" "$bytes" "$crf" >&2
+}
+
+# Copy shot $1 of kind $2 from $OUT into $3 (the destination): a still's WebP, a
+# loop's MP4 and poster. Fails on the first copy that does.
+publish_shot() {
+  local id=$1 kind=$2 dest=$3
+  cp -- "$OUT/$id.webp" "$dest/$id.webp" || return 1
+  [ "$kind" != loop ] || cp -- "$OUT/$id.mp4" "$dest/$id.mp4" || return 1
 }
 
 # The storyboard of loop $1: one still per beat, taken from the finished clip
@@ -219,13 +225,21 @@ compose_deps
 echo "encoding" >&2
 failed=0
 while read -r id kind max; do
-  encode_shot "$id" "$kind" "$MARKETING_DEST" "$max" || failed=1
+  encode_shot "$id" "$kind" "$max" || failed=1
   [ "$kind" != loop ] || storyboard_shot "$id" || echo "marketing: $id: the storyboard failed (the clip is fine)" >&2
 done < <(mk ids "$SHOTS_W")
 [ "$failed" = 0 ] || {
   echo "marketing: a shot is over budget or failed to encode (above); nothing was published" >&2
   exit 1
 }
+# Every shot encoded within budget: only now does any of them reach the
+# destination, so a failed run never leaves a mix of new clips and an old manifest.
+while read -r id kind _; do
+  publish_shot "$id" "$kind" "$MARKETING_DEST" || {
+    echo "marketing: $id: could not be copied to $MARKETING_DEST" >&2
+    exit 1
+  }
+done < <(mk ids "$SHOTS_W")
 mk manifest "$SHOTS_W" "$MARKETING_DEST" "${OUT#web/}/dims.json"
 echo "marketing: captures written to $MARKETING_DEST; storyboards in $OUT/storyboard"
 # The frame check: a beat whose frame did not show its expected text (shots.yaml
