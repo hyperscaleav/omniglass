@@ -213,10 +213,12 @@ or `↩️ <point> · Not changed`, with its reasons collapsed under them. A poi
 only when its commit is one the run pushed.
 
 agent-fix also answers each review thread it read, as the agent App, never a person (#2217). The
-agent gives every thread its own point, including the open threads from earlier reviews that
-its push settles, and the workflow does the rest after the run:
+agent gives every thread its own point, including the open threads from earlier reviews, and the
+workflow does the rest after the run:
 
-- **Fixed.** A thread a pushed commit fixed gets `✅ Fixed in <sha>` and is resolved.
+- **Fixed.** A thread a commit this run pushed fixed gets `✅ Fixed in <sha>` and is resolved. A
+  thread an earlier commit already fixed is not this run's to claim: it is left open, and the
+  reviewer resolves it once a re-review no longer raises it.
 - **Not changed.** A thread the agent read and left gets `↩️ Not changed: <reason>` and stays open
   for a person. The exception is an advisory finding (the reviewer's comment says
   `severity=advisory`) where the agent marks no change as the right answer: it gets

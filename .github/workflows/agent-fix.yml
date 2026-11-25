@@ -343,8 +343,9 @@ jobs:
             comment's id, when the point came from one) and, for an unchanged point on an
             advisory finding where no change is the right answer, no_change_needed: true.
             Give every thread you read its own point, the open threads listed from earlier
-            reviews included: a thread you fix, or one an earlier commit already fixed, is
-            "fixed" with that commit's sha. The workflow posts one line per point on the PR,
+            reviews included. Only a commit you make in this run counts as a fix: a thread
+            an earlier commit already fixed is "unchanged", and the reviewer resolves it once
+            it no longer raises it. The workflow posts one line per point on the PR,
             and as the agent App replies on each thread (naming the commit for a fixed one, the
             reason for one you left) and resolves the fixed ones. A thread you did not change
             stays open for a person. Anything else worth saying, such as the preflight step
