@@ -1245,6 +1245,55 @@ func TestAgentReviewReplyResult(t *testing.T) {
 // A thread the reviewer verified fixed is resolved in the same run, an
 // advisory one included; the thread id is found from the comment when the
 // open-thread list has none.
+// A head the reviewer has already reviewed costs no second review (#2277): a
+// reopen, a relabel, a draft flipped to ready or a manual run on a head that
+// has a completed review by an App bot with the round marker says "seen". A new
+// commit, a forced run and the review:deep label always review.
+func TestAgentReviewSeenSkipsAReviewedHead(t *testing.T) {
+	const head = "abcdef1234567890abcdef1234567890abcdef12"
+	marker := `ok\n<!-- agent-review round blocking=0 head=abcdef1234567890abcdef1234567890abcdef12 -->`
+	rev := func(id int, user, typ, state, commit, body string) string {
+		return `{"id":` + strconv.Itoa(id) + `,"user":"` + user + `","type":"` + typ + `","state":"` + state + `","commit_id":"` + commit + `","body":"` + body + `"}`
+	}
+	seen := func(event, action, label string, force bool, reviews ...string) string {
+		in := `{"head_sha":"` + head + `","event":"` + event + `","action":"` + action + `","label":"` + label +
+			`","force":` + strconv.FormatBool(force) + `,"reviews":[` + strings.Join(reviews, ",") + `]}`
+		out, code := agentReview(t, in, "seen")
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+		return out
+	}
+	done := rev(7, "reviewer[bot]", "Bot", "COMMENTED", head, marker)
+	cases := []struct {
+		name, want string
+		got        string
+	}{
+		{"reopened on a reviewed head", "seen: 7", seen("pull_request", "reopened", "", false, done)},
+		{"ready_for_review on a reviewed head", "seen: 7", seen("pull_request", "ready_for_review", "", false, done)},
+		{"a changes-requested review counts", "seen: 8", seen("pull_request", "reopened", "", false, rev(8, "reviewer[bot]", "Bot", "CHANGES_REQUESTED", head, marker))},
+		{"the newest of several is named", "seen: 9", seen("pull_request", "reopened", "", false, done, rev(9, "agent[bot]", "Bot", "COMMENTED", head, marker))},
+		{"a manual run on a reviewed head", "seen: 7", seen("workflow_dispatch", "", "", false, done)},
+		{"a push always reviews", "review", seen("pull_request", "synchronize", "", false, done)},
+		{"a forced manual run reviews", "review", seen("workflow_dispatch", "", "", true, done)},
+		{"review:deep always reviews", "review", seen("pull_request", "labeled", "review:deep", false, done)},
+		{"another head has no review of this one", "review", seen("pull_request", "reopened", "", false, rev(7, "reviewer[bot]", "Bot", "COMMENTED", "1111111111111111111111111111111111111111", marker))},
+		{"a pending review is not complete", "review", seen("pull_request", "reopened", "", false, rev(7, "reviewer[bot]", "Bot", "PENDING", head, marker))},
+		{"a dismissed review is not", "review", seen("pull_request", "reopened", "", false, rev(7, "reviewer[bot]", "Bot", "DISMISSED", head, marker))},
+		{"a person's review is not the reviewer's", "review", seen("pull_request", "reopened", "", false, rev(7, "fred", "User", "COMMENTED", head, marker))},
+		{"a bot review with no round marker is not the reviewer's", "review", seen("pull_request", "reopened", "", false, rev(7, "dependabot[bot]", "Bot", "COMMENTED", head, "bump"))},
+		{"no reviews", "review", seen("pull_request", "reopened", "", false)},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
+		}
+	}
+	if _, code := agentReview(t, `{"reviews":[]}`, "seen"); code != 2 {
+		t.Fatalf("input with no head: exit %d, want 2", code)
+	}
+}
+
 func TestAgentReviewVerifiedFixedAdvisoryThreadResolves(t *testing.T) {
 	r := `{"head_sha":"abcdef1234","expected":["recheck"],
 		"open_threads":[{"path":"w.yml","line":135,"rule":"r","severity":"advisory","comment_id":21,"thread_id":"T21"}],

@@ -198,6 +198,19 @@ review. The `plan` job waits for the PR's other checks, 15 minutes at most, then
 holds: the check goes red and says why. Push a fix that turns the PR green, and that push is
 reviewed. A `review:deep` label is never held.
 
+### A reviewed head is not reviewed twice
+
+agent-review runs on opened, synchronize, reopened, ready_for_review, labeled and a manual dispatch,
+so the same head commit can come up more than once. Before any wait or model call, `plan` asks
+`agent-review.sh seen` (#2277): is there a completed review on this head by an App bot (not pending,
+not dismissed, carrying the round marker every review ends with)? If so the run makes no model call
+and says so in its job summary, naming the review. A PR run then re-reads the reviewer's ruling, so the
+required check still reports what the earlier review said; a manual run just stops.
+
+A push of a new commit always reviews, since the new head has no review of its own. So do the
+`review:deep` label and a manual run started with `force: true`. A draft that was skipped as a draft
+has no review, so marking it ready reviews it.
+
 ## Asking for a fix
 
 Mention `@hyperscale-agent` in a PR comment or a review comment, or submit a review that requests
