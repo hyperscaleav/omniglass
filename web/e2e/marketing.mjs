@@ -433,9 +433,10 @@ function writeFrames(frames, out, id) {
 const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
 
 /**
- * The text on screen inside a part of the page, in document order: each text
- * node wholly inside it, shown, and not covered by something else at its middle
- * (a blade's dimmed backdrop, a dialog).
+ * The text on screen inside a part of the page: each text node wholly inside
+ * it, shown, and not covered by something else at its middle (a blade's dimmed
+ * backdrop, a dialog), in document order, then each form control's shown value
+ * (a select's chosen option, a text field's value) by the same tests.
  * @param {import('@playwright/test').Page} page
  * @param {import('./marketinglib.mjs').Box} r in viewport pixels
  * @returns {Promise<string[]>}
@@ -457,6 +458,25 @@ function textInside(page, r) {
       if (!inside) continue;
       const top = document.elementFromPoint(boxes[0].left + boxes[0].width / 2, boxes[0].top + boxes[0].height / 2);
       if (top && !el.contains(top) && !top.contains(el)) continue;
+      out.push(text);
+    }
+    // A form control draws its own text: a select its chosen option, a text
+    // field its value. Neither is a text node the walk above reaches, so each
+    // is read from the control and boxed by the control itself.
+    const typed = new Set(['', 'text', 'search', 'email', 'url', 'tel', 'number']);
+    for (const c of document.querySelectorAll('select, input, textarea')) {
+      const raw =
+        c instanceof HTMLSelectElement ? (c.selectedOptions[0]?.text ?? '')
+        : c instanceof HTMLInputElement ? (typed.has(c.type) ? c.value : '')
+        : c instanceof HTMLTextAreaElement ? c.value
+        : '';
+      const text = raw.replace(/\s+/g, ' ').trim();
+      if (!text || !c.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+      const b = c.getBoundingClientRect();
+      if (b.width <= 0 || b.height <= 0) continue;
+      if (b.left < r.x - 1 || b.top < r.y - 1 || b.right > r.x + r.width + 1 || b.bottom > r.y + r.height + 1) continue;
+      const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      if (top && !c.contains(top) && !top.contains(c)) continue;
       out.push(text);
     }
     return out;
