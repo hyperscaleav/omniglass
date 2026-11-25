@@ -75,12 +75,17 @@ ffmpeg_in() {
 COMPOSE=web/e2e/marketing/compose
 
 # The camera pass's packages, installed once in the Playwright image (it renders
-# with that image's Chromium, so puppeteer downloads none).
+# with that image's Chromium, so puppeteer downloads none) with the repo's one
+# pnpm (#2717): the image has none, so the pinned version goes on a scratch
+# prefix first, a tool install rather than the project's.
 compose_deps() {
   [ -d "$COMPOSE/node_modules/@revideo/renderer" ] && return 0
   echo "installing the camera pass (web/e2e/marketing/compose)" >&2
+  local pnpm
+  pnpm=$(node -p 'require("./'"$COMPOSE"'/package.json").packageManager') || return 1
   docker run --rm "${LAB_LABEL_ARGS[@]}" --user "$(id -u):$(id -g)" -e HOME=/tmp \
-    -e PUPPETEER_SKIP_DOWNLOAD=1 -e DISABLE_TELEMETRY=true -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" npm ci --no-audit --no-fund &
+    -e PUPPETEER_SKIP_DOWNLOAD=1 -e DISABLE_TELEMETRY=true -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" \
+    sh -c 'npm install -g --prefix /tmp/pnpm "$1" --no-audit --no-fund >/dev/null && /tmp/pnpm/bin/pnpm install --frozen-lockfile' sh "$pnpm" &
   LAB_FG_PID=$!
   wait "$LAB_FG_PID" || { LAB_FG_PID=""; return 1; }
   LAB_FG_PID=""

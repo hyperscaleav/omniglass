@@ -7,7 +7,7 @@
 // ({ viewport, events, lapses }), <seconds> the clip's length. The moves come from
 // cameraTrack (web/e2e/marketinglib.mjs, unit tested); Revideo renders them at
 // the viewport's size. web/e2e/marketing.sh runs this offline in the
-// Playwright image, after `npm ci` here.
+// Playwright image, after a pnpm install here (compose_deps).
 import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
