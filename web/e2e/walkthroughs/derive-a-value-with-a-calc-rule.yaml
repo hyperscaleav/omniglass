@@ -40,5 +40,5 @@ steps:
     caption: Its blade shows the value it last computed on each component.
   - click: 'section[aria-label="State"] li a >> nth=0'
     caption: Open one of those components.
-  - wait: { selector: '[data-testid="leaf-vitals"] a[href*="/calc-rules?rule="]', timeout: 15000 }
+  - wait: { selector: '[data-testid="leaf-vitals"] a[href*="/calc-rules?open="]', timeout: 15000 }
     caption: Among its vitals is the derived value, linked to the calc rule that wrote it.
