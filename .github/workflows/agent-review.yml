@@ -103,7 +103,7 @@ env:
             pageInfo { hasNextPage endCursor }
             nodes {
               id isResolved isOutdated path line startLine originalLine originalStartLine
-              comments(first: 1) { nodes { databaseId url body author { login } } }
+              comments(first: 1) { totalCount nodes { databaseId url body author { login } } }
             }
           }
         }
@@ -865,16 +865,21 @@ jobs:
           # followups exits 2 on bad input in the #2224 script and 64 (unknown)
           # in older copies, which have no threads either.
           probe=0; printf '{}' | bash "$script" followups >/dev/null 2>&1 || probe=$?
+          # The reviewer's resolved advisory threads only keep an advisory no one
+          # fixed from being posted again (#2222): advisories are resolved as they
+          # are posted, so they are not in the open threads.
+          resolved='[]'
           if [ "$probe" -eq 2 ]; then
-            open=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+            all=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
                 -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
-              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
-              | bash "$script" threads)
+              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}')
+            open=$(bash "$script" threads <<<"$all")
             echo "$(jq length <<<"$open") open finding(s) carried forward"
+            resolved=$(bash "$script" resolved-advisories <<<"$all" 2>/dev/null) || resolved='[]'
           fi
           results=$(jq -s -c --arg sha "$HEAD_SHA" --argjson expected "$EXPECTED" \
-            --arg poster "$POSTER" --arg author "$AUTHOR" --argjson open "$open" \
-            '{head_sha: $sha, expected: $expected, lenses: ., open_threads: $open,
+            --arg poster "$POSTER" --arg author "$AUTHOR" --argjson open "$open" --argjson resolved "$resolved" \
+            '{head_sha: $sha, expected: $expected, lenses: ., open_threads: $open, resolved_advisories: $resolved,
               own_pr: (($poster | ascii_downcase) == ($author | ascii_downcase))}' "$RUNNER_TEMP"/lens/*.json)
           bash "$script" review <<<"$results" > "$RUNNER_TEMP/review.json"
           jq -r '"\(.event): \(.comments | length) inline, body \(.body | length) chars"' "$RUNNER_TEMP/review.json"
@@ -900,6 +905,23 @@ jobs:
                     -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
                   || echo "::warning::agent-review: could not resolve thread ${id}"
               fi
+            done
+          fi
+          # Advisory findings stay inline, resolved, so they read as findings but
+          # do not hold the merge open ("Protect main" counts every unresolved
+          # thread, #2222). A blocking finding keeps its thread unresolved. The
+          # threads are read again, after the review above and the recheck
+          # resolves, so only what is still open is listed. A failure leaves a
+          # thread open, which only keeps it blocking the merge.
+          probe=0; printf '{}' | bash "$script" advisory-threads >/dev/null 2>&1 || probe=$?
+          if [ "$probe" -eq 2 ]; then
+            gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+                -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
+              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
+              | bash "$script" advisory-threads | jq -c '.[]' | while IFS= read -r t; do
+              gh api graphql -F id="$(jq -r '.thread_id' <<<"$t")" \
+                  -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
+                || echo "::warning::agent-review: could not resolve advisory thread $(jq -r '.comment_id' <<<"$t")"
             done
           fi
 
