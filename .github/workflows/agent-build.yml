@@ -254,11 +254,20 @@ jobs:
             nothing to demo. Then run the tag lint on it:
             PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag
             Fix the body until it passes, and open the PR with
-            gh pr create --draft --body-file body.md. Never pass --body. Before you mark the PR ready,
-            git fetch origin main and run scripts/agent-sync.sh merge origin/main, resolve
-            any conflicts it lists, and run make preflight again. When it passes and
-            /ship-slice is clean, mark it ready with gh pr ready: that starts agent-review,
-            and its findings come back to agent-fix. Leave the PR a draft if it is not done.
+            gh pr create --draft --body-file body.md. Never pass --body.
+
+            Before you mark the PR ready, review your own work the way agent-review will, in
+            this order, because each reviewer round costs 30 to 40 minutes and what you
+            catch here it does not: (1) run /adversarial-review on the full diff
+            (git diff origin/main...HEAD), which sweeps the same anti-pattern catalog the
+            reviewer's lenses check, and fix what it finds; (2) the neighbor check: list every
+            UI label, user-facing term, flag, route or identifier the diff added, renamed or
+            removed, and grep the whole docs tree for each old and new spelling, fixing every
+            hit or naming it in the PR body's Docs line; (3) git fetch origin main and run
+            scripts/agent-sync.sh merge origin/main, resolve any conflicts it lists, and run
+            make preflight until it passes; (4) when /ship-slice is clean, mark it ready with
+            gh pr ready: that starts agent-review, and its findings come back to agent-fix.
+            Leave the PR a draft if it is not done.
             Do not move the board to In Review: linking the PR does that.
 
             Never end your turn with work outstanding. Wait in the foreground: a Bash call
