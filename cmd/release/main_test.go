@@ -106,6 +106,27 @@ func TestDryRunPreviewsTheMinorAndCreatesNothing(t *testing.T) {
 	}
 }
 
+// A tag deleted on the remote, or never pushed, names no line: the decision
+// reads the remote's tags.
+func TestTheRemotesTagsDecide(t *testing.T) {
+	f := newFixture(t)
+	f.git(f.clone, "tag", "v0.0.0")
+	f.git(f.clone, "tag", "v0.3.0-rc.1")
+	f.git(f.clone, "push", "--quiet", "origin", "main", "--tags")
+	f.git(f.remote, "tag", "-d", "v0.3.0-rc.1")
+	f.git(f.clone, "tag", "v0.5.0")
+	f.commit("feat: a feature (#9)")
+	f.git(f.clone, "push", "--quiet", "origin", "main")
+
+	out, err := f.run(options{dryRun: true}, "")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Next release: v0.1.0") || !strings.Contains(out, "since v0.0.0") {
+		t.Errorf("a deleted or local-only tag named the line:\n%s", out)
+	}
+}
+
 // The fetch prunes deleted release branches but never a local tag.
 func TestFetchPrunesReleaseBranchesNotTags(t *testing.T) {
 	f := newFixture(t)

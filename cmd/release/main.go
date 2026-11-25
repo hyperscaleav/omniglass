@@ -64,8 +64,8 @@ func run(o options, in io.Reader, out io.Writer) error {
 	}
 	remoteRelease := "refs/remotes/" + o.remote + "/release/"
 	// Prune only the release branches, so a deleted branch stops naming a
-	// line. Tags are fetched apart and never pruned, so a local tag the remote
-	// lacks survives.
+	// line. Tags are fetched apart, for the log ranges, and never pruned, so a
+	// local tag the remote lacks survives.
 	if _, err := g.out("fetch", "--quiet", "--no-tags", "--prune", o.remote,
 		"+refs/heads/"+o.main+":refs/remotes/"+o.remote+"/"+o.main,
 		"+refs/heads/release/*:"+remoteRelease+"*"); err != nil {
@@ -83,7 +83,10 @@ func run(o options, in io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	tags, err := g.lines("tag", "--list", "v*")
+	// The line and the version are read from the remote's tags, not the
+	// clone's: a tag deleted on the remote (a mis-cut candidate) lingers in a
+	// clone, and a local-only tag was never released.
+	tags, err := g.remoteTags(o.remote)
 	if err != nil {
 		return err
 	}
@@ -297,6 +300,21 @@ func (g gitRunner) out(args ...string) (string, error) {
 func (g gitRunner) lines(args ...string) ([]string, error) {
 	b, err := g.raw(args...)
 	return strings.Fields(string(b)), err
+}
+
+// remoteTags lists the remote's v* tags, as the release decision reads them.
+func (g gitRunner) remoteTags(remote string) ([]string, error) {
+	lines, err := g.lines("ls-remote", "--tags", "--refs", remote, "refs/tags/v*")
+	if err != nil {
+		return nil, err
+	}
+	var tags []string
+	for _, f := range lines {
+		if t, ok := strings.CutPrefix(f, "refs/tags/"); ok {
+			tags = append(tags, t)
+		}
+	}
+	return tags, nil
 }
 
 // log reads a range along first parents, newest first, as the release

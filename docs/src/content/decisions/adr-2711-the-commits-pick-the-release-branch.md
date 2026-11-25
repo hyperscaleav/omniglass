@@ -9,7 +9,8 @@ refs: [2711, 2139, 2142]
 - **Date:** 2026-11-25 | **Status:** Accepted | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual)
 - **Decision:** (#2711, asked for by the architect: cutting a release should take no thought.) Refines item 4 of
   [ADR-2139](/architecture/decisions/#adr-2139-releases-are-cut-from-a-release-branch):
-  1. **The commits pick the line.** `cmd/release` (`make release`) reads `main` since the newest release line
+  1. **The commits pick the line.** `cmd/release` (`make release`) reads the remote's release branches and tags (a tag
+     deleted on the remote no longer counts, a local-only one never does) and `main` since the newest release line
      branched (its `release/<major>.<minor>` branch, else its newest tag) as conventional commits, with the same
      parser the notes use (`releasenotes.Parse`). A `feat` bumps the minor, a `fix` or `perf` the patch, anything
      else alone releases nothing.
