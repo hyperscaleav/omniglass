@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
+import AlarmInstance from "./AlarmInstance";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import TabRail from "./TabRail";
@@ -359,7 +360,7 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                             <Show when={scale().effect(a.severity) === "none"}>
                               <span class="shrink-0 text-[11px] text-base-content/45" data-testid="alarm-no-effect">does not affect health</span>
                             </Show>
-                            <span class="min-w-0 flex-1 basis-48 break-words" data-testid="alarm-message">{a.message}</span>
+                            <span class="min-w-0 flex-1 basis-48 break-words" data-testid="alarm-message">{a.message}<AlarmInstance instance={a.instance} /></span>
                             <Show when={a.raised_by_rule}>
                               {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
                             </Show>

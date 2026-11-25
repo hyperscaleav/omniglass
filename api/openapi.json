@@ -712,6 +712,10 @@
           "id": {
             "type": "string"
           },
+          "instance": {
+            "description": "What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component",
+            "type": "string"
+          },
           "location": {
             "description": "The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue",
             "type": "string"
@@ -7707,6 +7711,10 @@
             "type": "string"
           },
           "id": {
+            "type": "string"
+          },
+          "instance": {
+            "description": "What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component",
             "type": "string"
           },
           "message": {

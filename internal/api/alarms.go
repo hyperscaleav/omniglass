@@ -45,6 +45,7 @@ type alarmBody struct {
 	Severity       string     `json:"severity" doc:"The severity level the alarm was raised at, by name (see /severity-levels)"`
 	Message        string     `json:"message"`
 	DedupKey       string     `json:"dedup_key" doc:"What the alarm is about: one open alarm per (component, dedup_key)"`
+	Instance       string     `json:"instance,omitempty" doc:"What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component"`
 	RaisedAt       time.Time  `json:"raised_at"`
 	ClearedAt      *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
 	Active         bool       `json:"active"`
@@ -76,6 +77,7 @@ func toAlarmBody(a *storage.Alarm) alarmBody {
 		Severity:       a.Severity,
 		Message:        a.Message,
 		DedupKey:       a.DedupKey,
+		Instance:       a.Instance(),
 		RaisedAt:       a.RaisedAt,
 		ClearedAt:      a.ClearedAt,
 		Active:         a.Active(),

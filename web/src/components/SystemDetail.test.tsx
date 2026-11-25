@@ -178,6 +178,25 @@ describe("one body in two hosts", () => {
     requestTriage(undefined);
   });
 
+  // One rule raises one alarm per endpoint: a display down on both its
+  // endpoints reads two Reachability lost rows, each naming its endpoint.
+  it("names each alarm's endpoint, so two alarms of one rule on one component read apart", async () => {
+    const qc = seed();
+    const a = health.slots![0].alarms![0];
+    qc.setQueryData([...systemHealthKey(SID)], {
+      ...health,
+      slots: [{ ...health.slots![0], alarms: [
+        { ...a, id: "al-snmp", message: "Reachability lost", instance: "snmp" },
+        { ...a, id: "al-http", message: "Reachability lost", instance: "http" },
+      ] }],
+    });
+    mountPage(undefined, qc);
+    const why = await screen.findByTestId("alarm-strip");
+    await waitFor(() => expect(within(why).getAllByTestId("alarm-instance")).toHaveLength(2));
+    expect(within(why).getAllByTestId("alarm-instance").map((e) => e.textContent).sort()).toEqual(["on http", "on snmp"]);
+    expect(why.textContent).toContain("Reachability lost on snmp");
+  });
+
   // Snooze is offered on a system's alarm as on a component's (#2448): Snooze
   // while it is not snoozed, the chip and Unsnooze once it is.
   it("an unsnoozed alarm offers Snooze, a snoozed one its chip and Unsnooze, page and blade", async () => {

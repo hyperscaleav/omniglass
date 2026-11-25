@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from "solid-js";
+import AlarmInstance from "./AlarmInstance";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -70,7 +71,7 @@ export default function SystemSummary(props: { systemId: string; onOpen?: (id: s
           <span class="flex items-baseline gap-2 text-xs">
             <SeverityBadge name={a.severity} size="xs" />
             <span class="font-data text-base-content/80">{a.component}</span>
-            <span class="min-w-0 flex-1 truncate text-base-content/60">{a.message}</span>
+            <span class="min-w-0 flex-1 truncate text-base-content/60">{a.message}<AlarmInstance instance={a.instance} /></span>
           </span>
         )}
       </For>
