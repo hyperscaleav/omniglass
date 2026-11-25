@@ -110,7 +110,7 @@ test.describe("probe", () => {
     await page.goto("/web/login");
     await page.locator("#login-username").fill(USER as string);
     await page.locator("#login-password").fill(PASSWORD as string);
-    await page.getByRole("button", { name: /sign in/i }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.waitForURL((url) => !url.pathname.endsWith("/login"));
     await page.close();
     await ctx.addInitScript(VITALS);
