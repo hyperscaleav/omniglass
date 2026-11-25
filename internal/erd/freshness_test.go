@@ -87,6 +87,6 @@ func TestCommittedERDRenderMatchesItsSource(t *testing.T) {
 	if stale, why := RenderStale(d2, string(svg)); stale {
 		missing, extra := RenderDrift(d2, string(svg))
 		t.Errorf("the committed ERD render is stale: %s (the source has %v the SVG never drew, the SVG draws %v the source dropped); "+
-			"re-render it with `cd docs && corepack pnpm diagrams` (needs the d2 binary) and commit the SVG", why, missing, extra)
+			"re-render it with `cd docs && pnpm diagrams` (needs the d2 binary) and commit the SVG", why, missing, extra)
 	}
 }

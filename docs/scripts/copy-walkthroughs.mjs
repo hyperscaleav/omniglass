@@ -17,7 +17,7 @@
 // with controls on the deployed docs and their PR previews.
 //
 // Astro caches each rendered page by the page's own content, not by the
-// manifest it renders; the docs build (`corepack pnpm build`) sees the copy
+// manifest it renders; the docs build (`pnpm build`) sees the copy
 // change its render stamp and forces itself (astro-build.mjs, #937), and
 // check-walkthrough-embeds.mjs fails any build that still rendered stale.
 //
