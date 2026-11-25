@@ -501,7 +501,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                     {(r) => (
                                       <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
                                         <SeverityBadge name={r.severity} size="xs" />
-                                        <span>{r.message}</span>
+                                        <span>{r.message}<AlarmInstance instance={r.instance} /></span>
                                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                         <span class="text-base-content/45 tabular-nums">
                                           {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
@@ -530,7 +530,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     {(r) => (
                       <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
                         <SeverityBadge name={r.severity} size="xs" />
-                        <span>{r.message}</span>
+                        <span>{r.message}<AlarmInstance instance={r.instance} /></span>
                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
                         <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}{r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}</span>
                       </li>
