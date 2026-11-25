@@ -1,7 +1,7 @@
 {
   "id": "watch-an-impaired-device",
   "title": "Watch an impaired device",
-  "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.",
+  "description": "Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the gap return to 0 as the window slides.",
   "steps": [
     {
       "n": 1,
@@ -18,7 +18,7 @@
     {
       "n": 3,
       "kind": "click",
-      "caption": "projector-1 is polled over snmp. Open it in its drawer on the Simulation page.",
+      "caption": "projector-1 is polled over snmp. Open it in its drawer on the Simulation page, on its Impairments tab.",
       "still": "step-03.png"
     },
     {
@@ -66,15 +66,15 @@
     {
       "n": 11,
       "kind": "wait",
-      "caption": "Once the window slides past the change, the gap reads 0 and the attribution clears.",
+      "caption": "Once the window slides past the change, the gap reads 0 and its row loses its tint.",
       "still": "step-11.png"
     }
   ],
   "poster": "step-07.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 58.3,
-    "bytes": 1120888,
-    "previewBytes": 944394
+    "seconds": 44.7,
+    "bytes": 996101,
+    "previewBytes": 948802
   }
 }

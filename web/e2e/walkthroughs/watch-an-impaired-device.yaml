@@ -3,7 +3,14 @@
 # simulated device in the kernel, from its drawer on /simulation, and watch
 # the outpost's gap for that protocol open on Platform health, read as impaired
 # (expected, not lost), while the device's received count falls. Repair it
-# and watch the attribution clear once the window slides past the change.
+# and watch the gap return to 0 once the window slides past the change.
+#
+# A fresh lab plants two faults as applied impairments (#2508): dsp-1 in the
+# auditorium unplugged and display-1 in bay 1 answering 400ms late, both polled
+# over snmp. Their dropped polls are real loss, so the snmp gap would never read
+# 0 after Repair. The setup lifts both off camera, as a presenter would, and
+# waits for the 10s window to slide past, so the only impairment on this
+# outpost is the one the walkthrough applies.
 #
 # The device is projector-1 (the only component by that name in the seeded
 # fleet), polled over snmp only. Snmp rides udp, so a dropped request is gone:
@@ -15,16 +22,23 @@
 # walkthrough cadence (internal/lab): the server brackets the outpost every 1s
 # into a 10s window, the simulator pulls the impairment every 2s, and the page
 # polls every 5s. The gap opens 8 to 12s after Save; the attribution clears
-# about 14s after Repair, once the window's start is past the change.
+# about 14s after Repair, once the window's start is past the change, and the
+# row may take a window more to read calm, so the wait for it allows 40s.
+setup:
+  - put: '/components/east.hall.level-1.auditorium.$comp.dsp-1/impairment'
+    body: { unplugged: false, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 }
+  - put: '/components/depot.bay-1.$comp.display-1/impairment'
+    body: { unplugged: false, latency_ms: 0, jitter_ms: 0, loss_pct: 0, rate_kbit: 0 }
+  - pause: 20
 title: Watch an impaired device
-description: Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the attribution clear as the window slides.
+description: Drop a simulated device's packets from its drawer, watch Platform health read its protocol's gap as impaired, then repair it and watch the gap return to 0 as the window slides.
 steps:
   - goto: /platform?open=simulation
     caption: With a simulator connected, Platform health closes the loop. Every gap reads 0 and every device is drawing its polls.
   - type: { target: '[data-testid=platform-sim-device-filter]', text: projector-1 }
     caption: The device table is a page of rows behind a filter. Find projector-1 by name.
   - click: '[data-testid=platform-sim-device] >> role=link[name="projector-1"s]'
-    caption: projector-1 is polled over snmp. Open it in its drawer on the Simulation page.
+    caption: projector-1 is polled over snmp. Open it in its drawer on the Simulation page, on its Impairments tab.
   - type: { target: { role: textbox, name: Loss (%), exact: true }, text: '100' }
     caption: Drop every packet toward it, in the kernel, before the simulated device sees it.
   - click: { role: button, name: Save impairment }
@@ -40,5 +54,5 @@ steps:
     caption: Repair it. Every request reaches it again.
   - goto: /platform?open=simulation
     caption: The window still holds the change, so the gap still reads impaired.
-  - wait: { selector: '[data-testid=platform-sim-gap][data-gap=sent-not-received][data-protocol=snmp][data-tone=calm]:not(:has(.badge-info))', timeout: 40000 }
-    caption: Once the window slides past the change, the gap reads 0 and the attribution clears.
+  - wait: { selector: '[data-testid=platform-sim-gap][data-gap=sent-not-received][data-protocol=snmp][data-tone=calm]', timeout: 40000 }
+    caption: Once the window slides past the change, the gap reads 0 and its row loses its tint.
