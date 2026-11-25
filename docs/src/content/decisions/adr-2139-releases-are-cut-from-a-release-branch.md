@@ -28,7 +28,7 @@ refs: [2139, 1940, 1988, 1257, 64]
 - **Consequences:** every push to a release branch runs the same CI as `main`, so a candidate has
   had the full CI before it is tagged. Release branches need a ruleset of their own, like `main`'s.
   The PR title no longer sets the version, only the line it writes in the notes.
-- **Amended by [ADR-2652](#adr-2652-the-soak-gates-10-and-0x-releases-are-cut-weekly-from-main):** the soak
+- **Amended by [ADR-2652](#adr-2652-the-soak-gates-10-and-0x-releases-are-cut-on-demand-from-main):** the soak
   in decision 2 gates a final release from `v1.0.0` on; a `0.x` final needs only the CI its
-  release-branch push ran. After `v0.1.0`, a weekly run cuts the next minor from `main` as a new
-  release branch, and the version rule of decision 4 is unchanged.
+  release-branch push ran. After `v0.1.0`, each cut, made when wanted by one dispatch, makes the
+  next minor from `main` as a new release branch, and the version rule of decision 4 is unchanged.

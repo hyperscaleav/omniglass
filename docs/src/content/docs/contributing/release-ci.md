@@ -1,6 +1,6 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR and the release cut from a release branch, by hand or by the weekly 0.x cut."
+description: "The CI gates on every PR and the release cut from a release branch, by hand or by the one-dispatch 0.x cut."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
@@ -208,28 +208,31 @@ make release-plan FINAL=1    # the final release of the newest candidate
 No changelog is ever committed back, so a release never writes to `main` or the branch. The
 notes live on the GitHub Release.
 
-## The weekly 0.x cut
+## Cutting a 0.x release
 
 `v0.1.0` is the first public build, cut by hand as above once the release App is set up and
-`RELEASES_ENABLED` is on (#1940). After it, `0.x` releases come on a schedule rather than when
-one feels ready (ADR-2652):
+`RELEASES_ENABLED` is on (#1940). After it, a `0.x` release is cut whenever the work calls for
+one, roughly weekly, and cutting one takes a single action (ADR-2652):
 
-- **Once a week**, a scheduled run makes the next minor's branch from `main`'s tip: after
-  `v0.4.0`, `release/0.5`. It dispatches a candidate (`v0.5.0-rc.1`) and, once that branch push's
-  CI is green, the final on the same commit (`v0.5.0`).
-- **It skips a week** in which `main` has no commit since the last cut, and does nothing while
-  `RELEASES_ENABLED` is off.
+- **One dispatch, no inputs.** Dispatching the cut workflow makes the next minor's branch from
+  `main`'s tip: after `v0.4.0`, `release/0.5`. It dispatches a candidate (`v0.5.0-rc.1`) and,
+  once that branch push's CI is green, the final on the same commit (`v0.5.0`). Nobody picks the
+  version, the branch or the commit.
+- **It refuses** when `main` has no commit since the last cut, or `RELEASES_ENABLED` is off.
 - **It never cuts `1.0`.** `1.0` is a hand cut, and it needs [the soak](#the-soak-gate).
-- **The version is still the branch's.** The run only chooses the branch name, and
+- **A nudge, not a schedule.** When the newest final is a week old and `main` has commits since
+  it, a scheduled check opens one "a cut is due" issue, and the next cut closes it. Nothing
+  scheduled cuts a release.
+- **The version is still the branch's.** The cut only chooses the branch name, and
   `cmd/releaseversion` works out the tag as it does for a hand dispatch. semantic-release stays
   out of the path: it would number the first release `1.0.0` from breaking changes made before
   any release, and cut a release for every merge.
-- **A fix that cannot wait** for the next week goes by cherry-pick to the newest release branch
+- **A fix that cannot wait** for the next cut goes by cherry-pick to the newest release branch
   and a hand dispatch, which makes it that line's patch (`v0.5.1-rc.1`, then `v0.5.1`).
 
 :::note[Not built yet]
-The schedule is not in `release.yml` yet, so until it lands each `0.x` release is cut by hand, the
-same way. The follow-up work is listed on #2652.
+Neither the cut workflow nor the nudge exists yet, so until they land each `0.x` release is cut
+by hand, the same way. The follow-up work is listed on #2652.
 :::
 
 Until `1.0`, Omniglass is pre-production software: breaking changes can land in any release,
