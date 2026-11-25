@@ -158,6 +158,20 @@ describe("TimelineOverlay", () => {
     expect(readout).toContain("power off");
   });
 
+  it("reads a preset through now, so what happened seconds ago is on it", async () => {
+    const reads: Read[] = [];
+    stub(reads);
+    const opened = Date.now();
+    mount(() => hour);
+    await waitFor(() => expect(reads.some((r) => r.path === "/components/disp/commands")).toBe(true));
+    for (const r of reads.filter((r) => r.path === "/components/disp/commands" || r.path === "/components/disp/health")) {
+      expect(Date.parse(r.search.get("until") ?? "")).toBeGreaterThanOrEqual(opened);
+    }
+    for (const r of reads.filter((r) => r.body?.bindings[0].to)) {
+      expect(Date.parse(r.body!.bindings[0].to!)).toBeGreaterThanOrEqual(opened);
+    }
+  });
+
   it("re-reads every lane when the page's range changes", async () => {
     const reads: Read[] = [];
     stub(reads);

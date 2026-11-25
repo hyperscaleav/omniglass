@@ -70,6 +70,11 @@ Wait
 Type "# The receiver got it, signed over the exact bytes it received"
 Enter
 Wait
+Hide
+Type `demo_until 30 'tail -1 /tmp/rx.log | jq -e ".subject"'`
+Enter
+Wait@40s
+Show
 Type `tail -1 /tmp/rx.log | jq -c '{subject, verified, answered}'`
 Enter
 Wait
@@ -145,6 +150,11 @@ Show
 Type "# Delivered: every attempt at the clear carried one Idempotency-Key, so the receiver can drop a repeat"
 Enter
 Wait
+Hide
+Type `demo_until 30 'jq -se "map(select(.transition == \"cleared\" and .answered == 200)) | length > 0" /tmp/rx.log'`
+Enter
+Wait@40s
+Show
 Type `jq -c 'select(.transition == "cleared") | {answered, verified}' /tmp/rx.log`
 Enter
 Wait

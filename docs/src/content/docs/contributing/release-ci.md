@@ -85,6 +85,15 @@ handed to `e2e` and `smoke-lab` as one artifact (the image under both its tags, 
 load it and run with `SKIP_BUILD=1` (see the Makefile's `all`), so nothing on a PR push builds the image twice. `docs-shots.yml`
 and the opt-in `run:demo` pipeline still build their own, since their build id differs.
 
+The path-filtered checks that are not required (`docs-build`, `docs-shots` verify, `migrations` and the
+`goreleaser` snapshot) run none of their work on a draft (#2309): each job is guarded on the draft flag, so it
+reports skipped rather than never appearing, and each workflow listens for `ready_for_review`, which runs it on
+the draft's current head once the PR is marked ready. A draft that wants them now takes the `run:test`
+label ([labels](/contributing/labels/#runtask-triggers)): adding it starts them, and a push while it stays
+on runs them as on a ready PR. Any other label starts none of them. `pr-title` and `demo-tag` are metadata checks
+and run on a draft. The merge queue and pushes to `main` and release branches run all of it. CodeQL is the
+repository's default setup, not a workflow here, so a draft guard cannot be written for it in this tree.
+
 Skipped work still reports, so a required check never waits forever: `e2e`, `smoke-lab` and `gen-drift`
 always run and pass in seconds when nothing needs them (and fail if the build or the change lookup
 failed), and `test` counts a skipped shard as a pass only when the change lookup succeeded. Publishing
