@@ -4,6 +4,7 @@
   "description": "The marketing captures' camera (#2299): Revideo plays a recorded loop and eases the frame onto each focus the recorder logged.",
   "type": "module",
   "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@10.34.9",
   "dependencies": {
     "@revideo/2d": "0.11.0",
     "@revideo/core": "0.11.0",

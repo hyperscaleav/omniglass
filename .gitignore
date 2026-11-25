@@ -71,6 +71,8 @@ coverage.txt
 /web/e2e/marketing/compose/node_modules/
 /web/e2e/marketing/compose/public/
 /web/e2e/marketing/compose/out/
+# The camera project installs with pnpm (#2717); an npm lockfile is a mistake.
+/web/e2e/marketing/compose/package-lock.json
 # terminal demo recordings (make demo)
 /scripts/demo/out/
 /web/e2e/probe/out/
