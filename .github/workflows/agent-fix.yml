@@ -319,7 +319,7 @@ jobs:
             after your last commit and a green make preflight. A fix can add findings of its
             own and start another round, so before that push review this round's work the way
             the reviewer will, scoped to the commits you made in this run, not what a merge of
-            main brought in (git log --no-merges ${{ steps.status.outputs.head_sha }}..HEAD, each
+            main brought in (git log --first-parent --no-merges ${{ steps.status.outputs.head_sha }}..HEAD, each
             read with git show): run /adversarial-review on them and fix what it finds, then the neighbor check, which lists every UI label,
             user-facing term, flag, route or identifier your changes added, renamed or removed
             and greps the whole docs tree for each old and new spelling, fixing every hit.
