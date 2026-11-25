@@ -252,13 +252,17 @@ wraps and changes the height of the platform cards, so every shot of that page s
 the code, run `make docs-shots`, then commit the PNGs (the recapture branch does this on main), and
 `make docs-shots-check` passes on the clean tree that follows.
 
-The capture pins the raster path (#1860). The pinned browser would pick its rasterizer's SIMD path from
-the host CPU (Skia dispatches at runtime between SSE2, AVX2 and AVX-512), and the paths round a gradient pixel one
-level apart: a host without AVX2 (a generic virtual CPU) differed from CI by five pixels of the users page's
-avatar gradient (#774), repeatable on each host and invisible to a loose comparison. So the capture browser runs
-with `--disable-skia-runtime-opts` (`web/e2e/docs-shots.mjs`), which asks Skia to turn the runtime dispatch off so every host takes the baseline path. That this makes a baseline
-byte-identical across CPUs is not yet demonstrated: the AVX2 against non-AVX2 recapture comparison is still owed on #1860.
-The comparison stays exact.
+The capture pins the raster path (#1860). The pinned browser picks its rasterizer's SIMD path from the host
+CPU (Skia dispatches at runtime between SSE2, AVX2 and AVX-512), and the paths can round a gradient pixel one
+level apart: a host without AVX2 (a generic virtual CPU) once differed from CI by five pixels of the users page's
+avatar gradient (#774). So the capture browser runs with `--disable-skia-runtime-opts` (`web/e2e/docs-shots.mjs`),
+which turns the runtime dispatch off: every host takes the same baseline path. The comparison stays exact.
+Measured on an AVX2 host and a host with no AVX at all, the same tree captured with and without the flag
+([the comparison on #1860](https://github.com/hyperscaleav/omniglass/issues/1860#issuecomment-7169963900)):
+`users.png` is byte-identical across the two CPUs either way, one other baseline (`notification-target-new`, 8 pixels)
+differs across the CPUs without the flag and is byte-identical with it, and 36 of the 37 baselines match across the
+two CPUs with it. The one that does not, `fleet-history`, differs by where the history strip's alarm marker sits,
+which follows when the lab raised the alarm, not the rasterizer, so the flag does not and cannot pin it.
 Each capture logs the host's CPU model and whether AVX2 and AVX-512 are present (`capture: cpu ...` from
 `docs/screenshots/capture.sh`), so a baseline's hosts are in the run log. The baselines committed before the pin came
 from the unpinned path, so the first recapture after it lands (the `claude/docs-shots-recapture` PR) rewrites a few
