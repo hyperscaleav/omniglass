@@ -316,7 +316,14 @@ jobs:
             message with the line "Refs #${{ steps.gate.outputs.issue }}"; never write Fixes
             or Closes in a commit. Do NOT push mid-run: every push to this PR starts a full
             agent-review, so push once, to ${{ steps.gate.outputs.head }}, at the very end,
-            after your last commit and a green make preflight. Before each commit, run that
+            after your last commit and a green make preflight. A fix can add findings of its
+            own and start another round, so before that push review this round's work the way
+            the reviewer will, scoped to the commits you made in this run, not what a merge of
+            main brought in (git log --no-merges ${{ steps.status.outputs.head_sha }}..HEAD, each
+            read with git show): run /adversarial-review on them and fix what it finds, then the neighbor check, which lists every UI label,
+            user-facing term, flag, route or identifier your changes added, renamed or removed
+            and greps the whole docs tree for each old and new spelling, fixing every hit.
+            One self-review per round, then push. Before each commit, run that
             point's tests (make test-short at least) and scripts/agent-sync.sh guard
             origin/main. make preflight runs what the PR's required checks run (make gen
             with a drift check, make test, the docs build, the migration check) and fails if

@@ -65,6 +65,14 @@ moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.
 
+Before it marks the PR ready, the builder reviews its own work the way agent-review will, because each
+reviewer round costs 30 to 40 minutes (#2600). The prompt names the steps in order: `/adversarial-review`
+on the full diff (the same anti-pattern catalog the reviewer's lenses check), then the neighbor check, then
+`make preflight`, then `gh pr ready`. The neighbor check lists every UI label, user-facing term, flag, route
+or identifier the diff added, renamed or removed and greps the whole docs tree for each old and new spelling,
+fixing the hits or naming them in the PR body's Docs line. It is the same check `/ship-slice` step 5 holds a
+person to; a docs lint catches a label a page quotes, this catches the terms a page teaches.
+
 The PR body is the template filled in, never a free-form one: `gh` ignores the template when it
 is given a body, so the agent copies `.github/pull_request_template.md` to `body.md`, fills the
 Demo section (`demo: <id>` or `demo: none (<reason>)`), runs the demo tag lint on it
@@ -241,6 +249,11 @@ too. The agent reads only the comment or review that started it. Write the ask t
 ```text
 @hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
 ```
+
+agent-fix reviews its own round before it pushes (#2600): `/adversarial-review` on the commits it made in
+that run (not what a merge of `main` brought in), then the same neighbor check for every label, term, flag,
+route or identifier those commits added, renamed or removed. One self-review per round, scoped to the round's
+diff, so a fix does not add findings of its own and start another round.
 
 agent-fix answers each point on one line in its status comment, `✅ <point> · Fixed in <sha>`
 or `↩️ <point> · Not changed`, with its reasons collapsed under them. A point counts as fixed
