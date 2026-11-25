@@ -121,14 +121,17 @@ export function membershipRows(members: Member[], view: FleetView): MembershipRo
 export type IdentityRow = { name: string; label: string; value: unknown; sourceRule?: string; sourceRuleId?: string };
 
 // identityRows keeps every property that resolves to a value (an explicit
-// set, a calc rule's value, or the contract default): model, serial,
-// firmware are the point, but the rule is the value's presence, not a
-// hand-kept key list.
+// set, a calc rule's value, or the contract default), and otherwise what the
+// component reports for it: a property only observed (a polled input, a
+// firmware the device names) carries no value, only its reconciliation's is.
+// Model, serial, firmware are the point, but the rule is a value's presence,
+// not a hand-kept key list.
 export function identityRows(props: EffectivePropertyBody[]): IdentityRow[] {
   return (props ?? [])
-    .filter((p) => p.value !== null && p.value !== undefined && !isLifecycleDate(p.property_type_name))
-    .map((p) => {
-      const row: IdentityRow = { name: p.property_type_name, label: entityLabel({ name: p.property_type_name, label: p.label }), value: p.value };
+    .map((p) => ({ p, value: p.value ?? p.reconciliation?.is }))
+    .filter(({ p, value }) => value !== null && value !== undefined && !isLifecycleDate(p.property_type_name))
+    .map(({ p, value }) => {
+      const row: IdentityRow = { name: p.property_type_name, label: entityLabel({ name: p.property_type_name, label: p.label }), value };
       if (p.source_rule && p.source_rule_id) Object.assign(row, { sourceRule: p.source_rule, sourceRuleId: p.source_rule_id });
       return row;
     });

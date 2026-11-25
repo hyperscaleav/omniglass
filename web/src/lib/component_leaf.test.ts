@@ -229,6 +229,19 @@ describe("the leaf's dispatch facts (#786)", () => {
     ]);
   });
 
+  it("identityRows shows what the component reports for a property only observed", () => {
+    const rows = identityRows([
+      { property_type_name: "video-input", label: "Video Input", is_set: false, from_contract: false, reconciliation: { want: null, told: null, is: "hdmi2", is_instance: "", drift: false } },
+      { property_type_name: "firmware-version", value: "2.1.4", is_set: false, from_contract: true, reconciliation: { want: "2.1.4", told: null, is: "2.2.0", is_instance: "", drift: true } },
+      { property_type_name: "power-state", is_set: false, from_contract: false, reconciliation: { want: null, told: null, is: null, is_instance: "", drift: false } },
+    ] as never);
+    expect(rows).toEqual([
+      { name: "video-input", label: "Video Input", value: "hdmi2" },
+      // A declared value still reads first; its drift is the Configure tab's to show.
+      { name: "firmware-version", label: "firmware-version", value: "2.1.4" },
+    ]);
+  });
+
   it("identityRows names the calc rule a property's value was derived by (#999, #1018)", () => {
     const rows = identityRows([
       { property_type_name: "busy-flag", label: "Busy", value: true, is_set: false, from_contract: false, source_rule: "busy", source_rule_id: "11111111-1111-7111-8111-111111111111" },
