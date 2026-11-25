@@ -76,6 +76,7 @@ type healthAlarmBody struct {
 	ComponentID string    `json:"component_id" doc:"The component's uuid"`
 	Severity    string    `json:"severity"`
 	Message     string    `json:"message"`
+	Instance    string    `json:"instance,omitempty" doc:"What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component"`
 	RaisedAt    time.Time `json:"raised_at"`
 	// The acknowledgement, with the same names and rules as the component alarm
 	// list (alarmBody), so a system page can show and offer it without opening
@@ -226,6 +227,7 @@ func toHealthAlarmBodies(alarms []storage.Alarm) []healthAlarmBody {
 			ComponentID: a.ComponentID,
 			Severity:    a.Severity,
 			Message:     a.Message,
+			Instance:    a.Instance(),
 			RaisedAt:    a.RaisedAt,
 
 			AcknowledgedAt: a.AcknowledgedAt,

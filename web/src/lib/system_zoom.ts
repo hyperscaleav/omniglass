@@ -175,6 +175,10 @@ export type AlarmRow = {
   id: string;
   severity: string;
   message: string;
+  // What the alarm is about within its component (the endpoint a
+  // reachability alarm names), "" when it has none: two alarms of one rule on
+  // one component differ only here.
+  instance: string;
   component: string;
   componentId: string | null;
   slotLabel: string;
@@ -207,6 +211,7 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         id: a.id,
         severity: a.severity,
         message: a.message,
+        instance: a.instance ?? "",
         component: a.component,
         componentId: a.component_id || null,
         slotLabel: entityLabel(r),
@@ -235,6 +240,7 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         id: a.id,
         severity: a.severity,
         message: a.message,
+        instance: a.instance ?? "",
         component: a.component,
         componentId: a.component_id || m.id || null,
         slotLabel: slot ? entityLabel(slot) : "",

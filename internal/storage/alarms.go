@@ -89,6 +89,19 @@ func (a Alarm) Acknowledged() bool { return a.AcknowledgedAt != nil }
 // Snoozed reports whether the alarm is snoozed.
 func (a Alarm) Snoozed() bool { return a.SnoozedUntil != nil }
 
+// Instance is what a rule's alarm is about within its component: the instance
+// of the sample its rule judged, read from the rule key (ruleDedupKey), such as
+// the endpoint a reachability-lost alarm names. Two alarms of one rule on one
+// component differ only here, so a surface that lists both names it. Empty for
+// a hand-raised alarm (its key may not sit in the rule namespace) and for a
+// rule that judges one series per component.
+func (a Alarm) Instance() string {
+	if !strings.HasPrefix(a.DedupKey, "rule:") {
+		return ""
+	}
+	return ruleKeyInstance(a.DedupKey)
+}
+
 // AlarmFilter narrows a component's alarm list. The zero value is what is wrong
 // now: active alarms, acknowledged or not.
 type AlarmFilter struct {

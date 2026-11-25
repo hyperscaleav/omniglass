@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
+import AlarmInstance from "./AlarmInstance";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -500,7 +501,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                     {(r) => (
                                       <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
                                         <SeverityBadge name={r.severity} size="xs" />
-                                        <span>{r.message}</span>
+                                        <span>{r.message}<AlarmInstance instance={r.instance} /></span>
                                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                         <span class="text-base-content/45 tabular-nums">
                                           {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
@@ -529,7 +530,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     {(r) => (
                       <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
                         <SeverityBadge name={r.severity} size="xs" />
-                        <span>{r.message}</span>
+                        <span>{r.message}<AlarmInstance instance={r.instance} /></span>
                         <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
                         <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}{r.clearedAt ? ` · lasted ${durationText(Date.parse(r.clearedAt) - Date.parse(r.raisedAt))}` : ""}</span>
                       </li>
@@ -582,7 +583,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                                 message's width. */}
                             <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
                               <SeverityBadge name={a.severity} />
-                              <span class="min-w-0 break-words">{a.message}</span>
+                              <span class="min-w-0 break-words">{a.message}<AlarmInstance instance={a.instance} /></span>
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
