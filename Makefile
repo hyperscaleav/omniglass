@@ -244,6 +244,7 @@ migration-check:
 PREFLIGHT_AREAS = $(shell { git diff --name-only $$(git merge-base $(BASE) HEAD); git ls-files --others --exclude-standard; } | sort -u | bash scripts/ci-changes.sh)
 preflight:
 	bash scripts/check-go-pin.sh
+	bash scripts/check-node-pin.sh
 	@echo 'preflight areas (scripts/ci-changes.sh): $(PREFLIGHT_AREAS)'
 	$(if $(filter gen=true,$(PREFLIGHT_AREAS)),$(MAKE) preflight-gen)
 	$(if $(filter web=true,$(PREFLIGHT_AREAS)),$(MAKE) test-web)

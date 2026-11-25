@@ -55,7 +55,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
       - name: Install web deps
         run: cd web && npm ci
       - name: Verify screenshots are declared and present
@@ -92,7 +92,7 @@ jobs:
       # Docker), so the job needs no Go toolchain.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
       - name: Install web deps
         run: cd web && npm ci
       - name: Recapture both shot sets on the merged tree

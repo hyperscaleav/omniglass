@@ -34,7 +34,9 @@ operational checklist.
   [the lab guide](docs/src/content/docs/developer/lab.mdx).
 - **Go and Node** are needed for `make test` (the Go tiers and the SPA's typecheck and vitest
   suite), `make gen`, and the console's fast loop below. `make dev` builds the `make` outputs and
-  runs `npm install` in `web/`, so the loop is ready; it starts nothing.
+  runs `npm install` in `web/`, so the loop is ready; it starts nothing. Node is the major in
+  `.nvmrc` (CI's setup-node reads it too, and `nvm use` picks it up); the docs site builds with
+  pnpm 10 (`npm install -g pnpm@10`), since Node no longer ships corepack.
 
 ### The console's fast loop
 

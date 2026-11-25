@@ -31,7 +31,7 @@ prompt to add it. After a schema change, run `make gen`, never an edit to the re
 The page shows a committed SVG rendered from that source, and `make gen` does not re-render it (the docs
 build has no `d2` binary). `pnpm diagrams` ends each SVG with a hash of the source it drew, and `internal/erd` fails `make test`
 when the page's source no longer hashes to it, so after a schema change also run
-`cd docs && corepack pnpm diagrams` and commit the SVG.
+`cd docs && pnpm diagrams` and commit the SVG.
 :::
 
 ## The platform ERD
