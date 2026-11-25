@@ -864,6 +864,23 @@ jobs:
               fi
             done
           fi
+          # Advisory findings stay inline, resolved, so they read as findings but
+          # do not hold the merge open ("Protect main" counts every unresolved
+          # thread, #2222). A blocking finding keeps its thread unresolved. The
+          # threads are read again, after the review above and the recheck
+          # resolves, so only what is still open is listed. A failure leaves a
+          # thread open, which only keeps it blocking the merge.
+          probe=0; printf '{}' | bash "$script" advisory-threads >/dev/null 2>&1 || probe=$?
+          if [ "$probe" -eq 2 ]; then
+            gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+                -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
+              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
+              | bash "$script" advisory-threads | jq -c '.[]' | while IFS= read -r t; do
+              gh api graphql -F id="$(jq -r '.thread_id' <<<"$t")" \
+                  -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
+                || echo "::warning::agent-review: could not resolve advisory thread $(jq -r '.comment_id' <<<"$t")"
+            done
+          fi
 
       # The new review supersedes the reviewer's earlier ones (#2253): each is
       # minimized as outdated, a Changes requested one is dismissed so the PR's

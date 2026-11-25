@@ -1245,6 +1245,36 @@ func TestAgentReviewReplyResult(t *testing.T) {
 // A thread the reviewer verified fixed is resolved in the same run, an
 // advisory one included; the thread id is found from the comment when the
 // open-thread list has none.
+// Advisory findings stay inline but never block a merge (#2222): after a review
+// posts, the reviewer resolves its own unresolved advisory threads, and only
+// those. A blocking thread, an already resolved one and a person's stay as they
+// are, so a blocking finding still holds the merge open.
+func TestAgentReviewAdvisoryThreadsListsOnlyTheReviewersOwnAdvisories(t *testing.T) {
+	in := `{"bots":["hyperscale-reviewer[bot]"],"threads":[
+		{"id":"T1","isResolved":false,"isOutdated":false,"path":"x.go","line":5,"comments":{"nodes":[{"databaseId":11,"author":{"login":"hyperscale-reviewer"},
+			"body":"**⚠️ Nit**\n\n<!-- agent-review severity=advisory lens=a rule=r1 -->"}]}},
+		{"id":"T2","isResolved":false,"isOutdated":false,"path":"x.go","line":9,"comments":{"nodes":[{"databaseId":12,"author":{"login":"hyperscale-reviewer"},
+			"body":"**❌ Bug**\n\n<!-- agent-review severity=blocking lens=a rule=r2 -->"}]}},
+		{"id":"T3","isResolved":true,"isOutdated":false,"path":"x.go","line":1,"comments":{"nodes":[{"databaseId":13,"author":{"login":"hyperscale-reviewer"},
+			"body":"**⚠️ Old**\n\n<!-- agent-review severity=advisory lens=a rule=r3 -->"}]}},
+		{"id":"T4","isResolved":false,"isOutdated":false,"path":"x.go","line":2,"comments":{"nodes":[{"databaseId":14,"author":{"login":"fullmetal-fred"},
+			"body":"<!-- agent-review severity=advisory lens=a rule=r4 -->"}]}},
+		{"id":"T5","isResolved":false,"isOutdated":true,"path":"y.go","line":null,"originalLine":3,"comments":{"nodes":[{"databaseId":15,"author":{"login":"hyperscale-reviewer"},
+			"body":"**⚠️ Moved**\n\n<!-- agent-review severity=advisory lens=a rule=r5 -->"}]}},
+		{"id":"T6","isResolved":false,"isOutdated":false,"path":"z.go","line":4,"comments":{"nodes":[{"databaseId":16,"author":{"login":"hyperscale-reviewer"},"body":"unreadable"}]}}
+	]}`
+	out, code := agentReview(t, in, "advisory-threads")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if want := `[{"thread_id":"T1","comment_id":11},{"thread_id":"T5","comment_id":15}]`; out != want {
+		t.Fatalf("got %s\nwant %s", out, want)
+	}
+	if _, code := agentReview(t, `{"threads":[]}`, "advisory-threads"); code != 2 {
+		t.Fatalf("input with no bots: exit %d, want 2", code)
+	}
+}
+
 func TestAgentReviewVerifiedFixedAdvisoryThreadResolves(t *testing.T) {
 	r := `{"head_sha":"abcdef1234","expected":["recheck"],
 		"open_threads":[{"path":"w.yml","line":135,"rule":"r","severity":"advisory","comment_id":21,"thread_id":"T21"}],

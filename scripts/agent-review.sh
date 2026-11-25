@@ -40,6 +40,11 @@
 #                                       threads from GraphQL) on stdin and print
 #                                       the reviewer's open threads as the
 #                                       open_threads that review reads
+#   agent-review.sh advisory-threads    read {bots, threads} like threads and print
+#                                       [{thread_id, comment_id}] for the
+#                                       reviewer's unresolved advisory threads,
+#                                       which the workflow resolves once it has
+#                                       posted its review (#2222)
 #   agent-review.sh followups           read what review reads and print what to
 #                                       do on each thread the recheck lens
 #                                       judged, as [{comment_id, thread_id,
@@ -419,6 +424,17 @@ case "$mode" in
               detail: ($body | gsub("<!--[^>]*-->|</?(details|summary)>"; "") | gsub("\\s+"; " ") | .[:1200])
             }
         ]'
+    ;;
+
+  advisory-threads)
+    # An advisory finding stays inline for a reader but must not hold the merge
+    # open, since "Protect main" counts every unresolved thread (#2222). The
+    # workflow resolves what this lists after it posts a review; a blocking
+    # finding, and anything unreadable (which counts as blocking), is left open.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh advisory-threads < threads.json\n' >&2; exit 64; }
+    facts=$(cat)
+    open=$(bash "$0" threads <<<"$facts") || exit $?
+    jq -c '[.[] | select(.severity == "advisory" and (.thread_id // "") != "") | {thread_id, comment_id}]' <<<"$open"
     ;;
 
   context)

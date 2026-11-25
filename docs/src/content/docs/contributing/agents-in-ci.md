@@ -140,6 +140,13 @@ The reviewer talks on the threads it opened, and its newest review is the one th
   the thread and resolves it when the reply settles the point, because the finding was wrong or the reason
   given holds. Otherwise it says what is still missing and leaves the thread open. A reply that also
   mentions `@claude` still starts agent-fix.
+- **Advisories are resolved as they are posted (#2222).** "Protect main" counts every unresolved review
+  thread, so an advisory that stayed open would block the merge on each rerun. The reviewer posts an
+  advisory finding inline as usual, then resolves its own advisory threads once the review is up
+  (`advisory-threads`): they stay readable on the diff, collapsed as resolved, and a review with only
+  advisory findings leaves no unresolved thread. A blocking finding keeps its thread open and the review
+  still requests changes. A resolved advisory is no longer carried forward or rechecked, which is the
+  point: it never made the review request changes.
 - **Verified fixed resolves.** A thread the reviewer replies "Verified fixed" on is resolved in the same run,
   advisory threads included; `thread-of` finds a thread from its comment when the open list has no id.
 - **Supersede.** Each review's first line carries the head it covers (`... · head <sha>`). After posting,
