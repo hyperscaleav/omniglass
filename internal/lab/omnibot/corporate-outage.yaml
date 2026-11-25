@@ -5,15 +5,33 @@
 # of that staged state: the display is dark on ping and SNMP alike, the
 # shipped reachability rule holds a High alarm on it, the room is degraded
 # with its main-display slot short, and the rest of the room answers.
+#
+# Each turn records how long the model thought before it (think) and what it
+# thought (reasoning, shown as the console's Thinking), paced like a live
+# model, so a capture of the console reads as real inference, not a playback.
 prompt: Why is the 86-inch meeting room degraded?
 turns:
-  - tool_calls:
+  - think: 1.6s
+    reasoning: >-
+      The question is about this room. Start with its health: which slot is
+      short, and which component is behind it.
+    tool_calls:
       - name: get-system-health
         arguments: {name: hq-mr86-1}
-  - tool_calls:
+  - think: 2.1s
+    reasoning: >-
+      Degraded, with the main-display slot short and display-1 impaired. Check
+      whether the display still answers on any protocol before guessing at a
+      cause.
+    tool_calls:
       - name: get-component-reachability
         arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
-  - text: >-
+  - think: 3.8s
+    reasoning: >-
+      Ping and SNMP went dark together, so this is power or the network drop,
+      not configuration. The rest of the room still answers. Nothing to change
+      without asking.
+    text: >-
       This room is degraded because its main display is down. The display stopped
       answering ping and SNMP at the same moment, so the reachability rule raised a
       High alarm on it. Every protocol going dark at once points at the display's

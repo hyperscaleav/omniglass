@@ -1,0 +1,12 @@
+# The selftest's list whose setup names a component the lab does not have: the
+# run fails after the lab is up and before the first shot plays, naming the shot
+# and the component.
+lab: { scenario: dev, systems: 1 }
+shots:
+  - id: ghost
+    kind: still
+    alt: A still that is never recorded.
+    setup:
+      - put: /components/{no-such-site.no-such-room.$comp.display-1}/impairment
+        body: { unplugged: true }
+    start: /explore

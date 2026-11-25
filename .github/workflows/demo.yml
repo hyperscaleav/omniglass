@@ -48,7 +48,7 @@ name: demo
 #
 # The token boundary: no write token ever shares a runner with the tree's
 # code. `select`, every `record` leg and `combine` check the tree out and run
-# its code (npm install scripts, both recorders and every command a tape
+# its code (dependency install scripts, both recorders and every command a tape
 # types, the walkthrough-pr.mjs that stages the evidence and writes the
 # comment, the clip and the report) with a read-only token, and hand their
 # results on as artifacts. `publish` (contents and pull-requests write) and
@@ -277,6 +277,11 @@ jobs:
       # The walkthrough recorder runs in the pinned Playwright container
       # against the repo mounted from the runner, so it needs the web deps
       # installed here; the terminal recorder needs none.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: ${{ matrix.kind == 'walkthrough' }}
+        with:
+          version: 10
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: ${{ matrix.kind == 'walkthrough' }}
         with:
@@ -284,7 +289,7 @@ jobs:
 
       - name: Install web deps
         if: ${{ matrix.kind == 'walkthrough' }}
-        run: cd web && npm ci
+        run: cd web && pnpm install --frozen-lockfile
 
       # The lab is the binary and the image select built from this tree (one
       # build id, which the lab checks), and the Postgres it pulled: loaded

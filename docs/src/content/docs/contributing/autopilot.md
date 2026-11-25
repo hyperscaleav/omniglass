@@ -111,7 +111,7 @@ fires; a day it is not is a day the autopilot does not wake.
 The worker needs, beyond Go, Outpost, and Docker: an authenticated `gh` with the `gh image`
 extension (a bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP
 tools), the `d2` binary for any docs diagram, and the Playwright Chromium
-(`cd web && npx playwright install chromium`).
+(`cd web && pnpm exec playwright install chromium`).
 
 The prompt is intentionally thin, so the behavior lives in the versioned skill rather
 than in trigger config:

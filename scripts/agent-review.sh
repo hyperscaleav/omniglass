@@ -611,7 +611,7 @@ BRIEF
         [ "$p" = /dev/null ] && continue
         [ -f "$p" ] || continue
         case "$p" in
-          *.png | *.jpg | *.jpeg | *.gif | *.webp | *.ico | *.pdf | *.woff | *.woff2 | *.lock | */package-lock.json | package-lock.json | go.sum) continue ;;
+          *.png | *.jpg | *.jpeg | *.gif | *.webp | *.ico | *.pdf | *.woff | *.woff2 | *.lock | */package-lock.json | package-lock.json | */pnpm-lock.yaml | pnpm-lock.yaml | go.sum) continue ;;
         esac
         grep -Iq . "$p" 2>/dev/null || continue
         if [ "$(wc -c < "$pr")" -gt "$budget" ]; then left+=("$p"); continue; fi

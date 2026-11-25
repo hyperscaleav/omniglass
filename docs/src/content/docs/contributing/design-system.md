@@ -749,11 +749,11 @@ Three properties are load-bearing, and each is pinned by a test
 
 ## Build and embed
 
-The SPA builds with Vite (`npm run build`, into `internal/webui/dist`) and is embedded into the
+The SPA builds with Vite (`pnpm run build`, into `internal/webui/dist`) and is embedded into the
 Go binary under the `web` build tag, served at `/web`. One artifact serves the API and the
-console. In dev, `npm run dev` serves the SPA on :5173 with `/api` proxied to a running
+console. In dev, `pnpm run dev` serves the SPA on :5173 with `/api` proxied to a running
 [lab](/developer/lab/#the-console-fast-loop), so the frontend loop needs no rebuild: `./bin/omniglass lab
-run` in one terminal, `cd web && npm run dev` in another. The proxy targets `http://127.0.0.1:8080`
+run` in one terminal, `cd web && pnpm run dev` in another. The proxy targets `http://127.0.0.1:8080`
 (IPv4 loopback, not `localhost`, which Outpost may resolve to `::1` while the lab publishes on IPv4 only),
 and `OMNIGLASS_LAB_URL` moves it for a lab on another `--port`.
 

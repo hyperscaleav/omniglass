@@ -1,0 +1,15 @@
+{
+  "name": "omniglass-marketing-compose",
+  "private": true,
+  "description": "The marketing captures' camera (#2299): Revideo plays a recorded loop and eases the frame onto each focus the recorder logged.",
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "@revideo/2d": "0.11.0",
+    "@revideo/core": "0.11.0",
+    "@revideo/ffmpeg": "0.11.0",
+    "@revideo/renderer": "0.11.0",
+    "@revideo/ui": "0.11.0",
+    "@revideo/vite-plugin": "0.11.0"
+  }
+}

@@ -1320,7 +1320,7 @@ Working on the console itself, run the lab in one terminal and the console from 
 
 ```bash
 ./bin/omniglass lab run       # terminal 1
-cd web && npm run dev         # terminal 2: the console on http://localhost:5173/web, hot reload
+cd web && pnpm run dev        # terminal 2: the console on http://localhost:5173/web, hot reload
 ```
 
 The Vite dev server serves the console from source and proxies `/api` to the lab at
@@ -1329,7 +1329,7 @@ another port, point the proxy at it:
 
 ```bash
 ./bin/omniglass lab run --port 8081
-OMNIGLASS_LAB_URL=http://127.0.0.1:8081 npm run dev
+OMNIGLASS_LAB_URL=http://127.0.0.1:8081 pnpm run dev
 ```
 
 This loop needs Outpost; the lab itself needs only Docker. A change to the server, outpost or simulator
