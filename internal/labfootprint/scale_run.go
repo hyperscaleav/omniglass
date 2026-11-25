@@ -557,7 +557,17 @@ func (h *harness) loadPages(ctx context.Context, cfg ScaleConfig, system string)
 			return h.loadSystemPage(ctx, base, system)
 		})
 	}()
-	return func() PageRun { return <-done }
+	// The wait answers every time it is called: loadWindow takes the result and
+	// then waits again in its defer, so a bare channel read would block the
+	// second call forever and hang the whole measure (#2019).
+	var (
+		once   sync.Once
+		result PageRun
+	)
+	return func() PageRun {
+		once.Do(func() { result = <-done })
+		return result
+	}
 }
 
 // uptime is how long the server container had been running at t, so a
