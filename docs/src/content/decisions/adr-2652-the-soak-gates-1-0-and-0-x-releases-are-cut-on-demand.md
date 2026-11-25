@@ -33,11 +33,13 @@ refs: [2652, 2139, 1988, 1940]
 
      Either way it then dispatches a candidate on the branch tip and, once that branch push's CI is
      green, the final on the same commit. Nobody picks a version, a branch or a commit. The cut
-     refuses when `main` has no commit since the newest final, when `RELEASES_ENABLED` is off, or
-     when a patch's fast-forward is impossible because the branch has commits `main` lacks (a hand
-     cherry-pick); and it never cuts `1.0` (a hand cut, with its soak). A cherry-pick to the
-     branch and a hand dispatch stay for the rare fix that must ship without the features already
-     on `main`.
+     refuses when `main` has no commit since the newest final or `RELEASES_ENABLED` is off, and it
+     never cuts `1.0` (a hand cut, with its soak). A cherry-pick to the branch and a hand dispatch
+     stay for the rare fix that must ship without the features already on `main`. That
+     cherry-pick gives the branch a commit `main` lacks, so the branch can no longer fast-forward:
+     the next cut makes the next minor from `main` instead, whatever the commits say, and the
+     preview says why. The cherry-picked line takes later patches only by cherry-pick and a hand
+     dispatch.
   4. **`make release` previews, confirms and dispatches; the workflow cuts.** Run from any
      checkout, `make release` fetches `main` and the tags and prints the next version, the kind of
      bump (a new `release/0.<n+1>` branch, or a patch on `release/0.<n>`) and the commits that
@@ -48,7 +50,9 @@ refs: [2652, 2139, 1988, 1940]
      or fast-forwards the branch and pushes the tags with the release App's token (#1940), so the
      branch push runs CI, the `v*` tag ruleset holds, and nothing depends on the state of the
      laptop's checkout. The App needs a bypass on the `release/*` ruleset as well as the tag
-     ruleset, since that ruleset otherwise takes pull requests only. The preview and the workflow
+     ruleset, since that ruleset otherwise takes pull requests only and a pull request cannot
+     fast-forward (it lands as a squash or a merge commit). Until the workflow exists, a cut is the
+     same steps by an admin, whose bypass on that ruleset allows the branch push. The preview and the workflow
      share one Go command beside `cmd/releaseversion`, as `make release-plan` already runs it.
   5. **A nudge, never an automatic cut.** A scheduled check opens one issue saying a cut is due
      when the newest final is a week old and `main` has commits since it, keeps that one issue

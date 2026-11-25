@@ -223,10 +223,14 @@ semantic-release would (ADR-2652). Say the newest final is `v0.4.2`:
 - **Never `1.0`.** `1.0` is a hand cut, and it needs [the soak](#the-soak-gate).
 - **A fix that must ship without `main`'s features** goes by cherry-pick to the release branch
   and a hand dispatch, which makes it that line's patch (`v0.4.3-rc.1`, then `v0.4.3`). Any other
-  fix waits for the next cut.
+  fix waits for the next cut. The cherry-pick gives the branch a commit `main` lacks, so it can no
+  longer fast-forward: the next cut makes the next minor from `main` instead, and that line takes
+  later patches only by cherry-pick.
 
-Until the one-command cut below is built, each `0.x` cut is these steps by hand: make or
-fast-forward the branch, then dispatch a candidate and a final as above.
+Until the one-command cut below is built, an admin makes each `0.x` cut by hand: make the branch,
+or fast-forward it with `git push origin main:release/0.4` (a push that fails unless it is a
+fast-forward), then dispatch a candidate and a final as above. The `release/*` ruleset takes pull
+requests only, and a pull request cannot fast-forward, so the branch push needs the admin's bypass.
 
 :::design[Target design: the one-command 0.x cut, tracked in #2652]
 - **One command.** `make release` fetches `main` and the tags, and prints the next version, the
@@ -238,8 +242,9 @@ fast-forward the branch, then dispatch a candidate and a final as above.
   runs CI and the tag ruleset holds), dispatches the candidate and, once that branch push's CI is
   green, the final on the same commit. Nobody picks the version, the branch or the commit, and the
   laptop pushes nothing.
-- **It refuses** when `main` has no commit since the newest final, when `RELEASES_ENABLED` is
-  off, or when a patch cannot fast-forward because the branch has a commit `main` lacks.
+- **It refuses** when `main` has no commit since the newest final, or `RELEASES_ENABLED` is off.
+  When the branch cannot fast-forward (a hand cherry-pick), it cuts the next minor and the
+  preview says why.
 - **A nudge, not a schedule.** When the newest final is a week old and `main` has commits since
   it, a scheduled check opens one "a cut is due" issue, and the next cut closes it. Nothing
   scheduled cuts a release.
