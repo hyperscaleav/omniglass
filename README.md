@@ -12,9 +12,13 @@ It is two things at once, on purpose:
   `/docs`. Concepts and data flows are taught *in the product*, against real or
   simulated data, not just described in a wiki.
 
-> **Status: early, and public from the first commit.** Omniglass is being rebuilt in
-> the open, one vertical slice at a time. Expect the surface to move. The architecture
-> is published ahead of the code at
+> [!CAUTION]
+> **Pre-production software. Do not use it in production yet.** Omniglass has not
+> reached 1.0. Until it does, breaking changes can land in any release, at any time,
+> without notice.
+>
+> It is being rebuilt in the open, one vertical slice at a time, and the architecture is
+> published ahead of the code at
 > [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
 
 ## Design principles
