@@ -25,9 +25,10 @@ do not lean on CI to find what a local run would.
 `pnpm install --frozen-lockfile`, which installs exactly what `web/pnpm-lock.yaml` records and
 fails rather than rewrite it, so `git status` stays clean. `web/package.json`'s `packageManager`
 names the pnpm version, and pnpm 10 switches to it on its own. A dependency's install script runs
-only when `web/pnpm-workspace.yaml` lists the package under `allowBuilds`; a new dependency that
-needs one is skipped (pnpm 10 only warns, and `pnpm ignored-builds` names it) until it is added there, and
-`scripts/web_pnpm_test.go` fails on any change to that list that does not record the reason.
+only when `web/pnpm-workspace.yaml` allows the package under `allowBuilds`, and `strictDepBuilds`
+makes the install fail (`ERR_PNPM_IGNORED_BUILDS`) on any install script the file does not decide, so a
+new dependency that has one stops the install until it is listed there as `true` or `false`.
+`scripts/web_pnpm_test.go` fails on any entry that does not also record its answer and the reason.
 
 ## The spike carve-out
 
