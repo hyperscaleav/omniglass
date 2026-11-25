@@ -29,7 +29,7 @@
     },
     {
       "n": 5,
-      "kind": "press",
+      "kind": "click",
       "caption": "Close the drawer to return to the fleet.",
       "still": "step-05.png"
     },
@@ -43,8 +43,8 @@
   "poster": "step-04.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 16.6,
-    "bytes": 870134,
-    "previewBytes": 1100932
+    "seconds": 20.4,
+    "bytes": 917739,
+    "previewBytes": 1175312
   }
 }

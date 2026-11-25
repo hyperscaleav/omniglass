@@ -13,9 +13,12 @@ steps:
     caption: Its status says where it is served, and how often collection has reached it.
     hold: 1200
     poster: true
-  - press: Escape
+  # The drawer opens with its first button focused, whose tooltip opens on focus
+  # (#2584), and Escape dismisses that tooltip before it closes the drawer, so the
+  # drawer is closed by its Close button.
+  - click: { role: button, name: Close, exact: true }
     caption: Close the drawer to return to the fleet.
   # The drawer is modal: while it is open the page behind it is hidden from the
-  # accessibility tree, so the table is found by role only once Escape closed it.
+  # accessibility tree, so the table is found by role only once it is closed.
   - wait: { role: table }
     caption: Back on the fleet, every simulated component in view.
