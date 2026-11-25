@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { labProxyTarget } from "./labProxy";
 
-// The console's fast loop (#1196): `npm run dev` proxies /api to a running lab.
+// The console's fast loop (#1196): `pnpm run dev` proxies /api to a running lab.
 describe("labProxyTarget", () => {
   it("defaults to the lab's console on IPv4 loopback, never localhost", () => {
     // Outpost may resolve localhost to ::1, where the lab does not listen.

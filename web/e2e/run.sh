@@ -22,7 +22,7 @@ cd "$ROOT"
 lab_init oge2e
 STACK_SCENARIO=empty lab_up
 
-lab_pw npx playwright test "$@"
+lab_pw node_modules/.bin/playwright test "$@"
 lab_assert_intact
 lab_down
 
@@ -31,5 +31,5 @@ lab_down
 # runs the specs tagged @simulator, which skip without OG_E2E_SIMULATOR.
 lab_init oge2esim
 STACK_SCENARIO=dev lab_up
-lab_pw env OG_E2E_SIMULATOR=1 npx playwright test --grep @simulator "$@"
+lab_pw env OG_E2E_SIMULATOR=1 node_modules/.bin/playwright test --grep @simulator "$@"
 lab_assert_intact
