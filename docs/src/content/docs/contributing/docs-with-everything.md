@@ -252,11 +252,17 @@ wraps and changes the height of the platform cards, so every shot of that page s
 the code, run `make docs-shots`, then commit the PNGs (the recapture branch does this on main), and
 `make docs-shots-check` passes on the clean tree that follows.
 
-CI's runner is the canonical raster. The pinned browser picks its rasterizer's SIMD path from
-the host CPU, so a host without AVX2 (a generic virtual CPU) rounds some gradient pixels one
-level off from CI: repeatable on that host, and visible to an exact comparison (five pixels of
-the users page's avatar gradient, #774). When a local `make docs-shots-check` fails only by such a residue, adopt the CI
-recapture (the `claude/docs-shots-recapture` PR) instead of loosening the comparison or masking the element.
+The capture pins the raster path (#1860). The pinned browser would pick its rasterizer's SIMD path from
+the host CPU (Skia dispatches at runtime between SSE2, AVX2 and AVX-512), and the paths round a gradient pixel one
+level apart: a host without AVX2 (a generic virtual CPU) differed from CI by five pixels of the users page's
+avatar gradient (#774), repeatable on each host and invisible to a loose comparison. So the capture browser runs
+with `--disable-skia-runtime-opts` (`web/e2e/docs-shots.mjs`), which turns the runtime dispatch off: every host
+takes the same baseline path, and a baseline is the same bytes whatever CPU captured it. The comparison stays exact.
+Each capture logs the host's CPU model and whether AVX2 and AVX-512 are present (`capture: cpu ...` from
+`docs/screenshots/capture.sh`), so a baseline's hosts are in the run log. The baselines committed before the pin came
+from the unpinned path, so the first recapture after it lands (the `claude/docs-shots-recapture` PR) rewrites a few
+gradient pixels; adopt it. If a local `make docs-shots-check` still differs on a host only by such a residue, adopt
+the CI recapture rather than loosening the comparison or masking the element.
 
 ### A mask covers a box that holds still, and says that it is there
 
