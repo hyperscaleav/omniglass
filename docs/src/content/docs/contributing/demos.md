@@ -519,8 +519,8 @@ The recorder takes the loop's frames as screenshots at twice the viewport, as fa
 (Playwright's own video has CSS-pixel frames, so a "2x video" is the 1x frame padded with gray), so a 2x zoom
 is still crisp (past 2x the frame is upscaled, a little soft), and writes where each focused target sat on screen. ffmpeg joins the frames, each held for
 as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
-project in `web/e2e/marketing/compose/` then renders the pans and zooms over it, offline, with its
-telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
+project in `web/e2e/marketing/compose/` (installed once, with the repo's pinned pnpm, in the Playwright
+image) then renders the pans and zooms over it, offline, with its telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
 half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a click shows a
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
