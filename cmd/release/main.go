@@ -63,9 +63,15 @@ func run(o options, in io.Reader, out io.Writer) error {
 		return errors.New("this clone is shallow; the bump needs main's history since the last release: git fetch --unshallow " + o.remote)
 	}
 	remoteRelease := "refs/remotes/" + o.remote + "/release/"
-	if _, err := g.out("fetch", "--quiet", "--tags", "--prune", o.remote,
+	// Prune only the release branches, so a deleted branch stops naming a
+	// line. Tags are fetched apart and never pruned, so a local tag the remote
+	// lacks survives.
+	if _, err := g.out("fetch", "--quiet", "--no-tags", "--prune", o.remote,
 		"+refs/heads/"+o.main+":refs/remotes/"+o.remote+"/"+o.main,
 		"+refs/heads/release/*:"+remoteRelease+"*"); err != nil {
+		return err
+	}
+	if _, err := g.out("fetch", "--quiet", "--no-prune", o.remote, "refs/tags/*:refs/tags/*"); err != nil {
 		return err
 	}
 	mainRef := o.remote + "/" + o.main

@@ -35,7 +35,8 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and a release's
   notes group it by its type. A malformed title would muddy the history and land in the
-  notes' Other changes, so it is blocked at the PR. The version itself comes from the release branch, not the titles.
+  notes' Other changes, so it is blocked at the PR. The titles also pick the release line: `make release` reads their types to choose the next
+  release branch, and that branch then numbers the tags (see [cutting a release](#cutting-a-release-manual)).
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.

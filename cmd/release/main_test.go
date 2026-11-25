@@ -106,6 +106,29 @@ func TestDryRunPreviewsTheMinorAndCreatesNothing(t *testing.T) {
 	}
 }
 
+// The fetch prunes deleted release branches but never a local tag.
+func TestFetchPrunesReleaseBranchesNotTags(t *testing.T) {
+	f := newFixture(t)
+	f.git(f.clone, "tag", "v0.0.0")
+	f.git(f.clone, "push", "--quiet", "origin", "main", "main:refs/heads/release/0.4", "--tags")
+	f.git(f.clone, "fetch", "--quiet", "origin")
+	f.git(f.remote, "branch", "-D", "release/0.4")
+	f.git(f.clone, "tag", "local-only")
+	f.commit("feat: a feature (#9)")
+	f.git(f.clone, "push", "--quiet", "origin", "main")
+
+	out, err := f.run(options{dryRun: true}, "")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Branch: release/0.1") {
+		t.Errorf("the deleted release/0.4 still names a line:\n%s", out)
+	}
+	if got := f.git(f.clone, "tag", "--list", "local-only"); got != "local-only" {
+		t.Fatalf("the local tag was pruned")
+	}
+}
+
 func TestConfirmedRunCreatesTheBranchAtMainsTip(t *testing.T) {
 	f := newFixture(t)
 	f.git(f.clone, "tag", "v0.0.0")
