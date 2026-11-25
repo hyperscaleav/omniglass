@@ -35,7 +35,8 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and a release's
   notes group it by its type. A malformed title would muddy the history and land in the
-  notes' Other changes, so it is blocked at the PR. The version itself comes from the release branch, not the titles.
+  notes' Other changes, so it is blocked at the PR. The titles also pick the release line: `make release` reads their types to choose the next
+  release branch, and that branch then numbers the tags (see [cutting a release](#cutting-a-release-manual)).
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
@@ -149,9 +150,9 @@ first commit.
 ## Cutting a release (manual)
 
 Releases are **not** cut on merge to `main`, and `main` never freezes for one. A release is cut
-from a **release branch**, `release/<major>.<minor>`, made from `main` on the day of the cut,
-and there is exactly one way to cut one: dispatch the **release** workflow (`release.yml`) on
-that branch from its "Run workflow" button (#2139). A dispatch on any other ref fails at its
+from a **release branch**, `release/<major>.<minor>`, made from `main` on the day of the cut by
+`make release` (below), and there is exactly one way to cut one: dispatch the **release** workflow
+(`release.yml`) on that branch from its "Run workflow" button (#2139). A dispatch on any other ref fails at its
 first step.
 
 - **A candidate.** A dispatch tags the branch tip as the next candidate, `v0.1.0-rc.1`, and
@@ -164,9 +165,32 @@ first step.
   candidate, so what ships is exactly what soaked.
 - **A patch.** The branch lives on: after `v0.1.0`, the next candidate is `v0.1.1-rc.1`.
 
-The version comes from the branch name and the tags already cut
-(`cmd/releaseversion`), never from commit subjects, so the first `0.x` release cannot number
-itself `1.0.0` from an old breaking change.
+**Which branch to cut is not a judgment call.** `make release` reads the PR titles squash-merged
+on `main` since the newest release line branched and picks the branch for you (`cmd/release`,
+#2711):
+
+- **A breaking change** (a `!` after the type, or a `BREAKING CHANGE:` footer) bumps the
+  **minor** while the major is 0, and the major from 1.0 on. Before 1.0 nothing ever numbers a
+  release `1.0.0`.
+- **A `feat`** bumps the minor: the next line, `release/0.2` after `release/0.1`.
+- **A `fix` or `perf`** bumps the patch. A patch opens no branch, because it is a cherry-pick onto
+  the line's existing branch; `make release` lists the fixes on `main` that branch does not carry
+  yet, oldest first.
+- **Anything else alone** (`docs`, `ci`, `chore`, `refactor`, `test`) releases nothing.
+
+It prints the version, the commits that drove the bump, the tag the first dispatch on the branch
+cuts, and the full release notes, then asks before it creates `release/<major>.<minor>` at
+`main`'s tip on `origin`. It never dispatches the workflow and never touches `RELEASES_ENABLED`.
+
+```bash
+make release DRY_RUN=1   # preview only
+make release             # preview, then ask before creating the branch
+make release YES=1       # create it without asking
+```
+
+From there the tag a dispatch cuts comes from the branch name and the tags already cut
+(`cmd/releaseversion`), never from commit subjects: the commits pick the line, and the line
+numbers its candidates and its patches.
 
 **The notes** cover every commit since the previous final release, so a candidate's notes are
 cumulative, and group each PR title by its type (`cmd/releasenotes`, #2142): Breaking changes
@@ -204,7 +228,7 @@ the real cut, an admin can create a throwaway release branch such as `release/0.
 it with `dry_run`, and delete it. Release branches themselves are protected like `main` by a `release/*`
 ruleset: pull requests only, the same required checks, no force-push or deletion.
 
-To preview locally, from the release branch:
+To preview the next tag locally, from the release branch:
 
 ```bash
 make release-plan            # the tag the next dispatch cuts
