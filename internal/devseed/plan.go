@@ -71,7 +71,11 @@ type systemRow struct{ Key, Name, Label, Standard, SystemType, Room string }
 // componentRow is one component of a plan: a product placed in a room of Site,
 // filling Slot of System. Its name is the platform's to mint. A webhook
 // sender's component (#1747) is placed at its site and fills no slot.
-type componentRow struct{ Key, Product, Site, Room, System, Slot string }
+type componentRow struct {
+	Key, Product, Site, Room, System, Slot string
+	// Control wires the device's control face too (scenario.SlotFill.Control).
+	Control bool
+}
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
 // Creation order is part of the contract: a platform-minted name is the stem
@@ -112,7 +116,7 @@ func rowsOf(p *scenario.Plan) planRows {
 				for n := 1; n <= fill.Count; n++ {
 					r.Components = append(r.Components, componentRow{
 						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Product: fill.Product,
-						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot,
+						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control,
 					})
 				}
 			}

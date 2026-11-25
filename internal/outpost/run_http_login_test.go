@@ -259,7 +259,7 @@ func TestOutpostHTTPDigestAnswersItsChallenge(t *testing.T) {
 	var md5Profile string
 	shaProfile := "display-sha256"
 	s := newHTTPStack(t, "edge-digest", func(store *profile.Store) {
-		md5Profile = loginProfile(t, store, "digest", "POST /api/display/power")
+		md5Profile = loginProfile(t, store, "digest", "POST /api/display/power", "POST /api/display/input")
 		a := faceAuth(store, md5Profile)
 		a.Algorithm = "SHA-256"
 		loginVariant(store, md5Profile, shaProfile, a)
@@ -299,6 +299,21 @@ func TestOutpostHTTPDigestAnswersItsChallenge(t *testing.T) {
 		}
 		if got := fmt.Sprint(dev.ReadPath("status.device.power")); got != "standby" {
 			t.Fatalf("%s: power = %s after set-power, want standby", name, got)
+		}
+		// So does a set-input (#2649), and the display's acknowledgement,
+		// naming the input it switched to, settles it.
+		if _, err := s.gw.IssueCommand(s.ctx, owner, "component", comp, "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
+			t.Fatalf("issue set-input: %v", err)
+		}
+		deadline = time.Now().Add(20 * time.Second)
+		for s.commandStatus("set-input") != "settled" && time.Now().Before(deadline) {
+			time.Sleep(25 * time.Millisecond)
+		}
+		if got := fmt.Sprint(dev.ReadPath("status.display.input")); got != "hdmi2" {
+			t.Fatalf("%s: input = %s after set-input, want hdmi2", name, got)
+		}
+		if got := s.commandStatus("set-input"); got != "settled" {
+			t.Fatalf("%s: set-input is %q, want settled by the acknowledgement", name, got)
 		}
 
 		// A wrong password: the fresh state's bare request draws the

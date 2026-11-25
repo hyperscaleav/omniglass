@@ -1083,6 +1083,12 @@ drivers:
         - command_type: set-power
           request: { method: POST, path: /api/display/power, body: { power: "${value}" } }
           settle: { from: response, extract: { jsonpath: power } }
+        # So does the input acknowledgement (#2649): the input the display
+        # switched to, which settles a set-input against its intent. The SNMP
+        # driver's next poll of video-input then reads the same input.
+        - command_type: set-input
+          request: { method: POST, path: /api/display/input, body: { input: "${value}" } }
+          settle: { from: response, extract: { jsonpath: input } }
   - id: ucc-webhook
     label: UCC Webhooks
     version: "1.0.0"

@@ -3860,7 +3860,7 @@
    "version": "1.0.0",
    "transport": "http",
    "polls": 1,
-   "commands": 1
+   "commands": 2
   },
   {
    "id": "ucc-webhook",

@@ -48,6 +48,10 @@ standards:
       main-display: boreal-edge-86
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
+    # The boardrooms' displays take commands (#2649): each is wired with its
+    # web admin beside its SNMP agent, so a demo can switch a display's input
+    # from the console and watch the room recover.
+    control: [main-display]
   - name: divisible-conference
     system_type: conference
     products:

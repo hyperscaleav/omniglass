@@ -136,6 +136,54 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 	if res.Endpoints == 0 || endpoints != res.Endpoints+res.Senders || orphaned != 0 {
 		t.Errorf("%d endpoints in the database, result says %d and %d webhooks, %d on no component; want equal, non-zero, none", endpoints, res.Endpoints, res.Senders, orphaned)
 	}
+
+	// Control faces (#2649): one web admin on each controlled slot's device,
+	// and on no other component.
+	wantControl := map[string]int{}
+	for _, site := range p.Sites {
+		for _, s := range site.Systems {
+			for _, fill := range s.Slots {
+				if fill.Control {
+					wantControl[s.Name+"/"+fill.Slot] += fill.Count
+				}
+			}
+		}
+	}
+	if len(wantControl) == 0 {
+		t.Fatal("the plan controls no slot; the corporate boardrooms' displays should take commands")
+	}
+	gotControl := map[string]int{}
+	rows, err = conn.Query(ctx, `
+		select s.name || '/' || r.name
+		from endpoint e
+		join driver d on d.id = e.driver_id
+		join system_slot_assignment a on a.component_id = e.component
+		join system s on s.id = a.system_id
+		join system_slot r on r.id = a.slot_id
+		where d.name = 'boreal-edge-web'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatal(err)
+		}
+		gotControl[k]++
+	}
+	rows.Close()
+	if fmt.Sprint(sortedCounts(gotControl)) != fmt.Sprint(sortedCounts(wantControl)) {
+		t.Errorf("control faces = %v, want %v", sortedCounts(gotControl), sortedCounts(wantControl))
+	}
+}
+
+func sortedCounts(m map[string]int) []string {
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		out = append(out, fmt.Sprintf("%s=%d", k, v))
+	}
+	sort.Strings(out)
+	return out
 }
 
 // The same plan seeded into two fresh databases mints the same component
