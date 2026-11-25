@@ -181,21 +181,56 @@ func TestAgentStatusKeepsTheSummaryWithoutPoints(t *testing.T) {
 	}
 }
 
-// agent-fix replies on each review thread it fixed, and only those: a point
-// that was not changed, came from no thread, or names a commit the run did not
-// push gets no reply.
+// agent-fix answers every thread it read (#2217): a thread it fixed gets "Fixed
+// in <sha>" and is resolved, a thread it left alone gets its reason and stays
+// open for a person. A point that came from no thread, or that names a commit
+// the run did not push, is not fixed and gets no "Fixed" reply.
 func TestAgentStatusRepliesOnTheThreadsItFixed(t *testing.T) {
 	got, code := agentStatus(t, "replies", `{"commits":["`+pushedSHA+`"],"points":[
 		{"point":"a","status":"fixed","sha":"abc1234","comment_id":5},
 		{"point":"a again","status":"fixed","sha":"abc1234aa","comment_id":5},
-		{"point":"b","status":"unchanged","comment_id":6},
 		{"point":"c","status":"fixed","sha":"abc1234"},
-		{"point":"d","status":"fixed","sha":"deadbee","comment_id":7},
-		{"point":"e","status":"fixed","sha":"abc1234","comment_id":"8; rm -rf"}]}`)
-	if code != 0 || got != `[{"comment_id":5,"body":"✅ Fixed in abc1234"}]` {
-		t.Fatalf("exit %d: %s", code, got)
+		{"point":"d","status":"fixed","sha":"deadbee","comment_id":7,"reason":"claimed"},
+		{"point":"e","status":"fixed","sha":"abc1234","comment_id":"8; id"}],
+		"threads":[{"id":"T5","comments":{"nodes":[{"databaseId":5,"body":"x"}]}}]}`)
+	want := `[{"comment_id":5,"thread_id":"T5","body":"✅ Fixed in abc1234","resolve":true},` +
+		`{"comment_id":7,"thread_id":"","body":"↩️ Not changed: claimed","resolve":false}]`
+	if code != 0 || got != want {
+		t.Fatalf("exit %d:\n got %s\nwant %s", code, got, want)
 	}
 	if got, _ := agentStatus(t, "replies", `{}`); got != "[]" {
 		t.Fatalf("no points: %s", got)
+	}
+}
+
+// Any comment of a thread finds the thread, and a fixed point wins over an
+// unchanged one on the same thread, so one reply and one resolve per thread.
+func TestAgentStatusRepliesOncePerThreadAndFixedWins(t *testing.T) {
+	got, _ := agentStatus(t, "replies", `{"commits":["`+pushedSHA+`"],"points":[
+		{"point":"no","status":"unchanged","reason":"public name","comment_id":11},
+		{"point":"yes","status":"fixed","sha":"abc1234","comment_id":12}],
+		"threads":[{"id":"T1","comments":{"nodes":[{"databaseId":10,"body":"x"},{"databaseId":11,"body":"y"},{"databaseId":12,"body":"z"}]}}]}`)
+	want := `[{"comment_id":12,"thread_id":"T1","body":"✅ Fixed in abc1234","resolve":true}]`
+	if got != want {
+		t.Fatalf("got %s\nwant %s", got, want)
+	}
+}
+
+// A thread it read and did not change stays open with its reason, unless the
+// finding is advisory and the agent says no change is needed.
+func TestAgentStatusLeavesAnUnchangedThreadOpenWithAReason(t *testing.T) {
+	got, _ := agentStatus(t, "replies", `{"commits":[],"points":[
+		{"point":"blocking","status":"unchanged","reason":"the name is public config","comment_id":1,"no_change_needed":true},
+		{"point":"advisory held","status":"unchanged","reason":"the name is public config","comment_id":2},
+		{"point":"advisory fine","status":"unchanged","reason":"already handled by the caller","comment_id":3,"no_change_needed":true}],
+		"threads":[
+		{"id":"T1","comments":{"nodes":[{"databaseId":1,"body":"<!-- agent-review severity=blocking -->\nb"}]}},
+		{"id":"T2","comments":{"nodes":[{"databaseId":2,"body":"<!-- agent-review severity=advisory -->\na"}]}},
+		{"id":"T3","comments":{"nodes":[{"databaseId":3,"body":"<!-- agent-review severity=advisory -->\na"}]}}]}`)
+	want := `[{"comment_id":1,"thread_id":"T1","body":"↩️ Not changed: the name is public config","resolve":false},` +
+		`{"comment_id":2,"thread_id":"T2","body":"↩️ Not changed: the name is public config","resolve":false},` +
+		`{"comment_id":3,"thread_id":"T3","body":"↩️ No change needed: already handled by the caller","resolve":true}]`
+	if got != want {
+		t.Fatalf("got %s\nwant %s", got, want)
 	}
 }

@@ -218,10 +218,25 @@ too. The agent reads only the comment or review that started it. Write the ask t
 ```
 
 agent-fix answers each point on one line in its status comment, `✅ <point> · Fixed in <sha>`
-or `↩️ <point> · Not changed`, with its reasons collapsed under them, and replies
-`✅ Fixed in <sha>` on each review thread a commit it pushed fixed. A point counts as fixed only
-when its commit is one the run pushed. It never resolves a thread: the reviewer's recheck does
-that once it has seen the fix.
+or `↩️ <point> · Not changed`, with its reasons collapsed under them. A point counts as fixed
+only when its commit is one the run pushed.
+
+agent-fix also answers each review thread it read, as the agent App, never a person (#2217). The
+agent gives every thread its own point, including the open threads from earlier reviews, and the
+workflow does the rest after the run:
+
+- **Fixed.** A thread a commit this run pushed fixed gets `✅ Fixed in <sha>` and is resolved. A
+  thread an earlier commit already fixed is not this run's to claim: it is left open, and the
+  reviewer resolves it once a re-review no longer raises it.
+- **Not changed.** A thread the agent read and left gets `↩️ Not changed: <reason>` and stays open
+  for a person. The exception is an advisory finding (the reviewer's comment says
+  `severity=advisory`) where the agent marks no change as the right answer: it gets
+  `↩️ No change needed: <reason>` and is resolved. A blocking finding is never resolved this way.
+- **One reply per thread.** Several points on one thread make one reply, and a fixed point wins.
+
+A PR whose agent-review says ship and whose threads agents addressed can merge without anyone
+resolving a thread by hand. The reviewer still resolves its own threads that a later review no
+longer raises, as [above](#the-reviewer-on-its-threads).
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
