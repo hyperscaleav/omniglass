@@ -164,11 +164,12 @@ shots:
         expect: ["Why", "Display on the wrong input", "display-1"]
         zoom: 2.2
         hold: 1600
-      # Beat 4: the display itself, its own report: Video Input hdmi2.
+      # Beat 4: the display itself, its own report: Video Input hdmi2. Video Input
+      # is a property, so it reads in "What it is", not among the Vitals (metrics).
       - click: 'aside[data-blade] [data-testid=alarm-strip] button:text-is("display-1")'
         hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=vital-video-input]:has-text("hdmi2")' }
-        focus: 'aside[data-blade] [data-testid=leaf-vitals]'
+      - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity] dt:text-is("Video Input") + dd:has-text("hdmi2")' }
+        focus: 'aside[data-blade] [data-testid=leaf-identity]'
         expect: ["Video Input", "hdmi2"]
         zoom: 2.4
         hold: 1500
@@ -191,9 +192,9 @@ shots:
         zoom: 2.2
         hold: 1300
       # Its next poll reads hdmi1, sped up under the badge.
-      - wait: { selector: 'aside[data-blade] [data-testid=vital-video-input]:has-text("hdmi1")', timeout: 120000 }
+      - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity] dt:text-is("Video Input") + dd:has-text("hdmi1")', timeout: 120000 }
         fast: 30
-        focus: 'aside[data-blade] [data-testid=leaf-vitals]'
+        focus: 'aside[data-blade] [data-testid=leaf-identity]'
         expect: ["Video Input", "hdmi1"]
         zoom: 2.4
         hold: 1200
