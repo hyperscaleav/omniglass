@@ -194,9 +194,9 @@ function InboxRow(props: { entry: InboxEntry; busy: boolean; disabled: boolean; 
           </span>
         </div>
         <Show when={e().text}>
-          <p class="line-clamp-2 whitespace-pre-line text-xs text-base-content/50">{e().text}</p>
+          <p class="line-clamp-2 whitespace-pre-line text-xs text-base-content/50" data-testid="inbox-entry-text">{e().text}</p>
         </Show>
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/60">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/60" data-testid="inbox-entry-meta">
           <Tooltip as={A} href={inboxEntryHref(e())} class="link link-hover font-data text-base-content/80" onClick={props.onFollow} content="Open the component's activity, where this alarm sits">
             {e().component}
           </Tooltip>

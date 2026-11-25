@@ -81,6 +81,20 @@ for i in $(seq 1 90); do
   sleep 2
 done
 
+# The dev user's inbox holds the outpost-silent entry before any shot (#2292): the
+# alarm opening is not the entry arriving, since a rule's action queues it and
+# the tick delivers it a moment later, and the inbox shot is a different page,
+# empty or populated, depending on which side of that it lands. Wait for it so the
+# inbox is the same populated page every capture, and the shot can mask only what
+# moves. LOUD past the deadline, like the wait above.
+for i in $(seq 1 60); do
+  held="$(curl -fsS -H "Authorization: Bearer $LAB_TOKEN" "$LAB_HOST_URL/api/v1/auth/me/notifications" |
+    jq '[.notifications[] | select(.transition == "raised")] | length > 0')"
+  [ "$held" = true ] && break
+  [ "$i" = 60 ] && { echo "capture: the dev user's inbox held no alarm entry after 120s" >&2; exit 1; }
+  sleep 2
+done
+
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
 # failure: every CLI write here lands an audit row, so a write that silently
 # failed shifts the audit page by one row and the zero-tolerance gate reads
