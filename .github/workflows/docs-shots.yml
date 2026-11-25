@@ -30,11 +30,27 @@ on:
     paths:
       - docs/**
       - web/**
+  # The recapture runs on main, so its trigger is every input to a capture (#860):
+  # the console (web/**), the pages and their frontmatter (docs/**), the dev seed
+  # fleet the captured console renders, the boot seed and the migrations behind it
+  # (a new catalog row moves a count), and what builds the lab image the capture
+  # drives (the Makefile, the Dockerfile) and this workflow. The rest of internal/**
+  # is left out on purpose: the recapture builds the image and takes minutes, and a
+  # server change that moves a pixel does so through one of these inputs or through
+  # web/**. A new input that shapes what the console renders joins this list. A PR
+  # compares no pixels (verify is structural), so its filter is unchanged: a seed
+  # change is caught here, on main, after the merge.
   push:
     branches: [main, "release/**"]
     paths:
       - docs/**
       - web/**
+      - internal/devseed/**
+      - internal/seed/**
+      - db/migrations/**
+      - Makefile
+      - Dockerfile*
+      - .github/workflows/docs-shots.yml
 
 permissions:
   contents: read
