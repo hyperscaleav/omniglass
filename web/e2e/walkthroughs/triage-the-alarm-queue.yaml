@@ -34,5 +34,9 @@ steps:
     poster: true
   - click: { role: button, name: Troubleshoot Queue demo input lost with omnibot, exact: true }
     caption: Hand the third to omnibot. It is given the alarm by its component and when it was raised, never what the screen shows.
+  - wait: { selector: '[data-testid=omnibot-thinking]', timeout: 30000 }
+    caption: Omnibot runs the triage skill. Its reasoning and its calls fold into one line, so the answer is what you read.
+  - click: '[data-testid=omnibot-thinking] > summary'
+    caption: Open it to read the calls.
   - wait: { selector: '[data-testid=omnibot-step] >> nth=2', timeout: 30000 }
     caption: Omnibot runs the triage skill and reads the component, its alarms and its reachability, under your grants.
