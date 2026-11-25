@@ -259,7 +259,7 @@ avatar gradient (#774). So the capture browser runs with `--disable-skia-runtime
 which turns the runtime dispatch off: every host takes the same baseline path. The comparison stays exact.
 Measured on an AVX2 host and a host with no AVX at all, the same tree captured with and without the flag
 ([the comparison on #1860](https://github.com/hyperscaleav/omniglass/issues/1860#issuecomment-7169963900)):
-`users.png` is byte-identical across the two CPUs either way, one other baseline (`notification-target-new`, 8 pixels)
+the users page's shot (`users`) is byte-identical across the two CPUs either way, one other baseline (`notification-target-new`, 8 pixels)
 differs across the CPUs without the flag and is byte-identical with it, and 36 of the 37 baselines match across the
 two CPUs with it. The one that does not, `fleet-history`, differs by where the history strip's alarm marker sits,
 which follows when the lab raised the alarm, not the rasterizer, so the flag does not and cannot pin it.
