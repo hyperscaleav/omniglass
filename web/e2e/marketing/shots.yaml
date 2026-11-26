@@ -69,6 +69,13 @@ setup:
   - put: /components/{regional-06.regional-06-main.regional-06-main-1.regional-06-main-1-01.$comp.display-1}/impairment
     body: { unplugged: true }
   - wait: { get: /alarms?limit=50, field: alarms.4.active, equals: true, timeout: 180000 }
+  # The conference room's video bar takes a call at lab start (#2754), so by
+  # the device-everything shot it has run a while on its own: its call stats
+  # drifting, its participants coming and going, its log lines and events.
+  # {@system/member} is the component the system holds under that member
+  # name, looked up at run time, wherever the lab's size placed the room.
+  - post: /components/{@hq-divisible-conference-1/videobar-1}/simulation:fire
+    body: { surface: http-api, method: POST, path: /api/call/dial, body: '{"id":"c-showcase","participants":4}' }
 
 shots:
   # The hero: from the whole fleet to the cause, in one run. Beats: the count
@@ -409,6 +416,105 @@ shots:
   # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
   # rule needs about a minute to hold its alarm, and that minute plays as a
   # lapse, sped up as far as it needs (lapseSpeed in web/e2e/marketinglib.mjs).
+  # Collection: everything one device says (the architect's storyboard). The
+  # conference room's video bar, in a call since lab start: who it is (its
+  # identity), what it measures (its vitals), how it is read (two endpoints,
+  # https and its websocket, each authenticated), then its timeline over the
+  # hour: property lanes from both protocols, two metrics picked in, its own
+  # events and log lines, the cursor reading every lane at one instant, and one
+  # event it sent itself opened.
+  - id: device-everything
+    kind: loop
+    # 40: nine beats, each closed in on (#2752).
+    max_seconds: 40
+    alt: "Everything one device says in Omniglass: a conference room's video bar, its identity (firmware, hardware revision, serial, MAC, IP, hostname, resolution), its vitals (packet loss, jitter, bitrate, frame rate, levels, CPU, temperature), its two endpoints over https and websocket, each authenticated, then its timeline over the last hour: property lanes from both protocols, bitrate and packet loss picked in, the events and log lines the device sent itself, the cursor reading every lane at one instant, and its call-started event opened."
+    start: '/components/{@hq-divisible-conference-1/videobar-1}?range=1h'
+    ready: { selector: '[data-testid=leaf-identity]' }
+    steps:
+      # 1. The device: healthy, a Kestrel VRoom.
+      - wait: { selector: '[data-testid=leaf-header]' }
+        focus: '[data-testid=component-card]'
+        expect: ["healthy", "videobar-1"]
+        zoom: 1.0
+        hold: 1300
+      # 2. Who it is: the top of What it is, then down its identity.
+      - wait: { selector: '[data-testid=leaf-identity] dt:text-is("Firmware version")' }
+        focus: '[data-testid=leaf-identity]'
+        expect: ["Kestrel VRoom", "Firmware version"]
+        zoom: 1.6
+        hold: 1600
+      - hover: '[data-testid=leaf-identity] dt:text-is("MAC address")'
+        focus: here
+        expect: ["MAC address", "Serial number"]
+        zoom: 1.9
+        hold: 1600
+      # 3. What it measures: its vitals, moving.
+      - hover: '[data-testid=leaf-vitals]'
+        focus: here
+        expect: ["Vitals"]
+        zoom: 1.5
+        hold: 2200
+      # 4. How it is read: two endpoints, each up its ladder.
+      - hover: '[data-testid=leaf-collection]'
+        focus: here
+        expect: ["Collection"]
+        zoom: 1.6
+        hold: 2000
+      # 5. One axis: its timeline over the hour, lanes from both protocols.
+      - click: '[data-testid=component-detail] [role=tab]:text-is("Timeline")'
+        hold: 300
+      - wait: { selector: '[data-testid=timeline-property-row]' }
+        focus: '[data-testid=timeline-overlay]'
+        expect: ["Properties", "[wss]"]
+        zoom: 1.3
+        hold: 1800
+      # 6. Two metrics picked in, their charts laid on the same axis.
+      - click: 'button[aria-label="Pick metrics"]'
+        hold: 300
+      - click: 'label:has-text("bitrate") input[type=checkbox]'
+        hold: 300
+      - click: 'label:has-text("packet-loss-ratio") input[type=checkbox]'
+        hold: 300
+      - press: Escape
+        hold: 200
+      - wait: { selector: '[data-testid=timeline-metric-row]' }
+        focus: '[data-testid=timeline-metric-row] >> nth=0'
+        expect: ["bitrate"]
+        zoom: 1.6
+        hold: 1600
+      # 7. Its own events, then its log lines (every severity).
+      - wait: { selector: '[data-testid=timeline-events-row] g[role=button]' }
+        focus: '[data-testid=timeline-events-row]'
+        spot: false
+        expect: ["Events"]
+        zoom: 1.8
+        hold: 1300
+      - select: { target: 'select[aria-label="Log severity at least"]', value: info }
+        hold: 300
+      - wait: { selector: '[data-testid=timeline-logs-row] g[role=button]' }
+        focus: '[data-testid=timeline-logs-row]'
+        spot: false
+        expect: ["Logs"]
+        zoom: 1.8
+        hold: 1300
+      # 8. One instant: the cursor across the lanes, the readout reading them.
+      - hover: '[data-testid=timeline-metric-row] >> nth=0'
+        focus: '[data-testid=timeline-overlay]'
+        spot: false
+        expect: ["Timeline"]
+        zoom: 1.2
+        hold: 1200
+      - hover: '[data-testid=timeline-events-row] g[role=button][aria-label*="call-started"]'
+        hold: 1200
+      # 9. One event it sent itself, opened.
+      - click: '[data-testid=timeline-events-row] g[role=button][aria-label*="call-started"]'
+        hold: 300
+      - wait: { selector: '[data-testid=timeline-detail]' }
+        focus: here
+        expect: ["call-started"]
+        zoom: 2.0
+        hold: 2200
+
   - id: alarm-outage
     kind: loop
     max_seconds: 12

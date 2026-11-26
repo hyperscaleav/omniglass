@@ -14,6 +14,8 @@ import {
   loopMaxBytes,
   cameraTail,
   retime,
+  memberRefs,
+  substituteRefs,
   thinFrames,
   concatList,
   buildManifest,
@@ -153,7 +155,7 @@ describe("parseShots", () => {
     expect(parseShots("{ unclosed").problems[0]).toContain("is not YAML");
   });
 
-  it("parses the committed shot list: eight shots, the two kinds, every one with alt", () => {
+  it("parses the committed shot list: nine shots, the two kinds, every one with alt", () => {
     const text = readFileSync(join(__dirname, "../e2e/marketing/shots.yaml"), "utf8");
     const { list, problems } = parseShots(text);
     expect(problems).toEqual([]);
@@ -166,6 +168,7 @@ describe("parseShots", () => {
       "fleet-explore": "loop",
       "fleet-scale": "still",
       "credential-fix": "loop",
+      "device-everything": "loop",
       "alarm-outage": "loop",
       "system-why": "still",
       "omnibot-ask": "loop",
@@ -483,6 +486,20 @@ describe("landWaitMs", () => {
 
   it("adds nothing when the camera did not move", () => {
     expect(landWaitMs(false)).toBe(0);
+  });
+});
+
+describe("member addresses", () => {
+  it("finds each {@system/member} in a path, once", () => {
+    expect(memberRefs("/components/{@hq-conf-1/videobar-1}/simulation:fire")).toEqual([{ ref: "{@hq-conf-1/videobar-1}", system: "hq-conf-1", member: "videobar-1" }]);
+    expect(memberRefs("/components/{@a/b}?x={@a/b}")).toHaveLength(1);
+    expect(memberRefs("/components/{hq.x.$comp.display-1}/impairment")).toEqual([]);
+  });
+
+  it("puts each member's component id in its place, and refuses one it was not given", () => {
+    const ids = new Map([["{@hq-conf-1/videobar-1}", "01a2"]]);
+    expect(substituteRefs("/components/{@hq-conf-1/videobar-1}?tab=timeline", ids)).toBe("/components/01a2?tab=timeline");
+    expect(() => substituteRefs("/components/{@hq-conf-1/dsp-1}", ids)).toThrow("{@hq-conf-1/dsp-1}");
   });
 });
 

@@ -25,7 +25,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, clickFrame, expandAddress, followFrame, frameFor, landWaitMs, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, clickFrame, expandAddress, followFrame, frameFor, landWaitMs, frameRect, lapseSpeed, loopMaxBytes, memberRefs, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, substituteRefs, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -191,21 +191,46 @@ async function capture(file, out, only) {
 /** @param {string} base @param {string} token */
 function makeApi(base, token) {
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const url = (/** @type {string} */ p) => `${base}/api/v1${expandAddress(p)}`;
+  // A member address ({@system/member}) is looked up once, through the
+  // system's members, and its component id used from then on.
+  /** @type {Map<string, string>} */
+  const ids = new Map();
+  /** @param {string} p @returns {Promise<string>} */
+  const resolve = async (p) => {
+    for (const r of memberRefs(p)) {
+      if (ids.has(r.ref)) continue;
+      const res = await fetch(`${base}/api/v1/systems/${encodeURIComponent(r.system)}/members`, { headers });
+      if (!res.ok) throw new Error(`${r.ref}: the system's members read ${res.status}`);
+      const d = await res.json();
+      const items = Array.isArray(d) ? d : (Object.values(d).find(Array.isArray) ?? []);
+      const m = items.find((/** @type {any} */ x) => x.component === r.member);
+      if (!m?.component_id) throw new Error(`${r.ref}: system ${r.system} has no member ${r.member}`);
+      ids.set(r.ref, m.component_id);
+    }
+    return substituteRefs(p, ids);
+  };
+  const url = async (/** @type {string} */ p) => `${base}/api/v1${expandAddress(await resolve(p))}`;
   return {
+    resolve,
     /** @param {string} path @returns {Promise<number>} */
     async status(path) {
-      return (await fetch(url(path), { headers })).status;
+      let u;
+      try {
+        u = await url(path);
+      } catch {
+        return 404;
+      }
+      return (await fetch(u, { headers })).status;
     },
     /** @param {string} path @returns {Promise<unknown>} */
     async get(path) {
-      const r = await fetch(url(path), { headers });
+      const r = await fetch(await url(path), { headers });
       if (!r.ok) throw new Error(`GET ${path}: ${r.status} ${(await r.text()).slice(0, 200)}`);
       return r.json();
     },
     /** @param {string} method @param {string} path @param {unknown} body */
     async send(method, path, body) {
-      const r = await fetch(url(path), { method, headers, body: JSON.stringify(body) });
+      const r = await fetch(await url(path), { method, headers, body: JSON.stringify(body) });
       if (!r.ok) throw new Error(`${method} ${path}: ${r.status} ${(await r.text()).slice(0, 300)}`);
     },
   };
@@ -340,7 +365,7 @@ async function record(browser, base, storageState, shot, out, api) {
   const cam = { events: [], lapses: [], now: () => 0, vp: { width, height }, beats: [], open: null };
   let current = 'start';
   try {
-    await page.goto(`${base}/web${shot.start}`, { waitUntil: 'load', timeout: ACT_TIMEOUT * 2 });
+    await page.goto(`${base}/web${await api.resolve(shot.start)}`, { waitUntil: 'load', timeout: ACT_TIMEOUT * 2 });
     if (shot.ready) {
       current = `ready ${describeTarget(shot.ready)}`;
       await locate(page, shot.ready).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: 60_000 });
