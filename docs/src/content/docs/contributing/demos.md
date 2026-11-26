@@ -554,7 +554,9 @@ never taken for real time.
 
 Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
 part of a path is one address, percent-encoded whole, so a component's path address names one route
-segment), and `wait` polls a GET until a dotted field equals a value. This is how a fault is staged on the
+segment; `{@<system>/<member>}` names the component a system holds under that member name, looked up
+through the system's members at run time, for a device whose location a scale lab's size decides, and a
+shot's `start` takes it too), and `wait` polls a GET until a dotted field equals a value. This is how a fault is staged on the
 fleet: the main display of `hq-mr86-1` unplugged through the impairment route, a video bar's login
 repointed at a secret the device refuses. The shipped reachability rule needs about a minute to hold its
 alarm. A loop that shows the fault arriving (`alarm-outage`) unplugs the display as its last setup item and

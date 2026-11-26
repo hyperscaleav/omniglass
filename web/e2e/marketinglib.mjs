@@ -137,6 +137,35 @@ export function pointerX(kind, box) {
 }
 
 /**
+ * The member addresses in a path: `{@<system>/<member>}` names the component a
+ * system holds under that member name (`{@hq-divisible-conference-1/videobar-1}`),
+ * for a device whose location path a scale lab's size decides. The recorder
+ * looks each up through the system's members at run time (substituteRefs).
+ * @param {string} path
+ * @returns {{ ref: string, system: string, member: string }[]}
+ */
+export function memberRefs(path) {
+  const seen = new Map();
+  for (const m of path.matchAll(/\{@([^/{}]+)\/([^/{}]+)\}/g)) seen.set(m[0], { ref: m[0], system: m[1], member: m[2] });
+  return [...seen.values()];
+}
+
+/**
+ * A path with each member address replaced by the component id looked up for
+ * it; one with no id given is refused, naming it.
+ * @param {string} path
+ * @param {Map<string, string>} ids member address to component id
+ * @returns {string}
+ */
+export function substituteRefs(path, ids) {
+  return path.replace(/\{@([^/{}]+)\/([^/{}]+)\}/g, (ref) => {
+    const id = ids.get(ref);
+    if (!id) throw new Error(`no component found for ${ref}`);
+    return id;
+  });
+}
+
+/**
  * A console address in a request path: every {braced} part is percent-encoded
  * whole, so a component's path address (dots and a `$comp` segment) names the
  * one route segment it is. `/components/{a.$comp.b}/impairment` becomes

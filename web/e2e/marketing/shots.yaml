@@ -69,6 +69,13 @@ setup:
   - put: /components/{regional-06.regional-06-main.regional-06-main-1.regional-06-main-1-01.$comp.display-1}/impairment
     body: { unplugged: true }
   - wait: { get: /alarms?limit=50, field: alarms.4.active, equals: true, timeout: 180000 }
+  # The conference room's video bar takes a call at lab start (#2754), so by
+  # the device-everything shot it has run a while on its own: its call stats
+  # drifting, its participants coming and going, its log lines and events.
+  # {@system/member} is the component the system holds under that member
+  # name, looked up at run time, wherever the lab's size placed the room.
+  - post: /components/{@hq-divisible-conference-1/videobar-1}/simulation:fire
+    body: { surface: http-api, method: POST, path: /api/call/dial, body: '{"id":"c-showcase","participants":4}' }
 
 shots:
   # The hero: from the whole fleet to the cause, in one run. Beats: the count
@@ -401,6 +408,53 @@ shots:
         expect: ["reachable", "responsive", "authenticated"]
         zoom: 1.7
         hold: 1500
+
+  # Collection: everything one device says (the architect's storyboard, its
+  # first half). The conference room's video bar, in a call since lab start:
+  # who it is (its identity), what it measures (its vitals, moving), how it is
+  # read (two endpoints, https and its websocket, each authenticated). Its
+  # timeline beats (lanes from both protocols, metrics picked in, its own
+  # events and logs, one event opened) return once the simulator plays a
+  # scenario on its own clock (#1362, #2757), so a lab need not wait in real
+  # time for an hour to fill.
+  - id: device-everything
+    kind: loop
+    # 20: five beats, each closed in on (#2752).
+    max_seconds: 20
+    alt: "Everything one device says in Omniglass: a conference room's video bar in a call, its identity (firmware, hardware revision, serial, MAC, IP, hostname, resolution), its vitals moving (packet loss, jitter, bitrate, frame rate, levels, CPU, temperature, fan), and its two endpoints over https and websocket, each reachable, responsive and authenticated."
+    start: '/components/{@hq-divisible-conference-1/videobar-1}'
+    ready: { selector: '[data-testid=leaf-identity]' }
+    steps:
+      # 1. The device: healthy, a Kestrel VRoom.
+      - wait: { selector: '[data-testid=leaf-header]' }
+        focus: '[data-testid=component-card]'
+        expect: ["healthy", "videobar-1"]
+        zoom: 1.0
+        hold: 1300
+      # 2. Who it is: the top of What it is, then down its identity.
+      - wait: { selector: '[data-testid=leaf-identity] dt:text-is("Firmware version")' }
+        focus: '[data-testid=leaf-identity]'
+        expect: ["Kestrel VRoom", "Firmware version"]
+        zoom: 1.6
+        hold: 1600
+      - hover: '[data-testid=leaf-identity] dt:text-is("MAC address")'
+        focus: here
+        expect: ["MAC address", "Serial number"]
+        zoom: 1.9
+        hold: 1600
+      # 3. What it measures: its vitals, moving. The pointer goes to a row low in
+      # the list, so the whole card scrolls into view.
+      - hover: '[data-testid=leaf-vitals] dt:text-is("Temperature")'
+        focus: '[data-testid=leaf-vitals]'
+        expect: ["Bitrate", "Temperature"]
+        zoom: 1.5
+        hold: 2200
+      # 4. How it is read: two endpoints, each up its ladder.
+      - hover: '[data-testid=leaf-collection] :text-is("https") >> nth=0'
+        focus: '[data-testid=leaf-collection]'
+        expect: ["authenticated", "wss"]
+        zoom: 2.0
+        hold: 2000
 
   # Health & Alarms. The page's bullets, in order:
   #   1. A room that is down names the alarm and the slot it takes down.
