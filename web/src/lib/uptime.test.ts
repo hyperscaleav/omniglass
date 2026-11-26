@@ -128,3 +128,19 @@ describe("uptimeOver names the range it measured (#2741)", () => {
     expect(r.label).toBe(`${fmtTime(iso(from))} → ${fmtTime(iso(to))}`);
   });
 });
+
+// A custom range that closed before the owner's first record holds nothing
+// (#2741 review): it says so, rather than "no health recorded yet".
+describe("uptimeOver over a range before the first record", () => {
+  it("says nothing was recorded in the range, with no figure", () => {
+    const r = uptimeOver({
+      transitions: [],
+      health: "outage",
+      firstRecordedAt: iso(NOW - 10 * 86_400_000),
+      range: { kind: "absolute", from: NOW - 60 * 86_400_000, to: NOW - 59 * 86_400_000 },
+      now: NOW,
+    });
+    expect(r.pct).toBeNull();
+    expect(r.label).toBe("nothing recorded in this range");
+  });
+});

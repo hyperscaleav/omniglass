@@ -398,8 +398,10 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     transitions: [{ ts: iso(NOW - HOUR / 2), health: "outage" }],
   } as unknown as FleetHealth;
 
-  // Every health read goes through fetch, answered with the report above.
-  const stubHealth = (body: unknown = hourly) => {
+  // Every health read goes through fetch: a ranged read (one with since) is
+  // answered with `body`, the unranged current read with `bare`. `hold` keeps
+  // a ranged read in flight, for the moment between a pick and its answer.
+  const stubHealth = (body: unknown = hourly, bare: unknown = body, hold: (u: URL) => boolean = () => false) => {
     const reads: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -408,7 +410,9 @@ describe("the Activity tab follows the page's range (#2741)", () => {
         const url = new URL(req.url);
         if (url.pathname.endsWith(`/systems/${SID}/health`)) {
           reads.push(url);
-          return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+          const ranged = url.searchParams.has("since");
+          if (ranged && hold(url)) return new Promise<Response>(() => {});
+          return new Response(JSON.stringify(ranged ? body : bare), { status: 200, headers: { "content-type": "application/json" } });
         }
         const out = req.method === "POST" ? { results: [], cursor: "" } : [];
         return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
@@ -423,6 +427,7 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     return qc;
   };
   const since = (u: URL) => Date.parse(u.searchParams.get("since") ?? "");
+  const rangedOf = (reads: URL[]) => reads.filter((u) => u.searchParams.has("since"));
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -436,9 +441,9 @@ describe("the Activity tab follows the page's range (#2741)", () => {
   it("with range=1h, the health read carries that hour and Uptime is that hour's, labelled for it", async () => {
     const reads = stubHealth();
     mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
-    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
-    expect(since(reads[0])).toBe(NOW - HOUR);
-    expect(reads[0].searchParams.get("until")).toBeNull();
+    await waitFor(() => expect(rangedOf(reads).length).toBeGreaterThan(0));
+    expect(since(rangedOf(reads)[0])).toBe(NOW - HOUR);
+    expect(rangedOf(reads)[0].searchParams.get("until")).toBeNull();
     const kpi = await screen.findByTestId("uptime-kpi");
     await waitFor(() => expect(kpi.textContent).toContain("of the last hour"));
     expect(kpi.textContent).toContain("50.0%");
@@ -448,8 +453,8 @@ describe("the Activity tab follows the page's range (#2741)", () => {
   it("with no range given, Activity reads the last 30 days and the Timeline the last 24 hours", async () => {
     const reads = stubHealth();
     mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
-    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
-    expect(since(reads[0])).toBe(NOW - 30 * 24 * HOUR);
+    await waitFor(() => expect(rangedOf(reads).length).toBeGreaterThan(0));
+    expect(since(rangedOf(reads)[0])).toBe(NOW - 30 * 24 * HOUR);
     const kpi = await screen.findByTestId("uptime-kpi");
     await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
     expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 30 days");
@@ -512,6 +517,65 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     expect(kpi.textContent).toContain("50.0%");
     // The bar ends at the range's end, not now.
     expect(within(screen.getByTestId("health-history-full")).getByTestId("strip-end").textContent).toBe(fmtTime(iso(to)));
+  });
+
+  // Review of #2741: the header's since-when is the current report's last edge,
+  // whatever window Activity reads. An outage that began 3 h ago still reads
+  // "since then · 3h" with range=1h, though no edge falls inside that hour.
+  it("the header's since-when reads the current report, not the ranged one", async () => {
+    const opened = NOW - 3 * HOUR;
+    const bare = { ...hourly, carried_in: undefined, transitions: [{ ts: iso(NOW - 40 * 24 * HOUR), health: "healthy" }, { ts: iso(opened), health: "outage" }] };
+    const ranged = { ...hourly, carried_in: "outage", transitions: [] };
+    stubHealth(ranged, bare);
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const line = await screen.findByTestId("since-line");
+    expect(line.textContent).toContain(fmtTime(iso(opened)));
+    expect(line.textContent).toContain("3h");
+  });
+
+  // The current report keeps the 5 s poll on every tab, so the panels that
+  // share its key (the slots on Configure, a location's system summaries)
+  // move with it.
+  it("polls the unranged current report on Configure", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    vi.setSystemTime(new Date(NOW));
+    const reads = stubHealth();
+    mountPage(`/web/systems/${SID}?tab=configure`);
+    const bare = () => reads.filter((u) => !u.searchParams.has("since")).length;
+    // The mount's own first reads are not a poll.
+    await vi.advanceTimersByTimeAsync(0);
+    const atMount = bare();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(bare()).toBeGreaterThan(atMount);
+  });
+
+  // A pick's own read is in flight: Activity draws nothing from the range it
+  // left, rather than that range's report measured as the new one.
+  it("while a new range's read is in flight, Uptime shows no figure from the old range", async () => {
+    stubHealth(hourly, hourly, (u) => since(u) === NOW - 30 * 24 * HOUR);
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("50.0%"));
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-30d"));
+    await waitFor(() => expect(window.location.search).toContain("range=30d"));
+    await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).not.toContain("%"));
+    expect(screen.getByTestId("uptime-kpi").textContent).not.toContain("of the last 30 days");
+    expect(screen.queryByTestId("stretch-list")).toBeNull();
+  });
+
+  // A custom range from before the system existed holds no record: the bar is
+  // not painted in today's health, no stretch is listed, and Uptime says so.
+  it("a past custom range before the first record draws nothing and says so", async () => {
+    const from = NOW - 60 * 24 * HOUR;
+    const to = from + 2 * HOUR;
+    const young = { ...hourly, health: "outage", carried_in: undefined, first_recorded_at: iso(NOW - 10 * 24 * HOUR), transitions: [] };
+    stubHealth(young);
+    mountPage(`/web/systems/${SID}?tab=activity&from=${iso(from)}&to=${iso(to)}`, unseeded());
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("nothing recorded in this range"));
+    expect(screen.getByTestId("health-history-full").querySelectorAll("[data-segment]").length).toBe(0);
+    expect(screen.queryByTestId("stretch-list")).toBeNull();
   });
 
   // The address leaves the 24-hour default out, so on this page a pick of 24
