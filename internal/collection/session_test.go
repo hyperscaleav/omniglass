@@ -1056,6 +1056,74 @@ func TestSessionRedialDoesNotWaitForADialSlot(t *testing.T) {
 
 func slotTaken(s collection.DialSlots) bool { return len(s) == cap(s) }
 
+// #2755: an exchange that cannot run because its session is still making its
+// first connection says so as ErrSessionEstablishing, whether it waited out
+// the first dial or met a first attempt that failed inside the budget, so a
+// poll can tell "not yet" from a failure. Its text still names the state.
+func TestSessionExchangeBeforeTheFirstConnectionIsErrSessionEstablishing(t *testing.T) {
+	t.Run("the first dial is still in flight", func(t *testing.T) {
+		s := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: &blockingDialer{release: make(chan struct{})}})
+		t.Cleanup(s.Close)
+		_, err := s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond)
+		if !errors.Is(err, collection.ErrSessionEstablishing) || !strings.Contains(err.Error(), "is establishing") {
+			t.Fatalf("exchange during the first dial = %v, want ErrSessionEstablishing naming the state", err)
+		}
+	})
+	t.Run("a first attempt failed inside the budget", func(t *testing.T) {
+		d := &fakeSessionDialer{refuse: true}
+		s := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: d,
+			Backoff: func(int) time.Duration { return time.Hour }})
+		t.Cleanup(s.Close)
+		deadline := time.Now().Add(3 * time.Second)
+		for d.dialCount() == 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		_, err := s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond)
+		if !errors.Is(err, collection.ErrSessionEstablishing) {
+			t.Fatalf("exchange after a failed first attempt = %v, want ErrSessionEstablishing", err)
+		}
+	})
+}
+
+// A session that is down, recovering or rejected is not establishing: its
+// exchange fails as before, never as ErrSessionEstablishing, so the poll
+// still records the failure.
+func TestSessionExchangeOnADownRecoveringOrRejectedSessionIsNotEstablishing(t *testing.T) {
+	t.Run("down", func(t *testing.T) {
+		d, r := &fakeSessionDialer{refuse: true}, newRecorder()
+		s := startTestSession(t, d, r)
+		r.waitStates(t, establishing, down)
+		_, err := s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond)
+		if err == nil || errors.Is(err, collection.ErrSessionEstablishing) || !strings.Contains(err.Error(), "is down") {
+			t.Fatalf("exchange on a down session = %v, want the down failure, not establishing", err)
+		}
+	})
+	t.Run("recovering", func(t *testing.T) {
+		d := &fakeSessionDialer{}
+		r := newRecorder()
+		s := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: d, OnTransition: r.onTransition,
+			Backoff: func(int) time.Duration { return time.Hour }})
+		t.Cleanup(s.Close)
+		r.waitStates(t, establishing, up)
+		d.setRefuse(true)
+		d.last().kill(errors.New("EOF"))
+		r.waitStates(t, establishing, up, recovering)
+		_, err := s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond)
+		if err == nil || errors.Is(err, collection.ErrSessionEstablishing) || !strings.Contains(err.Error(), "is recovering") {
+			t.Fatalf("exchange on a recovering session = %v, want the recovering failure, not establishing", err)
+		}
+	})
+	t.Run("rejected", func(t *testing.T) {
+		s := collection.StartSession(collection.SessionConfig{Target: "10.0.0.1:1", Dialer: &fakeSessionDialer{},
+			Rejected: &collection.TerminalError{Class: driver.ClassAuth, Reason: "auth rejected"}})
+		t.Cleanup(s.Close)
+		_, err := s.Exchange(context.Background(), "GET INPUT", nil, 30*time.Millisecond)
+		if _, terminal := collection.AsTerminal(err); !terminal || errors.Is(err, collection.ErrSessionEstablishing) {
+			t.Fatalf("exchange on a rejected session = %v, want the refusal, not establishing", err)
+		}
+	})
+}
+
 // blockingDialer holds every dial until release closes, counting how many
 // are in flight at once.
 type blockingDialer struct {
