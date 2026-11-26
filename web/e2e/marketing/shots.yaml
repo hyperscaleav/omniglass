@@ -119,7 +119,7 @@ shots:
   - id: omniglass-teaser
     kind: loop
     max_seconds: 30
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display's timeline with the alarm and the command, the room healthy again, and three minutes later, sped up, its Activity with the outage closed beside its uptime, then the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display reading hdmi1, the room healthy again, and three minutes later, sped up, its Activity with the outage closed beside its uptime, then the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -220,17 +220,7 @@ shots:
         expect: ["Video Input", "hdmi1"]
         zoom: 2.4
         hold: 1000
-      # Beat 7: the display's timeline: the alarm, its Video Input and the
-      # command on one axis.
-      - click: 'aside[data-blade] [data-testid=component-detail] [role=tab]:text-is("Timeline")'
-        focus: out
-        hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=timeline-overlay]' }
-        focus: here
-        expect: ["Alarms", "Commands"]
-        zoom: 1.4
-        hold: 1400
-      # Beat 8: back in the room, healthy, its Why clear.
+      # Beat 7: back in the room, healthy, its Why clear.
       - press: Escape
         hold: 200
       - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 120000 }
@@ -239,7 +229,7 @@ shots:
         expect: ["healthy"]
         zoom: 2.4
         hold: 1200
-      # Beat 9: three minutes on (a lapse, under its badge), the room's Activity
+      # Beat 8: three minutes on (a lapse, under its badge), the room's Activity
       # again, as in beat 3b: the outage closed, its length beside the uptime.
       - wait: { seconds: 180 }
         lapse: 0.6
@@ -253,7 +243,7 @@ shots:
         expect: ["Uptime", "Outage"]
         zoom: 1.8
         hold: 1800
-      # Beat 10: its timeline over that hour, closing in on the outage: healthy,
+      # Beat 9: its timeline over that hour, closing in on the outage: healthy,
       # down for the ten minutes and the fix, healthy again.
       - click: '[data-testid=system-detail] [role=tab]:text-is("Timeline")'
         focus: out

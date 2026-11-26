@@ -509,8 +509,13 @@ function textInside(page, r) {
       if (!boxes.length) continue;
       const inside = boxes.every((b) => b.left >= r.x - 1 && b.top >= r.y - 1 && b.right <= r.x + r.width + 1 && b.bottom <= r.y + r.height + 1);
       if (!inside) continue;
+      // Hit-testing skips an element that takes no pointer events (a chart's
+      // label drawn over its bar), so such text is judged by its nearest
+      // ancestor that does take them: covered only when something outside it is on top.
+      let probe = el;
+      while (probe.parentElement && getComputedStyle(probe).pointerEvents === 'none') probe = probe.parentElement;
       const top = document.elementFromPoint(boxes[0].left + boxes[0].width / 2, boxes[0].top + boxes[0].height / 2);
-      if (top && !el.contains(top) && !top.contains(el)) continue;
+      if (top && !probe.contains(top) && !top.contains(probe)) continue;
       out.push(text);
     }
     // A form control draws its own text: a select its chosen option, a text
