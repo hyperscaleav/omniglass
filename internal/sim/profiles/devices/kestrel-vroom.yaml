@@ -65,15 +65,17 @@ interfaces:
       realm: "Kestrel VRoom"
       enforce: true
     # The live feed the web admin page updates from (#1038): every change
-    # to the call, the volume, the mute and the power state, one numbered
-    # event each
+    # to the call's state and participant count, the volume, the mute and
+    # the power state, one numbered event each
     # (event: change, its data the path and the value as JSON), behind the
-    # same basic auth. A reconnect's Last-Event-ID replays from that event,
-    # and the console drops every stream by firing POST at drop_path.
+    # same basic auth, beside the named events the routes and the call cycle
+    # report (call-started, participant-joined, log and the rest). A
+    # reconnect's Last-Event-ID replays from that event, and the console
+    # drops every stream by firing POST at drop_path.
     events:
       path: /api/events
       retry_ms: 2000
-      paths: [status.audio.volume, status.audio.mic_mute, status.call, status.device.power]
+      paths: [status.audio.volume, status.audio.mic_mute, status.call.active, status.call.participants, status.device.power]
       drop_path: /api/admin/streams/drop
     api_surface: kestrel-vroom
     routes:
@@ -165,24 +167,41 @@ interfaces:
         doc: { summary: "Place a call (the room joins a meeting)", tags: [api, control] }
         example: |
           {"id": "c9001", "participants": 3}
+        # A dialed call starts now, whatever the room's schedule (#2754): the
+        # schedule skips a meeting that falls due under it, and the call
+        # runs until it is hung up or for the default length
+        # (status.sim.dial_length minutes of call_cycle ticks).
         mutations:
           - { path: status.call.id, value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
           - { path: status.call.active, value: true }
           - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}", pattern: "^([1-9]|[1-5][0-9]|6[0-4])$" }
+          - { path: status.sim.dialed, value: true }
+          - { path: status.sim.dial_ticks, value: 0 }
         events:
           - name: call-started
             data: '{"id":"{{ .Request.Body.id }}","participants":{{ or .Request.Body.participants 2 }}}'
+          - name: log
+            data: '{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ .Request.Body.id }}, protocol=sip, peers={{ or .Request.Body.participants 2 }}, dialed)"}'
 
       - match: "POST /api/call/disconnect"
         template: api/kestrel-vroom/system-ack.json.gotempl
         doc: { summary: "Disconnect active call", tags: [api, control] }
         example: "{}"
+        # A hang-up ends the call now, dialed or scheduled, and drops the
+        # meeting it ended so the schedule books the room's next slot.
         mutate:
           status.call.active: false
           status.call.participants: 0
+          status.sim.dialed: false
+          status.sim.dial_ticks: 0
+          status.sim.start_at: 0
+          status.sim.end_at: 0
+          status.sim.plan_at: 0
         events:
           - name: call-ended
             data: '{"id":"{{ .State | get "status" | get "call" | get "id" }}"}'
+          - name: log
+            data: '{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ .State | get "status" | get "call" | get "id" }}, reason=local-hangup)"}'
 
       # Reboot resets uptime and a small set of volatile call/audio
       # state back to declared defaults. HTTP-only now (the SSH/Telnet
@@ -256,6 +275,133 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
+# The bar talks on its own (#2754): it keeps its room's meeting schedule,
+# its participants coming and going in a call, its call stats drifting and
+# its log stream, so a lab's every video bar shows what a codec reports
+# without anyone dialing. No tick is faster than 15 s (#1360's cost rule:
+# richness from more kinds of signal, not more samples), and a tick streams
+# only what it changed, so the live feed carries a call's transitions, not a
+# heartbeat. A dial (POST /api/call/dial) makes it talk now.
+behaviors:
+  # The room's meetings, on the wall clock, one tick a minute. When the room
+  # is free it books its next slot: a 15, 30 or 60 minute slot (15%, 45%,
+  # 40%) starting on the next half hour (a 15 minute one on the next
+  # quarter), taken about half the time (a slot it leaves free is planned
+  # past). A booked meeting starts 2 minutes
+  # early to 5 late, and ends up to 5 minutes before its slot does. In a
+  # call a participant joins or leaves now and then (8% a minute). The
+  # draws are the device's own source, so a bar keeps the same schedule on
+  # every run. status.sim.event names what this tick did (start, end, join,
+  # leave, or nothing), and the events and log lines read it. A dialed call
+  # owns the room: a meeting falling due under it is skipped, and it ends
+  # at hang-up or after status.sim.dial_length ticks. The bookkeeping
+  # (status.sim) is the simulator's, outside the paths the live feed streams.
+  - name: call_cycle
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.sim.participants_prev
+        value: '{{ .State.status.call.participants }}'
+      - path: status.sim.event
+        value: '{{ $now := now }}{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $move := "" }}{{ if chance 0.08 }}{{ if or (le $n 2) (and (lt $n 8) (chance 0.5)) }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if ge $now $s.end_at }}end{{ else }}{{ $move }}{{ end }}{{ else if and (gt $s.start_at 0) (ge $now $s.start_at) (lt $now $s.end_at) }}start{{ end }}'
+      - path: status.sim.dial_ticks
+        value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (ne $s.event "end") }}{{ add $s.dial_ticks 1 }}{{ else }}0{{ end }}'
+      - path: status.sim.dialed
+        value: '{{ if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.sim.dialed }}{{ end }}'
+      - path: status.call.active
+        value: '{{ $e := .State.status.sim.event }}{{ if eq $e "start" }}true{{ else if eq $e "end" }}false{{ else }}{{ .State.status.call.active }}{{ end }}'
+      - path: status.sim.call_seq
+        value: '{{ if eq .State.status.sim.event "start" }}{{ add .State.status.sim.call_seq 1 }}{{ else }}{{ .State.status.sim.call_seq }}{{ end }}'
+      - path: status.call.id
+        value: '{{ if eq .State.status.sim.event "start" }}c{{ add 9000 .State.status.sim.call_seq }}{{ else }}{{ .State.status.call.id }}{{ end }}'
+      - path: status.call.participants
+        value: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ if eq $e "start" }}{{ randInt 2 6 }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
+      # The room shares a laptop now and then in a call.
+      - path: status.presentation.local_active
+        value: '{{ if .State.status.call.active }}{{ if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
+      # A meeting falling due under a dialed call is skipped.
+      - path: status.sim.start_at
+        value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (gt $s.start_at 0) (ge now $s.start_at) }}0{{ else }}{{ $s.start_at }}{{ end }}'
+      # Planning: a free room books (or leaves free) its next slot.
+      - path: status.sim.plan
+        value: '{{ $s := .State.status.sim }}{{ $now := now }}{{ and (not .State.status.call.active) (ge $now $s.plan_at) (or (eq $s.start_at 0) (ge $now $s.end_at)) }}'
+      - path: status.sim.slot
+        value: '{{ if .State.status.sim.plan }}{{ $r := randInt 1 20 }}{{ if le $r 3 }}15{{ else if le $r 12 }}30{{ else }}60{{ end }}{{ else }}{{ .State.status.sim.slot }}{{ end }}'
+      - path: status.sim.boundary
+        value: '{{ if .State.status.sim.plan }}{{ if eq .State.status.sim.slot 15 }}{{ nextSlot now 15 }}{{ else }}{{ nextSlot now 30 }}{{ end }}{{ else }}{{ .State.status.sim.boundary }}{{ end }}'
+      - path: status.sim.booked
+        value: '{{ if .State.status.sim.plan }}{{ chance 0.5 }}{{ else }}{{ .State.status.sim.booked }}{{ end }}'
+      - path: status.sim.start_at
+        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}{{ add $s.boundary (mul 60 (randInt -2 5)) }}{{ else }}0{{ end }}{{ else }}{{ $s.start_at }}{{ end }}'
+      - path: status.sim.end_at
+        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}{{ sub (add $s.boundary (mul 60 $s.slot)) (mul 60 (randInt 0 5)) }}{{ else }}0{{ end }}{{ else }}{{ $s.end_at }}{{ end }}'
+      - path: status.sim.plan_at
+        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}0{{ else }}{{ sub (add $s.boundary (mul 60 $s.slot)) 120 }}{{ end }}{{ else }}{{ $s.plan_at }}{{ end }}'
+    events:
+      - name: call-started
+        data: '{{ if eq .State.status.sim.event "start" }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+      - name: participant-joined
+        data: '{{ if eq .State.status.sim.event "join" }}{"call_id":"{{ .State.status.call.id }}","participant":"guest-{{ .State.status.call.participants }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+      - name: participant-left
+        data: '{{ if eq .State.status.sim.event "leave" }}{"call_id":"{{ .State.status.call.id }}","participant":"guest-{{ .State.status.sim.participants_prev }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+      - name: call-ended
+        data: '{{ if eq .State.status.sim.event "end" }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.sim.participants_prev }}}{{ end }}'
+      # The codec's log stream (event: log): one line per occurrence, its
+      # severity, facility and text as the bar's own log writes them.
+      - name: log
+        data: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ $id := .State.status.call.id }}{{ if eq $e "start" }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if eq $e "join" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "leave" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "end" }}{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ $id }}, peers={{ .State.status.sim.participants_prev }}, reason=remote-hangup)"}{{ end }}'
+
+  # A status line every 15 minutes, call or none, so the log stream is not
+  # only a call's.
+  - name: status_log
+    schedule:
+      interval: 15m
+    events:
+      - name: log
+        data: '{"severity":"INFO","facility":"kvroom.system","text":"Status: power={{ .State.status.device.power }}, call={{ if .State.status.call.active }}active{{ else }}idle{{ end }}, cpu={{ .State.status.device.cpu_load }}%, temp={{ .State.status.device.temperature }}C, fan={{ .State.status.device.fan_rpm }}rpm"}'
+
+  # The call stats, every 30 s: the media a call carries drifts while one
+  # is up and rests at zero when the room is idle; the codec's own load,
+  # temperature, fan and memory drift either way (busier in a call). A
+  # lossy stretch writes the WARN line a real bar's network log does, and
+  # its recovery an INFO line.
+  - name: media_stats
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.media.packet_loss
+        value: '{{ if .State.status.call.active }}{{ round 4 (clamp 0.0 0.06 (randStep 0.012 .State.status.media.packet_loss)) }}{{ else }}0{{ end }}'
+      # The uplink's state, with hysteresis: degraded as loss crosses 3%,
+      # recovered once it is back under 2%, so its log lines are its
+      # transitions, not a line a tick.
+      - path: status.sim.net_event
+        value: '{{ $l := clamp 0.0 1.0 .State.status.media.packet_loss }}{{ $was := .State.status.sim.uplink_degraded }}{{ if and (gt $l 0.03) (not $was) }}degraded{{ else if and (le $l 0.02) $was }}recovered{{ end }}'
+      - path: status.sim.uplink_degraded
+        value: '{{ $e := .State.status.sim.net_event }}{{ if eq $e "degraded" }}true{{ else if eq $e "recovered" }}false{{ else }}{{ .State.status.sim.uplink_degraded }}{{ end }}'
+      - path: status.media.jitter_ms
+        value: '{{ if .State.status.call.active }}{{ round 1 (clamp 2.0 45.0 (randStep 6.0 .State.status.media.jitter_ms)) }}{{ else }}0{{ end }}'
+      - path: status.media.bitrate_kbps
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 1200.0 4000.0 (randStep 400.0 .State.status.media.bitrate_kbps)) }}{{ else }}0{{ end }}'
+      - path: status.media.frame_rate
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 24.0 30.0 (randStep 3.0 .State.status.media.frame_rate)) }}{{ else }}0{{ end }}'
+      - path: status.audio.speaker_level
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 10.0 85.0 (randStep 15.0 .State.status.audio.speaker_level)) }}{{ else }}0{{ end }}'
+      # The microphones' input level, in dBFS: a talking room in a call, a
+      # quiet one's -60 when idle.
+      - path: status.audio.mic_level_db
+        value: '{{ if .State.status.call.active }}{{ round 1 (clamp -50.0 -6.0 (randStep 6.0 .State.status.audio.mic_level_db)) }}{{ else }}-60{{ end }}'
+      - path: status.device.cpu_load
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 35.0 80.0 (randStep 8.0 .State.status.device.cpu_load)) }}{{ else }}{{ round 0 (clamp 8.0 25.0 (randStep 4.0 .State.status.device.cpu_load)) }}{{ end }}'
+      - path: status.device.temperature
+        value: '{{ round 1 (clamp 38.0 62.0 (randStep 1.5 .State.status.device.temperature)) }}'
+      - path: status.device.fan_rpm
+        value: '{{ round -1 (clamp 1800.0 3600.0 (randStep 150.0 .State.status.device.fan_rpm)) }}'
+      - path: status.device.memory_used
+        value: '{{ round 3 (clamp 0.35 0.7 (randStep 0.03 .State.status.device.memory_used)) }}'
+    events:
+      - name: log
+        data: '{{ $e := .State.status.sim.net_event }}{{ $loss := printf "%.1f" (mul 100.0 (clamp 0.0 1.0 .State.status.media.packet_loss)) }}{{ if eq $e "degraded" }}{"severity":"WARN","facility":"kvroom.net","text":"Uplink degraded: packet loss {{ $loss }}%, jitter {{ .State.status.media.jitter_ms }}ms, enabling rate adaptation"}{{ else if eq $e "recovered" }}{"severity":"INFO","facility":"kvroom.net","text":"Uplink recovered: loss {{ $loss }}%, jitter {{ .State.status.media.jitter_ms }}ms, resumed full-rate send"}{{ end }}'
+
 defaults:
   status:
     device:
@@ -263,6 +409,12 @@ defaults:
       # Anchor for the computed uptime field. 0 means "unset", seeded
       # to the device's start time on load.
       boot_epoch: 0
+      # The codec's own load (percent), temperature (C), fan (rpm) and
+      # memory in use (a fraction), drifted by media_stats.
+      cpu_load: 14
+      temperature: 44.0
+      fan_rpm: 2400
+      memory_used: 0.42
     # ---- Course datapoints (HTTP-only teaching surface) ----
     app:
       # UCC platform the bar is currently hosting.
@@ -305,9 +457,40 @@ defaults:
       volume: 50
       mic_mute: false
       speaker_level: 50
+      # The microphone array's input level, dBFS (media_stats drifts it).
+      mic_level_db: -60
     video:
       camera_on: true
       resolution: "3840x2160"
+    # The media a call carries (#2754), drifted by media_stats while a call
+    # is up and zero when idle: packet loss a ratio (0 to 1), jitter in ms,
+    # the send bitrate in kbps and the frame rate.
+    media:
+      packet_loss: 0
+      jitter_ms: 0
+      bitrate_kbps: 0
+      frame_rate: 0
+    # The schedule's bookkeeping (call_cycle): what this tick did, the
+    # meeting it has booked (its slot, boundary, start and end, unix
+    # seconds; 0 for none), when it plans next, the calls it has placed, a
+    # dialed call and its length, and the count before this tick. The
+    # simulator's, not the codec's: no template serves it.
+    sim:
+      event: ""
+      plan: false
+      slot: 30
+      boundary: 0
+      booked: false
+      start_at: 0
+      end_at: 0
+      plan_at: 0
+      call_seq: 0
+      dialed: false
+      dial_ticks: 0
+      dial_length: 30
+      participants_prev: 0
+      net_event: ""
+      uplink_degraded: false
     network:
       ipv4:
         address: ""
@@ -317,6 +500,7 @@ defaults:
       serial: ""
       model: "VRoom"
       manufacturer: "Kestrel"
+      hardware_revision: "B2"
     firmware:
       version: "2.7.3"
     network:
