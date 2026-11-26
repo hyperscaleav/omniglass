@@ -50,13 +50,21 @@ One stream carries up to 32 bindings, as server-sent events:
 - a `reset` names a binding whose cursor the tail no longer holds, and ends the stream, so its reader
   runs the history again.
 
+The same stream carries **changed notices** for the `topics` a watch names, a component or a system
+([ADR-2731](/architecture/decisions/#adr-2731-the-console-follows-state-over-its-one-live-stream-and-polling-is-guarded-out)).
+A write that moves one (a health recompute, which every alarm, slot and member change makes) lands a
+notice on the tail's change lane once its transaction commits, and a `changed` event names the topic,
+at most once each 250 ms per stream. It carries no data; the reader refetches the route it reads.
+The topics resume from the stream's last event id (`topics_cursor`, or `Last-Event-ID`), and one the
+tail no longer holds is a `reset` with `topics: true`.
+
 The tail holds the newest 4,096 commits or 64 MiB of rows, whichever is less, so a burst cannot grow it
 without bound. It is the server's own ingest landing: a value a rule or a calc derives is not on it,
 and a second server does not see the first's commits.
 
 ## Scope
 
-Both routes need `view:read`, and each binding also needs its kind's read (`component:read` or
+Both routes need `view:read`, and each binding (and each topic) also needs its kind's read (`component:read` or
 `system:read`) and resolves inside that read's [scope](/architecture/identity-access/). A filter
 selector resolves to the entities the caller can see; a literal ref outside the scope is the same 404
 as one that does not exist.
@@ -70,8 +78,10 @@ the server; past either, opening one is a 429.
 ## Who reads through it
 
 - **The console**: `createViewBinding` (`web/src/lib/binding.ts`) reads a binding's history through
-  the query cache and subscribes it to the page's one hub, which opens as few watches as hold the
-  page's bindings. Platform health's sparklines are bindings ([UI](/architecture/ui/)).
+  the query cache and subscribes it to the tab's one hub (`web/src/lib/live.ts`), which opens as few
+  watches as hold the page's bindings and its topics. Platform health's sparklines are bindings, and
+  the system page's health, slots and members follow its topic through `liveQuery`
+  ([UI](/architecture/ui/)).
 - **The CLI**: `omniglass view run` and `omniglass view watch`, generated from the routes.
 - **An agent**: `run-views` on the [MCP tools](/reference/mcp/) catalog, under the agent's token and
   scope like any other call.
