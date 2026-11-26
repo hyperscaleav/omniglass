@@ -51,6 +51,7 @@ import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_ran
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
+import { liveQuery } from "../lib/live";
 import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
@@ -108,11 +109,16 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const coarse = createClock(HISTORY_TICK_MS);
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
-  const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
-  // Each member's own health, polled off the system's members read: the
-  // fleet view's dots (read once) stand in until it answers.
-  const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
+  // The system's health, slots and members follow its topic on the tab's one
+  // live stream (#2731): every write that moves any of them recomputes the
+  // system, which names it, and each read refetches then, never on a timer.
+  const topics = () => [`system:${id()}`];
+  const health = liveQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), topics: topics() }));
+  const declared = liveQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), topics: topics() }));
+  // Each member's own health, off the system's members read (a member's
+  // health moving recomputes the system it staffs): the fleet view's dots
+  // (read once) stand in until it answers.
+  const membersQ = liveQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), topics: topics() }));
 
   const system = createMemo(() => (view.data?.systems ?? []).find((s) => s.id === id()));
 
@@ -173,11 +179,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const all = [...b.cards, ...b.groups.flatMap((g) => g.memberCards)];
     return all.map((c) => ({ name: c.name, componentId: c.componentId }));
   });
-  const alarmHistory = useQuery(() => ({
+  // A member's alarm raised or cleared recomputes the system, so its alarm
+  // history follows the same topic.
+  const alarmHistory = liveQuery(() => ({
     queryKey: systemAlarmsKey(id()),
     queryFn: () => systemAlarms(id()),
     enabled: tab() === "activity",
-    refetchInterval: LEAF_POLL_MS,
+    topics: topics(),
   }));
   // The one time range (#2304), held in the address: the metrics grid and the
   // timeline read over it, and the picker on the tab rail writes it. A blade

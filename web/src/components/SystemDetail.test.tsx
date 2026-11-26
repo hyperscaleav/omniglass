@@ -348,3 +348,38 @@ describe("the blade's tab and edit are its own", () => {
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
   });
 });
+
+describe("the system follows its topic live (#2731)", () => {
+  it("a changed notice on the stream refetches the system's health, and the page shows it without a refresh", async () => {
+    let ctl!: ReadableStreamDefaultController<Uint8Array>;
+    const watches: string[] = [];
+    let healthReads = 0;
+    const cleared = { ...health, health: "healthy", slots: [{ ...health.slots![0], impaired: false, down: [], alarms: [] }] };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/views:watch")) {
+        watches.push(decodeURIComponent(url));
+        const body = new ReadableStream<Uint8Array>({ start: (c) => (ctl = c) });
+        return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+      }
+      if (url.includes(`/systems/${SID}/health`)) {
+        healthReads++;
+        // The first read is the refresh a newly opened stream makes of what
+        // was read before it; the next is the notice's.
+        return new Response(JSON.stringify(healthReads === 1 ? health : cleared), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(null, { status: 204 });
+    });
+    mountPage();
+    await screen.findAllByText("No route to host");
+    await waitFor(() => expect(watches.some((w) => w.includes(`topics=system:${SID}`))).toBe(true));
+    const send = (event: string, data: unknown, id: string) =>
+      ctl.enqueue(new TextEncoder().encode(`id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    send("mark", { cursor: "boot.1" }, "boot.1");
+    await waitFor(() => expect(healthReads).toBe(1));
+    expect(screen.queryAllByText("No route to host").length).toBeGreaterThan(0);
+    send("changed", { topic: `system:${SID}`, kind: "system", id: SID, op: "update", v: 2 }, "boot.2");
+    await waitFor(() => expect(healthReads).toBe(2));
+    await waitFor(() => expect(screen.queryByText("No route to host")).toBeNull());
+  });
+});
