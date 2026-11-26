@@ -688,7 +688,7 @@ describe("the questions a shot asks the lab's recorded omnibot (#2526)", () => {
     const list = parseShots(readFileSync(join(__dirname, "../e2e/marketing/shots.yaml"), "utf8")).list!;
     const rec = readFileSync(join(__dirname, `../../internal/lab/omnibot/${list.lab.omnibotReplay}.yaml`), "utf8");
     const recorded = [...rec.matchAll(/^\s*-?\s*prompt:\s*(.+)$/gm)].map((m) => m[1].trim());
-    expect(recorded).toContain("Why is the 86-inch meeting room degraded?");
+    expect(recorded).toContain("Why is the 86-inch meeting room down?");
     expect(replayProblems(list.shots as never, recorded)).toEqual([]);
   });
 });
