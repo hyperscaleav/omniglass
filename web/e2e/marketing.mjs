@@ -30,8 +30,10 @@ import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
 // How long the browser may refuse screenshots (a navigation on camera) before
-// the frame loop calls it a failure.
+// the frame loop opens its session again, then calls it a failure; and how long
+// one capture may take before it counts as refused.
 const FRAME_REFUSAL_MS = 10_000;
+const FRAME_CAPTURE_MS = 3_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
 // Pacing (PACE, marketinglib.mjs) is shared with the parse, which holds a loop's
 // own spend to its maximum.
@@ -419,25 +421,39 @@ async function record(browser, base, storageState, shot, out, api) {
  * @param {number} origin Date.now() at the clip's start
  */
 async function startFrames(ctx, page, origin) {
-  const cdp = await ctx.newCDPSession(page);
+  let cdp = await ctx.newCDPSession(page);
   /** @type {{ t: number, data: string }[]} */
   const frames = [];
   let running = true;
   const taking = (async () => {
-    // A navigation on camera (a goto step, #2722) swaps the page out for a
-    // moment, and the browser refuses a screenshot while it does. That frame is
-    // skipped (the one before it holds on screen a little longer); a refusal
-    // that lasts past FRAME_REFUSAL_MS is a real failure and fails the shot.
+    // A navigation on camera (a goto step, #2722) swaps the page out, and the
+    // browser may refuse a screenshot, or not answer one, while it does. Each
+    // capture is time-boxed, so none can hang the shot; a refused or stalled
+    // one is skipped (the frame before it holds a little longer). Past
+    // FRAME_REFUSAL_MS without a frame the session is opened again once, and a
+    // second stretch fails the shot rather than recording nothing.
     let refusedSince = 0;
+    let reopened = false;
     while (running) {
       const a = Date.now();
-      let r;
-      try {
-        r = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true });
-      } catch (e) {
-        if (!running) break;
+      /** @type {{ data: string } | Error} */
+      const r = await Promise.race([
+        cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true }).catch((e) => /** @type {Error} */ (e)),
+        new Promise((res) => setTimeout(() => res(new Error(`no screenshot within ${FRAME_CAPTURE_MS}ms`)), FRAME_CAPTURE_MS)),
+      ]);
+      if (!running) break;
+      if (r instanceof Error) {
         refusedSince ||= a;
-        if (Date.now() - refusedSince > FRAME_REFUSAL_MS) throw e;
+        console.error(`marketing: frame skipped: ${r.message.split('\n')[0]}`);
+        if (Date.now() - refusedSince > FRAME_REFUSAL_MS) {
+          if (reopened) throw r;
+          reopened = true;
+          refusedSince = 0;
+          console.error('marketing: frames: opening the capture session again');
+          await cdp.detach().catch(() => {});
+          cdp = await ctx.newCDPSession(page);
+          continue;
+        }
         await new Promise((res) => setTimeout(res, 50));
         continue;
       }
