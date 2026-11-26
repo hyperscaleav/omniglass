@@ -25,7 +25,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, expandAddress, followFrame, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -504,7 +504,7 @@ function writeFrames(frames, out, id) {
 
 /** @typedef {{ step: number, from: number, at: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
 /** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[], at?: number, seen?: string[] }} OpenBeat */
-/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null, fresh?: (since: number) => Promise<boolean> }} Camera */
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null, fresh?: (since: number) => Promise<boolean>, frame?: { scale: number, x: number, y: number } }} Camera */
 
 const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
 
@@ -605,7 +605,10 @@ async function closeBeat(page, cam) {
  */
 async function logFocus(page, step, cam, own) {
   if (step.focus === undefined) return;
-  if (step.focus === 'out') return void cam.events.push({ t: cam.now(), box: null });
+  if (step.focus === 'out') {
+    cam.frame = frameFor(null, cam.vp);
+    return void cam.events.push({ t: cam.now(), box: null });
+  }
   const el = step.focus === 'here' ? own : locate(page, step.focus).filter({ visible: true }).first();
   if (!el) throw new Error('focus here needs a step with a target');
   // The console re-renders as a page settles (a blade closing, a route's table
@@ -625,6 +628,7 @@ async function logFocus(page, step, cam, own) {
   }
   const t = cam.now();
   cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}), ...(step.spot === false ? { spot: false } : {}) });
+  cam.frame = frameFor(box, cam.vp, step.zoom);
   const { rect, onScreen } = frameRect(frameFor(box, cam.vp, step.zoom), cam.vp);
   cam.open = { step: step.n, from: t, frame: rect, onScreen, ...(step.expect ? { expect: step.expect } : {}) };
 }
@@ -694,6 +698,16 @@ async function play(page, base, step, cursor, loop, cam, api) {
       if (!later) await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');
+      // The camera follows the pointer: a step with no focus of its own whose
+      // target is outside the frame the camera holds pans there, at the same
+      // zoom, as the pointer glides, so a click is never off screen.
+      if (loop && step.focus === undefined && cam.frame) {
+        const f = followFrame(box, cam.frame, cam.vp);
+        if (f) {
+          cam.events.push({ t: cam.now(), box, zoom: f.scale, spot: false, follow: true });
+          cam.frame = f;
+        }
+      }
       const x = pointerX(step.kind, box);
       const y = box.y + box.height / 2;
       await page.mouse.move(x, y, { steps: 6 });
