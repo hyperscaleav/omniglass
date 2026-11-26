@@ -10,12 +10,26 @@ sidebar:
 screenshots:
   - id: notifications-inbox
     path: /web/inbox
-    alt: "The inbox, empty: what reaches it (a group notification an admin points at you, or your own subscription) and the way to subscribe."
-    # The lab's outpost-silent alarm raises partway through a capture, so the inbox
-    # holds its entry in some captures and not in others. The masked twin covers
-    # the whole content region, the same size either way (#2168).
+    alt: "The inbox with one entry: the lab's outpost-silent alarm told to the admins, its subject, the component, the raised chip and the rule it came through, with Unread only and Mark all read above it."
+    # The capture waits for the dev user's inbox to hold the lab's outpost-silent
+    # entry (capture.sh), so the page is the same populated one every time. Two
+    # regions of the entry move with the capture's clock and are masked, nothing
+    # else is (#2292): the message text (it quotes the raise time) and the meta
+    # line (the entry's relative age changes the width of the chips that follow
+    # it), each a box the layout pins. The title, the strip with the counts, the
+    # buttons, the entry's subject and its unread dot stay in the baseline, so a
+    # change to the inbox page's layout or labels fails the gate.
     mask:
-      - "#scroll-main"
+      - "[data-testid=inbox-entry-text]"
+      - "[data-testid=inbox-entry-meta]"
+  - id: notifications-inbox-empty
+    path: /web/inbox
+    # The fleet viewer, signed in by the capture (capture.sh): no action rule tells them
+    # about the platform's alarms, so their inbox is genuinely empty, the same page every
+    # capture. Nothing on it moves, so nothing is masked: the empty state's text and its
+    # Subscribe to alarms button are gated, where the populated shot above gates the list (#2292).
+    as: viewer
+    alt: "The inbox of a person nothing has been told to: Your inbox is empty, what reaches it (a group notification or your own subscription), and the Subscribe to alarms button."
   - id: notifications-subscribe
     path: /web/profile/subscriptions
     steps:
@@ -38,6 +52,11 @@ the alarm's rendered message, its component, and the rule that told you. **Mark 
 marks it read too.
 
 ::screenshot{#notifications-inbox}
+
+A person nothing has been told to yet sees the empty state instead, with the way in: **Subscribe to alarms**
+opens your subscriptions, below.
+
+::screenshot{#notifications-inbox-empty}
 
 From the CLI:
 
