@@ -25,7 +25,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, expandAddress, followFrame, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, clickFrame, expandAddress, followFrame, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -356,6 +356,7 @@ async function record(browser, base, storageState, shot, out, api) {
     cam.now = () => (Date.now() - t0) / 1000;
     const frames = loop ? await startFrames(ctx, page, t0) : null;
     if (frames) cam.fresh = (since) => frames.fresh(since, FRESH_FRAME_MS);
+    if (loop) cam.frame = frameFor(null, cam.vp);
     if (loop) await page.mouse.move(cursor.x, cursor.y);
     /** @type {{ n: number, kind: string, target: string, from: number, to: number, authored: number }[]} */
     const timed = [];
@@ -698,11 +699,12 @@ async function play(page, base, step, cursor, loop, cam, api) {
       if (!later) await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');
-      // The camera follows the pointer: a step with no focus of its own whose
-      // target is outside the frame the camera holds pans there, at the same
-      // zoom, as the pointer glides, so a click is never off screen.
+      // The camera follows the pointer: a step with no focus of its own pans to
+      // its target as the pointer glides. A hover keeps the zoom held; a click,
+      // a select or a typed field closes in far enough to read what is clicked
+      // (clickFrame), so no click happens off screen or too small to see.
       if (loop && step.focus === undefined && cam.frame) {
-        const f = followFrame(box, cam.frame, cam.vp);
+        const f = step.kind === 'hover' ? followFrame(box, cam.frame, cam.vp) : clickFrame(box, cam.frame, cam.vp);
         if (f) {
           cam.events.push({ t: cam.now(), box, zoom: f.scale, spot: false, follow: true });
           cam.frame = f;

@@ -29,6 +29,8 @@ import {
   overrunReport,
   frameFor,
   followFrame,
+  clickFrame,
+  lapseLabel,
   frameRect,
   missingText,
   conditionMet,
@@ -453,6 +455,25 @@ describe("followFrame", () => {
   });
 });
 
+describe("clickFrame", () => {
+  const vp = { width: 1440, height: 900 };
+  const button = { x: 1300, y: 600, width: 60, height: 28 };
+
+  it("closes in on a click target from a wider frame, to the click zoom", () => {
+    const f = clickFrame(button, { scale: 1, x: 720, y: 450 }, vp);
+    expect(f).toEqual(frameFor(button, vp, CAMERA.clickZoom));
+  });
+
+  it("keeps a closer zoom it already holds, panning only if the target is out of frame", () => {
+    expect(clickFrame(button, { scale: 2.6, x: 1300, y: 610 }, vp)).toBeNull();
+    expect(clickFrame(button, { scale: 2.6, x: 700, y: 300 }, vp)).toEqual(frameFor(button, vp, 2.6));
+  });
+
+  it("closes in on a target in frame when the frame is too wide to read it", () => {
+    expect(clickFrame(button, { scale: 1.4, x: 1000, y: 500 }, vp)).toEqual(frameFor(button, vp, CAMERA.clickZoom));
+  });
+});
+
 describe("beatEnds", () => {
   it("ends a beat at the next focus, through a wait that closed it early", () => {
     const beats = [{ from: 2.468, to: 2.475 }, { from: 4.286, to: 6.9 }];
@@ -538,8 +559,8 @@ describe("the spotlight and the sped-up badge", () => {
   it("badges each lapse in the clip's own time, and skips one too short to read", () => {
     const lapses = [{ from: 1, to: 3, speed: 2 }, { from: 5, to: 65, speed: 32 }, { from: 70, to: 71, speed: 4 }];
     expect(lapseBadges(lapses)).toEqual([
-      { from: 1, to: 2, speed: 2 },
-      { from: 4, to: 5.875, speed: 32 },
+      { from: 1, to: 2, speed: 2, label: "+2 s" },
+      { from: 4, to: 5.875, speed: 32, label: "+60 s" },
     ]);
   });
 
@@ -551,7 +572,15 @@ describe("the spotlight and the sped-up badge", () => {
   });
 
   it("reads a lapse's derived speed as a whole number on its badge", () => {
-    expect(lapseBadges([{ from: 0, to: 28.5, speed: 31.67 }])).toEqual([{ from: 0, to: 0.9, speed: 32 }]);
+    expect(lapseBadges([{ from: 0, to: 28.5, speed: 31.67 }])).toEqual([{ from: 0, to: 0.9, speed: 32, label: "+29 s" }]);
+  });
+
+  it("labels a lapse by the real time it covers, as a clock would", () => {
+    expect(lapseLabel(45)).toBe("+45 s");
+    expect(lapseLabel(89)).toBe("+89 s");
+    expect(lapseLabel(180)).toBe("+3 min");
+    expect(lapseLabel(600)).toBe("+10 min");
+    expect(lapseLabel(7200)).toBe("+2 h");
   });
 });
 

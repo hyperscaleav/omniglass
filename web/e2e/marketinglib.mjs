@@ -31,7 +31,7 @@ export const LOOP_MAX_SECONDS = 9;
 // A loop may raise its own maximum up to this, for a story that cannot be told
 // faster without lying about it: omnibot's answer takes as long as inference
 // does, and the page's teaser runs from the fleet to a room back to healthy.
-export const LOOP_MAX_SECONDS_CAP = 36;
+export const LOOP_MAX_SECONDS_CAP = 60;
 // How far past its maximum a recorded loop may run before the run fails. A
 // loop's length is the lab's as much as the shot list's: each wait lasts as
 // long as the console takes, and a scale lab on a busy host takes longer. The
@@ -67,7 +67,7 @@ const MAX_LAPSE_SECONDS = 5;
 // centred.
 // spotPad is the lit margin round a focus box, in viewport pixels; dim is how
 // dark the rest of the frame goes while the camera is on a box.
-export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
+export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5, clickZoom: 2.2 };
 // A wait played as a lapse runs at up to MAX_FAST times real speed: an alarm
 // that takes a minute to raise plays in a second, and three minutes of a room
 // running on (a timed wait, #2722) in under one, under a badge that says the
@@ -602,7 +602,7 @@ export function lapseSpeed(real, lapse) {
 
 /**
  * The byte budget of a loop allowed `maxSeconds`: LOOP_MAX_BYTES up to 15
- * seconds, the same rate beyond, so a 36 second teaser may weigh 3.6 MB.
+ * seconds, the same rate beyond, so a 60 second teaser may weigh 6 MB.
  * @param {number} maxSeconds
  */
 export function loopMaxBytes(maxSeconds) {
@@ -746,6 +746,22 @@ export function followFrame(box, current, vp) {
   return inside ? null : frameFor(box, vp, current.scale);
 }
 
+/**
+ * Where the camera goes for a click (a select, a typed field) with no focus of
+ * its own: close enough to read what is clicked. Null when the frame it holds
+ * is already at least CAMERA.clickZoom and shows the target; else the target
+ * at the closer of that zoom and the one held, so a click never reads from a
+ * wide frame (the architect's storyboard, #2752).
+ * @param {Box} box the target, in viewport pixels
+ * @param {{ scale: number, x: number, y: number }} current the frame the camera holds
+ * @param {{ width: number, height: number }} vp
+ * @returns {{ scale: number, x: number, y: number } | null}
+ */
+export function clickFrame(box, current, vp) {
+  if (current.scale >= CAMERA.clickZoom) return followFrame(box, current, vp);
+  return frameFor(box, vp, CAMERA.clickZoom);
+}
+
 /** @typedef {{ from: number, at: number, to: number }} BeatTimes */
 
 /**
@@ -876,9 +892,21 @@ export function lapseBadges(lapses) {
   // sits on the line: the comparison allows for floating-point error, or half
   // of them would lose their badge to rounding.
   return lapses
-    .map((w) => ({ from: retime(w.from, lapses), to: retime(w.to, lapses), speed: w.speed }))
+    .map((w) => ({ from: retime(w.from, lapses), to: retime(w.to, lapses), speed: w.speed, real: w.to - w.from }))
     .filter((w) => w.to - w.from >= MIN_LAPSE_BADGE - 1e-6)
-    .map((w) => ({ from: round(w.from), to: round(w.to), speed: Math.round(w.speed) }));
+    .map((w) => ({ from: round(w.from), to: round(w.to), speed: Math.round(w.speed), label: lapseLabel(w.real) }));
+}
+
+/**
+ * What a lapse's clock says: the real time it covers, "+45 s" under a
+ * minute and a half, then whole minutes, then whole hours.
+ * @param {number} seconds real seconds
+ * @returns {string}
+ */
+export function lapseLabel(seconds) {
+  if (seconds < 90) return `+${Math.round(seconds)} s`;
+  if (seconds < 90 * 60) return `+${Math.round(seconds / 60)} min`;
+  return `+${Math.round(seconds / 3600)} h`;
 }
 export const MIN_LAPSE_BADGE = 0.6;
 

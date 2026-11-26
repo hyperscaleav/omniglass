@@ -477,9 +477,9 @@ and writes the files and a `shots.json` manifest into the directory. The landing
 every image, loop, poster and alt text with no code change there.
 
 A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
-`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 36, for a story such as
+`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 60, for a story such as
 omnibot's answer that cannot be told faster without faking it, or the page's teaser) and at most 1.5 MB (a
-loop allowed past 15 seconds earns that rate for its length, so a 36 second one may weigh 3.6 MB), with a WebP poster; the recorder re-encodes
+loop allowed past 15 seconds earns that rate for its length, so a 60 second one may weigh 6 MB), with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
 naming the shot and the limit.
 
@@ -530,9 +530,10 @@ image) then renders the pans and zooms over it, offline, with its telemetry off,
 half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a focus with
 `spot: false` keeps the whole frame lit, for a target that only aims the camera (an outage's alarm bar, with
 the health lanes above it, which the beat is about). The camera follows the pointer: a step with no `focus` of
-its own whose target lies outside the frame the camera holds (a click on a button below the form in view) pans
-there at the same zoom as the pointer glides, all of the frame lit, so no click happens off screen; the beat it
-is in runs on through the pan; a click shows a
+its own pans to its target as the pointer glides, all of the frame lit. A hover keeps the zoom the camera
+holds and moves only when its target is out of frame (`followFrame`); a click, a select or a typed field also
+closes in to at least 2.2x (`clickFrame`, `CAMERA.clickZoom`), so what is clicked reads as it is clicked,
+never from a wide frame or off screen. The beat it is in runs on through the move; a click shows a
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
 
@@ -543,12 +544,13 @@ recover (an outpost's next check-in after a credential is fixed) is not one to s
 fixes the wait's length in the clip, not its speed, so a slower lab makes a faster lapse rather than a
 longer loop; a wait past 300 times its lapse plays longer, and the budget catches it. A wait may
 also be for time itself, `wait: { seconds: N }`: on camera, with a lapse, minutes of the lab running on
-play in a moment under the badge (the teaser lets three pass after its fix, so the room's last hour on
+play in a moment under the clock (the teaser lets three pass after its fix, so the room's last hour on
 its timeline reads healthy, down, healthy again); in setup, off camera and up to 15 minutes, it lets a
 staged state last before the shot (the teaser's room is down ten minutes first). The clip says
-nothing false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N×
-speed" with that run's speed (`lapseBadges`), so an alarm that takes a minute to raise arrives on camera
-in a second and is never taken for real time.
+nothing false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a clock in the
+bottom-right corner, its hand spinning, labelled with the real time the stretch covers ("+3 min",
+`lapseBadges`, `lapseLabel`), so an alarm that takes a minute to raise arrives on camera in a second and is
+never taken for real time.
 
 Setup runs off camera, in order, as the lab's owner. `put`, `post` and `patch` call the API (a `{braced}`
 part of a path is one address, percent-encoded whole, so a component's path address names one route
