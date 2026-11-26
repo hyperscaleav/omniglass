@@ -453,13 +453,13 @@ shots:
       # the list, so the whole card scrolls into view.
       - hover: '[data-testid=leaf-vitals] dt:text-is("Temperature")'
         focus: '[data-testid=leaf-vitals]'
-        expect: ["Vitals"]
+        expect: ["Bitrate", "Temperature"]
         zoom: 1.5
         hold: 2200
       # 4. How it is read: two endpoints, each up its ladder.
-      - hover: '[data-testid=leaf-collection] .eyebrow >> nth=0'
+      - hover: '[data-testid=leaf-collection] :text-is("https") >> nth=0'
         focus: '[data-testid=leaf-collection]'
-        expect: ["Collection"]
+        expect: ["authenticated", "wss"]
         zoom: 2.0
         hold: 2000
 
