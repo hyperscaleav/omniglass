@@ -531,7 +531,50 @@ describe("the camera's tail and time-lapsed waits", () => {
     expect(lapseSpeed(28.5, 0.9)).toBeCloseTo(31.67);
     expect(lapseSpeed(0.4, 0.9)).toBe(1);
     expect(lapseSpeed(0, 0.9)).toBe(1);
-    expect(lapseSpeed(120, 0.9)).toBe(MAX_FAST);
+    expect(lapseSpeed(180, 0.6)).toBeCloseTo(300);
+    expect(lapseSpeed(1200, 0.9)).toBe(MAX_FAST);
+  });
+});
+
+// #2722: a wait may be for time itself, seconds of the lab running on, so a
+// stretch of the room's record is long enough to see: off camera in setup (the
+// room down for ten minutes before the shot), or on camera as a lapse (minutes
+// after the fix, played in seconds under the speed badge).
+describe("a timed wait", () => {
+  const loop = (steps: string) => `${LAB}shots:\n  - id: t\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n${steps}`;
+
+  it("waits for seconds, with no target, and a lapse plays it in the lapse's seconds", () => {
+    const { list, problems } = parseShots(loop("      - wait: { seconds: 180 }\n        lapse: 0.6\n"));
+    expect(problems).toEqual([]);
+    const step = list!.shots[0].steps[0];
+    expect(step).toMatchObject({ kind: "wait", seconds: 180, lapse: 0.6 });
+    expect(step.target).toBeUndefined();
+    expect(authoredSeconds(list!.shots[0])).toBeCloseTo((600 + 300) / 1000);
+  });
+
+  it("spends its whole seconds on screen without a lapse", () => {
+    const { list } = parseShots(loop("      - wait: { seconds: 2 }\n"));
+    expect(authoredSeconds(list!.shots[0])).toBeCloseTo((2000 + 300) / 1000);
+  });
+
+  it("refuses no seconds, too many, a target beside them, and a focus on itself", () => {
+    expect(parseShots(loop("      - wait: { seconds: 0 }\n")).problems.join()).toContain("seconds");
+    expect(parseShots(loop("      - wait: { seconds: 999 }\n")).problems.join()).toContain("seconds");
+    expect(parseShots(loop("      - wait: { seconds: 5, text: Done }\n")).problems.join()).toContain("either a target or seconds");
+    expect(parseShots(loop("      - wait: { seconds: 5 }\n        focus: here\n")).problems.join()).toContain("focus here needs a target");
+  });
+
+  it("runs off camera in setup, up to fifteen minutes", () => {
+    const setup = (secs: number) =>
+      `${LAB}shots:\n  - id: s\n    kind: still\n    alt: x\n    start: /a\n    setup:\n      - wait: { seconds: ${secs} }\n`;
+    const ok = parseShots(setup(600));
+    expect(ok.problems).toEqual([]);
+    expect(ok.list!.shots[0].setup[0]).toEqual({ kind: "pause", seconds: 600 });
+    expect(parseShots(setup(901)).problems.join()).toContain("seconds");
+    // A pause names no resource for the preflight to check.
+    expect(referencedResources(ok.list!.shots[0].setup, "/systems/hq-mr86-1")).toEqual([
+      { kind: "system", id: "hq-mr86-1", path: "/systems/hq-mr86-1" },
+    ]);
   });
 });
 

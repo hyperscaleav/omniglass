@@ -526,11 +526,15 @@ teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList
 are the framing, the move list, the lit box and the frame timing, unit tested.
 
 A `wait` may take `lapse: N` (seconds, up to 5): the quiet seconds before something changes play in N
-seconds of the clip, a time-lapse, sped up as much as that run's wait needs, up to 40 times
+seconds of the clip, a time-lapse, sped up as much as that run's wait needs, up to 300 times
 (`lapseSpeed`), and never slowed down. A loop has 9 seconds to spend and a console that needs five to
 recover (an outpost's next check-in after a credential is fixed) is not one to sit through. The lapse
 fixes the wait's length in the clip, not its speed, so a slower lab makes a faster lapse rather than a
-longer loop; a wait past 40 times its lapse plays longer, and the budget catches it. The clip says
+longer loop; a wait past 300 times its lapse plays longer, and the budget catches it. A wait may
+also be for time itself, `wait: { seconds: N }`: on camera, with a lapse, minutes of the lab running on
+play in a moment under the badge (the teaser lets three pass after its fix, so the room's last hour on
+its timeline reads healthy, down, healthy again); in setup, off camera and up to 15 minutes, it lets a
+staged state last before the shot (the teaser's room is down ten minutes first). The clip says
 nothing false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N×
 speed" with that run's speed (`lapseBadges`), so an alarm that takes a minute to raise arrives on camera
 in a second and is never taken for real time.

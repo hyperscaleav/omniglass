@@ -211,6 +211,13 @@ async function runSetup(api, where, items) {
         await api.send(it.method, it.path, it.body);
         continue;
       }
+      if (it.kind === 'pause') {
+        // The lab runs on off camera (#2722), so the state the shot opens on
+        // has lasted this long.
+        console.log(`marketing: ${where}: the lab runs on for ${it.seconds}s`);
+        await new Promise((r) => setTimeout(r, it.seconds * 1000));
+        continue;
+      }
       const deadline = Date.now() + it.timeout;
       let last;
       for (;;) {
@@ -589,6 +596,18 @@ async function play(page, base, step, cursor, loop, cam, api) {
       if (later) await logFocus(page, step, cam, null);
       break;
     case 'wait': {
+      if (step.seconds) {
+        // A wait for time itself (#2722): the lab runs on, played as a lapse
+        // when the step has one, so the record it leaves is there to read.
+        const from = cam.now();
+        await page.waitForTimeout(step.seconds * 1000);
+        if (step.lapse) {
+          const speed = lapseSpeed(cam.now() - from, step.lapse);
+          if (speed > 1) cam.lapses.push({ from, to: cam.now(), speed });
+        }
+        await logFocus(page, step, cam, null);
+        break;
+      }
       const el = locate(page, step.target).filter({ visible: true }).first();
       const from = cam.now();
       await el.waitFor({ state: 'visible', timeout: step.timeout });

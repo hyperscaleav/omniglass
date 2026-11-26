@@ -119,7 +119,7 @@ shots:
   - id: omniglass-teaser
     kind: loop
     max_seconds: 30
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record degraded, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display's timeline with the alarm and the command, and the room healthy again, its health record closing the degraded stretch."
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display's timeline with the alarm and the command, the room healthy again, and three minutes later, sped up, its last hour on the timeline: healthy, down for the outage, healthy."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -139,7 +139,10 @@ shots:
           clear_event_type: rule-cleared
       - post: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/simulation:fire
         body: { surface: web-admin, method: POST, path: /api/display/input, body: '{"input": "hdmi2"}' }
-      - wait: { get: /systems/hq-mr86-1/health, field: health, equals: degraded, timeout: 180000 }
+      - wait: { get: /systems/hq-mr86-1/health, field: health, equals: outage, timeout: 180000 }
+      # The room stays down ten minutes before the shot (#2722), so its hour on
+      # the timeline at the end reads healthy, down for that stretch, healthy.
+      - wait: { seconds: 600 }
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
@@ -170,7 +173,7 @@ shots:
         hold: 200
       - wait: { selector: 'aside[data-blade] [data-testid=stretch-list]:has-text("ongoing")' }
         focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
-        expect: ["Uptime", "degraded"]
+        expect: ["Uptime", "outage"]
         zoom: 1.8
         hold: 1600
       - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Overview")'
@@ -236,21 +239,22 @@ shots:
         expect: ["healthy"]
         zoom: 2.4
         hold: 1200
-      - hover: 'aside[data-blade] [data-testid=alarm-strip-clear]'
-        focus: here
-        expect: ["No active alarms"]
-        zoom: 2.4
-        hold: 1400
-      # Beat 9: the same record after the fix: the bar back to healthy, the
-      # degraded stretch closed at the recovery, and the uptime it cost.
-      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Activity")'
+      # Beat 9: three minutes on (a lapse, under its badge), the room's last hour on
+      # its timeline: healthy, down for the ten minutes and the fix, healthy again.
+      - wait: { seconds: 180 }
+        lapse: 0.6
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Timeline")'
         focus: out
         hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=stretch-list]:not(:has-text("ongoing"))' }
-        focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
-        expect: ["Uptime", "healthy"]
-        zoom: 1.8
-        hold: 1800
+      - click: 'aside[data-blade] [data-testid=time-range-trigger]'
+        hold: 200
+      - click: '[data-testid=time-range-preset-1h]'
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=timeline-health-row]' }
+        focus: 'aside[data-blade] [data-testid=timeline-overlay]'
+        expect: ["Health", "This system"]
+        zoom: 1.6
+        hold: 2400
 
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.

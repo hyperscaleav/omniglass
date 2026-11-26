@@ -17,10 +17,10 @@ import { load } from 'js-yaml';
 /** @typedef {{ width: number, height: number }} Viewport */
 /** @typedef {{ method: 'PUT' | 'POST' | 'PATCH', path: string, body: Record<string, unknown> }} Call */
 /** @typedef {{ get: string, field: string, equals: unknown, timeout: number }} Await */
-/** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
+/** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await) | { kind: 'pause', seconds: number }} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, lapse?: number, expect?: string[] }} Step */
+/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, lapse?: number, seconds?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -45,6 +45,8 @@ const LOOP_BUDGET_SECONDS = 15;
 export const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // Longest a wait or an await may be given, in milliseconds.
 export const MAX_WAIT_MS = 180_000;
+// Longest a setup pause may hold the lab off camera, in seconds (#2722).
+export const MAX_PAUSE_SECONDS = 900;
 export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
@@ -67,9 +69,10 @@ const MAX_LAPSE_SECONDS = 5;
 // dark the rest of the frame goes while the camera is on a box.
 export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
 // A wait played as a lapse runs at up to MAX_FAST times real speed: an alarm
-// that takes a minute to raise plays in a couple of seconds, under a badge that
-// says the clip is sped up (render.mjs).
-export const MAX_FAST = 40;
+// that takes a minute to raise plays in a second, and three minutes of a room
+// running on (a timed wait, #2722) in under one, under a badge that says the
+// clip is sped up and by how much (render.mjs), so no speed passes for real time.
+export const MAX_FAST = 300;
 // The recorder's own pace on a loop, in milliseconds: the pointer's glide to a
 // target before it acts, each key typed, the settle after a page loads, and the
 // moment the last state settles before the clip ends.
@@ -299,7 +302,19 @@ function parseStep(raw, n, label = 'step') {
     }
     case 'wait': {
       if (!isObj(v)) {
-        problems.push(`${where} must be { text | selector | role, timeout? }`);
+        problems.push(`${where} must be { text | selector | role, timeout? } or { seconds }`);
+        break;
+      }
+      // A wait for time itself (#2722): the lab runs on for seconds, so a
+      // stretch of its record is long enough to read. On camera it is played as
+      // a lapse; a focus can frame something else, never `here`.
+      if ('seconds' in v) {
+        if (Object.keys(v).length > 1) problems.push(`${where} waits for either a target or seconds, not both`);
+        if (!(Number.isInteger(v.seconds) && v.seconds >= 1 && v.seconds <= MAX_WAIT_MS / 1000)) {
+          problems.push(`${where}: seconds must be whole seconds, 1 to ${MAX_WAIT_MS / 1000}`);
+        }
+        if (step.focus === 'here') problems.push(`${where}: focus here needs a target, and a timed wait has none`);
+        step.seconds = v.seconds;
         break;
       }
       const { timeout, ...target } = v;
@@ -343,6 +358,16 @@ function parseSetup(raw, where) {
     } else if ('wait' in o) {
       const w = o.wait;
       if (!isObj(w)) return void problems.push(`${at}: wait must be { get, field, equals, timeout? }`);
+      if ('seconds' in w) {
+        // A pause (#2722): the lab runs on off camera, so the state the shot
+        // opens on has lasted that long (a room down for ten minutes).
+        if (Object.keys(w).length > 1) problems.push(`${at}: wait is either { get, field, equals } or { seconds }`);
+        if (!(Number.isInteger(w.seconds) && w.seconds >= 1 && w.seconds <= MAX_PAUSE_SECONDS)) {
+          problems.push(`${at}: wait.seconds must be whole seconds, 1 to ${MAX_PAUSE_SECONDS}`);
+        }
+        items.push({ kind: 'pause', seconds: w.seconds });
+        return;
+      }
       for (const k of Object.keys(w)) if (!['get', 'field', 'equals', 'timeout'].includes(k)) problems.push(`${at} has unknown key "${k}"`);
       if (!isStr(w.get) || !w.get.startsWith('/')) problems.push(`${at}: wait.get must be an API path starting with "/"`);
       if (!isStr(w.field)) problems.push(`${at}: wait.field must be a dotted field name`);
@@ -508,7 +533,7 @@ export function stepAuthoredSeconds(step) {
   if (step.kind === 'goto') ms += PACE.load;
   if (['click', 'hover', 'type', 'select'].includes(step.kind)) ms += PACE.glide;
   if (step.kind === 'type') ms += PACE.key * (step.text ?? '').length;
-  if (step.kind === 'wait') ms += (step.lapse ?? 0) * 1000;
+  if (step.kind === 'wait') ms += (step.lapse ?? (step.seconds ?? 0)) * 1000;
   return ms / 1000;
 }
 
@@ -637,7 +662,8 @@ const KIND = { components: 'component', systems: 'system', endpoints: 'endpoint'
 export function referencedResources(items, start) {
   /** @type {Map<string, { kind: string, id: string, path: string }>} */
   const found = new Map();
-  const paths = [...items.map((it) => (it.kind === 'call' ? it.path : it.get)), ...(start ? [start] : [])];
+  // A pause names no resource.
+  const paths = [...items.flatMap((it) => (it.kind === 'call' ? [it.path] : it.kind === 'await' ? [it.get] : [])), ...(start ? [start] : [])];
   for (const p of paths) {
     for (const m of p.matchAll(RESOURCE)) {
       const id = m[2].startsWith('{') ? m[2].slice(1, -1) : m[2];
