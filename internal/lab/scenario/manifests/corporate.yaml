@@ -170,3 +170,56 @@ health_history:
       health: degraded
       days_ago: 16
       minutes: 25
+
+# What every room acts out on the simulator's clock (#2757): its meetings, as
+# knobs per standard. The lab calendar is derived from these and a seed, never
+# stored, so every node computes the same one. A huddle room is booked less
+# and for shorter than a boardroom; a conference room fills most of its day.
+# Times are UTC; hours bounds the day meetings fall in. The signage has none.
+calendar:
+  meetings:
+    huddle-room:
+      booking_rate: 0.30
+      slot_mix: { 15: 3, 30: 5, 60: 1 }
+      no_show_rate: 0.15
+      ended_early_rate: 0.20
+      ended_late_rate: 0.08
+      attendance: { min: 2, max: 4 }
+      walk_in_rate: 0.12
+      hours: { start: 8, end: 18 }
+    mr65:
+      booking_rate: 0.40
+      slot_mix: { 15: 1, 30: 5, 60: 3 }
+      no_show_rate: 0.12
+      ended_early_rate: 0.18
+      ended_late_rate: 0.10
+      attendance: { min: 3, max: 8 }
+      walk_in_rate: 0.08
+      hours: { start: 8, end: 18 }
+    mr75:
+      booking_rate: 0.45
+      slot_mix: { 15: 1, 30: 4, 60: 4 }
+      no_show_rate: 0.10
+      ended_early_rate: 0.15
+      ended_late_rate: 0.12
+      attendance: { min: 4, max: 12 }
+      walk_in_rate: 0.06
+      hours: { start: 8, end: 18 }
+    mr86:
+      booking_rate: 0.50
+      slot_mix: { 30: 3, 60: 5 }
+      no_show_rate: 0.08
+      ended_early_rate: 0.12
+      ended_late_rate: 0.15
+      attendance: { min: 6, max: 16 }
+      walk_in_rate: 0.04
+      hours: { start: 8, end: 18 }
+    divisible-conference:
+      booking_rate: 0.60
+      slot_mix: { 30: 2, 60: 6 }
+      no_show_rate: 0.06
+      ended_early_rate: 0.10
+      ended_late_rate: 0.18
+      attendance: { min: 8, max: 30 }
+      walk_in_rate: 0.02
+      hours: { start: 8, end: 18 }

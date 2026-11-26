@@ -27,6 +27,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
@@ -268,6 +269,11 @@ type Device struct {
 	// now is the clock source. Defaults to time.Now in NewDevice; tests
 	// swap it via SetClock to make elapsed computed fields deterministic.
 	now func() time.Time
+
+	// room is where the device sits and calSrc reaches the engine's lab
+	// calendar (#2757); both stay zero on a device standing alone.
+	room   calendar.Room
+	calSrc func() *calendar.Calendar
 
 	mu    sync.RWMutex
 	state map[string]any

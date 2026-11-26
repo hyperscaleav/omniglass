@@ -44,6 +44,9 @@ type Manifest struct {
 	// HealthHistory is the past a lab seeded with --health-history carries
 	// (#2728); nil when the scenario declares none.
 	HealthHistory *HealthHistory `yaml:"health_history"`
+	// Calendar is what every simulated room acts out on the simulator's
+	// clock (#2757); nil when the scenario declares none.
+	Calendar *Calendar `yaml:"calendar"`
 }
 
 // Pusher is one outside actor a scenario places at every site, PerSite of
@@ -235,7 +238,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "health_history"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "health_history", "calendar"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file

@@ -8,8 +8,10 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 )
@@ -33,6 +35,8 @@ type Engine struct {
 	// obs counts what every device's faces were sent and how each request
 	// settled, kept by device id so a rebuilt device counts on.
 	obs *endpointObservation
+	// cal is the lab calendar (#2757) devices read through their clock.
+	cal atomic.Pointer[calendar.Calendar]
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
@@ -152,6 +156,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	}
 	dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, state)
 	dev.Product = snap.Product
+	dev.room = calendar.Room{Site: snap.SiteCode, Building: snap.Building, Room: snap.Room}
 	// Install the profile's defaults snapshot so templates and
 	// mutations on this device can read `{{ .Defaults.<path> }}` to
 	// reset state paths to their declared defaults (used by reboot
@@ -263,7 +268,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		}
 	}
 
-	push, err := compilePush(prof.Name, prof.Push)
+	push, err := compilePush(prof.Name, prof.Push, dev.calendarFuncs())
 	if err != nil {
 		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
 	}
@@ -609,6 +614,7 @@ func (e *Engine) SetHitReporter(f func(Hit)) {
 // engine's current seams, so a seam set after a device starts serving reaches
 // it without writing fields its listeners are reading.
 func (e *Engine) installSeams(dev *Device) {
+	dev.calSrc = e.Calendar
 	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()

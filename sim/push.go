@@ -123,12 +123,15 @@ func clockOffset(s string) (time.Duration, error) {
 }
 
 // pushFuncs are the template functions a push body renders with.
-func pushFuncs() template.FuncMap {
+func pushFuncs(extra template.FuncMap) template.FuncMap {
 	funcs := template.FuncMap{}
 	for name, fn := range templateFuncs {
 		funcs[name] = fn
 	}
 	funcs["bookingsAt"] = bookingsAt
+	for name, fn := range extra {
+		funcs[name] = fn
+	}
 	return funcs
 }
 
@@ -141,7 +144,7 @@ type pushData struct {
 }
 
 // compilePush compiles a profile's push face. Nil when it declares none.
-func compilePush(name string, p *profile.Push) (*pushFace, error) {
+func compilePush(name string, p *profile.Push, extra template.FuncMap) (*pushFace, error) {
 	if p == nil {
 		return nil, nil
 	}
@@ -149,7 +152,7 @@ func compilePush(name string, p *profile.Push) (*pushFace, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := template.New(name + ".push").Funcs(pushFuncs()).Option("missingkey=zero").Parse(p.Body)
+	body, err := template.New(name + ".push").Funcs(pushFuncs(extra)).Option("missingkey=zero").Parse(p.Body)
 	if err != nil {
 		return nil, fmt.Errorf("push.body: %w", err)
 	}
