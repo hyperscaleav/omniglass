@@ -129,7 +129,7 @@ shots:
     # 36: each beat holds once the video shows it (a full lab's heavy renders
     # stall the frames for seconds), and the story runs before and after the fix.
     max_seconds: 36
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display reading hdmi1, the room healthy again, and three minutes later, sped up, its Activity with the outage closed beside its uptime, then the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 issued and settled, the display reading hdmi1, the room healthy again, and three minutes later, sped up, its Activity with the outage closed beside its uptime, then the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -218,8 +218,12 @@ shots:
         hold: 500
       - select: { target: 'form:has(option[value=set-input]) select >> nth=1', value: hdmi1 }
         hold: 600
+      # The camera follows the pointer down to Issue, so the press is on screen.
       - click: { role: button, name: Issue }
-        hold: 200
+        focus: here
+        expect: ["Issue"]
+        zoom: 2.2
+        hold: 500
       # Beat 6: the display acknowledges, and the command settles.
       - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 30000 }
         focus: '[data-testid=toast]:has([data-testid=command-toast])'
