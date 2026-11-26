@@ -1,8 +1,8 @@
 // Package calendar is the lab calendar (#2757): the meetings every room of a
 // simulated lab holds, derived, never stored. Entries(room, window) is a pure
 // function of the room, the knobs a scenario declares for it, a seed and the
-// window, so every node that computes it computes the same calendar and no
-// node need hold or ship one. Nothing here reads a clock or a global: the
+// window, so every process that computes it computes the same calendar and no
+// process need hold or ship one. Nothing here reads a clock or a global: the
 // caller says what time it is.
 //
 // A room's day is generated whole from (seed, room key, UTC day), so a day is

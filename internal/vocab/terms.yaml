@@ -174,6 +174,10 @@ terms:
         origin: ADR-2031
         replacement: outpost (the collecting process; OMNIGLASS_OUTPOST_, /outposts, outpost:read, omniglass outpost)
         allow: '(?i)\bnode_modules\b|\bnode:(?:fs|path|url|os|crypto|child_process|test|assert|util|https?|net|stream|events|readline|process|buffer|zlib|module|timers|worker_threads|perf_hooks)\b|[?&]node=|\bnode\.?js\b|\bnode (?:--?[\w-]+(?:=\S+)? )*\S+\.(?:m?js|cjs|ts)\b|\bclass: node\b|\bnode: \{ style\b|\b(?:tree|leaf|root|child|parent|ancestor|descendant|sibling|dom|text|deepest|interior|ast|jsx|forest|element|graph|focusable|scan|plan) nodes?\b|\bthis node only\b'
+  - word: lab calendar
+    plural: lab calendars
+    definition: The meetings every simulated room holds, derived from the scenario and a seed rather than stored, so every simulator and the server compute the same one.
+    audience: admin
   - word: unclaimed source
     plural: unclaimed sources
     definition: A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.

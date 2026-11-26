@@ -12,7 +12,7 @@ import (
 // room acts out on the simulator's clock. Only meetings are declared here
 // today; scripted problems join them with their own slice (#2769). The
 // calendar itself is derived from these knobs and a seed (sim/calendar), never
-// written out, so every node computes the same one.
+// written out, so every process computes the same one.
 type Calendar struct {
 	Meetings Meetings `yaml:"meetings"`
 	Line     int      `yaml:"-"`
