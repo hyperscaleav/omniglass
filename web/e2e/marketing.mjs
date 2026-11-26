@@ -25,7 +25,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -381,7 +381,7 @@ async function record(browser, base, storageState, shot, out, api) {
       // Waits played faster are shortened in the frames and in the camera's times
       // alike, so a focus lands on the frame it was logged for.
       const events = cam.events.map((e) => ({ ...e, t: retime(e.t, cam.lapses) }));
-      writeFrames(taken.map((f) => ({ ...f, t: retime(f.t, cam.lapses) })), out, shot.id);
+      writeFrames(thinFrames(taken.map((f) => ({ ...f, t: retime(f.t, cam.lapses) })), FRAME_FALLBACK_SECONDS), out, shot.id);
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
       // The lapses, in real time, mark the stretches played faster: the

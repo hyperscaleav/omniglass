@@ -863,6 +863,28 @@ export const MIN_LAPSE_BADGE = 0.6;
 export const FRAME_FALLBACK_SECONDS = 0.04;
 
 /**
+ * A loop's frames thinned to at most one per `gap` seconds of clip, the first
+ * and last always kept. A lapse retimes its frames into a fraction of their
+ * real span (180 s at 300x is 0.6 s), so thousands of them land a ten-thousandth
+ * of a second apart; joined as they are, each still took the join's smallest
+ * duration and the lapse played ten times slower than its speed. The encode
+ * keeps one frame per 1/25 s anyway, so nothing visible is lost.
+ * @template {{ t: number }} F
+ * @param {F[]} frames ascending in t
+ * @param {number} gap seconds
+ * @returns {F[]}
+ */
+export function thinFrames(frames, gap) {
+  if (frames.length <= 2) return [...frames];
+  const kept = [frames[0]];
+  for (let i = 1; i < frames.length - 1; i++) {
+    if (frames[i].t - kept[kept.length - 1].t >= gap) kept.push(frames[i]);
+  }
+  kept.push(frames[frames.length - 1]);
+  return kept;
+}
+
+/**
  * The ffmpeg concat-demuxer list for a loop's frames, so a variable frame rate
  * plays at the pace it was taken.
  * @param {{ t: number }[]} frames times in seconds from the clip's start, ascending

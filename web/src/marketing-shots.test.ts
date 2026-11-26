@@ -14,6 +14,8 @@ import {
   loopMaxBytes,
   cameraTail,
   retime,
+  thinFrames,
+  concatList,
   buildManifest,
   cameraTrack,
   lapseBadges,
@@ -520,6 +522,32 @@ describe("the camera's tail and time-lapsed waits", () => {
     expect(cameraTail([{ t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }, { t: 2, box: null }])).toBe(0);
     // the last event by time, whatever order they were logged in
     expect(cameraTail([{ t: 5, box: null }, { t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }])).toBe(0);
+  });
+
+  it("keeps a lapse as short as its speed: a run of frames closer than a gap thins to one per gap", () => {
+    // 180 s of frames at 30 a second, retimed into 0.6 s of clip: each is
+    // 0.0001 s apart, and the joined clip gave each at least 0.001 s, so the
+    // lapse played for 5.4 s (#2722).
+    const lapse = Array.from({ length: 5400 }, (_, i) => ({ t: 1 + i * (0.6 / 5400), data: String(i) }));
+    const frames = [{ t: 0, data: "a" }, ...lapse, { t: 1.6, data: "z" }];
+    const kept = thinFrames(frames, 0.04);
+    expect(kept[0]).toEqual({ t: 0, data: "a" });
+    expect(kept[kept.length - 1]).toEqual({ t: 1.6, data: "z" });
+    // 0.6 s at one frame per 0.04 s, give or take the run's ends.
+    expect(kept.length).toBeGreaterThanOrEqual(15);
+    expect(kept.length).toBeLessThanOrEqual(19);
+    for (let i = 1; i < kept.length - 1; i++) expect(kept[i].t - kept[i - 1].t).toBeGreaterThanOrEqual(0.04);
+    // the joined clip is as long as the frames span, not stretched
+    const total = concatList(kept, (i) => `f${i}.jpg`)
+      .split("\n")
+      .filter((l) => l.startsWith("duration"))
+      .reduce((sum, l) => sum + Number(l.split(" ")[1]), 0);
+    expect(total).toBeCloseTo(1.6 + 0.04, 2);
+  });
+
+  it("leaves frames already a gap apart alone", () => {
+    const frames = [0, 0.05, 0.1, 0.2].map((t) => ({ t, data: String(t) }));
+    expect(thinFrames(frames, 0.04)).toEqual(frames);
   });
 
   it("shortens each second inside a lapse by its speed and leaves the rest", () => {
