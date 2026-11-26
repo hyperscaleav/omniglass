@@ -81,10 +81,12 @@ import Tooltip from "./ui/Tooltip";
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// HISTORY_TICK_MS is how often the history and the charts take a new now:
-// a thirty-day strip and a day's sparkline move too little in a second to
-// redraw on every tick.
-const HISTORY_TICK_MS = 60_000;
+// HISTORY_TICK_MS is how often the history and the charts take a new now: the
+// poll's cadence (#2723), so the record beside the header moves when the
+// health that feeds it does, and a recovery reaches Uptime and the bar within
+// one poll. A thirty-day strip still moves too little in a second to redraw on
+// every tick.
+const HISTORY_TICK_MS = LEAF_POLL_MS;
 // SystemDetail (#636, reoriented in #872, one body for both hosts since
 // #2423): a system's whole detail body, rendered by its page
 // (`/systems/:id`, host "page") and by the fleet blade (host "blade") alike.
@@ -421,7 +423,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
+                <HealthHistory compact now={historyNow()} transitions={health.data?.transitions ?? []} health={health.data?.health} />
                 <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
                   <Show when={windowAlarms().length > 0}>
                     <span class="absolute right-3 top-0 text-[10px] leading-3 text-base-content/40">▲ alarm raised</span>
