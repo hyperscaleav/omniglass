@@ -25,10 +25,19 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
+// How long the browser may refuse screenshots (a navigation on camera) before
+// the frame loop opens its session again, then calls it a failure; and how long
+// one capture may take before it counts as refused.
+const FRAME_REFUSAL_MS = 10_000;
+const FRAME_CAPTURE_MS = 1_000;
+// How long a beat waits for the video to catch up with the page: a heavy
+// render on a full lab stalls the screenshots for seconds after the page has
+// changed, and a beat that held from the page's change played over old frames.
+const FRESH_FRAME_MS = 8_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
 // Pacing (PACE, marketinglib.mjs) is shared with the parse, which holds a loop's
 // own spend to its maximum.
@@ -212,6 +221,13 @@ async function runSetup(api, where, items) {
         await api.send(it.method, it.path, it.body);
         continue;
       }
+      if (it.kind === 'pause') {
+        // The lab runs on off camera (#2722), so the state the shot opens on
+        // has lasted this long.
+        console.log(`marketing: ${where}: the lab runs on for ${it.seconds}s`);
+        await new Promise((r) => setTimeout(r, it.seconds * 1000));
+        continue;
+      }
       const deadline = Date.now() + it.timeout;
       let last;
       for (;;) {
@@ -339,6 +355,7 @@ async function record(browser, base, storageState, shot, out, api) {
     const t0 = Date.now();
     cam.now = () => (Date.now() - t0) / 1000;
     const frames = loop ? await startFrames(ctx, page, t0) : null;
+    if (frames) cam.fresh = (since) => frames.fresh(since, FRESH_FRAME_MS);
     if (loop) await page.mouse.move(cursor.x, cursor.y);
     /** @type {{ n: number, kind: string, target: string, from: number, to: number, authored: number }[]} */
     const timed = [];
@@ -365,7 +382,7 @@ async function record(browser, base, storageState, shot, out, api) {
       // Waits played faster are shortened in the frames and in the camera's times
       // alike, so a focus lands on the frame it was logged for.
       const events = cam.events.map((e) => ({ ...e, t: retime(e.t, cam.lapses) }));
-      writeFrames(taken.map((f) => ({ ...f, t: retime(f.t, cam.lapses) })), out, shot.id);
+      writeFrames(thinFrames(taken.map((f) => ({ ...f, t: retime(f.t, cam.lapses) })), FRAME_FALLBACK_SECONDS), out, shot.id);
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
       // The lapses, in real time, mark the stretches played faster: the
@@ -410,14 +427,47 @@ async function record(browser, base, storageState, shot, out, api) {
  * @param {number} origin Date.now() at the clip's start
  */
 async function startFrames(ctx, page, origin) {
-  const cdp = await ctx.newCDPSession(page);
+  let cdp = await ctx.newCDPSession(page);
   /** @type {{ t: number, data: string }[]} */
   const frames = [];
+  // When the newest frame's screenshot was asked for: what it shows is the
+  // page as it was then or later.
+  let newest = 0;
   let running = true;
   const taking = (async () => {
+    // A navigation on camera (a goto step, #2722) swaps the page out, and the
+    // browser may refuse a screenshot, or not answer one, while it does. Each
+    // capture is time-boxed, so none can hang the shot; a refused or stalled
+    // one is skipped (the frame before it holds a little longer). Past
+    // FRAME_REFUSAL_MS without a frame the session is opened again once, and a
+    // second stretch fails the shot rather than recording nothing.
+    let refusedSince = 0;
+    let reopened = false;
     while (running) {
       const a = Date.now();
-      const r = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true });
+      /** @type {{ data: string } | Error} */
+      const r = await Promise.race([
+        cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true }).catch((e) => /** @type {Error} */ (e)),
+        new Promise((res) => setTimeout(() => res(new Error(`no screenshot within ${FRAME_CAPTURE_MS}ms`)), FRAME_CAPTURE_MS)),
+      ]);
+      if (!running) break;
+      if (r instanceof Error) {
+        refusedSince ||= a;
+        console.error(`marketing: frame skipped: ${r.message.split('\n')[0]}`);
+        if (Date.now() - refusedSince > FRAME_REFUSAL_MS) {
+          if (reopened) throw r;
+          reopened = true;
+          refusedSince = 0;
+          console.error('marketing: frames: opening the capture session again');
+          await cdp.detach().catch(() => {});
+          cdp = await ctx.newCDPSession(page);
+          continue;
+        }
+        await new Promise((res) => setTimeout(res, 50));
+        continue;
+      }
+      refusedSince = 0;
+      newest = a;
       frames.push({ t: ((a + Date.now()) / 2 - origin) / 1000, data: r.data });
     }
   })();
@@ -426,6 +476,19 @@ async function startFrames(ctx, page, origin) {
       running = false;
       await taking;
       return frames;
+    },
+    /**
+     * Resolves true once a frame asked for at or after `since` (epoch ms) is
+     * in, so the video shows the page as it was then; false past `timeout`.
+     * @param {number} since @param {number} timeout
+     */
+    async fresh(since, timeout) {
+      const end = Date.now() + timeout;
+      while (newest < since) {
+        if (!running || Date.now() > end) return false;
+        await new Promise((res) => setTimeout(res, 25));
+      }
+      return true;
     },
   };
 }
@@ -441,7 +504,7 @@ function writeFrames(frames, out, id) {
 
 /** @typedef {{ step: number, from: number, at: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
 /** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[], at?: number, seen?: string[] }} OpenBeat */
-/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null }} Camera */
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null, fresh?: (since: number) => Promise<boolean> }} Camera */
 
 const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
 
@@ -469,8 +532,13 @@ function textInside(page, r) {
       if (!boxes.length) continue;
       const inside = boxes.every((b) => b.left >= r.x - 1 && b.top >= r.y - 1 && b.right <= r.x + r.width + 1 && b.bottom <= r.y + r.height + 1);
       if (!inside) continue;
+      // Hit-testing skips an element that takes no pointer events (a chart's
+      // label drawn over its bar), so such text is judged by its nearest
+      // ancestor that does take them: covered only when something outside it is on top.
+      let probe = el;
+      while (probe.parentElement && getComputedStyle(probe).pointerEvents === 'none') probe = probe.parentElement;
       const top = document.elementFromPoint(boxes[0].left + boxes[0].width / 2, boxes[0].top + boxes[0].height / 2);
-      if (top && !el.contains(top) && !top.contains(el)) continue;
+      if (top && !probe.contains(top) && !top.contains(probe)) continue;
       out.push(text);
     }
     // A form control draws its own text: a select its chosen option, a text
@@ -550,8 +618,13 @@ async function logFocus(page, step, cam, own) {
     box = await el.boundingBox();
   }
   if (!box) throw new Error('the focus has no box on screen');
+  // The beat opens once the video shows what the page now does, not before:
+  // the camera lands on the target as it appears in the clip.
+  if (cam.fresh && !(await cam.fresh(Date.now()))) {
+    console.error(`marketing: step ${step.n}: the video had not caught up with the page after ${FRESH_FRAME_MS / 1000}s`);
+  }
   const t = cam.now();
-  cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}) });
+  cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}), ...(step.spot === false ? { spot: false } : {}) });
   const { rect, onScreen } = frameRect(frameFor(box, cam.vp, step.zoom), cam.vp);
   cam.open = { step: step.n, from: t, frame: rect, onScreen, ...(step.expect ? { expect: step.expect } : {}) };
 }
@@ -590,6 +663,18 @@ async function play(page, base, step, cursor, loop, cam, api) {
       if (later) await logFocus(page, step, cam, null);
       break;
     case 'wait': {
+      if (step.seconds) {
+        // A wait for time itself (#2722): the lab runs on, played as a lapse
+        // when the step has one, so the record it leaves is there to read.
+        const from = cam.now();
+        await page.waitForTimeout(step.seconds * 1000);
+        if (step.lapse) {
+          const speed = lapseSpeed(cam.now() - from, step.lapse);
+          if (speed > 1) cam.lapses.push({ from, to: cam.now(), speed });
+        }
+        await logFocus(page, step, cam, null);
+        break;
+      }
       const el = locate(page, step.target).filter({ visible: true }).first();
       const from = cam.now();
       await el.waitFor({ state: 'visible', timeout: step.timeout });

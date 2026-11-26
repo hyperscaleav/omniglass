@@ -477,9 +477,9 @@ and writes the files and a `shots.json` manifest into the directory. The landing
 every image, loop, poster and alt text with no code change there.
 
 A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
-`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 30, for a story such as
+`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 36, for a story such as
 omnibot's answer that cannot be told faster without faking it, or the page's teaser) and at most 1.5 MB (a
-loop allowed past 15 seconds earns that rate for its length, so a 30 second one may weigh 3 MB), with a WebP poster; the recorder re-encodes
+loop allowed past 15 seconds earns that rate for its length, so a 36 second one may weigh 3.6 MB), with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
 naming the shot and the limit.
 
@@ -503,8 +503,11 @@ A loop has a camera. A step's `focus` moves it: `here` frames the step's own tar
 (`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
 (1 to 3) sets how close; without it the camera fits the target with a margin, never past 3x. A loop is
 watched on a phone too, where the console's 13-pixel text needs 2x or more to read. The camera
-eases over 0.6 s and centres the target, even near the capture's edge, where the frame shows the console's
-own dark base past it; so focus the thing the beat is about, not the panel around it. A target bigger than
+eases over 0.6 s, once the video has caught up with the page (a heavy render on a full lab stalls the
+screenshots for seconds after the page changed, and a beat that held from the change played over old
+frames; the wait counts toward the loop's length), and centres the target, or comes as near it as the capture's edge allows: the frame never
+looks past the capture, so a target at its edge sits off centre; focus the thing the beat is about, not the
+panel around it. A target bigger than
 the frame at its `zoom` (a whole card) keeps its top and left edges in view instead, so its heading shows. It eases back to the whole frame before the loop
 ends, so the loop's seam lands on the full view: the recorder keeps recording for that last ease when the
 final step leaves the camera zoomed. A focus on a still, or on a loop's prep, fails the parse.
@@ -524,16 +527,22 @@ is still crisp (past 2x the frame is upscaled, a little soft), and writes where 
 as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
 project in `web/e2e/marketing/compose/` (installed once, with the repo's pinned pnpm, in the Playwright
 image) then renders the pans and zooms over it, offline, with its telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
-half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a click shows a
+half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a focus with
+`spot: false` keeps the whole frame lit, for a target that only aims the camera (an outage's alarm bar, with
+the health lanes above it, which the beat is about); a click shows a
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
 
 A `wait` may take `lapse: N` (seconds, up to 5): the quiet seconds before something changes play in N
-seconds of the clip, a time-lapse, sped up as much as that run's wait needs, up to 40 times
+seconds of the clip, a time-lapse, sped up as much as that run's wait needs, up to 300 times
 (`lapseSpeed`), and never slowed down. A loop has 9 seconds to spend and a console that needs five to
 recover (an outpost's next check-in after a credential is fixed) is not one to sit through. The lapse
 fixes the wait's length in the clip, not its speed, so a slower lab makes a faster lapse rather than a
-longer loop; a wait past 40 times its lapse plays longer, and the budget catches it. The clip says
+longer loop; a wait past 300 times its lapse plays longer, and the budget catches it. A wait may
+also be for time itself, `wait: { seconds: N }`: on camera, with a lapse, minutes of the lab running on
+play in a moment under the badge (the teaser lets three pass after its fix, so the room's last hour on
+its timeline reads healthy, down, healthy again); in setup, off camera and up to 15 minutes, it lets a
+staged state last before the shot (the teaser's room is down ten minutes first). The clip says
 nothing false: a sped-up stretch that lasts at least 0.6 seconds on screen carries a badge reading "N×
 speed" with that run's speed (`lapseBadges`), so an alarm that takes a minute to raise arrives on camera
 in a second and is never taken for real time.
@@ -549,9 +558,9 @@ true. The shots run in the order listed on one lab, and a later shot relies on t
 left.
 
 A `call` step is the same request in the middle of a clip, off camera: `call: { put: <path>, body: {...} }`.
-It is what happens in the room while the console shows what it makes of it: the teaser
-(`omniglass-teaser`) plugs the boardroom's display back in with one, then waits in a `lapse: 0.6` for the room
-to read healthy. It takes no focus, since nothing on screen moves for it, and the preflight checks the
+It is what happens in the room while the console shows what it makes of it: a device plugged back in, say,
+then a `wait` in a `lapse` for the console to read the room healthy (no shot in the list uses one today; the
+teaser fixes its room from the console, with Send command). It takes no focus, since nothing on screen moves for it, and the preflight checks the
 resource it names as it does a setup item's.
 
 One thing is hidden and nothing else: the lab banner. The capture-only stylesheet (`CAPTURE_CSS` in

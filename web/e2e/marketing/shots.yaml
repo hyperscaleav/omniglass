@@ -8,11 +8,13 @@
 # grammar (goto, click, hover, type, select, press, wait; `hold` lingers after a
 # step) without captions. On a loop, a step's `focus` moves the camera as the
 # step starts: `here` eases the frame onto the step's own target, a target
-# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 2) sets
+# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 3) sets
 # the scale instead of fitting the box. The target lands in the middle of the
-# frame, even at the capture's edge (the console's dark base shows past it), so
-# focus the information itself, not the row or panel around it. A clip that
-# ends zoomed eases out before it loops.
+# frame, or as near it as the capture's edge allows (the frame never looks past
+# the capture), so focus the information itself, not the row or panel around
+# it. The rest of the frame dims round the target; `spot: false` keeps it all
+# lit, for a target that only aims the camera. A clip that ends zoomed eases
+# out before it loops.
 #
 # A focus opens a beat, which runs until the next focus. Its `expect` names the
 # text its bullet rests on; the recorder reads the text on screen inside the
@@ -112,19 +114,22 @@ shots:
         zoom: 1.2
         hold: 2000
 
-  # The page's hero: thirty seconds from the whole fleet to one room and back
-  # to healthy, every beat in the drawer the console opens beside the list, so
-  # nothing jumps to a full page. Beats: the count of rooms that need attention;
-  # those rooms; the headquarters boardroom's Why, naming its main display; the
-  # alarm snoozed from that row; the display plugged back in (off camera, the
-  # wait for the console to see it sped up under its badge), the room reading
-  # healthy and its Why clear; its Activity, the stretch it spent down in
-  # its health history. It leaves the boardroom healthy, as the outage clip
-  # below expects to find it.
+  # The page's hero: about thirty seconds (at most 36) from the whole fleet to
+  # one room and back to healthy, every beat in the drawer the console opens
+  # beside the list, so nothing jumps to a full page. Beats: the count of rooms
+  # that need attention; those rooms; the headquarters boardroom's Why, naming
+  # its display on the wrong input; its Activity over the last hour, the outage
+  # ongoing; the display's own Video Input; Send command from its alarm,
+  # set-input hdmi1, settled; the display reading hdmi1 and the room healthy
+  # (sped up under the badge); three minutes on, the same Activity with the
+  # outage closed, then the hour's Timeline: healthy, down, healthy. It leaves
+  # the boardroom healthy, as the outage clip below expects to find it.
   - id: omniglass-teaser
     kind: loop
-    max_seconds: 30
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the display's own Video Input reading hdmi2, Set input hdmi1 sent from the alarm and settled, the display's timeline with the alarm and the command, and the room healthy again."
+    # 36: each beat holds once the video shows it (a full lab's heavy renders
+    # stall the frames for seconds), and the story runs before and after the fix.
+    max_seconds: 36
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display reading hdmi1, the room healthy again, and three minutes later, sped up, its Activity with the outage closed beside its uptime, then the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -145,7 +150,13 @@ shots:
       - post: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/simulation:fire
         body: { surface: web-admin, method: POST, path: /api/display/input, body: '{"input": "hdmi2"}' }
       - wait: { get: /systems/hq-mr86-1/health, field: health, equals: outage, timeout: 180000 }
-    start: /explore
+      # The room stays down ten minutes before the shot (#2722), so its hour on
+      # the timeline at the end reads healthy, down for that stretch, healthy.
+      - wait: { seconds: 600 }
+    # The last hour in the address: the room's drawer opens on it, so its
+    # Activity, before the fix and after, draws the outage across that hour
+    # (#2741) rather than as a sliver of 30 days.
+    start: /explore?range=1h
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
       # Beat 1: the fleet's count, and how many rooms need attention.
@@ -153,7 +164,7 @@ shots:
         focus: '[data-testid=explore-counts]'
         expect: ["systems", "need attention"]
         zoom: 2.6
-        hold: 1300
+        hold: 1100
       # Beat 2: only those rooms, the boardroom among them.
       - click: { role: button, name: need attention }
         focus: 'ul[role=list][aria-label=Matches]'
@@ -168,7 +179,19 @@ shots:
         focus: here
         expect: ["Why", "Display on the wrong input", "display-1"]
         zoom: 2.2
-        hold: 1600
+        hold: 1400
+      # Beat 3b: the room's health over time, as a status page reads it: its
+      # uptime, the record ending degraded, the stretch still ongoing.
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Activity")'
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=stretch-list]:has-text("ongoing")' }
+        focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
+        expect: ["Uptime", "outage"]
+        zoom: 1.8
+        hold: 1400
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Overview")'
+        focus: out
+        hold: 200
       # Beat 4: the display itself, its own report: Video Input hdmi2. Video Input
       # is a property, so it reads in "What it is", not among the Vitals (metrics).
       - click: 'aside[data-blade] [data-testid=alarm-strip] button:text-is("display-1")'
@@ -178,7 +201,14 @@ shots:
         expect: ["Video Input", "hdmi2"]
         zoom: 2.4
         hold: 1500
-      # Beat 5: Send command from its alarm: Set input, hdmi1, Issue.
+      # Beat 5: Send command from its alarm. The camera lands on the button with
+      # the pointer and holds while its tooltip says what it does, then the
+      # click opens the form: Set input, hdmi1, Issue.
+      - hover: 'aside[data-blade] [data-testid=leaf-alarms] button[aria-label="Send command"]'
+        focus: here
+        expect: ["Send a command to display-1"]
+        zoom: 2.0
+        hold: 1100
       - click: 'aside[data-blade] [data-testid=leaf-alarms] button[aria-label="Send command"]'
         hold: 300
       - select: { target: { role: combobox, name: Command }, value: set-input }
@@ -202,18 +232,8 @@ shots:
         focus: 'aside[data-blade] [data-testid=leaf-identity]'
         expect: ["Video Input", "hdmi1"]
         zoom: 2.4
-        hold: 1200
-      # Beat 7: the display's timeline: the alarm, its Video Input and the
-      # command on one axis.
-      - click: 'aside[data-blade] [data-testid=component-detail] [role=tab]:text-is("Timeline")'
-        focus: out
-        hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=timeline-overlay]' }
-        focus: here
-        expect: ["Alarms", "Commands"]
-        zoom: 1.4
-        hold: 2000
-      # Beat 8: back in the room, healthy, its Why clear.
+        hold: 1000
+      # Beat 7: back in the room, healthy, its Why clear.
       - press: Escape
         hold: 200
       - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 120000 }
@@ -222,11 +242,29 @@ shots:
         expect: ["healthy"]
         zoom: 2.4
         hold: 1200
-      - hover: 'aside[data-blade] [data-testid=alarm-strip-clear]'
-        focus: here
-        expect: ["No active alarms"]
-        zoom: 2.4
-        hold: 1400
+      # Beat 8: three minutes on (a lapse, under its badge), the room's Activity
+      # again, as in beat 3b: the outage closed, its length beside the uptime.
+      - wait: { seconds: 180 }
+        lapse: 0.6
+      # In the same drawer, a tab away (a page load on a 1,000-system lab
+      # stalls the frames for seconds, so the beats stay in the drawer).
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Activity")'
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=stretch-0]:has-text("Outage"):not(:has-text("ongoing"))' }
+        focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
+        expect: ["Uptime", "Outage"]
+        zoom: 1.8
+        hold: 1800
+      # Beat 9: its timeline over that hour, closing in on the outage: healthy,
+      # down for the ten minutes and the fix, healthy again.
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Timeline")'
+        hold: 200
+      - wait: { selector: 'aside[data-blade] [data-testid=timeline-health-row]' }
+        focus: 'aside[data-blade] [data-testid=timeline-alarm-span]'
+        spot: false
+        expect: ["Health", "This system"]
+        zoom: 2.0
+        hold: 2200
 
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.
@@ -339,7 +377,7 @@ shots:
   #   3. Its outage and vitals, beside the rooms it serves.
   # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
   # rule needs about a minute to hold its alarm, and that minute plays as a
-  # lapse, sped up as far as 40x.
+  # lapse, sped up as far as it needs (lapseSpeed in web/e2e/marketinglib.mjs).
   - id: alarm-outage
     kind: loop
     max_seconds: 12
