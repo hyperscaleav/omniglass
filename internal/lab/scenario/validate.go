@@ -100,6 +100,7 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 	}
 	probs = append(probs, checkSiteBounds(m)...)
 	probs = append(probs, checkPushers(m, cat)...)
+	probs = append(probs, checkHealthHistory(m)...)
 
 	if len(probs) > 0 {
 		sort.SliceStable(probs, func(i, j int) bool { return probs[i].Line < probs[j].Line })

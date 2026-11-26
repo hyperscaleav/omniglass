@@ -140,7 +140,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().DurationVar(&scale.timeout, "ready-timeout", defaultScaleTimeout, "a scale lab: how long its bring-up may take before it is removed, naming what is not up")
 	// The delivery table's proof that a refusal reads as loss (#1698).
 	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered"} {
+	// The marketing captures (#2728) photograph a fleet that has been running.
+	cmd.Flags().BoolVar(&scale.healthHistory, "health-history", false, "a throwaway scale lab: seed the scenario's health storyline, 30 days of made-up health and the alarms behind it, for a capture (needs --ephemeral)")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -248,7 +250,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Project: project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: m.Name,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
-			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce,
+			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce, HealthHistory: f.scale.healthHistory,
 			ServerEnv: settingsEnv, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -323,6 +325,9 @@ type labScale struct {
 	// induce makes one simulated device answer a property key no driver
 	// registers (#1698), so the delivery table shows a refusal as loss.
 	induce bool
+	// healthHistory seeds the scenario's health storyline (#2728) on a
+	// throwaway scale lab, for the marketing captures.
+	healthHistory bool
 }
 
 // parseByteSize reads a size like 512m or 4g (binary units; a bare number is
@@ -537,7 +542,7 @@ func dialDaemon(host string) error {
 
 func newLabSeedCmd() *cobra.Command {
 	var scenario, outpost, user, password, replay string
-	var noOutpost, induce, keep, platformHistory, ssoDemo bool
+	var noOutpost, induce, keep, platformHistory, ssoDemo, healthHistory bool
 	var systems, reportSeconds int
 	cmd := &cobra.Command{
 		Use:    "seed",
@@ -553,9 +558,11 @@ func newLabSeedCmd() *cobra.Command {
 				return err
 			}
 			if systems > 0 {
-				err = runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteOutpostTokenHashesEnv), pushers, induce, keep)
+				err = runLabScaleSeed(cmd.Context(), cmd.OutOrStdout(), scenario, systems, user, password, config.Get(lab.SiteOutpostTokenHashesEnv), pushers, induce, keep, healthHistory)
 			} else if induce {
 				return errors.New("--induce-unregistered is a scale lab's: it needs --systems")
+			} else if healthHistory {
+				return errors.New("--health-history seeds a scale scenario's storyline: it needs --systems")
 			} else {
 				err = runLabSeed(cmd.Context(), cmd.OutOrStdout(), scenario, outpost, user, password, config.Get("OMNIGLASS_LAB_OUTPOST_TOKEN_HASH"), noOutpost,
 					pushers, reportSeconds, platformHistory, ssoDemo)
@@ -579,6 +586,7 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().IntVar(&systems, "systems", 0, "seed the scale lab scenario --scenario resolved at this many systems, with an outpost per site")
 	cmd.Flags().BoolVar(&induce, "induce-unregistered", false, "with --systems: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	cmd.Flags().BoolVar(&keep, "keep", false, "a kept scale lab: keep the fleet a database already holds and re-enroll its site outposts")
+	cmd.Flags().BoolVar(&healthHistory, "health-history", false, "with --systems: seed the scenario's health storyline, 30 days of made-up health and the alarms behind it (#2728)")
 	cmd.Flags().StringVar(&replay, "omnibot-replay", lab.DefaultOmnibotReplay, "the omnibot recording to write for the server to play")
 	cmd.Flags().BoolVar(&ssoDemo, "sso", false, "configure single sign-on against the lab's Dex and link its demo person (#2362)")
 	return cmd
@@ -874,7 +882,7 @@ func bootstrapLabOwner(ctx context.Context, gw storage.Gateway, user string, pwH
 // with this run's hashes, its pushers given this run's tokens, and the login
 // is made to work, and nothing is seeded, so a kept lab induces only if its
 // first seed did.
-func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string, pushers map[string]lab.PusherToken, induce, keep bool) error {
+func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, systems int, user, password, tokenHashes string, pushers map[string]lab.PusherToken, induce, keep, healthHistory bool) error {
 	m, err := labscenario.Shipped(scenario)
 	if err != nil {
 		return err
@@ -886,6 +894,14 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 	plan, err := labscenario.Resolve(m, cat, systems)
 	if err != nil {
 		return err
+	}
+	if healthHistory {
+		if m.HealthHistory == nil {
+			return fmt.Errorf("lab seed: the %s scenario declares no health storyline for --health-history", m.Name)
+		}
+		if missing := plan.MissingStorylineSystems(m.HealthHistory); len(missing) > 0 {
+			return fmt.Errorf("lab seed: the health storyline names systems a %d-system %s lab has not: %s", systems, m.Name, strings.Join(missing, ", "))
+		}
 	}
 	hashes, err := lab.ParseSiteOutpostTokenHashes(tokenHashes)
 	if err != nil {
@@ -951,6 +967,13 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 	}
 	if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
 		return err
+	}
+	// The storyline ends a moment before the seed began, so every system's
+	// own record (created, staffed) follows the seeded past (ADR-2726).
+	if healthHistory {
+		if err := devseed.SeedHealthHistory(ctx, gw, m.HealthHistory, start.Add(-time.Minute)); err != nil {
+			return fmt.Errorf("lab seed: %w", err)
+		}
 	}
 	summary := fmt.Sprintf("scenario %s at %d systems: %d sites, %d components, %d pushers, %d webhook senders, seeded in %s",
 		m.Name, plan.Totals.Systems, len(plan.Sites), plan.Totals.Components, seeded.Pushers, seeded.Senders, time.Since(start).Round(time.Second))

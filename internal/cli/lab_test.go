@@ -33,7 +33,7 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	}
 	// A scale lab's proving knobs are for the integration tests, not a
 	// learner's help, and the induced refusal is off unless asked (#1698).
-	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered"} {
+	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
 		f := cmd.Flags().Lookup(name)
 		if f == nil {
 			t.Errorf("lab run has no --%s", name)
@@ -43,8 +43,10 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 			t.Errorf("--%s shows in a learner's help", name)
 		}
 	}
-	if f := cmd.Flags().Lookup("induce-unregistered"); f != nil && f.DefValue != "false" {
-		t.Errorf("--induce-unregistered defaults to %s, want off", f.DefValue)
+	for _, name := range []string{"induce-unregistered", "health-history"} {
+		if f := cmd.Flags().Lookup(name); f != nil && f.DefValue != "false" {
+			t.Errorf("--%s defaults to %s, want off", name, f.DefValue)
+		}
 	}
 }
 

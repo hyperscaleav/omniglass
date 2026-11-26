@@ -311,17 +311,17 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteOutpostTokenHashes(outposts[1:]), pushers, false, false); err == nil || !strings.Contains(err.Error(), outposts[0].Name) {
+		lab.FormatSiteOutpostTokenHashes(outposts[1:]), pushers, false, false, false); err == nil || !strings.Contains(err.Error(), outposts[0].Name) {
 		t.Fatalf("a missing site hash: %v, want a refusal naming %s", err, outposts[0].Name)
 	}
 	short, _ := lab.ParsePusherTokens(lab.FormatPusherTokens(minted[1:]))
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteOutpostTokenHashes(outposts), short, false, false); err == nil || !strings.Contains(err.Error(), minted[0].Name) {
+		lab.FormatSiteOutpostTokenHashes(outposts), short, false, false, false); err == nil || !strings.Contains(err.Error(), minted[0].Name) {
 		t.Fatalf("a missing pusher token: %v, want a refusal naming %s", err, minted[0].Name)
 	}
 
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteOutpostTokenHashes(outposts), pushers, false, false); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteOutpostTokenHashes(outposts), pushers, false, false, false); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
 	senders := map[string]int{} // site -> its platforms
@@ -416,7 +416,7 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 		t.Errorf("%d addresses for %d components and platforms", len(addresses), want)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteOutpostTokenHashes(outposts), pushers, false, false); err == nil || !strings.Contains(err.Error(), "holds data") {
+		lab.FormatSiteOutpostTokenHashes(outposts), pushers, false, false, false); err == nil || !strings.Contains(err.Error(), "holds data") {
 		t.Fatalf("a second seed: %v, want a refusal of a database holding data", err)
 	}
 }
@@ -451,7 +451,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	}
 	firstTokens, firstHashes := mint()
 	firstPushers, firstPusherTokens := scalePusherTokens(t, plan)
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, firstPusherTokens, false, true); err != nil {
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, firstHashes, firstPusherTokens, false, true, false); err != nil {
 		t.Fatalf("the first seed, kept: %v", err)
 	}
 	gw, err := storage.NewPG(ctx, dsn)
@@ -477,7 +477,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	secondTokens, secondHashes := mint()
 	secondPushers, secondPusherTokens := scalePusherTokens(t, plan)
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, true); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, true, false); err != nil {
 		t.Fatalf("the second seed, kept: %v", err)
 	}
 	res := lab.ParseSeedResult(out.String())
@@ -509,7 +509,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 		}
 	}
 
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, false); err == nil ||
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, false, false); err == nil ||
 		!strings.Contains(err.Error(), "holds data") || !strings.Contains(err.Error(), "--fresh") {
 		// The kept volumes outlive a throwaway run, so starting it again
 		// throwaway never clears them: the refusal names --fresh.
@@ -522,7 +522,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	}
 	_, otherPushers := scalePusherTokens(t, other)
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 20, lab.LoginUser, lab.LoginPassword,
-		lab.FormatSiteOutpostTokenHashes(otherOutposts), otherPushers, false, true); err == nil || !strings.Contains(err.Error(), "--fresh") {
+		lab.FormatSiteOutpostTokenHashes(otherOutposts), otherPushers, false, true, false); err == nil || !strings.Contains(err.Error(), "--fresh") {
 		t.Fatalf("a kept seed at another size: %v, want a refusal naming --fresh", err)
 	}
 	// A first run stopped after the fleet was seeded and before its outposts
@@ -531,7 +531,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	if _, err := gw.UpdateOutpost(ctx, "", unplaced, storage.OutpostPatch{LocationName: &nowhere}, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, true); err == nil ||
+	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, secondHashes, secondPusherTokens, false, true, false); err == nil ||
 		!strings.Contains(err.Error(), "--fresh") || !strings.Contains(err.Error(), unplaced) {
 		t.Fatalf("a kept seed with %s at no site: %v, want a refusal naming the outpost and --fresh", unplaced, err)
 	}
@@ -601,7 +601,7 @@ func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
 		outposts = append(outposts, lab.SiteOutpost{Name: labscenario.SiteOutpost(site.Name), TokenHash: hex.EncodeToString(hash)})
 	}
 	var out bytes.Buffer
-	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteOutpostTokenHashes(outposts), pushers, true, false); err != nil {
+	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteOutpostTokenHashes(outposts), pushers, true, false, false); err != nil {
 		t.Fatalf("lab seed --systems 3 --induce-unregistered: %v", err)
 	}
 	res := lab.ParseSeedResult(out.String())
@@ -685,5 +685,15 @@ func TestLabSeedDropsTheStoredLabKey(t *testing.T) {
 	defer gw.Close()
 	if m, err := gw.OmnibotModel(ctx); err != nil || m == nil || m.Key != "mine" {
 		t.Fatalf("an operator's own key after the seed: model = %+v, %v", m, err)
+	}
+}
+
+// A health storyline that names rooms a lab of this size has not is refused
+// before the database is touched (#2728): a small corporate lab has no
+// headquarters boardroom for the storyline to land on.
+func TestLabScaleSeedRefusesAStorylineItsPlanCannotHold(t *testing.T) {
+	err := runLabScaleSeed(context.Background(), &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, "", nil, false, false, true)
+	if err == nil || !strings.Contains(err.Error(), "hq-mr86-1") {
+		t.Fatalf("a 3-system lab with --health-history: %v, want a refusal naming the storyline's missing rooms", err)
 	}
 }
