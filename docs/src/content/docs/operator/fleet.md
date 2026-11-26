@@ -85,7 +85,7 @@ screenshots:
         selector: "role=tab[name='Activity']"
       - action: click
         selector: "[data-testid=stretch-0] button"
-    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
+    alt: "The Activity tab, statuspage style: the 30-day uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
@@ -412,8 +412,8 @@ the page's, and a pick in the panel leaves the page's address alone.
 
 ## Activity: the history, the events, the logs
 
-**Activity** reads the way a status page reads: the window's **uptime** up top (the
-health KPI over time), the timeline beside it with one marker per alarm raise, then
+**Activity** reads the way a status page reads: the 30-day **uptime** up top (the
+availability KPI), the timeline beside it with one marker per alarm raise, then
 the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
 expanding to the health changes inside it and the alarms that explain them. An entry reads
 ongoing only while the system is still away from healthy; the moment it recovers, the entry
