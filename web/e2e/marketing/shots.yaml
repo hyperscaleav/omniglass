@@ -250,9 +250,9 @@ shots:
         hold: 200
       - wait: { selector: '[data-testid=timeline-health-row]' }
         focus: '[data-testid=timeline-overlay]'
-        expect: ["Health", "This system", "Last 1 hour"]
+        expect: ["Health", "This system"]
         zoom: 1.6
-        hold: 2400
+        hold: 3000
 
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.

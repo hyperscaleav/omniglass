@@ -33,7 +33,7 @@ const ACT_TIMEOUT = 15_000;
 // the frame loop opens its session again, then calls it a failure; and how long
 // one capture may take before it counts as refused.
 const FRAME_REFUSAL_MS = 10_000;
-const FRAME_CAPTURE_MS = 3_000;
+const FRAME_CAPTURE_MS = 1_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
 // Pacing (PACE, marketinglib.mjs) is shared with the parse, which holds a loop's
 // own spend to its maximum.
