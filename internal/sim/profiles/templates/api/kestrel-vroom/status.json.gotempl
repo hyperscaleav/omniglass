@@ -4,7 +4,15 @@
     "uptime": {{ .State | get "status" | get "device" | get "uptime" }},
     "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
     "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
-    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}"
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+    {{/* @field status.device.cpu_load number "Codec CPU load, percent" */}}
+    "cpu_load": {{ .State | get "status" | get "device" | get "cpu_load" }},
+    {{/* @field status.device.temperature number "Codec temperature, degrees Celsius" */}}
+    "temperature": {{ .State | get "status" | get "device" | get "temperature" }},
+    {{/* @field status.device.fan_rpm number "Cooling fan speed, rpm" */}}
+    "fan_rpm": {{ .State | get "status" | get "device" | get "fan_rpm" }},
+    {{/* @field status.device.memory_used number "Memory in use, a fraction (0 to 1)" */}}
+    "memory_used": {{ .State | get "status" | get "device" | get "memory_used" }}
   },
   "app": {
     "mode": "{{ .State | get "status" | get "app" | get "mode" }}",
@@ -24,5 +32,15 @@
   "video": {
     "camera_on": {{ .State | get "status" | get "video" | get "camera_on" }},
     "resolution": "{{ .State | get "status" | get "video" | get "resolution" }}"
+  },
+  "media": {
+    {{/* @field status.media.packet_loss number "Packet loss of the call's media, a ratio (0 to 1); 0 when idle" */}}
+    "packet_loss": {{ .State | get "status" | get "media" | get "packet_loss" }},
+    {{/* @field status.media.jitter_ms number "Jitter of the call's media, ms; 0 when idle" */}}
+    "jitter_ms": {{ .State | get "status" | get "media" | get "jitter_ms" }},
+    {{/* @field status.media.bitrate_kbps number "Send bitrate of the call's video, kbps; 0 when idle" */}}
+    "bitrate_kbps": {{ .State | get "status" | get "media" | get "bitrate_kbps" }},
+    {{/* @field status.media.frame_rate number "Frame rate of the call's video, fps; 0 when idle" */}}
+    "frame_rate": {{ .State | get "status" | get "media" | get "frame_rate" }}
   }
 }

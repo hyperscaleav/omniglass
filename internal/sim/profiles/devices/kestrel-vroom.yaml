@@ -256,6 +256,82 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
+# The bar talks on its own (#2754): a call about every 90 s, its
+# participants coming and going, its call stats drifting and its log stream,
+# so a lab's every video bar shows what a codec reports without anyone
+# dialing. No tick is faster than 15 s (#1360's cost rule: richness from
+# more kinds of signal, not more samples), and a tick streams only what it
+# changed, so the live feed carries a call's transitions, not a heartbeat.
+behaviors:
+  # The call cycle, one tick each 15 s through six phases: 1 a call starts
+  # (a new id, two to six participants), 2 to 4 its participants walk one
+  # at a time (one joins, one leaves, or none), 5 it ends, 0 the room rests.
+  # A call of 60 s and a rest of 30 s. Its bookkeeping (status.sim) is the
+  # simulator's, outside the paths the live feed streams. The cycle owns the
+  # call: a call dialed over the API is ended by its next phase 5.
+  - name: call_cycle
+    schedule:
+      interval: 15s
+    mutations:
+      - path: status.sim.participants_prev
+        value: '{{ .State.status.call.participants }}'
+      - path: status.sim.call_phase
+        value: '{{ if ge .State.status.sim.call_phase 5 }}0{{ else }}{{ add .State.status.sim.call_phase 1 }}{{ end }}'
+      - path: status.sim.call_seq
+        value: '{{ if eq .State.status.sim.call_phase 1 }}{{ add .State.status.sim.call_seq 1 }}{{ else }}{{ .State.status.sim.call_seq }}{{ end }}'
+      - path: status.call.id
+        value: '{{ if eq .State.status.sim.call_phase 1 }}c{{ add 9000 .State.status.sim.call_seq }}{{ else }}{{ .State.status.call.id }}{{ end }}'
+      - path: status.call.active
+        value: '{{ and (ge .State.status.sim.call_phase 1) (le .State.status.sim.call_phase 4) }}'
+      - path: status.call.participants
+        value: '{{ $p := .State.status.sim.call_phase }}{{ if eq $p 1 }}{{ round 0 (randStep 2.0 4.0) }}{{ else if and (ge $p 2) (le $p 4) }}{{ round 0 (clamp 1.0 8.0 (randStep 1.49 .State.status.call.participants)) }}{{ else }}0{{ end }}'
+      # The room shares its laptop for the middle of each call.
+      - path: status.presentation.local_active
+        value: '{{ eq .State.status.sim.call_phase 3 }}'
+    events:
+      - name: call-started
+        data: '{{ if eq .State.status.sim.call_phase 1 }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+      - name: participant-joined
+        data: '{{ $p := .State.status.sim.call_phase }}{{ if and (ge $p 2) (le $p 4) (gt .State.status.call.participants .State.status.sim.participants_prev) }}{"call_id":"{{ .State.status.call.id }}","participant":"guest-{{ .State.status.call.participants }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+      - name: participant-left
+        data: '{{ $p := .State.status.sim.call_phase }}{{ if and (ge $p 2) (le $p 4) (lt .State.status.call.participants .State.status.sim.participants_prev) }}{"call_id":"{{ .State.status.call.id }}","participant":"guest-{{ .State.status.sim.participants_prev }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+      - name: call-ended
+        data: '{{ if eq .State.status.sim.call_phase 5 }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.sim.participants_prev }}}{{ end }}'
+      # The codec's log stream (event: log): one line per occurrence, its
+      # severity, facility and text as the bar's own log writes them.
+      - name: log
+        data: '{{ $p := .State.status.sim.call_phase }}{{ $n := .State.status.call.participants }}{{ $was := .State.status.sim.participants_prev }}{{ $id := .State.status.call.id }}{{ if eq $p 1 }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if and (ge $p 2) (le $p 4) (gt $n $was) }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if and (ge $p 2) (le $p 4) (lt $n $was) }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ else if eq $p 5 }}{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ $id }}, duration=60s, reason=remote-hangup)"}{{ end }}'
+
+  # The call stats, every 30 s: the media a call carries drifts while one
+  # is up and rests at zero when the room is idle; the codec's own load,
+  # temperature, fan and memory drift either way (busier in a call). A
+  # lossy stretch writes the WARN line a real bar's network log does.
+  - name: media_stats
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.media.packet_loss
+        value: '{{ if .State.status.call.active }}{{ round 4 (clamp 0.0 0.06 (randStep 0.012 .State.status.media.packet_loss)) }}{{ else }}0{{ end }}'
+      - path: status.media.jitter_ms
+        value: '{{ if .State.status.call.active }}{{ round 1 (clamp 2.0 45.0 (randStep 6.0 .State.status.media.jitter_ms)) }}{{ else }}0{{ end }}'
+      - path: status.media.bitrate_kbps
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 1200.0 4000.0 (randStep 400.0 .State.status.media.bitrate_kbps)) }}{{ else }}0{{ end }}'
+      - path: status.media.frame_rate
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 24.0 30.0 (randStep 3.0 .State.status.media.frame_rate)) }}{{ else }}0{{ end }}'
+      - path: status.audio.speaker_level
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 10.0 85.0 (randStep 15.0 .State.status.audio.speaker_level)) }}{{ else }}0{{ end }}'
+      - path: status.device.cpu_load
+        value: '{{ if .State.status.call.active }}{{ round 0 (clamp 35.0 80.0 (randStep 8.0 .State.status.device.cpu_load)) }}{{ else }}{{ round 0 (clamp 8.0 25.0 (randStep 4.0 .State.status.device.cpu_load)) }}{{ end }}'
+      - path: status.device.temperature
+        value: '{{ round 1 (clamp 38.0 62.0 (randStep 1.5 .State.status.device.temperature)) }}'
+      - path: status.device.fan_rpm
+        value: '{{ round -1 (clamp 1800.0 3600.0 (randStep 150.0 .State.status.device.fan_rpm)) }}'
+      - path: status.device.memory_used
+        value: '{{ round 3 (clamp 0.35 0.7 (randStep 0.03 .State.status.device.memory_used)) }}'
+    events:
+      - name: log
+        data: '{{ if gt (clamp 0.0 1.0 .State.status.media.packet_loss) 0.03 }}{"severity":"WARN","facility":"kvroom.net","text":"Uplink degraded: packet loss {{ printf "%.1f" (mul 100.0 .State.status.media.packet_loss) }}%, jitter {{ .State.status.media.jitter_ms }}ms, enabling rate adaptation"}{{ end }}'
+
 defaults:
   status:
     device:
@@ -263,6 +339,12 @@ defaults:
       # Anchor for the computed uptime field. 0 means "unset", seeded
       # to the device's start time on load.
       boot_epoch: 0
+      # The codec's own load (percent), temperature (C), fan (rpm) and
+      # memory in use (a fraction), drifted by media_stats.
+      cpu_load: 14
+      temperature: 44.0
+      fan_rpm: 2400
+      memory_used: 0.42
     # ---- Course datapoints (HTTP-only teaching surface) ----
     app:
       # UCC platform the bar is currently hosting.
@@ -308,6 +390,21 @@ defaults:
     video:
       camera_on: true
       resolution: "3840x2160"
+    # The media a call carries (#2754), drifted by media_stats while a call
+    # is up and zero when idle: packet loss a ratio (0 to 1), jitter in ms,
+    # the send bitrate in kbps and the frame rate.
+    media:
+      packet_loss: 0
+      jitter_ms: 0
+      bitrate_kbps: 0
+      frame_rate: 0
+    # The call cycle's bookkeeping (call_cycle): where it is, how many calls
+    # it has placed, and the count before this tick. The simulator's, not
+    # the codec's: no template serves it.
+    sim:
+      call_phase: 0
+      call_seq: 0
+      participants_prev: 0
     network:
       ipv4:
         address: ""
@@ -317,6 +414,7 @@ defaults:
       serial: ""
       model: "VRoom"
       manufacturer: "Kestrel"
+      hardware_revision: "B2"
     firmware:
       version: "2.7.3"
     network:
