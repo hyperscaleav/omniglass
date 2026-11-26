@@ -2,7 +2,7 @@
 title: "A system's Activity follows the page's time range, opening on 30 days"
 date: 2026-11-26
 status: Accepted
-summary: "A system's Activity tab reads its Uptime, health history bar, stretch list, alarm rows and markers over the page's one time range, reversing the design in which Activity kept its own fixed windows. With no range given Activity opens on the last 30 days and Overview and the Timeline on 24 hours; a range once picked governs every tab, so the system page writes every pick to the address, 24 hours included. The bar opens at the range's start with the carried-in health, and Uptime's label names the range."
+summary: "A system's Activity tab reads its health history bar, stretch list, alarm rows and markers over the page's one time range, reversing the design in which Activity kept its own fixed windows; Uptime stays the availability KPI over a fixed 30 days. With no range given Activity opens on the last 30 days and Overview and the Timeline on 24 hours; a range once picked governs every tab, so the system page writes every pick to the address, 24 hours included. The bar opens at the range's start with the carried-in health."
 refs: [2741, 2304, 2425, 2722, 2735]
 ---
 
@@ -10,8 +10,9 @@ refs: [2741, 2304, 2425, 2722, 2735]
 - **Decision:** (#2741, the default ruled by the architect.) The system page's time range (#2304)
   governs Activity too: Activity reads the system's health report a second time over the range, with
   its `since` (and `until` for a custom range), while the current report (header, Why, slots) stays the
-  one unranged, polled read on every tab. Uptime is measured over the range and labelled by it ("of the last hour", a custom range by its dates,
-  still "since ..." for a system younger than the range), the history bar opens at the range's start in
+  one unranged, polled read on every tab. Uptime is not ranged: it is the availability KPI over a fixed
+  rolling 30 days (the service levels in [health](/architecture/health/), #2607), read from the current
+  report whatever the picker holds ("since ..." for a younger system). The history bar opens at the range's start in
   the health carried in (`carried_in`), and the alarm rows and markers read the same window (a custom
   range also reads its alarms with `since` and `until`, since the default alarm read covers only the
   last 30 days of cleared ones). With no range in the address, Activity opens on the last 30 days
@@ -26,3 +27,6 @@ refs: [2741, 2304, 2425, 2722, 2735]
   #2735). Over a fixed 30 days a ten-minute outage is a fraction of a pixel and Uptime cannot be read
   for the hour an operator is looking at; asked for while recording the marketing teaser's
   before-and-after health beats (#2722). Events and logs keep their 24-hour lists for now.
+- **Amended (#2741, before merge):** the first cut measured Uptime over the range too; the architect
+  ruled it a fixed-window KPI, a status number rather than a troubleshooting readout, so it reads the
+  30 days whatever range is picked, and the range governs only the history beside it.
