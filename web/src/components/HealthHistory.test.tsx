@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@solidjs/testing-library";
 import HealthHistory from "./HealthHistory";
 import type { HealthTransition } from "../lib/health";
+import { fmtTime } from "../lib/format";
 
 // The history strip is the surface that answers "when did this change", so the
 // one thing it must never do is render a state it knows as a state it does not.
@@ -101,5 +102,30 @@ describe("HealthHistory with a caller's now", () => {
     // Degraded held 60 s; healthy has held 5 s then 60 s, so its share grows.
     expect(early[1] / early[0]).toBeCloseTo(5 / 60, 1);
     expect(later[1] / later[0]).toBeCloseTo(1, 1);
+  });
+});
+
+// #2741: the bar opens at the range's start, the carried-in health drawn
+// before the first edge inside it, so the bar and Uptime describe one window.
+describe("HealthHistory over a range", () => {
+  const t0 = Date.parse("2026-08-20T17:00:00Z");
+  const iso = (ms: number) => new Date(ms).toISOString();
+
+  it("starts at the range's start with the carried-in health", () => {
+    const from = t0 - 3600_000;
+    const { container } = render(() => (
+      <HealthHistory compact now={t0} from={from} carriedIn="healthy" health="outage" transitions={[at(iso(t0 - 30 * 60_000), "outage")]} />
+    ));
+    expect(container.querySelector("[data-testid='strip-start']")!.textContent).toBe(fmtTime(iso(from)));
+    const segs = [...container.querySelectorAll<HTMLElement>("[data-segment]")];
+    expect(segs.map((el) => el.getAttribute("data-segment")!.split(":")[0])).toEqual(["healthy", "outage"]);
+    expect(parseFloat(segs[0].style.flexGrow) / parseFloat(segs[1].style.flexGrow)).toBeCloseTo(1, 1);
+  });
+
+  it("with nothing carried in, starts at the first edge, as before", () => {
+    const { container } = render(() => (
+      <HealthHistory compact now={t0} from={t0 - 3600_000} health="outage" transitions={[at(iso(t0 - 30 * 60_000), "outage")]} />
+    ));
+    expect(container.querySelector("[data-testid='strip-start']")!.textContent).toBe(fmtTime(iso(t0 - 30 * 60_000)));
   });
 });

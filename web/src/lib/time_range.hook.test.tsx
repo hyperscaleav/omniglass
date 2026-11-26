@@ -84,3 +84,44 @@ describe("useHostTimeRange", () => {
     expect(screen.getByTestId("search").textContent).toBe("?range=6h");
   });
 });
+
+// The range given, apart from the default (#2741): a body whose tabs open on
+// different defaults reads `given`, and writes every pick to the address.
+function GivenProbe(props: { host: "page" | "blade" }) {
+  const { given, setRange } = useHostTimeRange(props.host, { explicit: true });
+  const loc = useLocation();
+  return (
+    <div>
+      <span data-testid="given">{JSON.stringify(given() ?? null)}</span>
+      <span data-testid="search">{loc.search}</span>
+      <button onClick={() => setRange({ kind: "preset", preset: "24h" })}>24h</button>
+    </div>
+  );
+}
+
+describe("useHostTimeRange's given range (#2741)", () => {
+  const mountGiven = (path: string, host: "page" | "blade") => {
+    window.history.pushState({}, "", path);
+    render(() => (
+      <Router base="/web">
+        <Route path="/g" component={() => <GivenProbe host={host} />} />
+      </Router>
+    ));
+  };
+
+  it("a page with no range in the address has none given, and an explicit pick of 24 hours lands in it", async () => {
+    mountGiven("/web/g?tab=activity", "page");
+    expect(screen.getByTestId("given").textContent).toBe("null");
+    fireEvent.click(screen.getByText("24h"));
+    await screen.findByText("?tab=activity&range=24h");
+    expect(screen.getByTestId("given").textContent).toBe(JSON.stringify({ kind: "preset", preset: "24h" }));
+  });
+
+  it("a blade opens with none given when its page has none, and a pick is given after", async () => {
+    mountGiven("/web/g", "blade");
+    expect(screen.getByTestId("given").textContent).toBe("null");
+    fireEvent.click(screen.getByText("24h"));
+    await screen.findByText(JSON.stringify({ kind: "preset", preset: "24h" }));
+    expect(screen.getByTestId("search").textContent).toBe("");
+  });
+});

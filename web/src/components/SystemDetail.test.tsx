@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -28,6 +28,7 @@ import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
 import { clickDelete } from "./configure.testkit";
 import { answerConfirms } from "../lib/confirm.testkit";
+import { fmtTime } from "../lib/format";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
 // so a blade shows every section, tab and action its page shows.
@@ -377,5 +378,114 @@ describe("the Activity tab's history keeps time with the poll", () => {
     vi.advanceTimersByTime(5_000);
     // 35 s healthy of 65 s: the history took the poll's next now.
     await waitFor(() => expect(kpi.textContent).toContain("53.8"));
+  });
+});
+
+// #2741: the Activity tab follows the page's one range, as Overview and the
+// Timeline do. With no range in the address it opens on the last 30 days (its
+// status-page default); a range once picked governs every tab.
+describe("the Activity tab follows the page's range (#2741)", () => {
+  const NOW = Date.parse("2026-08-20T16:00:00Z");
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const HOUR = 3600_000;
+  // Healthy when the hour opened, in outage for its last half.
+  const hourly = {
+    ...health,
+    health: "outage",
+    carried_in: "healthy",
+    first_recorded_at: "2026-07-01T00:00:00Z",
+    transitions: [{ ts: iso(NOW - HOUR / 2), health: "outage" }],
+  } as unknown as FleetHealth;
+
+  // Every health read goes through fetch, answered with the report above.
+  const stubHealth = (body: unknown = hourly) => {
+    const reads: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const url = new URL(req.url);
+        if (url.pathname.endsWith(`/systems/${SID}/health`)) {
+          reads.push(url);
+          return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        const out = req.method === "POST" ? { results: [], cursor: "" } : [];
+        return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    return reads;
+  };
+  // A cache with no health in it, so the page's own read is the one drawn.
+  const unseeded = () => {
+    const qc = seed();
+    qc.removeQueries({ queryKey: [...systemHealthKey(SID)] });
+    return qc;
+  };
+  const since = (u: URL) => Date.parse(u.searchParams.get("since") ?? "");
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(NOW));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("with range=1h, the health read carries that hour and Uptime is that hour's, labelled for it", async () => {
+    const reads = stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+    expect(since(reads[0])).toBe(NOW - HOUR);
+    expect(reads[0].searchParams.get("until")).toBeNull();
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last hour"));
+    expect(kpi.textContent).toContain("50.0%");
+    expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 1 hour");
+  });
+
+  it("with no range given, Activity reads the last 30 days and the Timeline the last 24 hours", async () => {
+    const reads = stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
+    await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+    expect(since(reads[0])).toBe(NOW - 30 * 24 * HOUR);
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 30 days");
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours"));
+    expect(window.location.search).not.toContain("range=");
+  });
+
+  it("the history bar starts at the range's start, the carried-in health before the first edge", async () => {
+    stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const strip = await screen.findByTestId("health-history-full");
+    await waitFor(() => expect(within(strip).getByTestId("strip-start").textContent).toBe(fmtTime(iso(NOW - HOUR))));
+    const segs = [...strip.querySelectorAll("[data-segment]")].map((el) => el.getAttribute("data-segment")!.split(":")[0]);
+    expect(segs).toEqual(["healthy", "outage"]);
+  });
+
+  it("the picker shows on Activity, and a pick there moves the Timeline's range too", async () => {
+    stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
+    fireEvent.click(await screen.findByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+    await waitFor(() => expect(window.location.search).toContain("range=7d"));
+    await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 7 days"));
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+  });
+
+  // The address leaves the 24-hour default out, so on this page a pick of 24
+  // hours has to say so: otherwise Activity would fall back to its 30 days.
+  it("a pick of the last 24 hours on Activity holds there", async () => {
+    stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
+    fireEvent.click(await screen.findByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-24h"));
+    await waitFor(() => expect(window.location.search).toContain("range=24h"));
+    await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 24 hours"));
+    expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours");
   });
 });

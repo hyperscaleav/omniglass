@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { uptimeOver, RANGE_30D_MS } from "./uptime";
+import { fmtTime } from "./format";
 
 const NOW = Date.parse("2026-11-23T14:00:00Z");
 const min = (n: number) => n * 60_000;
@@ -52,7 +53,7 @@ describe("uptimeOver (#2435): the healthy share of the entity's recorded life in
       transitions: [{ ts: iso(NOW - min(10)), health: "degraded" }],
       health: "degraded",
       firstRecordedAt: iso(NOW - min(10)),
-      rangeStart: NOW - 7 * 86_400_000,
+      range: { kind: "preset", preset: "7d" },
       now: NOW,
     });
     expect(r.from).toBe(NOW - min(10));
@@ -65,7 +66,7 @@ describe("uptimeOver (#2435): the healthy share of the entity's recorded life in
       carriedIn: "healthy",
       health: "outage",
       firstRecordedAt: iso(NOW - 5 * 86_400_000),
-      rangeStart: NOW - min(60),
+      range: { kind: "preset", preset: "1h" },
       now: NOW,
     });
     expect(r.from).toBe(NOW - min(60));
@@ -76,5 +77,54 @@ describe("uptimeOver (#2435): the healthy share of the entity's recorded life in
   it("a zero-length life is no percentage", () => {
     const r = uptimeOver({ transitions: [], health: "healthy", firstRecordedAt: iso(NOW), now: NOW });
     expect(r.pct).toBeNull();
+  });
+});
+
+// The window is the page's range (#2741): the label names it, so the number
+// beside it is never read as another window's.
+describe("uptimeOver names the range it measured (#2741)", () => {
+  const old = { transitions: [], health: "healthy", firstRecordedAt: iso(NOW - 90 * 86_400_000), now: NOW };
+
+  it("labels each preset by its window", () => {
+    expect(uptimeOver({ ...old, range: { kind: "preset", preset: "1h" } }).label).toBe("of the last hour");
+    expect(uptimeOver({ ...old, range: { kind: "preset", preset: "7d" } }).label).toBe("of the last 7 days");
+    expect(uptimeOver({ ...old, range: { kind: "preset", preset: "30d" } }).label).toBe("of the last 30 days");
+    expect(uptimeOver(old).label).toBe("of the last 30 days");
+  });
+
+  it("an hour's range measures that hour from the carried-in health", () => {
+    const r = uptimeOver({
+      transitions: [{ ts: iso(NOW - min(10)), health: "outage" }],
+      carriedIn: "healthy",
+      health: "outage",
+      firstRecordedAt: iso(NOW - 5 * 86_400_000),
+      range: { kind: "preset", preset: "1h" },
+      now: NOW,
+    });
+    expect(r.from).toBe(NOW - min(60));
+    expect(r.pct).toBe("83.3");
+    expect(r.label).toBe("of the last hour");
+  });
+
+  it("a system younger than the range still reads since its first record", () => {
+    const r = uptimeOver({ transitions: [], health: "healthy", firstRecordedAt: iso(NOW - min(20)), range: { kind: "preset", preset: "1h" }, now: NOW });
+    expect(r.label).toBe(`since ${fmtTime(iso(NOW - min(20)))}`);
+  });
+
+  it("a custom range is measured to its own end and labelled by its dates", () => {
+    const from = NOW - 3 * min(60);
+    const to = NOW - min(60);
+    const r = uptimeOver({
+      transitions: [{ ts: iso(NOW - 2 * min(60)), health: "outage" }],
+      carriedIn: "healthy",
+      health: "healthy",
+      firstRecordedAt: iso(NOW - 5 * 86_400_000),
+      range: { kind: "absolute", from, to },
+      now: NOW,
+    });
+    // Healthy the first hour, out the second: the hour after the range is not counted.
+    expect(r.pct).toBe("50.0");
+    expect(r.from).toBe(from);
+    expect(r.label).toBe(`${fmtTime(iso(from))} → ${fmtTime(iso(to))}`);
   });
 });

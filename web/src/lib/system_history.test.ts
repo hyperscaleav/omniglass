@@ -28,8 +28,7 @@ describe("memberAlarmRows", () => {
           { id: "a2", severity: "warning", message: "Input signal lost", raised_at: iso(60), cleared_at: iso(59), active: false },
         ]),
       ],
-      now,
-      30 * 24,
+      { from: now - 30 * 24 * 3600_000 },
       SEEDED_LEVELS,
     );
 
@@ -49,8 +48,7 @@ describe("memberAlarmRows", () => {
         { id: "http", severity: "high", message: "Reachability lost", instance: "http", raised_at: iso(3), active: true },
         { id: "hand", severity: "warning", message: "Bezel cracked", raised_at: iso(4), active: true },
       ])],
-      now,
-      24,
+      { from: now - 24 * 3600_000 },
       SEEDED_LEVELS,
     );
     expect(r.map((x) => [x.id, x.instance])).toEqual([["snmp", "snmp"], ["http", "http"], ["hand", ""]]);
@@ -59,18 +57,31 @@ describe("memberAlarmRows", () => {
   it("keeps an alarm raised before the window when it was still active inside it", () => {
     const r = memberAlarmRows(
       [alarms("x", "cx", [{ id: "old", severity: "high", message: "m", raised_at: iso(31 * 24), cleared_at: iso(29 * 24), active: false }])],
-      now,
-      30 * 24,
+      { from: now - 30 * 24 * 3600_000 },
       SEEDED_LEVELS,
     );
     expect(r).toHaveLength(1);
     const gone = memberAlarmRows(
       [alarms("x", "cx", [{ id: "gone", severity: "high", message: "m", raised_at: iso(40 * 24), cleared_at: iso(35 * 24), active: false }])],
-      now,
-      30 * 24,
+      { from: now - 30 * 24 * 3600_000 },
       SEEDED_LEVELS,
     );
     expect(gone).toHaveLength(0);
+  });
+
+  // A custom range ends before now (#2741): an alarm raised after its end,
+  // still open or not, is not in it.
+  it("a window that ends in the past leaves out an alarm raised after it", () => {
+    const r = memberAlarmRows(
+      [alarms("x", "cx", [
+        { id: "inside", severity: "high", message: "m", raised_at: iso(5), cleared_at: iso(4), active: false },
+        { id: "open-before", severity: "high", message: "m", raised_at: iso(6), active: true },
+        { id: "after", severity: "high", message: "m", raised_at: iso(1), active: true },
+      ])],
+      { from: now - 10 * 3600_000, to: now - 2 * 3600_000 },
+      SEEDED_LEVELS,
+    );
+    expect(r.map((x) => x.id).sort()).toEqual(["inside", "open-before"]);
   });
 });
 
@@ -149,8 +160,7 @@ describe("stretchReasons", () => {
         { id: "a2", severity: "warning", message: "Unrelated, later", raised_at: iso(10), active: true },
       ]),
     ],
-    now,
-    30 * 24,
+    { from: now - 30 * 24 * 3600_000 },
     SEEDED_LEVELS,
   );
 
