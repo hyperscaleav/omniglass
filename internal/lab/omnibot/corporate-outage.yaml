@@ -3,13 +3,14 @@
 # hq-mr86-1 unplugged (web/e2e/marketing/shots.yaml). The calls run for real
 # against the lab; only the model's words are recorded, and each one is true
 # of that staged state: the display is dark on ping and SNMP alike, the
-# shipped reachability rule holds a High alarm on it, the room is degraded
-# with its main-display slot short, and the rest of the room answers.
+# shipped reachability rule holds a High alarm on it, the room is down (a
+# meeting room's main display takes it down, #2736) with its main-display slot
+# short, and the rest of the room answers.
 #
 # Each turn records how long the model thought before it (think) and what it
 # thought (reasoning, shown as the console's Thinking), paced like a live
 # model, so a capture of the console reads as real inference, not a playback.
-prompt: Why is the 86-inch meeting room degraded?
+prompt: Why is the 86-inch meeting room down?
 turns:
   - think: 1.6s
     reasoning: >-
@@ -20,7 +21,7 @@ turns:
         arguments: {name: hq-mr86-1}
   - think: 2.1s
     reasoning: >-
-      Degraded, with the main-display slot short and display-1 impaired. Check
+      Down, with the main-display slot short and display-1 impaired. Check
       whether the display still answers on any protocol before guessing at a
       cause.
     tool_calls:
@@ -32,7 +33,7 @@ turns:
       not configuration. The rest of the room still answers. Nothing to change
       without asking.
     text: >-
-      This room is degraded because its main display is down. The display stopped
+      This room is down because its main display is. The display stopped
       answering ping and SNMP at the same moment, so the reachability rule raised a
       High alarm on it. Every protocol going dark at once points at the display's
       power or its network drop, not its configuration. The touch panel, scheduler
@@ -54,7 +55,7 @@ conversations:
       - text: >-
           The display's High alarm is active: it stopped answering ping and SNMP at
           the same moment, so the device is dark, not misconfigured. Its room is
-          degraded with the main-display slot short. Next step: check the display's
+          down with the main-display slot short. Next step: check the display's
           power and its switch port. I will ask before running anything.
   - prompt: What is wrong with the main display?
     turns: *triage

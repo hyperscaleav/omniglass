@@ -328,3 +328,32 @@ func jsonEqual(a, b []byte) bool {
 	}
 	return reflect.DeepEqual(x, y)
 }
+
+// #2736: a meeting room whose main display fails does not work, so every
+// shipped meeting-room standard takes the room down when its main display is
+// impaired; its other slots keep the default (degraded).
+func TestShippedMeetingRoomsGoDownWithTheirMainDisplay(t *testing.T) {
+	cat := template.Shipped()
+	for _, name := range []string{"meeting-room", "mr55", "mr65", "mr75", "mr86", "mr98"} {
+		tpl, err := cat.Get(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if tpl.Standard == nil {
+			t.Fatalf("%s carries no standard", name)
+		}
+		seen := false
+		for _, s := range tpl.Standard.Slots {
+			want := ""
+			if s.Name == "main-display" {
+				want, seen = "outage", true
+			}
+			if s.Impact != want {
+				t.Errorf("%s slot %s impact = %q, want %q", name, s.Name, s.Impact, want)
+			}
+		}
+		if !seen {
+			t.Errorf("%s has no main-display slot", name)
+		}
+	}
+}

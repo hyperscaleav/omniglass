@@ -86,6 +86,10 @@ differently in different slots: a dead confidence monitor is not a dead main dis
 | `degraded` | the system works, worse | a slot that costs quality, not the meeting |
 | `none` | nothing | a slot you track but do not depend on |
 
+The shipped meeting-room templates (`meeting-room` and its sized variants) declare their **main display**
+`outage`: a meeting room whose display is dark, unreachable or on the wrong input does not work, so the
+room reads down rather than worse. Their other slots keep the default (#2736).
+
 **Quorum is the redundancy knob.** A quorum of 1 with two components assigned tolerates one failure; a
 quorum of 2 with two assigned is impaired the moment either goes out. Redundancy is the gap between
 assigned and needed, with no separate vocabulary.
