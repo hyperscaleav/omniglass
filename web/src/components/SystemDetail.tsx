@@ -14,7 +14,7 @@ import AddComponentLink from "./AddComponentLink";
 import SystemEmpty from "./SystemEmpty";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
-import { systemHealth, systemHealthRangeKey, healthOf, type FleetHealth } from "../lib/health";
+import { systemHealth, systemHealthKey, systemHealthRangeKey, healthOf } from "../lib/health";
 import { systemSlots, systemSlotsKey } from "../lib/system_slots";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
@@ -130,20 +130,10 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const activityRange = (): TimeRange => rangeOr(HISTORY_DEFAULT_RANGE);
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  // The report over Activity's range: its history covers that range, and the
-  // health in force when it opened (carried_in) comes with it. The current
-  // health the header reads is the same whatever the range, so a new range
-  // keeps this system's last report on screen while its own read lands.
-  const health = useQuery(() => {
-    const r = activityRange();
-    const sid = id();
-    return {
-      queryKey: systemHealthRangeKey(sid, r),
-      queryFn: () => systemHealth(sid, r),
-      refetchInterval: LEAF_POLL_MS,
-      placeholderData: (prev: FleetHealth | undefined, prevQuery?: { queryKey: readonly unknown[] }) => (prevQuery?.queryKey[1] === sid ? prev : undefined),
-    };
-  });
+  // The current report: the header, Why, the slots and the components read
+  // it on every tab, and the panels that share its key (the slots on
+  // Configure, a location's system summaries) move with its poll.
+  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
   const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
   // Each member's own health, polled off the system's members read: the
   // fleet view's dots (read once) stand in until it answers.
@@ -208,6 +198,19 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const all = [...b.cards, ...b.groups.flatMap((g) => g.memberCards)];
     return all.map((c) => ({ name: c.name, componentId: c.componentId }));
   });
+  // The same report over Activity's range (#2741), read only on Activity: its
+  // transitions cover the range, and the health in force when it opened
+  // (carried_in) comes with it. A new range draws nothing until its own read
+  // lands, so no figure is the old range's report measured as the new one.
+  const history = useQuery(() => {
+    const r = activityRange();
+    return {
+      queryKey: systemHealthRangeKey(id(), r),
+      queryFn: () => systemHealth(id(), r),
+      enabled: tab() === "activity",
+      refetchInterval: LEAF_POLL_MS,
+    };
+  });
   const alarmHistory = useQuery(() => {
     const r = activityRange();
     return {
@@ -221,7 +224,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // last edge, which a poll can bring in between two ticks (a stretch that
   // opened seconds ago would otherwise have a negative length and vanish).
   const historyNow = createMemo(() => {
-    const t = health.data?.transitions ?? [];
+    const t = history.data?.transitions ?? [];
     return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
   });
   // Activity's window on the history's clock: a preset slides to now, a custom
@@ -232,27 +235,35 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const reachesNow = to >= historyNow();
     return { from, end: reachesNow ? historyNow() : to, reachesNow };
   });
+  // The current health stands for the window only when the window reaches
+  // now: a custom range that ended before it is drawn from its own record
+  // alone, so one from before the system existed is empty, not today's health.
+  const windowHealth = () => (historyWindow().reachesNow ? history.data?.health : undefined);
   // The spans open at the window's start with the health carried in, so the
   // bar, Uptime and the stretch list describe the same window.
   const healthSpans = createMemo(() =>
     timelineSpans(
-      withCarriedIn((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.carried_in, historyWindow().from),
-      health.data?.health ?? null,
+      withCarriedIn((history.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), history.data?.carried_in, historyWindow().from),
+      windowHealth() ?? null,
       historyWindow().end,
     ),
   );
   const uptimeWindow = createMemo(() =>
     uptimeOver({
-      transitions: health.data?.transitions ?? [],
-      health: health.data?.health,
-      carriedIn: health.data?.carried_in,
-      firstRecordedAt: health.data?.first_recorded_at,
+      transitions: history.data?.transitions ?? [],
+      health: windowHealth(),
+      carriedIn: history.data?.carried_in,
+      firstRecordedAt: history.data?.first_recorded_at,
       range: activityRange(),
       now: historyNow(),
     }),
   );
-  const uptime = () => uptimeWindow().pct;
-  const stretches = createMemo(() => stretchesOf(healthSpans(), historyWindow().end, historyWindow().reachesNow ? health.data?.health : null));
+  const uptime = () => (history.data ? uptimeWindow().pct : null);
+  const stretches = createMemo(() => stretchesOf(healthSpans(), historyWindow().end, windowHealth()));
+  // What an empty stretch list says: still reading, nothing recorded in the
+  // window, or healthy all the way through it.
+  const quietWindow = () =>
+    !history.data ? "Reading the range." : uptimeWindow().pct === null ? "Nothing recorded in this window." : "Nothing in this window. The system held healthy the whole way.";
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -462,18 +473,18 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     {uptime()}<span class="text-lg">%</span>
                   </Show>
                 </span>
-                <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
+                <span class="text-[10px] text-base-content/45">{history.data ? uptimeWindow().label : "reading the range"}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory
                   compact
                   now={historyWindow().end}
                   from={historyWindow().from}
-                  carriedIn={health.data?.carried_in}
+                  carriedIn={history.data?.carried_in}
                   endLabel={historyWindow().reachesNow ? undefined : fmtTime(new Date(historyWindow().end).toISOString())}
                   window={`the recorded edges over ${rangePhrase(activityRange())}`}
-                  transitions={health.data?.transitions ?? []}
-                  health={health.data?.health}
+                  transitions={history.data?.transitions ?? []}
+                  health={windowHealth()}
                 />
                 <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
                   <Show when={windowAlarms().length > 0}>
@@ -496,7 +507,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
 
             <div>
               <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many health changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
+              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">{quietWindow()}</p>}>
                 <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
                   <For each={stretches()}>
                     {(inc, idx) => {

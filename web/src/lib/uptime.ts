@@ -35,6 +35,7 @@ export type UptimeResult = {
 };
 
 const NONE: UptimeResult = { pct: null, from: null, shortened: false, label: "no health recorded yet" };
+const EMPTY_RANGE: UptimeResult = { pct: null, from: null, shortened: false, label: "nothing recorded in this range" };
 
 export function uptimeOver(i: UptimeInput): UptimeResult {
   const range = i.range ?? HISTORY_DEFAULT_RANGE;
@@ -47,6 +48,9 @@ export function uptimeOver(i: UptimeInput): UptimeResult {
     .filter((e) => e.at <= end)
     .sort((a, b) => a.at - b.at);
   const recorded = i.firstRecordedAt ? Date.parse(i.firstRecordedAt) : edges.length ? edges[0].at : NaN;
+  // A custom range that closed before the first record holds nothing, though
+  // health was recorded after it.
+  if (range.kind === "absolute" && end < i.now && !Number.isNaN(recorded) && recorded >= end) return EMPTY_RANGE;
   if (Number.isNaN(recorded)) return NONE;
   const from = Math.max(rangeStart, recorded);
   const total = end - from;

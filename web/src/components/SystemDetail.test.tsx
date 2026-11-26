@@ -509,7 +509,8 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     const alarmsRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/alarms`))!;
     expect(alarmsRead.searchParams.get("since")).toBe(iso(from));
     expect(alarmsRead.searchParams.get("until")).toBe(iso(to));
-    const healthRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/health`))!;
+    await waitFor(() => expect(reads.some((u) => u.pathname.endsWith(`/systems/${SID}/health`) && u.searchParams.has("since"))).toBe(true));
+    const healthRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/health`) && u.searchParams.has("since"))!;
     expect(healthRead.searchParams.get("since")).toBe(iso(from));
     expect(healthRead.searchParams.get("until")).toBe(iso(to));
     const kpi = await screen.findByTestId("uptime-kpi");

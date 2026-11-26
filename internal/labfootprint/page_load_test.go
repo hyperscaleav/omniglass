@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -123,26 +122,7 @@ func TestLoadSystemPage(t *testing.T) {
 		"/api/v1/systems/sys-1/metrics/cpu-load/samples?hours=24&resolution=300&instance=core+0",
 		"/api/v1/systems/sys-1/metrics/uptime/samples?hours=24&resolution=300")
 	slices.Sort(want)
-	// The health read opens the page's history 30 days back, as the console's
-	// Activity does with no range given (#2741): checked here, then compared
-	// as the list's {since}.
-	g := asked()
-	for i, r := range g {
-		u, err := url.Parse(r)
-		if err != nil || !strings.HasSuffix(u.Path, "/health") {
-			continue
-		}
-		since, err := time.Parse(time.RFC3339Nano, u.Query().Get("since"))
-		if err != nil {
-			t.Fatalf("the health read's since: %v", err)
-		}
-		if d := time.Since(since) - 30*24*time.Hour; d < 0 || d > time.Minute {
-			t.Errorf("the health read's since is %s, want 30 days back", since)
-		}
-		g[i] = u.Path + "?since={since}"
-	}
-	slices.Sort(g)
-	if !slices.Equal(g, want) {
+	if g := asked(); !slices.Equal(g, want) {
 		t.Errorf("a load read\n  %s\nwant\n  %s", strings.Join(g, "\n  "), strings.Join(want, "\n  "))
 	}
 	if got.Took <= 0 || got.Bytes < int64(len(want)*2) {

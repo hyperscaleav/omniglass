@@ -21,8 +21,6 @@ import (
 // makes, as paths under /api/v1. {system} is the system's id. The metrics
 // read's answer names the series the page charts: one samples read for each
 // metric from the contract or sampled, the sampled ones with their instance.
-// {since} is the start of the health history the page opens on (#2741): 30
-// days before the load, as the page's Activity reads with no range given.
 // The page's own test (web/src/pages/SystemZoom.test.tsx) records the reads a
 // render makes and compares them to the generated copy of this list, so a
 // read the page gains or drops fails there until this list follows.
@@ -36,7 +34,7 @@ var SystemPageReads = []string{
 	"/severity-levels",
 	"/standards",
 	"/systems",
-	"/systems/{system}/health?since={since}",
+	"/systems/{system}/health",
 	"/systems/{system}/members",
 	"/systems/{system}/metrics",
 	pageSeriesRead,
@@ -44,9 +42,6 @@ var SystemPageReads = []string{
 	"/systems/{system}/slots",
 	"/views/fleet",
 }
-
-// pageHistoryWindow is how far back the page's health read opens its history.
-const pageHistoryWindow = 30 * 24 * time.Hour
 
 // pageSeriesRead is one chart's samples read: the page's 24 hour range at its
 // five minute resolution.
@@ -188,12 +183,11 @@ func LoadSystemPage(ctx context.Context, fetch PageFetch, base, systemID string)
 		return body
 	}
 	sys := url.PathEscape(systemID)
-	since := url.QueryEscape(start.Add(-pageHistoryWindow).UTC().Format("2006-01-02T15:04:05.000Z07:00"))
 	for _, r := range SystemPageReads {
 		if strings.Contains(r, "{metric}") {
 			continue
 		}
-		path := strings.ReplaceAll(strings.ReplaceAll(r, "{system}", sys), "{since}", since)
+		path := strings.ReplaceAll(r, "{system}", sys)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

@@ -271,7 +271,7 @@ declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a health, drawn from the **recorded edges**
-over the last 30 days. It is not a sample and not a redraw of what somebody happened to look at; each edge
+over the page's time range (the last 30 days unless you pick another). It is not a sample and not a redraw of what somebody happened to look at; each edge
 was written at the moment the fleet changed, by the write that changed it. That is what makes "it broke
 Friday at 18:40 and came back Monday at 09:15" answerable on Tuesday.
 

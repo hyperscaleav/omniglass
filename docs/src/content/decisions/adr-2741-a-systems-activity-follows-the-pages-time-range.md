@@ -6,10 +6,11 @@ summary: "A system's Activity tab reads its Uptime, health history bar, stretch 
 refs: [2741, 2304, 2425, 2722, 2735]
 ---
 
-- **Date:** 2026-11-26 | **Status:** Accepted | **Pages:** [explore your fleet](/operator/fleet/), [the visualization inventory](/contributing/visualization-inventory/)
+- **Date:** 2026-11-26 | **Status:** Accepted | **Pages:** [explore your fleet](/operator/fleet/), [alarms](/operator/alarms/), [the visualization inventory](/contributing/visualization-inventory/)
 - **Decision:** (#2741, the default ruled by the architect.) The system page's time range (#2304)
-  governs Activity too: the health read carries the range's `since` (and `until` for a custom range),
-  Uptime is measured over it and labelled by it ("of the last hour", a custom range by its dates,
+  governs Activity too: Activity reads the system's health report a second time over the range, with
+  its `since` (and `until` for a custom range), while the current report (header, Why, slots) stays the
+  one unranged, polled read on every tab. Uptime is measured over the range and labelled by it ("of the last hour", a custom range by its dates,
   still "since ..." for a system younger than the range), the history bar opens at the range's start in
   the health carried in (`carried_in`), and the alarm rows and markers read the same window (a custom
   range also reads its alarms with `since` and `until`, since the default alarm read covers only the

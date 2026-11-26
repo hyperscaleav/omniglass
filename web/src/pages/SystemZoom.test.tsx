@@ -5,9 +5,8 @@ import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-
 import Systems from "./Systems";
 import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { SYSTEM_HEALTH_PREFIX, systemHealthRangeKey, type FleetHealth } from "../lib/health";
+import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
 import { seedSystemHealth } from "../lib/health.testkit";
-import { HISTORY_DEFAULT_RANGE } from "../lib/time_range";
 import { systemSlotsKey } from "../lib/system_slots";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
@@ -992,8 +991,8 @@ describe("the location is context, the system the subject (#872)", () => {
 
   it("offers Retry when a read fails, instead of a blank", async () => {
     const r = mount();
-    r.qc.setQueryData([...systemHealthRangeKey(uuidFor("szp-sys"), HISTORY_DEFAULT_RANGE)], undefined);
-    r.qc.getQueryCache().find({ queryKey: [...systemHealthRangeKey(uuidFor("szp-sys"), HISTORY_DEFAULT_RANGE)] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], undefined);
+    r.qc.getQueryCache().find({ queryKey: [...systemHealthKey(uuidFor("szp-sys"))], exact: true })?.setState({ status: "error", error: new Error("boom"), data: undefined });
     expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
@@ -1327,9 +1326,10 @@ describe("the system view refreshes (#940)", () => {
     // No member is read on its own; the members' alarms are one read.
     expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
     expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
-    // The whole poll: health, slots, members, alarms, events, logs. The
+    // The whole poll: health (the current report, and the same report over
+    // Activity's range, #2741), slots, members, alarms, events, logs. The
     // metrics read belongs to Overview's metrics grid (#2424).
-    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
+    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/health", "/logs", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
   it("holds the poll while the tab is hidden", async () => {
@@ -1380,7 +1380,7 @@ describe("the lab's system page load", () => {
         const req = input instanceof Request ? input : new Request(String(input));
         const u = new URL(req.url);
         const path = u.pathname.replace(/^\/api\/v1/, "");
-        const query = u.search.replace(/instance=[^&]*/, "instance={instance}").replace(/since=[^&]*/, "since={since}");
+        const query = u.search.replace(/instance=[^&]*/, "instance={instance}");
         reads.add(
           (path.replace(id, "{system}").replace(/\/metrics\/[^/]+\/samples$/, "/metrics/{metric}/samples") + query),
         );
