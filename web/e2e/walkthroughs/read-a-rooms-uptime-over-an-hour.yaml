@@ -1,0 +1,21 @@
+# A system's Activity follows the page's time range (#2741): its Uptime, the
+# history bar and the stretches beneath it read over the range the tab rail
+# holds, the last 30 days until another is picked, so a short outage reads as
+# a block of the hour it happened in rather than a sliver of the month.
+title: Read a room's uptime over the last hour
+description: Open the Huddle Room's Activity, read its Uptime over the last 30 days, pick the last hour on the tab rail, and read the Uptime and history redrawn over that hour.
+steps:
+  - goto: /systems/huddle?tab=activity
+    caption: The Huddle Room's Activity. With no range picked it reads the last 30 days, the window a status page leads with.
+  - wait: { selector: '[data-testid=uptime-kpi]:has-text("of the last 30 days")' }
+    caption: Uptime is the healthy share of the window, and the bar beside it draws the same window.
+  - click: '[data-testid=time-range-trigger]'
+    caption: The time range on the tab rail governs Activity too.
+  - wait: { selector: '[data-testid=time-range-panel]' }
+    caption: Pick a shorter window to read a recent outage at the scale it happened.
+  - click: '[data-testid=time-range-preset-1h]'
+    caption: Pick the last hour. The address now says range=1h, and the Timeline and Overview read the same hour.
+  - wait: { selector: '[data-testid=uptime-kpi]:has-text("of the last hour")' }
+    caption: Uptime, the history bar and the stretch list now read the last hour, opening on the health the room held as it began.
+    poster: true
+    hold: 2000
