@@ -25,7 +25,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, clickFrame, expandAddress, followFrame, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, clickFrame, expandAddress, followFrame, frameFor, landWaitMs, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -703,18 +703,20 @@ async function play(page, base, step, cursor, loop, cam, api) {
       // its target as the pointer glides. A hover keeps the zoom held; a click,
       // a select or a typed field closes in far enough to read what is clicked
       // (clickFrame), so no click happens off screen or too small to see.
+      let moved = false;
       if (loop && step.focus === undefined && cam.frame) {
         const f = step.kind === 'hover' ? followFrame(box, cam.frame, cam.vp) : clickFrame(box, cam.frame, cam.vp);
         if (f) {
           cam.events.push({ t: cam.now(), box, zoom: f.scale, spot: false, follow: true });
           cam.frame = f;
+          moved = true;
         }
       }
       const x = pointerX(step.kind, box);
       const y = box.y + box.height / 2;
       await page.mouse.move(x, y, { steps: 6 });
       Object.assign(cursor, { x, y });
-      if (loop) await page.waitForTimeout(PACE.glide);
+      if (loop) await page.waitForTimeout(PACE.glide + landWaitMs(moved));
       if (step.kind === 'click') await el.click({ timeout: ACT_TIMEOUT });
       else if (step.kind === 'type') {
         await el.click({ timeout: ACT_TIMEOUT });

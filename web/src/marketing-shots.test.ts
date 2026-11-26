@@ -30,6 +30,7 @@ import {
   frameFor,
   followFrame,
   clickFrame,
+  landWaitMs,
   lapseLabel,
   frameRect,
   missingText,
@@ -471,6 +472,17 @@ describe("clickFrame", () => {
 
   it("closes in on a target in frame when the frame is too wide to read it", () => {
     expect(clickFrame(button, { scale: 1.4, x: 1000, y: 500 }, vp)).toEqual(frameFor(button, vp, CAMERA.clickZoom));
+  });
+});
+
+describe("landWaitMs", () => {
+  it("holds a click the camera moved for until the move lands, beyond the pointer's glide", () => {
+    expect(landWaitMs(true)).toBe(Math.max(0, CAMERA.ease * 1000 - PACE.glide));
+    expect(landWaitMs(true)).toBeGreaterThan(0);
+  });
+
+  it("adds nothing when the camera did not move", () => {
+    expect(landWaitMs(false)).toBe(0);
   });
 });
 

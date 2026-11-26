@@ -762,6 +762,17 @@ export function clickFrame(box, current, vp) {
   return frameFor(box, vp, CAMERA.clickZoom);
 }
 
+/**
+ * How much longer a step waits, past the pointer's glide, before it acts when
+ * the camera moved for it (followFrame, clickFrame): long enough for the move
+ * to land, so a click that closes a form is seen before the form goes.
+ * @param {boolean} moved
+ * @returns {number} milliseconds
+ */
+export function landWaitMs(moved) {
+  return moved ? Math.max(0, CAMERA.ease * 1000 - PACE.glide) : 0;
+}
+
 /** @typedef {{ from: number, at: number, to: number }} BeatTimes */
 
 /**

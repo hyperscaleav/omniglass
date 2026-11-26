@@ -173,13 +173,18 @@ shots:
         expect: ["Hq Annex 1 05"]
         zoom: 1.6
         hold: 1300
-      # 4. Close on the boardroom's name and the red mark beside it, then click.
-      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05"))'
+      # 4. Close on the boardroom's name, pan along its row to the red outage
+      # mark at its end, then back to the name and click.
+      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) :text-is("Hq Annex 1 05")'
         focus: here
         expect: ["Hq Annex 1 05"]
         zoom: 2.6
-        hold: 1200
-      - click: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05"))'
+        hold: 900
+      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) > span:last-child'
+        focus: here
+        zoom: 2.6
+        hold: 1000
+      - click: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) :text-is("Hq Annex 1 05")'
         hold: 400
       # 5. The drawer opens; its Activity tab, clicked close: Uptime and the
       # last hour's bar with the outage still running.
@@ -237,19 +242,20 @@ shots:
         hold: 800
       - click: { role: button, name: Issue }
         hold: 600
-      # 13. The confirmation: issued, then settled.
-      - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 30000 }
+      # 13. The confirmation, as soon as it shows: set-input issued.
+      - wait: { selector: '[data-testid=command-toast]' }
         focus: '[data-testid=toast]:has([data-testid=command-toast])'
-        expect: ["set-input issued to display-1", "settled"]
+        expect: ["set-input issued to display-1"]
         zoom: 2.2
-        hold: 1500
-      # 14. Back up to the display's own health, its alarm still there, then
-      # the alarm clearing and leaving its list (sped up under the clock).
+        hold: 900
+      # 14. Straight back up to the display's own health while its alarm is
+      # still there, then the alarm clearing and leaving its list (sped up under
+      # the clock).
       - wait: { selector: 'aside[data-blade] [data-testid=leaf-header]' }
         focus: 'aside[data-blade] [data-testid=component-card]'
-        expect: ["Video Input"]
+        expect: ["What it is"]
         zoom: 1.4
-        hold: 400
+        hold: 300
       - wait: { selector: 'aside[data-blade] [data-testid=component-card]:not(:has([data-testid=leaf-alarms]))', timeout: 120000 }
         lapse: 1.0
         focus: 'aside[data-blade] [data-testid=leaf-header]'

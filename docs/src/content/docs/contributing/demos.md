@@ -533,7 +533,7 @@ the health lanes above it, which the beat is about). The camera follows the poin
 its own pans to its target as the pointer glides, all of the frame lit. A hover keeps the zoom the camera
 holds and moves only when its target is out of frame (`followFrame`); a click, a select or a typed field also
 closes in to at least 2.2x (`clickFrame`, `CAMERA.clickZoom`), so what is clicked reads as it is clicked,
-never from a wide frame or off screen. The beat it is in runs on through the move; a click shows a
+never from a wide frame or off screen, and the step waits for the move to land before it acts (`landWaitMs`), so a click that closes a form is seen before the form goes. The beat it is in runs on through the move; a click shows a
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
 
