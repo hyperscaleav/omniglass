@@ -1,12 +1,12 @@
 ---
 title: "Releases are cut from a release branch"
 date: 2026-11-18
-status: "Accepted, amended by ADR-2652"
+status: "Superseded in part by [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10)"
 summary: "A release is cut from a release/<major>.<minor> branch made from main, as numbered candidates (v0.1.0-rc.1, rc.2) and then a final tag on the newest candidate's commit once it has soaked. The version comes from the branch name and the tags already cut, not from commit subjects, and fixes reach the branch by cherry-pick"
 refs: [2139, 1940, 1988, 1257, 64]
 ---
 
-- **Date:** 2026-11-18 | **Status:** Accepted, amended by ADR-2652 | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual), [a soak run](/developer/lab/#a-soak-run)
+- **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual), [a soak run](/developer/lab/#a-soak-run)
 - **Decision:** (#2139, decided by the architect for 0.1.0.)
   1. **A release branch, not a frozen main.** On the cut, `release/<major>.<minor>` is made from
      `main`, and `main` stays open. The release workflow runs only on such a branch.
@@ -28,10 +28,8 @@ refs: [2139, 1940, 1988, 1257, 64]
 - **Consequences:** every push to a release branch runs the same CI as `main`, so a candidate has
   had the full CI before it is tagged. Release branches need a ruleset of their own, like `main`'s.
   The PR title no longer sets the version, only the line it writes in the notes.
-- **Amended by [ADR-2652](#adr-2652-the-soak-gates-10-and-0x-releases-are-cut-on-demand-from-main):** the soak
-  in decision 2 gates a final release from `v1.0.0` on; a `0.x` final needs only the CI its
-  release-branch push ran. After `v0.1.0`, each cut, made when wanted by `make release`, bumps by
-  the conventional commits since the newest final: a feat or a breaking change makes the next
-  minor's branch from `main`, and fixes alone fast-forward the current branch to `main` for its
-  next patch. The tag rule of decision 4 is unchanged, and decision 3's cherry-pick stays for a fix
-  that must ship without `main`'s features.
+- **Superseded in part by** [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10): release-please cuts every release from
+  `main`, a minor and a patch alike, so decisions 1 (the release branch), 3 (fixes by
+  cherry-pick) and 4 (the version from the branch) no longer hold, and there are no backports.
+  Decision 2's soak gates a final release from `v1.0.0` on, and candidates wait until then.
+  Decision 5 stands: the release App's token creates the tag.
