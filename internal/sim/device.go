@@ -648,10 +648,28 @@ type routeEntry struct {
 	Emit *emitAction
 }
 
-// routeEvent is one compiled named event a route reports.
+// routeEvent is one compiled named event a route or a behavior reports.
 type routeEvent struct {
 	name string
 	data *template.Template
+}
+
+// compileNamedEvents compiles the named events a route or a behavior (owner,
+// for the error) declares: each needs a name a stream can carry and data
+// that parses against funcs.
+func compileNamedEvents(owner string, events []profile.RouteEvent, funcs template.FuncMap) ([]routeEvent, error) {
+	var evs []routeEvent
+	for _, e := range events {
+		if strings.TrimSpace(e.Name) == "" || strings.ContainsAny(e.Name, "\r\n") {
+			return nil, fmt.Errorf("%s declares an event with no name, or a name with a line break", owner)
+		}
+		dt, err := template.New(owner + " event " + e.Name).Funcs(funcs).Parse(e.Data)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s event %q data: %w", owner, e.Name, err)
+		}
+		evs = append(evs, routeEvent{name: e.Name, data: dt})
+	}
+	return evs, nil
 }
 
 // commandEntry pairs a CLI command match with a compiled template. Used
@@ -1106,16 +1124,9 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 		return fmt.Errorf("compiling mutations for %q: %w", match, err)
 	}
 
-	var evs []routeEvent
-	for _, e := range events {
-		if strings.TrimSpace(e.Name) == "" || strings.ContainsAny(e.Name, "\r\n") {
-			return fmt.Errorf("route %q declares an event with no name, or a name with a line break", match)
-		}
-		dt, err := template.New(match + " event " + e.Name).Funcs(templateFuncs).Parse(e.Data)
-		if err != nil {
-			return fmt.Errorf("parsing route %q event %q data: %w", match, e.Name, err)
-		}
-		evs = append(evs, routeEvent{name: e.Name, data: dt})
+	evs, err := compileNamedEvents("route "+strconv.Quote(match), events, templateFuncs)
+	if err != nil {
+		return err
 	}
 
 	em, err := compileEmit(emit, templateFuncs)
