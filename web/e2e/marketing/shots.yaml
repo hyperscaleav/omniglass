@@ -114,15 +114,16 @@ shots:
         zoom: 1.2
         hold: 2000
 
-  # The page's hero: thirty seconds from the whole fleet to one room and back
-  # to healthy, every beat in the drawer the console opens beside the list, so
-  # nothing jumps to a full page. Beats: the count of rooms that need attention;
-  # those rooms; the headquarters boardroom's Why, naming its main display; the
-  # alarm snoozed from that row; the display plugged back in (off camera, the
-  # wait for the console to see it sped up under its badge), the room reading
-  # healthy and its Why clear; its Activity, the stretch it spent down in
-  # its health history. It leaves the boardroom healthy, as the outage clip
-  # below expects to find it.
+  # The page's hero: about thirty seconds (at most 36) from the whole fleet to
+  # one room and back to healthy, every beat in the drawer the console opens
+  # beside the list, so nothing jumps to a full page. Beats: the count of rooms
+  # that need attention; those rooms; the headquarters boardroom's Why, naming
+  # its display on the wrong input; its Activity over the last hour, the outage
+  # ongoing; the display's own Video Input; Send command from its alarm,
+  # set-input hdmi1, settled; the display reading hdmi1 and the room healthy
+  # (sped up under the badge); three minutes on, the same Activity with the
+  # outage closed, then the hour's Timeline: healthy, down, healthy. It leaves
+  # the boardroom healthy, as the outage clip below expects to find it.
   - id: omniglass-teaser
     kind: loop
     # 36: each beat holds once the video shows it (a full lab's heavy renders
@@ -376,7 +377,7 @@ shots:
   #   3. Its outage and vitals, beside the rooms it serves.
   # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
   # rule needs about a minute to hold its alarm, and that minute plays as a
-  # lapse, sped up as far as 40x.
+  # lapse, sped up as far as it needs (lapseSpeed in web/e2e/marketinglib.mjs).
   - id: alarm-outage
     kind: loop
     max_seconds: 12

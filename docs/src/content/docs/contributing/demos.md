@@ -558,9 +558,9 @@ true. The shots run in the order listed on one lab, and a later shot relies on t
 left.
 
 A `call` step is the same request in the middle of a clip, off camera: `call: { put: <path>, body: {...} }`.
-It is what happens in the room while the console shows what it makes of it: the teaser
-(`omniglass-teaser`) plugs the boardroom's display back in with one, then waits in a `lapse: 0.6` for the room
-to read healthy. It takes no focus, since nothing on screen moves for it, and the preflight checks the
+It is what happens in the room while the console shows what it makes of it: a device plugged back in, say,
+then a `wait` in a `lapse` for the console to read the room healthy (no shot in the list uses one today; the
+teaser fixes its room from the console, with Send command). It takes no focus, since nothing on screen moves for it, and the preflight checks the
 resource it names as it does a setup item's.
 
 One thing is hidden and nothing else: the lab banner. The capture-only stylesheet (`CAPTURE_CSS` in
