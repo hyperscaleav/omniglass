@@ -474,9 +474,9 @@ and writes the files and a `shots.json` manifest into the directory. The landing
 every image, loop, poster and alt text with no code change there.
 
 A shot is **data**: an id, a kind, a viewport, an `alt`, setup, and steps. A `still` is one 2x WebP. A
-`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 30, for a story such as
+`loop` is an H.264 MP4 of 5 to 9 seconds (a loop's `max_seconds` may raise that to 36, for a story such as
 omnibot's answer that cannot be told faster without faking it, or the page's teaser) and at most 1.5 MB (a
-loop allowed past 15 seconds earns that rate for its length, so a 30 second one may weigh 3 MB), with a WebP poster; the recorder re-encodes
+loop allowed past 15 seconds earns that rate for its length, so a 36 second one may weigh 3.6 MB), with a WebP poster; the recorder re-encodes
 a loop smaller until it fits, and a loop that cannot fit, or is too short or too long, fails the run
 naming the shot and the limit.
 
@@ -500,7 +500,9 @@ A loop has a camera. A step's `focus` moves it: `here` frames the step's own tar
 (`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
 (1 to 3) sets how close; without it the camera fits the target with a margin, never past 3x. A loop is
 watched on a phone too, where the console's 13-pixel text needs 2x or more to read. The camera
-eases over 0.6 s and centres the target, or comes as near it as the capture's edge allows: the frame never
+eases over 0.6 s, once the video has caught up with the page (a heavy render on a full lab stalls the
+screenshots for seconds after the page changed, and a beat that held from the change played over old
+frames; the wait counts toward the loop's length), and centres the target, or comes as near it as the capture's edge allows: the frame never
 looks past the capture, so a target at its edge sits off centre; focus the thing the beat is about, not the
 panel around it. A target bigger than
 the frame at its `zoom` (a whole card) keeps its top and left edges in view instead, so its heading shows. It eases back to the whole frame before the loop

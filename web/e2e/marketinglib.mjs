@@ -31,7 +31,7 @@ export const LOOP_MAX_SECONDS = 9;
 // A loop may raise its own maximum up to this, for a story that cannot be told
 // faster without lying about it: omnibot's answer takes as long as inference
 // does, and the page's teaser runs from the fleet to a room back to healthy.
-export const LOOP_MAX_SECONDS_CAP = 30;
+export const LOOP_MAX_SECONDS_CAP = 36;
 // How far past its maximum a recorded loop may run before the run fails. A
 // loop's length is the lab's as much as the shot list's: each wait lasts as
 // long as the console takes, and a scale lab on a busy host takes longer. The
@@ -597,7 +597,7 @@ export function lapseSpeed(real, lapse) {
 
 /**
  * The byte budget of a loop allowed `maxSeconds`: LOOP_MAX_BYTES up to 15
- * seconds, the same rate beyond, so a 30 second teaser may weigh 3 MB.
+ * seconds, the same rate beyond, so a 36 second teaser may weigh 3.6 MB.
  * @param {number} maxSeconds
  */
 export function loopMaxBytes(maxSeconds) {

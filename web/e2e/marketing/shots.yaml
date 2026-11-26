@@ -120,7 +120,9 @@ shots:
   # below expects to find it.
   - id: omniglass-teaser
     kind: loop
-    max_seconds: 30
+    # 36: each beat holds once the video shows it (a full lab's heavy renders
+    # stall the frames for seconds), and the story runs before and after the fix.
+    max_seconds: 36
     alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display reading hdmi1, the room healthy again, and three minutes later, sped up, its Activity with the outage closed beside its uptime, then the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside

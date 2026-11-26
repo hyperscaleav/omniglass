@@ -34,6 +34,10 @@ const ACT_TIMEOUT = 15_000;
 // one capture may take before it counts as refused.
 const FRAME_REFUSAL_MS = 10_000;
 const FRAME_CAPTURE_MS = 1_000;
+// How long a beat waits for the video to catch up with the page: a heavy
+// render on a full lab stalls the screenshots for seconds after the page has
+// changed, and a beat that held from the page's change played over old frames.
+const FRESH_FRAME_MS = 8_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
 // Pacing (PACE, marketinglib.mjs) is shared with the parse, which holds a loop's
 // own spend to its maximum.
@@ -350,6 +354,7 @@ async function record(browser, base, storageState, shot, out, api) {
     const t0 = Date.now();
     cam.now = () => (Date.now() - t0) / 1000;
     const frames = loop ? await startFrames(ctx, page, t0) : null;
+    if (frames) cam.fresh = (since) => frames.fresh(since, FRESH_FRAME_MS);
     if (loop) await page.mouse.move(cursor.x, cursor.y);
     /** @type {{ n: number, kind: string, target: string, from: number, to: number, authored: number }[]} */
     const timed = [];
@@ -424,6 +429,9 @@ async function startFrames(ctx, page, origin) {
   let cdp = await ctx.newCDPSession(page);
   /** @type {{ t: number, data: string }[]} */
   const frames = [];
+  // When the newest frame's screenshot was asked for: what it shows is the
+  // page as it was then or later.
+  let newest = 0;
   let running = true;
   const taking = (async () => {
     // A navigation on camera (a goto step, #2722) swaps the page out, and the
@@ -458,6 +466,7 @@ async function startFrames(ctx, page, origin) {
         continue;
       }
       refusedSince = 0;
+      newest = a;
       frames.push({ t: ((a + Date.now()) / 2 - origin) / 1000, data: r.data });
     }
   })();
@@ -466,6 +475,19 @@ async function startFrames(ctx, page, origin) {
       running = false;
       await taking;
       return frames;
+    },
+    /**
+     * Resolves true once a frame asked for at or after `since` (epoch ms) is
+     * in, so the video shows the page as it was then; false past `timeout`.
+     * @param {number} since @param {number} timeout
+     */
+    async fresh(since, timeout) {
+      const end = Date.now() + timeout;
+      while (newest < since) {
+        if (!running || Date.now() > end) return false;
+        await new Promise((res) => setTimeout(res, 25));
+      }
+      return true;
     },
   };
 }
@@ -481,7 +503,7 @@ function writeFrames(frames, out, id) {
 
 /** @typedef {{ step: number, from: number, at: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
 /** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[], at?: number, seen?: string[] }} OpenBeat */
-/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null }} Camera */
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null, fresh?: (since: number) => Promise<boolean> }} Camera */
 
 const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
 
@@ -595,6 +617,11 @@ async function logFocus(page, step, cam, own) {
     box = await el.boundingBox();
   }
   if (!box) throw new Error('the focus has no box on screen');
+  // The beat opens once the video shows what the page now does, not before:
+  // the camera lands on the target as it appears in the clip.
+  if (cam.fresh && !(await cam.fresh(Date.now()))) {
+    console.error(`marketing: step ${step.n}: the video had not caught up with the page after ${FRESH_FRAME_MS / 1000}s`);
+  }
   const t = cam.now();
   cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}), ...(step.spot === false ? { spot: false } : {}) });
   const { rect, onScreen } = frameRect(frameFor(box, cam.vp, step.zoom), cam.vp);
