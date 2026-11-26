@@ -438,6 +438,33 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     vi.unstubAllGlobals();
   });
 
+  it("a failed ranged read says so on Activity and offers Retry, which reads it again", async () => {
+    let failing = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const url = new URL(req.url);
+        if (url.pathname.endsWith(`/systems/${SID}/health`)) {
+          const ranged = url.searchParams.has("since");
+          if (ranged && failing) return new Response(JSON.stringify({ title: "Bad Request", status: 400, detail: "since is malformed" }), { status: 400, headers: { "content-type": "application/problem+json" } });
+          return new Response(JSON.stringify(hourly), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        const out = req.method === "POST" ? { results: [], cursor: "" } : [];
+        return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const alert = await screen.findByTestId("history-error");
+    expect(alert.textContent).toContain("since is malformed");
+    const kpi = screen.getByTestId("uptime-kpi");
+    expect(kpi.textContent).not.toContain("reading the range");
+    failing = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(kpi.textContent).toContain("of the last hour"));
+    expect(screen.queryByTestId("history-error")).toBeNull();
+  });
+
   it("with range=1h, the health read carries that hour and Uptime is that hour's, labelled for it", async () => {
     const reads = stubHealth();
     mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());

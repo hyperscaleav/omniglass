@@ -6,6 +6,7 @@ import HealthBadge from "./HealthBadge";
 import HealthHistory from "./HealthHistory";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
+import Button from "./Button";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
 import HealthReason from "./HealthReason";
@@ -262,8 +263,17 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const stretches = createMemo(() => stretchesOf(healthSpans(), historyWindow().end, windowHealth()));
   // What an empty stretch list says: still reading, nothing recorded in the
   // window, or healthy all the way through it.
+  // A failed ranged read says why above the tab and offers Retry (the
+  // current read's failure is the page's, through DetailGate).
+  const historyError = () => (history.error && !history.data ? describeError(history.error) : null);
   const quietWindow = () =>
-    !history.data ? "Reading the range." : uptimeWindow().pct === null ? "Nothing recorded in this window." : "Nothing in this window. The system held healthy the whole way.";
+    historyError()
+      ? "The range could not be read."
+      : !history.data
+        ? "Reading the range."
+        : uptimeWindow().pct === null
+          ? "Nothing recorded in this window."
+          : "Nothing in this window. The system held healthy the whole way.";
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -458,6 +468,14 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
         </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
+            <Show when={historyError()}>
+              {(msg) => (
+                <div role="alert" data-testid="history-error" class="alert alert-error alert-soft text-sm">
+                  <span class="flex-1">{msg()}</span>
+                  <Button size="xs" loading={history.isFetching} onClick={() => void history.refetch()}>Retry</Button>
+                </div>
+              )}
+            </Show>
             <div class="flex flex-wrap items-stretch gap-3">
               <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
                 <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
@@ -473,7 +491,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     {uptime()}<span class="text-lg">%</span>
                   </Show>
                 </span>
-                <span class="text-[10px] text-base-content/45">{history.data ? uptimeWindow().label : "reading the range"}</span>
+                <span class="text-[10px] text-base-content/45">{history.data ? uptimeWindow().label : historyError() ? "not read" : "reading the range"}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory
