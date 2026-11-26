@@ -22,6 +22,14 @@ screenshots:
     mask:
       - "[data-testid=inbox-entry-text]"
       - "[data-testid=inbox-entry-meta]"
+  - id: notifications-inbox-empty
+    path: /web/inbox
+    # The fleet viewer, signed in by the capture (capture.sh): no action rule tells them
+    # about the platform's alarms, so their inbox is genuinely empty, the same page every
+    # capture. Nothing on it moves, so nothing is masked: the empty state's text and its
+    # Subscribe to alarms button are gated, where the populated shot above gates the list (#2292).
+    as: viewer
+    alt: "The inbox of a person nothing has been told to: Your inbox is empty, what reaches it (a group notification or your own subscription), and the Subscribe to alarms button."
   - id: notifications-subscribe
     path: /web/profile/subscriptions
     steps:
@@ -44,6 +52,11 @@ the alarm's rendered message, its component, and the rule that told you. **Mark 
 marks it read too.
 
 ::screenshot{#notifications-inbox}
+
+A person nothing has been told to yet sees the empty state instead, with the way in: **Subscribe to alarms**
+opens your subscriptions, below.
+
+::screenshot{#notifications-inbox-empty}
 
 From the CLI:
 

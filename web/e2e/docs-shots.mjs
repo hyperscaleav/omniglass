@@ -98,8 +98,14 @@ for (const spec of specs) {
   // Attached before navigation so a font file that 404s or never arrives is
   // recorded rather than inferred from the raster later (#775).
   const failedFontRequests = watchFontRequests(page);
-  if ((spec.auth ?? true) && TOKEN) {
-    await page.addInitScript((t) => localStorage.setItem('og-token', t), TOKEN);
+  // `as: viewer` shoots the page as another seeded person, whose session the
+  // capture script signed in and hands over as OG_TOKEN_VIEWER (the empty inbox,
+  // #2292). A shot that names a person without a token fails, never falls back
+  // to the admin's page.
+  const token = spec.as ? process.env[`OG_TOKEN_${String(spec.as).toUpperCase()}`] : TOKEN;
+  if (spec.as && !token) throw new Error(`${spec.id}: as: ${spec.as} but OG_TOKEN_${String(spec.as).toUpperCase()} is not set`);
+  if ((spec.auth ?? true) && token) {
+    await page.addInitScript((t) => localStorage.setItem('og-token', t), token);
   }
   // Not networkidle: a page bound to live data holds its views stream open.
   await gotoSettled(page, BASE + spec.path);
