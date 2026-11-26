@@ -409,13 +409,6 @@ shots:
         zoom: 1.7
         hold: 1500
 
-  # Health & Alarms. The page's bullets, in order:
-  #   1. A room that is down names the alarm and the slot it takes down.
-  #   2. One click opens the component behind it.
-  #   3. Its outage and vitals, beside the rooms it serves.
-  # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
-  # rule needs about a minute to hold its alarm, and that minute plays as a
-  # lapse, sped up as far as it needs (lapseSpeed in web/e2e/marketinglib.mjs).
   # Collection: everything one device says (the architect's storyboard, its
   # first half). The conference room's video bar, in a call since lab start:
   # who it is (its identity), what it measures (its vitals, moving), how it is
@@ -463,6 +456,13 @@ shots:
         zoom: 2.0
         hold: 2000
 
+  # Health & Alarms. The page's bullets, in order:
+  #   1. A room that is down names the alarm and the slot it takes down.
+  #   2. One click opens the component behind it.
+  #   3. Its outage and vitals, beside the rooms it serves.
+  # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
+  # rule needs about a minute to hold its alarm, and that minute plays as a
+  # lapse, sped up as far as it needs (lapseSpeed in web/e2e/marketinglib.mjs).
   - id: alarm-outage
     kind: loop
     max_seconds: 12
