@@ -1,6 +1,6 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR and the release cut from a release branch, by hand, and the planned one-command 0.x cut."
+description: "The CI gates on every PR, the release cut from a release branch, and the planned release-please cut from main."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
@@ -241,50 +241,28 @@ make release-plan FINAL=1    # the final release of the newest candidate
 No changelog is ever committed back, so a release never writes to `main` or the branch. The
 notes live on the GitHub Release.
 
-## Cutting a 0.x release
+## Cutting a release with release-please
 
-`v0.1.0` is the first public build, cut by hand as above once the release App is set up and
-`RELEASES_ENABLED` is on (#1940). After it, a `0.x` release is cut whenever the work calls for
-one, roughly weekly, and the version bumps by the conventional commits since the newest final, as
-semantic-release would (ADR-2652). Say the newest final is `v0.4.2`:
+The branch-per-minor cut above is what the release workflow does today. It is to be replaced by
+release-please on `main`, one process for a minor and a patch (ADR-2652):
 
-- **A feat or a breaking change** since it makes the next minor: `release/0.5` from `main`'s tip,
-  then `v0.5.0`. Before `1.0`, breaking bumps the minor.
-- **Only fixes and the rest** (`fix`, `perf`, `docs`, `chore` and the like) make the next patch:
-  `release/0.4` fast-forwards to `main`'s tip, then `v0.4.3`. That tip is the commit `main`
-  already ran CI on, so nothing new is committed and nothing can conflict.
-- **Never `1.0`.** `1.0` is a hand cut, and it needs [the soak](#the-soak-gate).
-- **A fix that must ship without `main`'s features** goes by cherry-pick to the release branch
-  and a hand dispatch, which makes it that line's patch (`v0.4.3-rc.1`, then `v0.4.3`). Any other
-  fix waits for the next cut. The cherry-pick gives the branch a commit `main` lacks, so it can no
-  longer fast-forward: the next cut makes the next minor from `main` instead, and that line takes
-  later patches only by cherry-pick.
-
-Until the one-command cut below is built, an admin makes each `0.x` cut by hand: make the branch,
-or fast-forward it with `git push origin main:release/0.4` (a push that fails unless it is a
-fast-forward), then dispatch a candidate and a final as above. The `release/*` ruleset takes pull
-requests only, and a pull request cannot fast-forward, so the branch push needs the admin's bypass.
-
-:::design[Target design: the one-command 0.x cut, tracked in #2652]
-- **One command.** `make release` fetches `main` and the tags, and prints the next version, the
-  kind of bump (a new branch, or a patch on the current line) and the commits that drove it, then
-  asks to confirm. `make release DRY_RUN=1` previews and stops.
-- **The workflow cuts, not the laptop.** On a yes, `make release` dispatches the cut workflow with
-  the version it showed. The workflow works the bump out again and refuses if `main` moved since
-  the preview, makes or fast-forwards the branch with the release App's token (so the branch push
-  runs CI and the tag ruleset holds), dispatches the candidate and, once that branch push's CI is
-  green, the final on the same commit. Nobody picks the version, the branch or the commit, and the
-  laptop pushes nothing.
-- **It refuses** when `main` has no commit since the newest final, or `RELEASES_ENABLED` is off.
-  When the branch cannot fast-forward (a hand cherry-pick), it cuts the next minor and the
-  preview says why.
-- **A nudge, not a schedule.** When the newest final is a week old and `main` has commits since
-  it, a scheduled check opens one "a cut is due" issue, and the next cut closes it. Nothing
-  scheduled cuts a release.
-- **The tag is still the branch's.** The cut only chooses between a new branch and a
-  fast-forward, and `cmd/releaseversion` works out the tag as it does for a hand dispatch. The
-  semantic-release tool stays out of the path: it would cut a release for every merge, with no
-  click to approve it.
+:::design[Target design: release-please on main, tracked in #2652]
+- **A standing release PR.** On every push to `main`, the release-please workflow keeps one PR
+  open, `chore(main): release 0.<n>.<p>`, with the next version and the notes, read from the
+  squash-merged PR titles since the last release. It changes only `version.txt` and
+  `.release-please-manifest.json`; no CHANGELOG is committed.
+- **Merging it is the release.** release-please tags the merge commit and creates the GitHub
+  Release with the PR's notes, and the same run builds the image, attaches the binaries and
+  comments "Released in" on the PRs it ships. A minor and a patch are the same step.
+- **The commits pick the version.** A `feat` or a breaking change bumps the minor before `1.0`
+  (`bump-minor-pre-major`), a `fix` or `perf` the patch. `1.0` is a `release-as` set on purpose,
+  with [the soak](#the-soak-gate).
+- **Forward only.** No release branches and no backports: a fix ships in the next release.
+- **The release App's token.** The workflow runs with it, so the tag ruleset holds, the release
+  PR's checks run, and the created release starts the build. It does nothing while
+  `RELEASES_ENABLED` is off (#1940).
+- **Retired.** The release branches, the cut-by-dispatch, `make release`, `make release-plan`,
+  `cmd/release` and `cmd/releaseversion`.
 :::
 
 Until `1.0`, Omniglass is pre-production software: breaking changes can land in any release,
