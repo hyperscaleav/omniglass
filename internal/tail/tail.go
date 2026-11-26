@@ -116,6 +116,9 @@ type Hub struct {
 	wake     chan struct{}
 	// followers counts the streams following change notices (#2731).
 	followers atomic.Int64
+	// dropped is one past the sequence at which a notice last went unpublished for want
+	// of a follower.
+	dropped uint64
 }
 
 // New returns a hub whose ring holds the last commits commits, and of those
@@ -193,10 +196,31 @@ func (h *Hub) FollowChanges() func() {
 func (h *Hub) Following() bool { return h != nil && h.followers.Load() > 0 }
 
 // PublishChanges publishes change notices, only while a stream follows them.
+// A notice dropped is remembered (ChangesDroppedSince), so a stream that
+// resumes across the gap is told to refetch rather than trusted to have
+// missed nothing.
 func (h *Hub) PublishChanges(rows []Row) {
+	if h == nil || len(rows) == 0 {
+		return
+	}
 	if h.Following() {
 		h.Publish(rows)
+		return
 	}
+	h.mu.Lock()
+	h.dropped = h.seq + 1
+	h.mu.Unlock()
+}
+
+// ChangesDroppedSince reports whether a change notice went unpublished at or
+// after the commit at seq, so a topics cursor at seq cannot vouch for it.
+func (h *Hub) ChangesDroppedSince(seq uint64) bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.dropped > 0 && h.dropped-1 >= seq
 }
 
 // Publish lands rows that are already durable as the next commit: the change

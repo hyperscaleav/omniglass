@@ -668,10 +668,16 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 			if from == "" {
 				from = in.LastEventID
 			}
-			if from == "" {
+			resumes := from != ""
+			if !resumes {
 				from = now
 			}
 			if follow.after, err = hub.Seq(from); err != nil {
+				resetTopics = true
+			} else if resumes && hub.ChangesDroppedSince(follow.after) {
+				// A notice went unpublished while no stream followed topics
+				// (the gap of a reconnect), so the position cannot vouch for
+				// what it missed.
 				resetTopics = true
 			}
 		}

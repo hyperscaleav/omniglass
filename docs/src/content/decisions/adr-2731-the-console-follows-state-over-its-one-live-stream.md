@@ -66,7 +66,7 @@ refs: [2731, 2724, 1830, 2732]
      and `PublishChanges` drops a notice while the count is zero. We chose this over a second bounded
      ring because it keeps one cursor per stream (point 2); while someone does follow topics, a storm still
      shares the ring, bounded by the one-notice-per-topic-per-window coalescing on the send side only.
-     A topic cursor resumed after a gap with no followers resets, as one the ring no longer holds does.
+     A notice dropped is remembered (`ChangesDroppedSince`), so a topics cursor resumed across one, the gap of a reconnect with no other page open, resets and the client refetches instead of trusting a silence.
 - **Divergence from the issue:** the issue drew the change hub as a sibling of the tail ring; one ring
   keeps one cursor per stream (point 2). Collection topics (a scoped list, at most once a second) are not
   in this slice: the system page needs entity topics only, and #2732 tracks them.

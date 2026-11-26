@@ -717,6 +717,10 @@ func TestViewsWatchTopicsResumeWithNoRepeat(t *testing.T) {
 		}
 		return ev.Event == "changed" && ev.ID != ""
 	})
+	// A second stream keeps the topics followed through the reconnect (a
+	// page open elsewhere), so no notice goes unpublished in the gap.
+	keep := f.openWatchQuery(t, f.ownerTok, topicsQuery("component:codec-a", ""), "")
+	keep.until(t, "the second stream's opening mark", func(ev sseEvent) bool { return ev.Event == "mark" })
 	w.cancel()
 
 	raise("two")
@@ -737,6 +741,21 @@ func TestViewsWatchTopicsResumeWithNoRepeat(t *testing.T) {
 	})
 	if vs[0] <= first || vs[1] <= vs[0] {
 		t.Fatalf("the resumed stream carried %v after %d: a change repeated", vs, first)
+	}
+
+	keep.cancel()
+	again.cancel()
+	// With nobody following, a change goes unpublished: a resume across it
+	// cannot vouch for what it missed, and resets rather than stay silent.
+	raise("four")
+	missed := f.openWatchQuery(t, f.ownerTok, topicsQuery("component:codec-a", last), "")
+	select {
+	case ev := <-missed.events:
+		if ev.Event != "reset" || !strings.Contains(ev.Data, `"topics":true`) {
+			t.Fatalf("a resume across an unfollowed change opened with %+v, want a reset naming the topics", ev)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no reset for a resume across an unfollowed change")
 	}
 
 	gone := f.openWatchQuery(t, f.ownerTok, topicsQuery("component:codec-a", "0123456789ab.1"), "")

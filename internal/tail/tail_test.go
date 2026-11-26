@@ -435,6 +435,14 @@ func TestPublishChangesNeedsAFollower(t *testing.T) {
 	}
 	release()
 	release()
+	at, _ := h.Seq(h.Cursor())
+	h.PublishChanges([]tail.Row{row})
+	if !h.ChangesDroppedSince(at) {
+		t.Fatal("a dropped notice was not remembered")
+	}
+	if h.ChangesDroppedSince(at + 1) {
+		t.Fatal("a position past the drop was told it missed one")
+	}
 	if h.Following() {
 		t.Fatal("still following after release")
 	}
