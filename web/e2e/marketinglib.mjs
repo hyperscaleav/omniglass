@@ -70,8 +70,9 @@ const MAX_LAPSE_SECONDS = 5;
 export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5, clickZoom: 2.2 };
 // A wait played as a lapse runs at up to MAX_FAST times real speed: an alarm
 // that takes a minute to raise plays in a second, and three minutes of a room
-// running on (a timed wait, #2722) in under one, under a badge that says the
-// clip is sped up and by how much (render.mjs), so no speed passes for real time.
+// running on (a timed wait, #2722) in under one, under a clock in the corner
+// that names the real time it covers (lapseLabel, render.mjs), so no speed
+// passes for real time.
 export const MAX_FAST = 300;
 // The recorder's own pace on a loop, in milliseconds: the pointer's glide to a
 // target before it acts, each key typed, the settle after a page loads, and the
@@ -892,9 +893,10 @@ export function spotFor(box, vp) {
 }
 
 /**
- * The sped-up stretches of a clip, in the clip's own time, for the badge that
- * says so: a lapse shorter than MIN_LAPSE_BADGE seconds once shortened gets
- * none, since a badge that flashes reads as a glitch.
+ * The sped-up stretches of a clip, in the clip's own time, for the corner clock
+ * that says so, each labelled with the real time it covers: a lapse shorter than
+ * MIN_LAPSE_BADGE seconds once shortened gets none, since a clock that flashes
+ * reads as a glitch.
  * @param {Lapse[]} lapses in real time, ascending
  * @returns {Lapse[]}
  */

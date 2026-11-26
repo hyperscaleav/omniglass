@@ -387,7 +387,8 @@ async function record(browser, base, storageState, shot, out, api) {
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
       // The lapses, in real time, mark the stretches played faster: the
-      // compositor badges them so a sped-up wait never passes for real time.
+      // compositor shows its corner clock over them so a sped-up wait never
+      // passes for real time.
       writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events, lapses: cam.lapses }, null, 2));
       // Each beat: when it opened, was checked and ended, the part of the capture
       // its frame shows, and the text on screen inside that frame once its step

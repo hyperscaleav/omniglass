@@ -431,8 +431,8 @@ shots:
         expect: ["healthy"]
         zoom: 1.4
         hold: 900
-      # Beat 2: the alarm arrives. The wait for it plays sped up, under a badge
-      # that says so; the frame holds on the Why strip as it appears.
+      # Beat 2: the alarm arrives. The wait for it plays sped up, under the
+      # corner clock; the frame holds on the Why strip as it appears.
       - wait: { selector: '[data-testid=alarm-strip]', timeout: 180000 }
         lapse: 0.9
         focus: here
