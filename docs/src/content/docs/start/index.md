@@ -18,5 +18,8 @@ Read it in order:
    platform, and what Omniglass does about it.
 2. [The model in one pass](/start/the-model/): the words Omniglass is built on, in the order the data
    travels.
-3. [Your first ten minutes](/start/first-ten-minutes/): a working Omniglass on your machine, signed
-   in, walking a simulated fleet with planted faults.
+3. [Your first ten minutes](/start/first-ten-minutes/): a working Omniglass on your machine, then a
+   ten-step example in the console: break a device and watch the platform notice.
+
+Then, when you want more, [guided walkthroughs](/start/walkthroughs/) replay real console flows on the
+same lab.
