@@ -52,7 +52,7 @@
     },
     "behaviors": {
       "type": "array",
-      "description": "Autonomous, scheduled mutations applied to the device's state at runtime, temperature drift, scheduled state changes. Each behavior runs a goroutine and emits a StateChange event per tick. For monotonic time counters (uptime) use computed instead, which is resolved on read and emits no events.",
+      "description": "Autonomous, scheduled mutations applied to the device's state at runtime, temperature drift, scheduled state changes. Each behavior runs a goroutine and emits a StateChange for what each tick changed (a write of the value a path already holds is no change). For monotonic time counters (uptime) use computed instead, which is resolved on read and emits no events.",
       "items": {
         "$ref": "#/$defs/behavior"
       }
@@ -485,6 +485,28 @@
             }
           },
           "additionalProperties": false
+        },
+        "events": {
+          "type": "array",
+          "description": "Named events the behavior reports on the device's events face each tick, after its mutations apply (as a route's events do): each data is a template rendered against the state the tick left, and one that renders empty is not reported that tick, so the template's own condition says when it fires (a call starting, a participant joining, a log line).",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "data"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The event's name on the stream (its event: field), e.g. call-started or log."
+              },
+              "data": {
+                "type": "string",
+                "description": "The event's data template, usually a JSON document; an empty render skips the event this tick."
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false

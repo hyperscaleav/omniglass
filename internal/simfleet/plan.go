@@ -63,16 +63,22 @@ var AttachSecret = map[string]string{
 	"meridian-mx-snmp":       CommunitySecret,
 	"meridian-xl-snmp":       CommunitySecret,
 	"boreal-edge-web":        BorealLoginSecret,
+	// The bar's control socket answers behind the login its https API does
+	// (#2754).
+	"kestrel-ws": KestrelLoginSecret,
 }
 
-// Control is the driver of a device's control face, keyed by the driver its
-// product names, for a component planned to take commands (#2649): the
-// product's own driver only reads the device (the Boreal display's SNMP
-// agent), and the face that switches it answers on another port behind a
-// login. A control face is planned only where it is asked for
-// (Component.Control), never fleet wide.
+// Control is the driver of a device's second face, keyed by the driver its
+// product names, for a component a standard asks it of (Component.Control):
+// the face that answers on another port of the same device, another
+// protocol beside the one its product's driver speaks. The Boreal display's
+// SNMP agent only reads it, and its web admin switches it (#2649); the
+// Kestrel bar's https API is joined by the control socket its touch panel
+// drives, a held websocket (#2754). Planned only where it is asked for,
+// never fleet wide.
 var Control = map[string]string{
 	"boreal-edge-snmp": "boreal-edge-web",
+	"kestrel-api":      "kestrel-ws",
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -218,6 +224,12 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// use, its token in the header the platform demands.
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": UCCTokenSecret}
+	},
+	// The Kestrel bar's control socket on 9443 (#2754), wss with its key
+	// pinned on first use, the upgrade behind the bar's login: its second
+	// face (Control), never a product's own driver. 9443 needs no lift.
+	"kestrel-ws": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(9443)), "login": KestrelLoginSecret}
 	},
 	// The Boreal display's web admin on 80, behind its digest login: its
 	// control face (Control), never a product's own driver.

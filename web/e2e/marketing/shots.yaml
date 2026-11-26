@@ -8,11 +8,15 @@
 # grammar (goto, click, hover, type, select, press, wait; `hold` lingers after a
 # step) without captions. On a loop, a step's `focus` moves the camera as the
 # step starts: `here` eases the frame onto the step's own target, a target
-# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 2) sets
+# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 3) sets
 # the scale instead of fitting the box. The target lands in the middle of the
-# frame, even at the capture's edge (the console's dark base shows past it), so
-# focus the information itself, not the row or panel around it. A clip that
-# ends zoomed eases out before it loops.
+# frame, or as near it as the capture's edge allows (the frame never looks past
+# the capture), so focus the information itself, not the row or panel around
+# it. The rest of the frame dims round the target; `spot: false` keeps it all
+# lit, for a target that only aims the camera. A step with no focus whose
+# target is outside the frame (a click below the form) pans there at the same
+# zoom as the pointer moves: the camera follows the pointer. A clip that ends
+# zoomed eases out before it loops.
 #
 # A focus opens a beat, which runs until the next focus. Its `expect` names the
 # text its bullet rests on; the recorder reads the text on screen inside the
@@ -65,6 +69,13 @@ setup:
   - put: /components/{regional-06.regional-06-main.regional-06-main-1.regional-06-main-1-01.$comp.display-1}/impairment
     body: { unplugged: true }
   - wait: { get: /alarms?limit=50, field: alarms.4.active, equals: true, timeout: 180000 }
+  # The conference room's video bar takes a call at lab start (#2754), so by
+  # the device-everything shot it has run a while on its own: its call stats
+  # drifting, its participants coming and going, its log lines and events.
+  # {@system/member} is the component the system holds under that member
+  # name, looked up at run time, wherever the lab's size placed the room.
+  - post: /components/{@hq-divisible-conference-1/videobar-1}/simulation:fire
+    body: { surface: http-api, method: POST, path: /api/call/dial, body: '{"id":"c-showcase","participants":4}' }
 
 shots:
   # The hero: from the whole fleet to the cause, in one run. Beats: the count
@@ -112,19 +123,18 @@ shots:
         zoom: 1.2
         hold: 2000
 
-  # The page's hero: thirty seconds from the whole fleet to one room and back
-  # to healthy, every beat in the drawer the console opens beside the list, so
-  # nothing jumps to a full page. Beats: the count of rooms that need attention;
-  # those rooms; the headquarters boardroom's Why, naming its main display; the
-  # alarm snoozed from that row; the display plugged back in (off camera, the
-  # wait for the console to see it sped up under its badge), the room reading
-  # healthy and its Why clear; its Activity, the stretch it spent down in
-  # its health history. It leaves the boardroom healthy, as the outage clip
-  # below expects to find it.
+  # The page's hero, on the architect's storyboard (#2752): from the whole
+  # fleet to one room, its alarm, the device behind it, the fix sent from the
+  # console, and the room healthy again, every beat in the drawer the console
+  # opens beside the list. The camera closes in on every click (clickFrame), so
+  # what is clicked reads as it is clicked. It leaves the boardroom healthy, as
+  # the outage clip below expects to find it.
   - id: omniglass-teaser
     kind: loop
-    max_seconds: 30
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the display's own Video Input reading hdmi2, Set input hdmi1 sent from the alarm and settled, the display's timeline with the alarm and the command, and the room healthy again."
+    # 60: every beat holds long enough to read, and the story runs before and
+    # after the fix (the architect's ruling, #2752).
+    max_seconds: 60
+    alt: "Omniglass from the fleet to a fix: the fleet and the rooms that need attention, filtered to them; a headquarters boardroom, down, opened in the drawer to its Activity, the outage ongoing beside its uptime; the outage expanded to the alarm that explains it, display-1 on the wrong input; the display itself, what it is, Video Input hdmi2, its alarm and its quick actions; Send command, Set input hdmi1, sent and settled; the display's alarm clearing, sped up under a clock; the room healthy again, and three minutes later its Activity with the outage closed and the last hour's timeline: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -145,88 +155,148 @@ shots:
       - post: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/simulation:fire
         body: { surface: web-admin, method: POST, path: /api/display/input, body: '{"input": "hdmi2"}' }
       - wait: { get: /systems/hq-mr86-1/health, field: health, equals: outage, timeout: 180000 }
-    start: /explore
+      # The room stays down ten minutes before the shot (#2722), so its hour on
+      # the timeline at the end reads healthy, down for that stretch, healthy.
+      - wait: { seconds: 600 }
+    # The last hour in the address: the room's drawer opens on it, so its
+    # Activity, before the fix and after, draws the outage across that hour
+    # (#2741) rather than as a sliver of 30 days.
+    start: /explore?range=1h
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
-      # Beat 1: the fleet's count, and how many rooms need attention.
-      - hover: { role: button, name: need attention }
-        focus: '[data-testid=explore-counts]'
+      # 1. The fleet page, the whole fleet: its systems and how many need
+      # attention.
+      - wait: { selector: '[data-testid=explore-counts]' }
+        focus: here
         expect: ["systems", "need attention"]
-        zoom: 2.6
-        hold: 1300
-      # Beat 2: only those rooms, the boardroom among them.
+        zoom: 1.0
+        hold: 1500
+      # 2. Close on "need attention", and click it (the click closes in).
       - click: { role: button, name: need attention }
+        hold: 500
+      # 3. The rooms that need attention.
+      - wait: { selector: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05"))' }
         focus: 'ul[role=list][aria-label=Matches]'
         expect: ["Hq Annex 1 05"]
         zoom: 1.6
-        hold: 1000
-      # Beat 3: the boardroom opens in the drawer, and its Why names the fault
-      # and the display it is on.
-      - click: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05"))'
-        hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip]' }
+        hold: 1300
+      # 4. Close on the boardroom's name, pan along its row to the red outage
+      # mark at its end, then back to the name and click.
+      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) :text-is("Hq Annex 1 05")'
         focus: here
-        expect: ["Why", "Display on the wrong input", "display-1"]
+        expect: ["Hq Annex 1 05"]
+        zoom: 2.6
+        hold: 900
+      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) [data-testid=health]'
+        focus: here
+        zoom: 2.6
+        hold: 1000
+      - click: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) :text-is("Hq Annex 1 05")'
+        hold: 400
+      # 5. The drawer opens; its Activity tab, clicked close: Uptime and the
+      # last hour's bar with the outage still running.
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Activity")'
+        hold: 300
+      - wait: { selector: 'aside[data-blade] [data-testid=stretch-list]:has-text("ongoing")' }
+        focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
+        expect: ["Uptime", "outage"]
+        zoom: 1.8
+        hold: 1800
+      # 6. The ongoing outage opened: the alarm that explains it and the device.
+      - click: 'aside[data-blade] [data-testid=stretch-0] > button'
+        hold: 300
+      - wait: { selector: 'aside[data-blade] [data-testid=stretch-0] li:has-text("Display on the wrong input")' }
+        focus: 'aside[data-blade] [data-testid=stretch-0]'
+        expect: ["Display on the wrong input", "display-1"]
         zoom: 2.2
-        hold: 1600
-      # Beat 4: the display itself, its own report: Video Input hdmi2. Video Input
-      # is a property, so it reads in "What it is", not among the Vitals (metrics).
-      - click: 'aside[data-blade] [data-testid=alarm-strip] button:text-is("display-1")'
-        hold: 200
+        hold: 2200
+      # 7. Follow to the device: display-1, clicked close.
+      - click: 'aside[data-blade] [data-testid=stretch-0] button:text-is("display-1")'
+        hold: 300
+      # 8. Widen to the display's full drawer.
+      - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity]' }
+        focus: 'aside[data-blade] [data-testid=component-card]'
+        expect: ["What it is"]
+        hold: 1400
+      # 9. What it is, and what it reports: Video Input hdmi2.
       - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity] dt:text-is("Video Input") + dd:has-text("hdmi2")' }
         focus: 'aside[data-blade] [data-testid=leaf-identity]'
         expect: ["Video Input", "hdmi2"]
         zoom: 2.4
-        hold: 1500
-      # Beat 5: Send command from its alarm: Set input, hdmi1, Issue.
+        hold: 1700
+      # 10. Its alarm, then close on the alarm's quick actions.
+      - wait: { selector: 'aside[data-blade] [data-testid=leaf-alarms]' }
+        focus: here
+        expect: ["Display on the wrong input"]
+        zoom: 2.2
+        hold: 1400
+      - hover: 'aside[data-blade] [data-testid=leaf-alarms] button[aria-label="Send command"]'
+        focus: here
+        expect: ["Send a command to display-1"]
+        zoom: 2.6
+        hold: 1300
+      # 11. Send command.
       - click: 'aside[data-blade] [data-testid=leaf-alarms] button[aria-label="Send command"]'
         hold: 300
+      # 12. The command's options; set-input, hdmi1, then Send (Issue), each
+      # click and choice closed in on.
       - select: { target: { role: combobox, name: Command }, value: set-input }
         focus: 'form:has(option[value=set-input])'
         expect: ["Command", "set-input"]
         zoom: 1.8
-        hold: 500
+        hold: 800
       - select: { target: 'form:has(option[value=set-input]) select >> nth=1', value: hdmi1 }
-        hold: 600
+        hold: 800
       - click: { role: button, name: Issue }
-        hold: 200
-      # Beat 6: the display acknowledges, and the command settles.
-      - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 30000 }
+        hold: 600
+      # 13. The confirmation, as soon as it shows: set-input issued.
+      - wait: { selector: '[data-testid=command-toast]' }
         focus: '[data-testid=toast]:has([data-testid=command-toast])'
-        expect: ["set-input issued to display-1", "settled"]
+        expect: ["set-input issued to display-1"]
         zoom: 2.2
-        hold: 1300
-      # Its next poll reads hdmi1, sped up under the badge.
-      - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity] dt:text-is("Video Input") + dd:has-text("hdmi1")', timeout: 120000 }
-        lapse: 0.6
-        focus: 'aside[data-blade] [data-testid=leaf-identity]'
-        expect: ["Video Input", "hdmi1"]
-        zoom: 2.4
-        hold: 1200
-      # Beat 7: the display's timeline: the alarm, its Video Input and the
-      # command on one axis.
-      - click: 'aside[data-blade] [data-testid=component-detail] [role=tab]:text-is("Timeline")'
-        focus: out
-        hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=timeline-overlay]' }
-        focus: here
-        expect: ["Alarms", "Commands"]
+        hold: 900
+      # 14. Straight back up to the display's own health while its alarm is
+      # still there, then the alarm clearing and leaving its list (sped up under
+      # the clock).
+      - wait: { selector: 'aside[data-blade] [data-testid=leaf-header]' }
+        focus: 'aside[data-blade] [data-testid=component-card]'
+        expect: ["What it is"]
         zoom: 1.4
-        hold: 2000
-      # Beat 8: back in the room, healthy, its Why clear.
+        hold: 300
+      - wait: { selector: 'aside[data-blade] [data-testid=component-card]:not(:has([data-testid=leaf-alarms]))', timeout: 120000 }
+        lapse: 1.0
+        focus: 'aside[data-blade] [data-testid=leaf-header]'
+        expect: ["healthy"]
+        zoom: 2.4
+        hold: 1500
+      # 15. Back to the system: the room healthy, green.
       - press: Escape
         hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=alarm-strip-clear]', timeout: 120000 }
+      - wait: { selector: 'aside[data-blade] [data-testid=system-header]:has-text("healthy")', timeout: 120000 }
         lapse: 0.6
         focus: 'aside[data-blade] [data-testid=system-header]'
         expect: ["healthy"]
         zoom: 2.4
-        hold: 1200
-      - hover: 'aside[data-blade] [data-testid=alarm-strip-clear]'
-        focus: here
-        expect: ["No active alarms"]
-        zoom: 2.4
-        hold: 1400
+        hold: 1500
+      # 16. Three minutes on (sped up under the clock), its Activity: the
+      # outage closed, its length, beside Uptime.
+      - wait: { seconds: 180 }
+        lapse: 0.6
+      - wait: { selector: 'aside[data-blade] [data-testid=stretch-0]:has-text("Outage"):not(:has-text("ongoing"))' }
+        focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
+        expect: ["Uptime", "Outage"]
+        zoom: 1.8
+        hold: 2000
+      # 17. Its timeline over that hour, closing in on the outage: healthy, down
+      # for the ten minutes and the fix, healthy again.
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Timeline")'
+        hold: 300
+      - wait: { selector: 'aside[data-blade] [data-testid=timeline-health-row]' }
+        focus: 'aside[data-blade] [data-testid=timeline-alarm-span]'
+        spot: false
+        expect: ["Health", "This system"]
+        zoom: 2.0
+        hold: 2600
 
   # Systems. The page's bullets, in order:
   #   1. Locations nest to any depth, in any shape you define.
@@ -237,6 +307,9 @@ shots:
   # in their slots.
   - id: fleet-explore
     kind: loop
+    # 12: the camera closes in on each click and lands before it acts (#2752),
+    # which a 9 second loop of several clicks cannot spare.
+    max_seconds: 12
     alt: "Expanding Headquarters in the Omniglass fleet outline to its building, a floor and its rooms, then opening a meeting room to its system: a display, panels and a video bar, each product in its slot."
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
@@ -284,6 +357,9 @@ shots:
   # every poll), so the endpoint reads rejected and the outpost stops asking.
   - id: credential-fix
     kind: loop
+    # 12: the camera closes in on each click and lands before it acts (#2752),
+    # which a 9 second loop of several clicks cannot spare.
+    max_seconds: 12
     alt: "A video bar whose login the device refuses: the endpoint reads rejected with the device's 401, the login is corrected in place on the endpoint, and it reads reachable, responsive and authenticated again."
     setup:
       - post: /secrets
@@ -333,13 +409,60 @@ shots:
         zoom: 1.7
         hold: 1500
 
+  # Collection: everything one device says (the architect's storyboard, its
+  # first half). The conference room's video bar, in a call since lab start:
+  # who it is (its identity), what it measures (its vitals, moving), how it is
+  # read (two endpoints, https and its websocket, each authenticated). Its
+  # timeline beats (lanes from both protocols, metrics picked in, its own
+  # events and logs, one event opened) return once the simulator plays a
+  # scenario on its own clock (#1362, #2757), so a lab need not wait in real
+  # time for an hour to fill.
+  - id: device-everything
+    kind: loop
+    # 20: five beats, each closed in on (#2752).
+    max_seconds: 20
+    alt: "Everything one device says in Omniglass: a conference room's video bar in a call, its identity (firmware, hardware revision, serial, MAC, IP, hostname, resolution), its vitals moving (packet loss, jitter, bitrate, frame rate, levels, CPU, temperature, fan), and its two endpoints over https and websocket, each reachable, responsive and authenticated."
+    start: '/components/{@hq-divisible-conference-1/videobar-1}'
+    ready: { selector: '[data-testid=leaf-identity]' }
+    steps:
+      # 1. The device: healthy, a Kestrel VRoom.
+      - wait: { selector: '[data-testid=leaf-header]' }
+        focus: '[data-testid=component-card]'
+        expect: ["healthy", "videobar-1"]
+        zoom: 1.0
+        hold: 1300
+      # 2. Who it is: the top of What it is, then down its identity.
+      - wait: { selector: '[data-testid=leaf-identity] dt:text-is("Firmware version")' }
+        focus: '[data-testid=leaf-identity]'
+        expect: ["Kestrel VRoom", "Firmware version"]
+        zoom: 1.6
+        hold: 1600
+      - hover: '[data-testid=leaf-identity] dt:text-is("MAC address")'
+        focus: here
+        expect: ["MAC address", "Serial number"]
+        zoom: 1.9
+        hold: 1600
+      # 3. What it measures: its vitals, moving. The pointer goes to a row low in
+      # the list, so the whole card scrolls into view.
+      - hover: '[data-testid=leaf-vitals] dt:text-is("Temperature")'
+        focus: '[data-testid=leaf-vitals]'
+        expect: ["Bitrate", "Temperature"]
+        zoom: 1.5
+        hold: 2200
+      # 4. How it is read: two endpoints, each up its ladder.
+      - hover: '[data-testid=leaf-collection] :text-is("https") >> nth=0'
+        focus: '[data-testid=leaf-collection]'
+        expect: ["authenticated", "wss"]
+        zoom: 2.0
+        hold: 2000
+
   # Health & Alarms. The page's bullets, in order:
   #   1. A room that is down names the alarm and the slot it takes down.
   #   2. One click opens the component behind it.
   #   3. Its outage and vitals, beside the rooms it serves.
   # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
   # rule needs about a minute to hold its alarm, and that minute plays as a
-  # lapse, sped up as far as 40x.
+  # lapse, sped up as far as it needs (lapseSpeed in web/e2e/marketinglib.mjs).
   - id: alarm-outage
     kind: loop
     max_seconds: 12
@@ -362,8 +485,8 @@ shots:
         expect: ["healthy"]
         zoom: 1.4
         hold: 900
-      # Beat 2: the alarm arrives. The wait for it plays sped up, under a badge
-      # that says so; the frame holds on the Why strip as it appears.
+      # Beat 2: the alarm arrives. The wait for it plays sped up, under the
+      # corner clock; the frame holds on the Why strip as it appears.
       - wait: { selector: '[data-testid=alarm-strip]', timeout: 180000 }
         lapse: 0.9
         focus: here

@@ -17,10 +17,10 @@ import { load } from 'js-yaml';
 /** @typedef {{ width: number, height: number }} Viewport */
 /** @typedef {{ method: 'PUT' | 'POST' | 'PATCH', path: string, body: Record<string, unknown> }} Call */
 /** @typedef {{ get: string, field: string, equals: unknown, timeout: number }} Await */
-/** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await)} SetupItem */
+/** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await) | { kind: 'pause', seconds: number }} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, lapse?: number, expect?: string[] }} Step */
+/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, spot?: false, lapse?: number, seconds?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string, healthHistory: boolean }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -31,7 +31,7 @@ export const LOOP_MAX_SECONDS = 9;
 // A loop may raise its own maximum up to this, for a story that cannot be told
 // faster without lying about it: omnibot's answer takes as long as inference
 // does, and the page's teaser runs from the fleet to a room back to healthy.
-export const LOOP_MAX_SECONDS_CAP = 30;
+export const LOOP_MAX_SECONDS_CAP = 60;
 // How far past its maximum a recorded loop may run before the run fails. A
 // loop's length is the lab's as much as the shot list's: each wait lasts as
 // long as the console takes, and a scale lab on a busy host takes longer. The
@@ -45,11 +45,13 @@ const LOOP_BUDGET_SECONDS = 15;
 export const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // Longest a wait or an await may be given, in milliseconds.
 export const MAX_WAIT_MS = 180_000;
+// Longest a setup pause may hold the lab off camera, in seconds (#2722).
+export const MAX_PAUSE_SECONDS = 900;
 export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
 export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait', 'call'];
-const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'lapse', 'expect'];
+const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'spot', 'fast', 'lapse', 'expect'];
 // The longest a lapse may play: past this, a wait is the story, not a pause in it.
 const MAX_LAPSE_SECONDS = 5;
 
@@ -65,11 +67,13 @@ const MAX_LAPSE_SECONDS = 5;
 // centred.
 // spotPad is the lit margin round a focus box, in viewport pixels; dim is how
 // dark the rest of the frame goes while the camera is on a box.
-export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5 };
+export const CAMERA = { ease: 0.6, maxZoom: 3, minZoom: 1, margin: 0.1, backdrop: '#080c16', spotPad: 12, dim: 0.5, clickZoom: 2.2 };
 // A wait played as a lapse runs at up to MAX_FAST times real speed: an alarm
-// that takes a minute to raise plays in a couple of seconds, under a badge that
-// says the clip is sped up (render.mjs).
-export const MAX_FAST = 40;
+// that takes a minute to raise plays in a second, and three minutes of a room
+// running on (a timed wait, #2722) in under one, under a clock in the corner
+// that names the real time it covers (lapseLabel, render.mjs), so no speed
+// passes for real time.
+export const MAX_FAST = 300;
 // The recorder's own pace on a loop, in milliseconds: the pointer's glide to a
 // target before it acts, each key typed, the settle after a page loads, and the
 // moment the last state settles before the clip ends.
@@ -130,6 +134,35 @@ export function pointerX(kind, box) {
   if (kind === 'click' || kind === 'hover') return box.x + box.width / 2;
   if (kind === 'select') return Math.max(box.x + box.width - 16, box.x + box.width / 2);
   return Math.min(box.x + 24, box.x + box.width / 2);
+}
+
+/**
+ * The member addresses in a path: `{@<system>/<member>}` names the component a
+ * system holds under that member name (`{@hq-divisible-conference-1/videobar-1}`),
+ * for a device whose location path a scale lab's size decides. The recorder
+ * looks each up through the system's members at run time (substituteRefs).
+ * @param {string} path
+ * @returns {{ ref: string, system: string, member: string }[]}
+ */
+export function memberRefs(path) {
+  const seen = new Map();
+  for (const m of path.matchAll(/\{@([^/{}]+)\/([^/{}]+)\}/g)) seen.set(m[0], { ref: m[0], system: m[1], member: m[2] });
+  return [...seen.values()];
+}
+
+/**
+ * A path with each member address replaced by the component id looked up for
+ * it; one with no id given is refused, naming it.
+ * @param {string} path
+ * @param {Map<string, string>} ids member address to component id
+ * @returns {string}
+ */
+export function substituteRefs(path, ids) {
+  return path.replace(/\{@([^/{}]+)\/([^/{}]+)\}/g, (ref) => {
+    const id = ids.get(ref);
+    if (!id) throw new Error(`no component found for ${ref}`);
+    return id;
+  });
 }
 
 /**
@@ -222,6 +255,14 @@ function parseStep(raw, n, label = 'step') {
     if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: zoom goes with a focus on a target`);
     step.zoom = o.zoom;
   }
+  // spot: false lights the whole frame on this focus instead of dimming all but
+  // its target, for a target that points the camera at a region rather than
+  // being the one thing to read (an outage's alarm bar, with the lanes above it).
+  if ('spot' in o) {
+    if (o.spot !== false) problems.push(`${where}: spot takes only false, to light the whole frame`);
+    else if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: spot goes with a focus on a target`);
+    else step.spot = false;
+  }
   // expect: the text a beat's frame must hold as the beat ends, each string
   // found within what is on screen inside the frame. It goes with the focus that
   // opens the beat, so it cannot sit on a focus that leaves for the whole frame.
@@ -299,7 +340,19 @@ function parseStep(raw, n, label = 'step') {
     }
     case 'wait': {
       if (!isObj(v)) {
-        problems.push(`${where} must be { text | selector | role, timeout? }`);
+        problems.push(`${where} must be { text | selector | role, timeout? } or { seconds }`);
+        break;
+      }
+      // A wait for time itself (#2722): the lab runs on for seconds, so a
+      // stretch of its record is long enough to read. On camera it is played as
+      // a lapse; a focus can frame something else, never `here`.
+      if ('seconds' in v) {
+        if (Object.keys(v).length > 1) problems.push(`${where} waits for either a target or seconds, not both`);
+        if (!(Number.isInteger(v.seconds) && v.seconds >= 1 && v.seconds <= MAX_WAIT_MS / 1000)) {
+          problems.push(`${where}: seconds must be whole seconds, 1 to ${MAX_WAIT_MS / 1000}`);
+        }
+        if (step.focus === 'here') problems.push(`${where}: focus here needs a target, and a timed wait has none`);
+        step.seconds = v.seconds;
         break;
       }
       const { timeout, ...target } = v;
@@ -343,6 +396,16 @@ function parseSetup(raw, where) {
     } else if ('wait' in o) {
       const w = o.wait;
       if (!isObj(w)) return void problems.push(`${at}: wait must be { get, field, equals, timeout? }`);
+      if ('seconds' in w) {
+        // A pause (#2722): the lab runs on off camera, so the state the shot
+        // opens on has lasted that long (a room down for ten minutes).
+        if (Object.keys(w).length > 1) problems.push(`${at}: wait is either { get, field, equals } or { seconds }`);
+        if (!(Number.isInteger(w.seconds) && w.seconds >= 1 && w.seconds <= MAX_PAUSE_SECONDS)) {
+          problems.push(`${at}: wait.seconds must be whole seconds, 1 to ${MAX_PAUSE_SECONDS}`);
+        }
+        items.push({ kind: 'pause', seconds: w.seconds });
+        return;
+      }
       for (const k of Object.keys(w)) if (!['get', 'field', 'equals', 'timeout'].includes(k)) problems.push(`${at} has unknown key "${k}"`);
       if (!isStr(w.get) || !w.get.startsWith('/')) problems.push(`${at}: wait.get must be an API path starting with "/"`);
       if (!isStr(w.field)) problems.push(`${at}: wait.field must be a dotted field name`);
@@ -513,7 +576,7 @@ export function stepAuthoredSeconds(step) {
   if (step.kind === 'goto') ms += PACE.load;
   if (['click', 'hover', 'type', 'select'].includes(step.kind)) ms += PACE.glide;
   if (step.kind === 'type') ms += PACE.key * (step.text ?? '').length;
-  if (step.kind === 'wait') ms += (step.lapse ?? 0) * 1000;
+  if (step.kind === 'wait') ms += (step.lapse ?? (step.seconds ?? 0)) * 1000;
   return ms / 1000;
 }
 
@@ -569,7 +632,7 @@ export function lapseSpeed(real, lapse) {
 
 /**
  * The byte budget of a loop allowed `maxSeconds`: LOOP_MAX_BYTES up to 15
- * seconds, the same rate beyond, so a 30 second teaser may weigh 3 MB.
+ * seconds, the same rate beyond, so a 60 second teaser may weigh 6 MB.
  * @param {number} maxSeconds
  */
 export function loopMaxBytes(maxSeconds) {
@@ -642,7 +705,8 @@ const KIND = { components: 'component', systems: 'system', endpoints: 'endpoint'
 export function referencedResources(items, start) {
   /** @type {Map<string, { kind: string, id: string, path: string }>} */
   const found = new Map();
-  const paths = [...items.map((it) => (it.kind === 'call' ? it.path : it.get)), ...(start ? [start] : [])];
+  // A pause names no resource.
+  const paths = [...items.flatMap((it) => (it.kind === 'call' ? [it.path] : it.kind === 'await' ? [it.get] : [])), ...(start ? [start] : [])];
   for (const p of paths) {
     for (const m of p.matchAll(RESOURCE)) {
       const id = m[2].startsWith('{') ? m[2].slice(1, -1) : m[2];
@@ -653,7 +717,7 @@ export function referencedResources(items, start) {
 }
 
 /** @typedef {{ x: number, y: number, width: number, height: number }} Box */
-/** @typedef {{ t: number, box: Box | null, zoom?: number }} FocusEvent */
+/** @typedef {{ t: number, box: Box | null, zoom?: number, spot?: false, follow?: true }} FocusEvent */
 /** @typedef {{ at: number, dur: number, scale: number, x: number, y: number, spot: Box | null }} CameraMove */
 
 /**
@@ -678,16 +742,65 @@ export function frameFor(box, vp, zoom) {
   );
   const scale = Math.min(CAMERA.maxZoom, Math.max(CAMERA.minZoom, zoom ?? fit));
   // Along one axis: the box's middle, or, when the box overflows the frame's
-  // inner span there, the point that puts its start a margin inside the frame.
+  // inner span there, the point that puts its start a margin inside the frame;
+  // then held so the frame never reaches past the capture (a box at its edge
+  // sits off centre rather than beside empty backdrop).
   const axis = (/** @type {number} */ start, /** @type {number} */ size, /** @type {number} */ view) => {
     const span = view / scale;
-    return size > span * (1 - 2 * CAMERA.margin) ? start - span * CAMERA.margin + span / 2 : start + size / 2;
+    const want = size > span * (1 - 2 * CAMERA.margin) ? start - span * CAMERA.margin + span / 2 : start + size / 2;
+    return Math.min(view - span / 2, Math.max(span / 2, want));
   };
   return {
     scale: round(scale),
     x: round(axis(box.x, box.width, vp.width)),
     y: round(axis(box.y, box.height, vp.height)),
   };
+}
+
+/**
+ * Where the camera goes so the pointer's target is on screen as the pointer
+ * reaches it: the camera follows the pointer. Null while the frame it holds
+ * shows the target with a margin to spare, or shows the whole capture; else
+ * the same zoom recentred on the target (held on the capture, as frameFor is).
+ * @param {Box} box the target, in viewport pixels
+ * @param {{ scale: number, x: number, y: number }} current the frame the camera holds
+ * @param {{ width: number, height: number }} vp
+ * @returns {{ scale: number, x: number, y: number } | null}
+ */
+export function followFrame(box, current, vp) {
+  if (current.scale <= 1) return null;
+  const { rect } = frameRect(current, vp);
+  const m = Math.min(rect.width, rect.height) * CAMERA.margin;
+  const inside =
+    box.x >= rect.x + m && box.y >= rect.y + m && box.x + box.width <= rect.x + rect.width - m && box.y + box.height <= rect.y + rect.height - m;
+  return inside ? null : frameFor(box, vp, current.scale);
+}
+
+/**
+ * Where the camera goes for a click (a select, a typed field) with no focus of
+ * its own: close enough to read what is clicked. Null when the frame it holds
+ * is already at least CAMERA.clickZoom and shows the target; else the target
+ * at the closer of that zoom and the one held, so a click never reads from a
+ * wide frame (the architect's storyboard, #2752).
+ * @param {Box} box the target, in viewport pixels
+ * @param {{ scale: number, x: number, y: number }} current the frame the camera holds
+ * @param {{ width: number, height: number }} vp
+ * @returns {{ scale: number, x: number, y: number } | null}
+ */
+export function clickFrame(box, current, vp) {
+  if (current.scale >= CAMERA.clickZoom) return followFrame(box, current, vp);
+  return frameFor(box, vp, CAMERA.clickZoom);
+}
+
+/**
+ * How much longer a step waits, past the pointer's glide, before it acts when
+ * the camera moved for it (followFrame, clickFrame): long enough for the move
+ * to land, so a click that closes a form is seen before the form goes.
+ * @param {boolean} moved
+ * @returns {number} milliseconds
+ */
+export function landWaitMs(moved) {
+  return moved ? Math.max(0, CAMERA.ease * 1000 - PACE.glide) : 0;
 }
 
 /** @typedef {{ from: number, at: number, to: number }} BeatTimes */
@@ -704,7 +817,9 @@ export function frameFor(box, vp, zoom) {
  */
 export function beatEnds(beats, events) {
   return beats.map((b) => {
-    const next = events.find((e) => e.t > b.from);
+    // A camera following the pointer (followFrame) pans within a beat; it does
+    // not end it.
+    const next = events.find((e) => e.t > b.from && !e.follow);
     return next ? { ...b, to: next.t } : b;
   });
 }
@@ -774,7 +889,7 @@ export function cameraTrack(events, vp, duration) {
     if (f.scale === cur.scale && f.x === cur.x && f.y === cur.y) continue;
     const at = round(Math.max(0, e.t, free));
     if (at + CAMERA.ease > duration) break;
-    moves.push({ at, dur: CAMERA.ease, ...f, spot: spotFor(e.box, vp) });
+    moves.push({ at, dur: CAMERA.ease, ...f, spot: e.spot === false ? null : spotFor(e.box, vp) });
     cur = f;
     free = at + CAMERA.ease;
   }
@@ -807,9 +922,10 @@ export function spotFor(box, vp) {
 }
 
 /**
- * The sped-up stretches of a clip, in the clip's own time, for the badge that
- * says so: a lapse shorter than MIN_LAPSE_BADGE seconds once shortened gets
- * none, since a badge that flashes reads as a glitch.
+ * The sped-up stretches of a clip, in the clip's own time, for the corner clock
+ * that says so, each labelled with the real time it covers: a lapse shorter than
+ * MIN_LAPSE_BADGE seconds once shortened gets none, since a clock that flashes
+ * reads as a glitch.
  * @param {Lapse[]} lapses in real time, ascending
  * @returns {Lapse[]}
  */
@@ -818,9 +934,21 @@ export function lapseBadges(lapses) {
   // sits on the line: the comparison allows for floating-point error, or half
   // of them would lose their badge to rounding.
   return lapses
-    .map((w) => ({ from: retime(w.from, lapses), to: retime(w.to, lapses), speed: w.speed }))
+    .map((w) => ({ from: retime(w.from, lapses), to: retime(w.to, lapses), speed: w.speed, real: w.to - w.from }))
     .filter((w) => w.to - w.from >= MIN_LAPSE_BADGE - 1e-6)
-    .map((w) => ({ from: round(w.from), to: round(w.to), speed: Math.round(w.speed) }));
+    .map((w) => ({ from: round(w.from), to: round(w.to), speed: Math.round(w.speed), label: lapseLabel(w.real) }));
+}
+
+/**
+ * What a lapse's clock says: the real time it covers, "+45 s" under a
+ * minute and a half, then whole minutes, then whole hours.
+ * @param {number} seconds real seconds
+ * @returns {string}
+ */
+export function lapseLabel(seconds) {
+  if (seconds < 90) return `+${Math.round(seconds)} s`;
+  if (seconds < 90 * 60) return `+${Math.round(seconds / 60)} min`;
+  return `+${Math.round(seconds / 3600)} h`;
 }
 export const MIN_LAPSE_BADGE = 0.6;
 
@@ -829,6 +957,28 @@ export const MIN_LAPSE_BADGE = 0.6;
 // recording of it is the 1x frame padded with gray). Each frame shows from its
 // own time to the next one's; the first shows from the clip's start.
 export const FRAME_FALLBACK_SECONDS = 0.04;
+
+/**
+ * A loop's frames thinned to at most one per `gap` seconds of clip, the first
+ * and last always kept. A lapse retimes its frames into a fraction of their
+ * real span (180 s at 300x is 0.6 s), so thousands of them land a ten-thousandth
+ * of a second apart; joined as they are, each still took the join's smallest
+ * duration and the lapse played ten times slower than its speed. The encode
+ * keeps one frame per 1/25 s anyway, so nothing visible is lost.
+ * @template {{ t: number }} F
+ * @param {F[]} frames ascending in t
+ * @param {number} gap seconds
+ * @returns {F[]}
+ */
+export function thinFrames(frames, gap) {
+  if (frames.length <= 2) return [...frames];
+  const kept = [frames[0]];
+  for (let i = 1; i < frames.length - 1; i++) {
+    if (frames[i].t - kept[kept.length - 1].t >= gap) kept.push(frames[i]);
+  }
+  kept.push(frames[frames.length - 1]);
+  return kept;
+}
 
 /**
  * The ffmpeg concat-demuxer list for a loop's frames, so a variable frame rate

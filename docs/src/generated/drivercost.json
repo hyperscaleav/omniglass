@@ -102,35 +102,34 @@
         "ucc-rooms"
       ],
       "drivers": [
-        "kestrel-api",
         "kestrel-gaze-api",
         "kestrel-relay-api",
         "recording-service-api",
         "ucc-rooms"
       ],
       "memory_per_task_kib": {
-        "median": 13.66875,
+        "median": 10.128125,
         "min": 3.47375,
         "max": 48.41875,
-        "n": 5
+        "n": 4
       },
       "memory_per_endpoint_kib": {
-        "median": 13.895,
+        "median": 13.781875,
         "min": 13.175,
-        "max": 123.83520599250937,
-        "n": 5
+        "max": 96.8375,
+        "n": 4
       },
       "cpu_per_run_ms": {
-        "median": 5.752682805473865,
+        "median": 6.2325312993600095,
         "min": 5.0743377372085,
         "max": 7.21982653700496,
-        "n": 5
+        "n": 4
       },
       "millicores_per_task": {
-        "median": 0.19175609351579548,
+        "median": 0.2077510433120003,
         "min": 0.16914459124028333,
         "max": 0.240660884566832,
-        "n": 5
+        "n": 4
       }
     },
     {
@@ -142,35 +141,34 @@
         "kestrel-relay-api"
       ],
       "drivers": [
-        "kestrel-api",
         "kestrel-gaze-api",
         "kestrel-relay-api",
         "recording-service-api",
         "ucc-rooms"
       ],
       "memory_per_task_kib": {
-        "median": 13.66875,
+        "median": 10.128125,
         "min": 3.47375,
         "max": 48.41875,
-        "n": 5
+        "n": 4
       },
       "memory_per_endpoint_kib": {
-        "median": 13.895,
+        "median": 13.781875,
         "min": 13.175,
-        "max": 123.83520599250937,
-        "n": 5
+        "max": 96.8375,
+        "n": 4
       },
       "cpu_per_run_ms": {
-        "median": 5.752682805473865,
+        "median": 6.2325312993600095,
         "min": 5.0743377372085,
         "max": 7.21982653700496,
-        "n": 5
+        "n": 4
       },
       "millicores_per_task": {
-        "median": 0.01917560935157955,
+        "median": 0.020775104331200032,
         "min": 0.016914459124028336,
         "max": 0.0240660884566832,
-        "n": 5
+        "n": 4
       }
     },
     {
@@ -468,17 +466,11 @@
       "polls": [
         "5m0s",
         "30s",
+        "30s",
         "30s"
       ],
-      "measured": true,
-      "step_tasks": 1600,
-      "memory_per_task_kib": 41.278401997503124,
-      "memory_per_endpoint_kib": 123.83520599250937,
-      "memory_warm_mib": 5.350260416666657,
-      "millicores_per_task": 0.13422926546105685,
-      "cpu_per_run_ms": 5.752682805473865,
-      "thread_cpu_per_run_ms": 0.5075498524266534,
-      "thread_share": 0.08822837441057992
+      "measured": false,
+      "reason": "its polls changed since the sweep; not yet measured at its polls"
     },
     {
       "driver": "kestrel-gaze-api",

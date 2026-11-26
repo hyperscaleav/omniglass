@@ -61,6 +61,13 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// States the class-signal floor for the lab's seeded DSP, so naming
 		// the shipped product is what it tests (#1493).
 		"internal/lab/dsp_floor_integration_test.go": true,
+		// Pins the shipped Kestrel and Polaris drivers to what their
+		// simulated devices serve, so naming the shipped products is what
+		// it tests (#2754).
+		"internal/seed/vroom_talks_driver_test.go": true,
+		// States the showcase floor for the corporate lab's conference
+		// video bar, so naming the shipped product is what it tests (#2754).
+		"internal/lab/videobar_talks_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

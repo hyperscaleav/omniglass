@@ -30,7 +30,7 @@ Everything a simulated device is comes from the catalog embedded in the binary
 
 - a **device profile** (`devices/*.yaml`) declares a product's identity, its protocol surfaces (each
   a protocol, a port, its auth, and the routes, commands, OIDs and subscriptions it answers), its
-  behaviors (values that drift on an interval), its computed fields (values derived on read, such as
+  behaviors (state that moves on an interval, and the named events it reports), its computed fields (values derived on read, such as
   uptime from a boot time) and its default state;
 - a **surface fragment** (`surfaces/*.yaml`) is what two profiles share, taken in with `include:`;
   the loader refuses an unknown fragment or one a surface restates
@@ -306,6 +306,42 @@ delivery sent twice. These are the faces the shipped drivers' event, log and web
 against
 ([ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s),
 [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+
+### A device talks on its own
+
+A behavior is a timer on one device: each tick applies its changes to the live state, then reports
+its **named events** on the device's events face, as a route does, each rendered against the state
+the tick left. An event whose data renders empty is not one that tick reports, so the template's own
+condition says when it fires; and a tick streams only what it changed, so a timer that rewrites a
+watched path with the value it already holds puts nothing on the feed
+([ADR-2754](/architecture/decisions/#adr-2754-a-behavior-tick-streams-only-what-it-changed-and-may-report-named-events)).
+A behavior reads the wall clock through its device's clock (`now`, and `nextSlot` for the next
+boundary of a slot) and draws from its device's seeded source (`randStep`, `randInt`, `chance`), so a
+device keeps the same schedule on every run and a test drives a simulated day on a pinned clock
+([ADR-2754.2](/architecture/decisions/#adr-27542-a-behavior-reads-its-devices-wall-clock-and-draws-from-its-devices-source)).
+No behavior in a shipped profile ticks faster than 15 seconds: a device gets richer by reporting more
+kinds of signal, not more samples (#1360).
+
+The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab keeps its room's meeting
+schedule, a tick a minute. When the room is free it books its next slot, 15, 30 or 60 minutes,
+starting on the next half hour (a 15-minute one on the next quarter), and takes about half the slots
+it considers; a meeting starts up to 2 minutes early or 5 late and ends up to 5 minutes before its
+slot does. The call reports `call-started` (a fresh call id, two to six participants) and
+`call-ended`, and in between a participant joins or leaves now and then (`participant-joined`,
+`participant-left`). Each occurrence is also an `event: log` line in the codec's idiom (a severity, a
+facility such as `kvroom.call`, and its text), beside a status line every 15 minutes. A second
+behavior, every 30 seconds, drifts the call's packet loss (a ratio), jitter, bitrate, frame rate,
+speaker level and microphone level while a call is up and rests them when the room is idle, drifts
+the codec's own load, temperature, fan and memory, and writes the WARN line a bar's network log does
+when loss crosses 3% and an INFO line when it recovers. A bar runs about 0.6 calls, 3 events and 9 log
+lines an hour. Booking tables would drive the schedule in time; today it is each bar's own draws.
+
+A call on demand still talks now: the bar's own dial route starts one at once with its event and log
+line, a meeting falling due under it is skipped, and it ends at the bar's hang-up route or after
+30 minutes, so a demo or a test can make a bar talk without waiting for its schedule. The
+`kestrel-api` driver lands all of it from one held feed and two polls, and in the corporate lab's
+conference rooms the bar's websocket control socket is a second endpoint beside its https API
+([the scale lab](/developer/lab/#scale-lab-scenarios)).
 
 ### A simulated service posts from the start
 

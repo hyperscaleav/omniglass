@@ -1009,29 +1009,35 @@ standards:
 	}
 }
 
-// The boardrooms' displays take commands (#2649): every mr86 system's
-// main-display fill is marked for its control face, and no other fill of any
-// system is, so the corporate lab adds one endpoint a boardroom.
-func TestCorporateControlsOnlyTheBoardroomDisplays(t *testing.T) {
+// The corporate lab's second faces (#2649, #2754): every mr86 system's
+// main-display fill is marked for its control face (the boardroom display
+// takes commands), every divisible-conference system's video-bar fill for
+// its control socket (the bar talks over two protocols), and no other fill
+// of any system is.
+func TestCorporateControlsOnlyTheBoardroomDisplaysAndConferenceBars(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	boardrooms := 0
+	boardrooms, conferences := 0, 0
 	for _, s := range p.allSystems() {
 		for _, f := range s.Slots {
-			want := s.Standard == "mr86" && f.Slot == "main-display"
-			if f.Control != want {
-				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, want)
+			display := s.Standard == "mr86" && f.Slot == "main-display"
+			bar := s.Standard == "divisible-conference" && f.Slot == "video-bar"
+			if f.Control != (display || bar) {
+				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, display || bar)
 			}
-			if want {
+			if display {
 				boardrooms++
+			}
+			if bar {
+				conferences++
 			}
 		}
 	}
-	if boardrooms == 0 {
-		t.Fatal("no boardroom display is controlled at 100 systems")
+	if boardrooms == 0 || conferences == 0 {
+		t.Fatalf("at 100 systems %d boardroom displays and %d conference bars are controlled, want some of each", boardrooms, conferences)
 	}
 }
 

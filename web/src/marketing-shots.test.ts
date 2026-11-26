@@ -14,6 +14,10 @@ import {
   loopMaxBytes,
   cameraTail,
   retime,
+  memberRefs,
+  substituteRefs,
+  thinFrames,
+  concatList,
   buildManifest,
   cameraTrack,
   lapseBadges,
@@ -26,6 +30,10 @@ import {
   lapseSpeed,
   overrunReport,
   frameFor,
+  followFrame,
+  clickFrame,
+  landWaitMs,
+  lapseLabel,
   frameRect,
   missingText,
   conditionMet,
@@ -147,7 +155,7 @@ describe("parseShots", () => {
     expect(parseShots("{ unclosed").problems[0]).toContain("is not YAML");
   });
 
-  it("parses the committed shot list: eight shots, the two kinds, every one with alt", () => {
+  it("parses the committed shot list: nine shots, the two kinds, every one with alt", () => {
     const text = readFileSync(join(__dirname, "../e2e/marketing/shots.yaml"), "utf8");
     const { list, problems } = parseShots(text);
     expect(problems).toEqual([]);
@@ -160,6 +168,7 @@ describe("parseShots", () => {
       "fleet-explore": "loop",
       "fleet-scale": "still",
       "credential-fix": "loop",
+      "device-everything": "loop",
       "alarm-outage": "loop",
       "system-why": "still",
       "omnibot-ask": "loop",
@@ -325,6 +334,19 @@ describe("focus and zoom on a step", () => {
     ]);
   });
 
+  it("takes spot: false on a focus on a target, and names it anywhere else", () => {
+    const ok = parseShots(LOOP("      - click: a\n        focus: here\n        spot: false\n"));
+    expect(ok.problems).toEqual([]);
+    expect(ok.list?.shots[0].steps[0].spot).toBe(false);
+    const { problems } = parseShots(
+      LOOP("      - click: a\n        focus: here\n        spot: true\n" + "      - click: b\n        spot: false\n"),
+    );
+    expect(problems).toEqual([
+      "shot a-loop: step 1 (click): spot takes only false, to light the whole frame",
+      "shot a-loop: step 2 (click): spot goes with a focus on a target",
+    ]);
+  });
+
   it("refuses a focus on a still and on a loop's prep, which is cut", () => {
     const still = parseShots(`${LAB}shots:\n${STILL}    steps:\n      - click: a\n        focus: here\n`);
     expect(still.problems).toEqual(["shot a-still: step 1 has a focus: the camera moves on a loop only"]);
@@ -394,10 +416,17 @@ describe("frameFor", () => {
     expect(frameFor({ x: 0, y: 0, width: 1440, height: 900 }, vp).scale).toBe(1);
   });
 
-  it("takes a zoom over the fit, and centres the box even at the capture's edge", () => {
-    // A chip in the top-left corner sits in the middle of the frame.
-    const f = frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5);
-    expect(f).toEqual({ scale: 1.5, x: 30, y: 20 });
+  it("takes a zoom over the fit, and centres the box away from the capture's edges", () => {
+    const f = frameFor({ x: 600, y: 400, width: 40, height: 20 }, vp, 1.5);
+    expect(f).toEqual({ scale: 1.5, x: 620, y: 410 });
+  });
+
+  it("never looks past the capture: a box at its edge sits off centre instead", () => {
+    // At 1.5 the frame is 960 x 600: a chip in the top-left corner puts the
+    // frame's centre 480 x 300 in, not on the chip, so no backdrop shows.
+    expect(frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5)).toEqual({ scale: 1.5, x: 480, y: 300 });
+    // At 2 the frame is 720 x 450: a span at the right end, 1300 to 1400.
+    expect(frameFor({ x: 1300, y: 400, width: 100, height: 14 }, vp, 2)).toEqual({ scale: 2, x: 1080, y: 407 });
   });
 
   it("keeps a box taller than the frame's top in view, a margin in", () => {
@@ -407,11 +436,84 @@ describe("frameFor", () => {
   });
 });
 
+describe("followFrame", () => {
+  const vp = { width: 1440, height: 900 };
+  // At 2x on a form in the right half: the frame is 720 x 450, centred at 1080, 300.
+  const form = { scale: 2, x: 1080, y: 300 };
+
+  it("leaves the camera where it is while the target is in its frame", () => {
+    expect(followFrame({ x: 1000, y: 250, width: 80, height: 30 }, form, vp)).toBeNull();
+  });
+
+  it("pans at the same zoom to a target outside the frame, so the click is on screen", () => {
+    // The Issue button below the form, at y 600: outside a frame that ends at 525.
+    expect(followFrame({ x: 1300, y: 600, width: 60, height: 28 }, form, vp)).toEqual(frameFor({ x: 1300, y: 600, width: 60, height: 28 }, vp, 2));
+  });
+
+  it("pans for a target only partly in frame, or within the margin of its edge", () => {
+    expect(followFrame({ x: 1000, y: 500, width: 80, height: 40 }, form, vp)).not.toBeNull();
+  });
+
+  it("never moves a camera showing the whole capture", () => {
+    expect(followFrame({ x: 10, y: 10, width: 20, height: 20 }, { scale: 1, x: 720, y: 450 }, vp)).toBeNull();
+  });
+});
+
+describe("clickFrame", () => {
+  const vp = { width: 1440, height: 900 };
+  const button = { x: 1300, y: 600, width: 60, height: 28 };
+
+  it("closes in on a click target from a wider frame, to the click zoom", () => {
+    const f = clickFrame(button, { scale: 1, x: 720, y: 450 }, vp);
+    expect(f).toEqual(frameFor(button, vp, CAMERA.clickZoom));
+  });
+
+  it("keeps a closer zoom it already holds, panning only if the target is out of frame", () => {
+    expect(clickFrame(button, { scale: 2.6, x: 1300, y: 610 }, vp)).toBeNull();
+    expect(clickFrame(button, { scale: 2.6, x: 700, y: 300 }, vp)).toEqual(frameFor(button, vp, 2.6));
+  });
+
+  it("closes in on a target in frame when the frame is too wide to read it", () => {
+    expect(clickFrame(button, { scale: 1.4, x: 1000, y: 500 }, vp)).toEqual(frameFor(button, vp, CAMERA.clickZoom));
+  });
+});
+
+describe("landWaitMs", () => {
+  it("holds a click the camera moved for until the move lands, beyond the pointer's glide", () => {
+    expect(landWaitMs(true)).toBe(Math.max(0, CAMERA.ease * 1000 - PACE.glide));
+    expect(landWaitMs(true)).toBeGreaterThan(0);
+  });
+
+  it("adds nothing when the camera did not move", () => {
+    expect(landWaitMs(false)).toBe(0);
+  });
+});
+
+describe("member addresses", () => {
+  it("finds each {@system/member} in a path, once", () => {
+    expect(memberRefs("/components/{@hq-conf-1/videobar-1}/simulation:fire")).toEqual([{ ref: "{@hq-conf-1/videobar-1}", system: "hq-conf-1", member: "videobar-1" }]);
+    expect(memberRefs("/components/{@a/b}?x={@a/b}")).toHaveLength(1);
+    expect(memberRefs("/components/{hq.x.$comp.display-1}/impairment")).toEqual([]);
+  });
+
+  it("puts each member's component id in its place, and refuses one it was not given", () => {
+    const ids = new Map([["{@hq-conf-1/videobar-1}", "01a2"]]);
+    expect(substituteRefs("/components/{@hq-conf-1/videobar-1}?tab=timeline", ids)).toBe("/components/01a2?tab=timeline");
+    expect(() => substituteRefs("/components/{@hq-conf-1/dsp-1}", ids)).toThrow("{@hq-conf-1/dsp-1}");
+  });
+});
+
 describe("beatEnds", () => {
   it("ends a beat at the next focus, through a wait that closed it early", () => {
     const beats = [{ from: 2.468, to: 2.475 }, { from: 4.286, to: 6.9 }];
     const events = [{ t: 2.468, box: null }, { t: 4.286, box: null }];
     expect(beatEnds(beats, events)).toEqual([{ from: 2.468, to: 4.286 }, { from: 4.286, to: 6.9 }]);
+  });
+
+  it("runs a beat on through a camera that follows the pointer", () => {
+    const beats = [{ from: 1, to: 2 }];
+    const events = [{ t: 1, box: null }, { t: 1.5, box: { x: 1, y: 1, width: 5, height: 5 }, follow: true as const }, { t: 3, box: null }];
+    expect(beatEnds(beats, events)).toEqual([{ from: 1, to: 3 }]);
   });
 });
 
@@ -436,6 +538,11 @@ describe("cameraTrack", () => {
       { at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425, spot: { x: 588, y: 388, width: 124, height: 74 } },
       { at: 6 - CAMERA.ease, dur: CAMERA.ease, scale: 1, x: 720, y: 450, spot: null },
     ]);
+  });
+
+  it("lights the whole frame on a focus that asks for no spot", () => {
+    const moves = cameraTrack([{ t: 1, box, zoom: 1.5, spot: false }], vp, 6);
+    expect(moves[0]).toEqual({ at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425, spot: null });
   });
 
   it("waits for a move to land before the next, and drops one that changes nothing", () => {
@@ -481,8 +588,8 @@ describe("the spotlight and the sped-up badge", () => {
   it("badges each lapse in the clip's own time, and skips one too short to read", () => {
     const lapses = [{ from: 1, to: 3, speed: 2 }, { from: 5, to: 65, speed: 32 }, { from: 70, to: 71, speed: 4 }];
     expect(lapseBadges(lapses)).toEqual([
-      { from: 1, to: 2, speed: 2 },
-      { from: 4, to: 5.875, speed: 32 },
+      { from: 1, to: 2, speed: 2, label: "+2 s" },
+      { from: 4, to: 5.875, speed: 32, label: "+60 s" },
     ]);
   });
 
@@ -494,7 +601,15 @@ describe("the spotlight and the sped-up badge", () => {
   });
 
   it("reads a lapse's derived speed as a whole number on its badge", () => {
-    expect(lapseBadges([{ from: 0, to: 28.5, speed: 31.67 }])).toEqual([{ from: 0, to: 0.9, speed: 32 }]);
+    expect(lapseBadges([{ from: 0, to: 28.5, speed: 31.67 }])).toEqual([{ from: 0, to: 0.9, speed: 32, label: "+29 s" }]);
+  });
+
+  it("labels a lapse by the real time it covers, as a clock would", () => {
+    expect(lapseLabel(45)).toBe("+45 s");
+    expect(lapseLabel(89)).toBe("+89 s");
+    expect(lapseLabel(180)).toBe("+3 min");
+    expect(lapseLabel(600)).toBe("+10 min");
+    expect(lapseLabel(7200)).toBe("+2 h");
   });
 });
 
@@ -505,6 +620,32 @@ describe("the camera's tail and time-lapsed waits", () => {
     expect(cameraTail([{ t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }, { t: 2, box: null }])).toBe(0);
     // the last event by time, whatever order they were logged in
     expect(cameraTail([{ t: 5, box: null }, { t: 1, box: { x: 1, y: 1, width: 5, height: 5 } }])).toBe(0);
+  });
+
+  it("keeps a lapse as short as its speed: a run of frames closer than a gap thins to one per gap", () => {
+    // 180 s of frames at 30 a second, retimed into 0.6 s of clip: each is
+    // 0.0001 s apart, and the joined clip gave each at least 0.001 s, so the
+    // lapse played for 5.4 s (#2722).
+    const lapse = Array.from({ length: 5400 }, (_, i) => ({ t: 1 + i * (0.6 / 5400), data: String(i) }));
+    const frames = [{ t: 0, data: "a" }, ...lapse, { t: 1.6, data: "z" }];
+    const kept = thinFrames(frames, 0.04);
+    expect(kept[0]).toEqual({ t: 0, data: "a" });
+    expect(kept[kept.length - 1]).toEqual({ t: 1.6, data: "z" });
+    // 0.6 s at one frame per 0.04 s, give or take the run's ends.
+    expect(kept.length).toBeGreaterThanOrEqual(15);
+    expect(kept.length).toBeLessThanOrEqual(19);
+    for (let i = 1; i < kept.length - 1; i++) expect(kept[i].t - kept[i - 1].t).toBeGreaterThanOrEqual(0.04);
+    // the joined clip is as long as the frames span, not stretched
+    const total = concatList(kept, (i) => `f${i}.jpg`)
+      .split("\n")
+      .filter((l) => l.startsWith("duration"))
+      .reduce((sum, l) => sum + Number(l.split(" ")[1]), 0);
+    expect(total).toBeCloseTo(1.6 + 0.04, 2);
+  });
+
+  it("leaves frames already a gap apart alone", () => {
+    const frames = [0, 0.05, 0.1, 0.2].map((t) => ({ t, data: String(t) }));
+    expect(thinFrames(frames, 0.04)).toEqual(frames);
   });
 
   it("shortens each second inside a lapse by its speed and leaves the rest", () => {
@@ -541,7 +682,50 @@ describe("the camera's tail and time-lapsed waits", () => {
     expect(lapseSpeed(28.5, 0.9)).toBeCloseTo(31.67);
     expect(lapseSpeed(0.4, 0.9)).toBe(1);
     expect(lapseSpeed(0, 0.9)).toBe(1);
-    expect(lapseSpeed(120, 0.9)).toBe(MAX_FAST);
+    expect(lapseSpeed(180, 0.6)).toBeCloseTo(300);
+    expect(lapseSpeed(1200, 0.9)).toBe(MAX_FAST);
+  });
+});
+
+// #2722: a wait may be for time itself, seconds of the lab running on, so a
+// stretch of the room's record is long enough to see: off camera in setup (the
+// room down for ten minutes before the shot), or on camera as a lapse (minutes
+// after the fix, played in seconds under the speed badge).
+describe("a timed wait", () => {
+  const loop = (steps: string) => `${LAB}shots:\n  - id: t\n    kind: loop\n    alt: x\n    start: /a\n    steps:\n${steps}`;
+
+  it("waits for seconds, with no target, and a lapse plays it in the lapse's seconds", () => {
+    const { list, problems } = parseShots(loop("      - wait: { seconds: 180 }\n        lapse: 0.6\n"));
+    expect(problems).toEqual([]);
+    const step = list!.shots[0].steps[0];
+    expect(step).toMatchObject({ kind: "wait", seconds: 180, lapse: 0.6 });
+    expect(step.target).toBeUndefined();
+    expect(authoredSeconds(list!.shots[0])).toBeCloseTo((600 + 300) / 1000);
+  });
+
+  it("spends its whole seconds on screen without a lapse", () => {
+    const { list } = parseShots(loop("      - wait: { seconds: 2 }\n"));
+    expect(authoredSeconds(list!.shots[0])).toBeCloseTo((2000 + 300) / 1000);
+  });
+
+  it("refuses no seconds, too many, a target beside them, and a focus on itself", () => {
+    expect(parseShots(loop("      - wait: { seconds: 0 }\n")).problems.join()).toContain("seconds");
+    expect(parseShots(loop("      - wait: { seconds: 999 }\n")).problems.join()).toContain("seconds");
+    expect(parseShots(loop("      - wait: { seconds: 5, text: Done }\n")).problems.join()).toContain("either a target or seconds");
+    expect(parseShots(loop("      - wait: { seconds: 5 }\n        focus: here\n")).problems.join()).toContain("focus here needs a target");
+  });
+
+  it("runs off camera in setup, up to fifteen minutes", () => {
+    const setup = (secs: number) =>
+      `${LAB}shots:\n  - id: s\n    kind: still\n    alt: x\n    start: /a\n    setup:\n      - wait: { seconds: ${secs} }\n`;
+    const ok = parseShots(setup(600));
+    expect(ok.problems).toEqual([]);
+    expect(ok.list!.shots[0].setup[0]).toEqual({ kind: "pause", seconds: 600 });
+    expect(parseShots(setup(901)).problems.join()).toContain("seconds");
+    // A pause names no resource for the preflight to check.
+    expect(referencedResources(ok.list!.shots[0].setup, "/systems/hq-mr86-1")).toEqual([
+      { kind: "system", id: "hq-mr86-1", path: "/systems/hq-mr86-1" },
+    ]);
   });
 });
 

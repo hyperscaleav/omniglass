@@ -1201,11 +1201,15 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, rng HealthRang
 		}
 		rep.Slots = append(rep.Slots, row)
 	}
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, rng); err != nil {
+	var carried string
+	if rep.Transitions, carried, err = healthTransitions(ctx, p.pool, "system", sys.ID, rng); err != nil {
 		return nil, err
 	}
 	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "system", sys.ID, rng); err != nil {
 		return nil, err
+	}
+	if rep.CarriedIn == "" {
+		rep.CarriedIn = carried
 	}
 	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "system", sys.ID); err != nil {
 		return nil, err
@@ -1348,11 +1352,15 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, rng Health
 	}
 	rep.Systems = systems
 	rep.Verdict = health.RollUp(systemHealthValues(systems)).String()
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, rng); err != nil {
+	var carried string
+	if rep.Transitions, carried, err = healthTransitions(ctx, p.pool, "location", loc.ID, rng); err != nil {
 		return nil, err
 	}
 	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "location", loc.ID, rng); err != nil {
 		return nil, err
+	}
+	if rep.CarriedIn == "" {
+		rep.CarriedIn = carried
 	}
 	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "location", loc.ID); err != nil {
 		return nil, err
@@ -1374,11 +1382,15 @@ func (p *PG) ComponentHealthReport(ctx context.Context, componentName string, rn
 	if rep.Verdict, err = p.ComponentHealth(ctx, c.ID); err != nil {
 		return nil, err
 	}
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "component", c.ID, rng); err != nil {
+	var carried string
+	if rep.Transitions, carried, err = healthTransitions(ctx, p.pool, "component", c.ID, rng); err != nil {
 		return nil, err
 	}
 	if rep.CarriedIn, err = healthCarriedIn(ctx, p.pool, "component", c.ID, rng); err != nil {
 		return nil, err
+	}
+	if rep.CarriedIn == "" {
+		rep.CarriedIn = carried
 	}
 	if rep.FirstRecorded, err = healthFirstRecorded(ctx, p.pool, "component", c.ID); err != nil {
 		return nil, err
@@ -1527,31 +1539,58 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 // rather than the component-and-instance one. ownerID follows recordHealth's
 // contract (see ownerArcExprN): an id for component/system/location, a name for
 // outpost. The window's boundary is the database's own (tsSince, #719).
-func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) ([]HealthTransition, error) {
+func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) ([]HealthTransition, string, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	bound, args := rng.predicate("ts", ownerID, healthKey)
-	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
-		where %s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
-		  and provenance = 'calculated' and %s
-		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1), bound)
+	owner := fmt.Sprintf(`%s = %s and property_type_id = (select id from property_type_in_effect() property_type where name = $2) and instance = ''
+		  and provenance = 'calculated'`, col, ownerArcExprN(ownerKind, 1))
+	var sql string
+	var args []any
+	if rng.Since.IsZero() && rng.Window > 0 {
+		// The default window (#2735): one statement decides its start on the
+		// database's clock and reads both the edges inside it and the newest
+		// edge before it, the health carried in, so the two can never disagree
+		// about where the window opened. The carried-in row is flagged.
+		args = []any{ownerID, healthKey, rng.Window.Seconds()}
+		until := ""
+		if !rng.Until.IsZero() {
+			args = append(args, rng.Until)
+			until = fmt.Sprintf(" and ts <= $%d", len(args))
+		}
+		sql = fmt.Sprintf(`with b as (select now() - make_interval(secs => $3) as since)
+			(select ts, value #>> '{}', false as carried, id from property, b where %[1]s and ts >= b.since%[2]s)
+			union all
+			(select ts, value #>> '{}', true, id from property, b where %[1]s and ts < b.since order by ts desc, id desc limit 1)
+			order by carried desc, ts asc, id asc`, owner, until)
+	} else {
+		var bound string
+		bound, args = rng.predicate("ts", ownerID, healthKey)
+		sql = fmt.Sprintf(`select ts, value #>> '{}', false, id from property where %s and %s order by ts asc, id asc`, owner, bound)
+	}
 	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("storage: health transitions %s/%s: %w", ownerKind, ownerID, err)
+		return nil, "", fmt.Errorf("storage: health transitions %s/%s: %w", ownerKind, ownerID, err)
 	}
 	defer rows.Close()
 
 	out := []HealthTransition{}
+	carried := ""
 	for rows.Next() {
 		var t HealthTransition
-		if err := rows.Scan(&t.TS, &t.Value); err != nil {
-			return nil, fmt.Errorf("storage: scan health transition %s/%s: %w", ownerKind, ownerID, err)
+		var isCarried bool
+		var id int64
+		if err := rows.Scan(&t.TS, &t.Value, &isCarried, &id); err != nil {
+			return nil, "", fmt.Errorf("storage: scan health transition %s/%s: %w", ownerKind, ownerID, err)
+		}
+		if isCarried {
+			carried = t.Value
+			continue
 		}
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	return out, carried, rows.Err()
 }
 
 // healthFirstRecorded is the timestamp of the owner's first recorded edge, nil
@@ -1571,9 +1610,12 @@ func healthFirstRecorded(ctx context.Context, q txQuerier, ownerKind, ownerID st
 	return first, nil
 }
 
-// healthCarriedIn is the verdict in force at rng.Since (#2425): the newest
-// recorded edge strictly before it, or "" when the range has no explicit
-// Since or nothing was recorded before it. One indexed row, however long ago.
+// healthCarriedIn is the health in force at an explicit rng.Since (#2425): the
+// newest recorded edge strictly before it, or "" when the range has no
+// explicit Since or nothing was recorded before it. The default window's
+// carried-in health comes with its transitions, from the one statement that
+// decides that window's start on the database's clock (healthTransitions,
+// #2735). One indexed row, however long ago.
 func healthCarriedIn(ctx context.Context, q txQuerier, ownerKind, ownerID string, rng HealthRange) (string, error) {
 	if rng.Since.IsZero() {
 		return "", nil

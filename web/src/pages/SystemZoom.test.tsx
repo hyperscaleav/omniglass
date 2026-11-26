@@ -6,6 +6,7 @@ import Systems from "./Systems";
 import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
+import { seedSystemHealth } from "../lib/health.testkit";
 import { systemSlotsKey } from "../lib/system_slots";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
@@ -133,7 +134,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("szp-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update"] }]);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
+  seedSystemHealth(qc, uuidFor("szp-sys"), healthOverride);
   qc.setQueryData([...systemSlotsKey(uuidFor("szp-sys"))], declared);
   qc.setQueryData([...systemMembersKey(uuidFor("szp-sys"))], membersOverride ?? memberRowsOf(view, uuidFor("szp-sys")));
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
@@ -504,7 +505,7 @@ describe("the map tab (#791)", () => {
     const before = screen.getByTestId("mapmarker-room-mic-1");
     // A real change (a new transition), so structural sharing hands the page
     // a new payload and everything derived from it recomputes.
-    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], {
+    seedSystemHealth(r.qc, uuidFor("szp-sys"), {
       ...health,
       transitions: [...(health.transitions ?? []), { ts: "2026-08-16T09:00:00Z", health: "degraded" }],
     });
@@ -913,9 +914,10 @@ describe("the metrics grid on the system page (#794, #2424)", () => {
       expect(screen.queryByLabelText("From")).toBeNull();
     });
 
-    it("carries no range control on Activity, whose reads keep their own fixed windows", () => {
+    // Activity follows the range too (#2741), opening on its 30 days.
+    it("carries the range control on Activity, showing the window it reads", () => {
       mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`, health, METRICS);
-      expect(screen.queryByTestId("time-range-trigger")).toBeNull();
+      expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 30 days");
     });
   });
 
@@ -990,7 +992,7 @@ describe("the location is context, the system the subject (#872)", () => {
   it("offers Retry when a read fails, instead of a blank", async () => {
     const r = mount();
     r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], undefined);
-    r.qc.getQueryCache().find({ queryKey: [...systemHealthKey(uuidFor("szp-sys"))] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
+    r.qc.getQueryCache().find({ queryKey: [...systemHealthKey(uuidFor("szp-sys"))], exact: true })?.setState({ status: "error", error: new Error("boom"), data: undefined });
     expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
@@ -1076,7 +1078,7 @@ describe("the location configures beside its system (#872)", () => {
 
   it("gives an unplaced system no Location section", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-other")}?tab=configure`);
-    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, slots: [], transitions: [] });
+    seedSystemHealth(r.qc, uuidFor("szp-other"), { ...health, slots: [], transitions: [] });
     r.qc.setQueryData([...systemSlotsKey(uuidFor("szp-other"))], []);
     r.qc.setQueryData([...systemMetricsKey(uuidFor("szp-other"))], []);
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
@@ -1266,7 +1268,7 @@ describe("the system view refreshes (#940)", () => {
       const url = (input as Request).url;
       if (url.includes("/views:watch")) return watchResponse();
       gets.push(new URL(url).pathname);
-      if (url.endsWith("/health")) return json(alarmed ? moved() : calm);
+      if (new URL(url).pathname.endsWith("/health")) return json(alarmed ? moved() : calm);
       if (url.endsWith("/members")) return json({ system: "boardroom", members: memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": alarmed ? "outage" : "healthy" }) });
       if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
@@ -1328,7 +1330,7 @@ describe("the system view refreshes (#940)", () => {
       const url = (input as Request).url;
       if (url.includes("/views:watch")) return watchResponse();
       gets.push(new URL(url).pathname);
-      if (url.endsWith("/health")) return json(calm);
+      if (new URL(url).pathname.endsWith("/health")) return json(calm);
       if (url.endsWith("/members")) return json({ members: memberRowsOf(big, uuidFor("szp-sys")) });
       if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
@@ -1352,9 +1354,10 @@ describe("the system view refreshes (#940)", () => {
     // No member is read on its own; the members' alarms are one read.
     expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
     expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
-    // The whole refetch: health, slots, members, alarms. The events and logs
+    // The whole refetch: health (the current report, and the same report over
+    // Activity's range, #2741), slots, members, alarms. The events and logs
     // lists, and the metrics grid, follow in a later slice (#2731).
-    expect([...gets].sort()).toEqual(["/alarms", "/health", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
+    expect([...gets].sort()).toEqual(["/alarms", "/health", "/health", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
   it("holds what still polls while the tab is hidden", async () => {

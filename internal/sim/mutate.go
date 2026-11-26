@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -213,6 +214,64 @@ func compileOneFuncs(path string, value any, enum []string, pattern string, opti
 // a failure should fail the request closed (default) or only log.
 func applyMutations(root map[string]any, muts []mutation, data templateData) (diffs map[string]any, errs []error) {
 	return applyMutationsEach(root, muts, data)
+}
+
+// applyChangedMutations is the form a behavior tick uses (#2754): the
+// per-mutation semantics of applyMutations, but a mutation that writes the
+// value its path already holds is no diff, so a timer that rewrites a
+// watched path every tick streams only what moved.
+func applyChangedMutations(root map[string]any, muts []mutation, data templateData) (diffs map[string]any, errs []error) {
+	if len(muts) == 0 {
+		return nil, nil
+	}
+	diffs = make(map[string]any, len(muts))
+	for _, m := range muts {
+		one, err := applyOneTracked(root, m, data)
+		errs = append(errs, err...)
+		for p, v := range one {
+			diffs[p] = v
+		}
+	}
+	if len(diffs) == 0 {
+		diffs = nil
+	}
+	return diffs, errs
+}
+
+// applyOneTracked applies one mutation and reports it as a diff only when
+// the value it wrote differs from what its path held.
+func applyOneTracked(root map[string]any, m mutation, data templateData) (map[string]any, []error) {
+	var before any
+	if path, err := renderTmpl(m.path, data); err == nil {
+		before = deepCopyValue(lookupStatePath(root, path))
+	}
+	diffs, errs := applyMutationsEach(root, []mutation{m}, data)
+	for p, v := range diffs {
+		if before != nil && sameValue(before, v) {
+			delete(diffs, p)
+		}
+	}
+	return diffs, errs
+}
+
+// sameValue is a state value unchanged by a write: equal numbers whatever
+// their Go type (a profile's YAML int beside a template's int64), else deep
+// equality.
+func sameValue(a, b any) bool {
+	if isNumber(a) && isNumber(b) {
+		fa, _, _ := toFloat(a)
+		fb, _, _ := toFloat(b)
+		return fa == fb
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+func isNumber(v any) bool {
+	switch v.(type) {
+	case int, int32, int64, uint, uint32, uint64, float32, float64:
+		return true
+	}
+	return false
 }
 
 // applyRouteMutations is the all-or-nothing form a request route uses:

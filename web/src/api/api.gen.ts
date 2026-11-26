@@ -4451,7 +4451,7 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  /** The health in force when the range opened: the last recorded edge before its start, whether the caller bounded the start (an explicit since, or the one derived from until) or the default window opened it. Absent when nothing was recorded before it. A timeline draws the stretch before the first transition from it, and uptime counts that stretch as it */
   carried_in?: string;
   /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
   first_recorded_at?: string;
