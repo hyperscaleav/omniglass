@@ -243,16 +243,14 @@ shots:
       # its timeline: healthy, down for the ten minutes and the fix, healthy again.
       - wait: { seconds: 180 }
         lapse: 0.6
-      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Timeline")'
+      # The room's own page opens on its timeline at the last hour (the page
+      # takes its tab and range from the address).
+      - goto: /systems/hq-mr86-1?tab=timeline&range=1h
         focus: out
         hold: 200
-      - click: 'aside[data-blade] [data-testid=time-range-trigger]'
-        hold: 200
-      - click: '[data-testid=time-range-preset-1h]'
-        hold: 200
-      - wait: { selector: 'aside[data-blade] [data-testid=timeline-health-row]' }
-        focus: 'aside[data-blade] [data-testid=timeline-overlay]'
-        expect: ["Health", "This system"]
+      - wait: { selector: '[data-testid=timeline-health-row]' }
+        focus: '[data-testid=timeline-overlay]'
+        expect: ["Health", "This system", "Last 1 hour"]
         zoom: 1.6
         hold: 2400
 
