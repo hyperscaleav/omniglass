@@ -31,6 +31,7 @@ type viewsFixture struct {
 	base     string
 	ownerTok string
 	c        *apiClient
+	gw       *storage.PG
 }
 
 func newViewsFixture(t *testing.T, opts ...api.Option) *viewsFixture {
@@ -63,7 +64,7 @@ func newViewsFixture(t *testing.T, opts ...api.Option) *viewsFixture {
 	t.Cleanup(busSrv.Shutdown)
 	srv := httptest.NewServer(api.NewHandler(gw, append([]api.Option{api.WithTelemetryPublisher(busSrv)}, opts...)...))
 	t.Cleanup(srv.Close)
-	return &viewsFixture{ctx: ctx, dsn: dsn, base: srv.URL, ownerTok: ownerTok, c: &apiClient{t: t, ctx: ctx, base: srv.URL}}
+	return &viewsFixture{ctx: ctx, dsn: dsn, base: srv.URL, ownerTok: ownerTok, c: &apiClient{t: t, ctx: ctx, base: srv.URL}, gw: gw}
 }
 
 // push lands telemetry on a component through the real push route.
@@ -155,6 +156,7 @@ type viewTailWire struct {
 type watch struct {
 	events chan sseEvent
 	status int
+	header http.Header
 	cancel context.CancelFunc
 }
 
@@ -163,8 +165,14 @@ type watch struct {
 func (f *viewsFixture) openWatch(t *testing.T, tok string, bindings []map[string]any, lastEventID string) *watch {
 	t.Helper()
 	raw, _ := json.Marshal(bindings)
+	return f.openWatchQuery(t, tok, "bindings="+url.QueryEscape(string(raw)), lastEventID)
+}
+
+// openWatchQuery opens one stream with the query given.
+func (f *viewsFixture) openWatchQuery(t *testing.T, tok, query, lastEventID string) *watch {
+	t.Helper()
 	ctx, cancel := context.WithCancel(f.ctx)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.base+"/api/v1/views:watch?bindings="+url.QueryEscape(string(raw)), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.base+"/api/v1/views:watch?"+query, nil)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -177,7 +185,7 @@ func (f *viewsFixture) openWatch(t *testing.T, tok string, bindings []map[string
 		cancel()
 		t.Fatalf("open watch: %v", err)
 	}
-	w := &watch{events: make(chan sseEvent, 256), status: resp.StatusCode, cancel: cancel}
+	w := &watch{events: make(chan sseEvent, 256), status: resp.StatusCode, header: resp.Header, cancel: cancel}
 	t.Cleanup(cancel)
 	go func() {
 		defer resp.Body.Close()
@@ -575,4 +583,169 @@ func TestViewsWatchRefusesPastThePerUserLimit(t *testing.T) {
 		w.cancel()
 		return w.status == http.StatusOK
 	})
+}
+
+// changedOf decodes a changed event.
+func changedOf(t *testing.T, ev sseEvent) (out struct {
+	Topic, Kind, ID, Op string
+	V                   uint64
+}) {
+	t.Helper()
+	if err := json.Unmarshal([]byte(ev.Data), &out); err != nil {
+		t.Fatalf("decode changed %q: %v", ev.Data, err)
+	}
+	return out
+}
+
+// topicsQuery is a watch query following topics alone.
+func topicsQuery(topics, cursor string) string {
+	q := "topics=" + url.QueryEscape(topics)
+	if cursor != "" {
+		q += "&topics_cursor=" + url.QueryEscape(cursor)
+	}
+	return q
+}
+
+// A watch's topics name each entity a write moved (#2731): a slot declared
+// on a system is a change to the system, and an alarm on a component a
+// change to it, each on the stream within a second of the write committing.
+// The stream says not to buffer it and when to reconnect.
+func TestViewsWatchTopicsNameAChange(t *testing.T) {
+	t.Parallel()
+	f := newViewsFixture(t)
+	all := scope.Set{All: true}
+	loc := "loc-a"
+	sys, err := f.gw.CreateSystem(f.ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &loc}, all, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	w := f.openWatchQuery(t, f.ownerTok, topicsQuery("system:sys-a,component:codec-a", ""), "")
+	if w.status != http.StatusOK || w.header.Get("X-Accel-Buffering") != "no" || w.header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("the watch answered %d %v", w.status, w.header)
+	}
+	w.until(t, "the stream's opening mark", func(ev sseEvent) bool { return ev.Event == "mark" })
+
+	at := time.Now()
+	if _, err := f.gw.SetSystemSlot(f.ctx, "", "system", "sys-a", storage.SystemSlotSpec{Name: "display", Quorum: 1}); err != nil {
+		t.Fatalf("declare a slot: %v", err)
+	}
+	w.until(t, "the system's change", func(ev sseEvent) bool {
+		if ev.Event != "changed" {
+			return false
+		}
+		c := changedOf(t, ev)
+		return c.Topic == "system:sys-a" && c.Kind == "system" && c.ID == sys.ID && c.Op == "update"
+	})
+	if took := time.Since(at); took > time.Second {
+		t.Fatalf("the system's change reached the stream %s after the write, want within a second", took)
+	}
+	if _, err := f.gw.RaiseAlarm(f.ctx, "", "codec-a", storage.AlarmSpec{Severity: "high", Message: "down", DedupKey: "down"}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	w.until(t, "the component's change", func(ev sseEvent) bool {
+		return ev.Event == "changed" && changedOf(t, ev).Topic == "component:codec-a"
+	})
+}
+
+// A viewer scoped to one location follows topics only inside it: a topic
+// outside it is the same 404 as one that does not exist, before any stream
+// opens, and a change to an entity outside it never appears on their stream.
+func TestViewsWatchTopicsAreScoped(t *testing.T) {
+	t.Parallel()
+	f := newViewsFixture(t)
+	var locA, codecB string
+	conn, err := pgx.Connect(f.ctx, f.dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	if err := conn.QueryRow(f.ctx, `select (select id::text from location where name = 'loc-a'), (select id::text from component where name = 'codec-b')`).Scan(&locA, &codecB); err != nil {
+		t.Fatalf("ids: %v", err)
+	}
+	conn.Close(f.ctx)
+	viewer := setupScopedViewer(t, f.ctx, f.dsn, "group-a-topics", "viewer", "location", locA)
+
+	for _, topic := range []string{"component:codec-b", "component:" + codecB, "component:no-such-codec", "system:no-such-system"} {
+		if status, body := f.c.send(viewer, http.MethodGet, "/views:watch?"+topicsQuery(topic, ""), nil); status != http.StatusNotFound {
+			t.Fatalf("a topic %s outside the viewer's scope: %d %s, want the non-disclosing 404", topic, status, body)
+		}
+	}
+	for _, bad := range []string{"", "location:loc-a", "codec-a"} {
+		if status, _ := f.c.send(viewer, http.MethodGet, "/views:watch?"+topicsQuery(bad, ""), nil); status != http.StatusUnprocessableEntity {
+			t.Fatalf("topics %q: %d, want 422", bad, status)
+		}
+	}
+
+	w := f.openWatchQuery(t, viewer, topicsQuery("component:codec-a", ""), "")
+	w.until(t, "the stream's opening mark", func(ev sseEvent) bool { return ev.Event == "mark" })
+	if _, err := f.gw.RaiseAlarm(f.ctx, "", "codec-b", storage.AlarmSpec{Severity: "high", Message: "down", DedupKey: "down"}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	if _, err := f.gw.RaiseAlarm(f.ctx, "", "codec-a", storage.AlarmSpec{Severity: "high", Message: "down", DedupKey: "down"}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	w.until(t, "codec-a's change", func(ev sseEvent) bool {
+		if strings.Contains(ev.Data, codecB) || strings.Contains(ev.Data, "codec-b") {
+			t.Fatalf("the group A viewer's stream named codec-b: %s", ev.Data)
+		}
+		return ev.Event == "changed" && changedOf(t, ev).Topic == "component:codec-a"
+	})
+}
+
+// A reconnect from the last event id the stream sent carries the change made
+// while it was down and repeats none it delivered; a position the tail cannot
+// order (another boot's) is a reset naming the topics, so the page refetches.
+func TestViewsWatchTopicsResumeWithNoRepeat(t *testing.T) {
+	t.Parallel()
+	f := newViewsFixture(t)
+	raise := func(key string) {
+		t.Helper()
+		if _, err := f.gw.RaiseAlarm(f.ctx, "", "codec-a", storage.AlarmSpec{Severity: "high", Message: key, DedupKey: key}); err != nil {
+			t.Fatalf("raise alarm: %v", err)
+		}
+	}
+	w := f.openWatchQuery(t, f.ownerTok, topicsQuery("component:codec-a", ""), "")
+	w.until(t, "the stream's opening mark", func(ev sseEvent) bool { return ev.Event == "mark" })
+	raise("one")
+	var last string
+	var first uint64
+	w.until(t, "the first change", func(ev sseEvent) bool {
+		if ev.ID != "" {
+			last = ev.ID
+		}
+		if ev.Event == "changed" {
+			first = changedOf(t, ev).V
+		}
+		return ev.Event == "changed" && ev.ID != ""
+	})
+	w.cancel()
+
+	raise("two")
+	again := f.openWatchQuery(t, f.ownerTok, topicsQuery("component:codec-a", last), "")
+	var vs []uint64
+	again.until(t, "the change made while the stream was down", func(ev sseEvent) bool {
+		if ev.Event == "changed" {
+			vs = append(vs, changedOf(t, ev).V)
+		}
+		return len(vs) == 1
+	})
+	raise("three")
+	again.until(t, "the next change", func(ev sseEvent) bool {
+		if ev.Event == "changed" {
+			vs = append(vs, changedOf(t, ev).V)
+		}
+		return len(vs) == 2
+	})
+	if vs[0] <= first || vs[1] <= vs[0] {
+		t.Fatalf("the resumed stream carried %v after %d: a change repeated", vs, first)
+	}
+
+	gone := f.openWatchQuery(t, f.ownerTok, topicsQuery("component:codec-a", "0123456789ab.1"), "")
+	select {
+	case ev := <-gone.events:
+		if ev.Event != "reset" || !strings.Contains(ev.Data, `"topics":true`) {
+			t.Fatalf("a position from another boot opened with %+v, want a reset naming the topics", ev)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no reset for a position from another boot")
+	}
 }

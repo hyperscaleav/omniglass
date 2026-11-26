@@ -303,6 +303,7 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := recordHealth(ctx, q, "component", c.ID, health.ComponentValue(effects)); err != nil {
 			return err
 		}
+		p.noteChange(q, "component", c.ID)
 		staffed, err := p.systemsStaffedBy(ctx, q, c.ID)
 		if err != nil {
 			return err
@@ -323,6 +324,10 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 		if err := recordHealth(ctx, q, "system", s.ID, health.SystemValueWith(unconditional, choices)); err != nil {
 			return err
 		}
+		// Every write that moves a system's health, slots or members
+		// recomputes it here, so the recompute is the system's change
+		// notice, whether or not its verdict moved (#2731).
+		p.noteChange(q, "system", s.ID)
 	}
 
 	// A location's verdict reads its children's RECORDED values: its own

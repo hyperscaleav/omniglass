@@ -388,3 +388,32 @@ func TestMarkSucceedsUnderConcurrentCommits(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 }
+
+// A published change lands on the ring as its own commit, after the commits
+// before it, and wakes a waiting reader: the change lane rides the tail's
+// cursor, so a stream resumes rows and changes from one position.
+func TestPublishLandsAChangeOnTheRing(t *testing.T) {
+	h := tail.New(8, 0)
+	c0, _ := h.Mark(func() error { return nil })
+	wake := h.Wait()
+	h.Publish([]tail.Row{{Lane: tail.LaneChange, OwnerKind: "system", OwnerID: "s1", Key: tail.ChangeUpdate}})
+	select {
+	case <-wake:
+	default:
+		t.Fatal("a publish did not wake the waiting reader")
+	}
+	commits, next, err := h.Read(c0, 0)
+	if err != nil || len(commits) != 1 || commits[0].Rows[0].Lane != tail.LaneChange || next != commits[0].Cursor {
+		t.Fatalf("the change on the ring: %v %+v %q", err, commits, next)
+	}
+	h.Publish(nil)
+	if again, _, _ := h.Read(next, 0); len(again) != 0 {
+		t.Fatalf("an empty publish landed: %+v", again)
+	}
+}
+
+// A nil hub publishes nothing and does not panic: a store with no tail.
+func TestPublishOnNilHub(t *testing.T) {
+	var h *tail.Hub
+	h.Publish([]tail.Row{{Lane: tail.LaneChange}})
+}

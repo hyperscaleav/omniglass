@@ -30,7 +30,16 @@ const (
 	LaneProperty Lane = "property"
 	LaneEvent    Lane = "event"
 	LaneLog      Lane = "log"
+	// LaneChange is a state-change notice (#2731): an entity a write changed,
+	// published after its transaction commits, so a live page refetches the
+	// read that shows it. It carries no data: OwnerKind and OwnerID name the
+	// entity, Key the operation.
+	LaneChange Lane = "change"
 )
+
+// ChangeUpdate is the operation a change notice names when an entity's state
+// moved (its health recomputed, a slot or member changed).
+const ChangeUpdate = "update"
 
 // Row is one landed sample, event, or log line, as the store kept it: owner
 // resolved to its uuid, timestamp capped, value normalized. Fields a lane
@@ -156,6 +165,38 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 	}
 	h.mu.Lock()
 	h.settle()
+	h.append(rows, size)
+	wake := h.wake
+	h.wake = make(chan struct{})
+	h.mu.Unlock()
+	close(wake)
+	return nil
+}
+
+// Publish lands rows that are already durable as the next commit: the change
+// lane's notices, which a write's transaction publishes after it commits. It
+// takes no part in Mark's fence, which orders a snapshot against the sample
+// rows it reads; a notice is not in any snapshot, the client refetches its
+// route instead. No rows publishes nothing.
+func (h *Hub) Publish(rows []Row) {
+	if h == nil || len(rows) == 0 {
+		return
+	}
+	size := 0
+	for _, r := range rows {
+		size += RowBytes(r)
+	}
+	h.mu.Lock()
+	h.append(rows, size)
+	wake := h.wake
+	h.wake = make(chan struct{})
+	h.mu.Unlock()
+	close(wake)
+}
+
+// append slots rows as the next commit, dropping the oldest held past the
+// ring's bounds. The caller holds mu.
+func (h *Hub) append(rows []Row, size int) {
 	h.seq++
 	slots := uint64(len(h.ring))
 	if h.seq-h.oldest >= slots {
@@ -167,11 +208,6 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 	for h.maxBytes > 0 && h.held > h.maxBytes && h.oldest < h.seq {
 		h.drop()
 	}
-	wake := h.wake
-	h.wake = make(chan struct{})
-	h.mu.Unlock()
-	close(wake)
-	return nil
 }
 
 // finish ends a commit that publishes nothing.
