@@ -165,7 +165,9 @@ func vroomInACall(t *testing.T) *sim.Device {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]
-	d.TickBehavior("call_cycle")
+	if res := d.Operate(sim.Operation{Kind: "http", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c9001","participants":3}`}); res.Status != http.StatusOK {
+		t.Fatalf("dial = %+v", res)
+	}
 	d.TickBehavior("media_stats")
 	return d
 }
