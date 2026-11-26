@@ -81,10 +81,12 @@ import Tooltip from "./ui/Tooltip";
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// HISTORY_TICK_MS is how often the history and the charts take a new now:
-// a thirty-day strip and a day's sparkline move too little in a second to
-// redraw on every tick.
-const HISTORY_TICK_MS = 60_000;
+// HISTORY_TICK_MS is how often the history and the charts take a new now: the
+// poll's cadence (#2723), so the record beside the header moves when the
+// health that feeds it does, and a recovery reaches Uptime and the bar within
+// one poll. A thirty-day strip still moves too little in a second to redraw on
+// every tick.
+const HISTORY_TICK_MS = LEAF_POLL_MS;
 // SystemDetail (#636, reoriented in #872, one body for both hosts since
 // #2423): a system's whole detail body, rendered by its page
 // (`/systems/:id`, host "page") and by the fleet blade (host "blade") alike.
