@@ -151,7 +151,7 @@ shots:
         focus: '[data-testid=explore-counts]'
         expect: ["systems", "need attention"]
         zoom: 2.6
-        hold: 1300
+        hold: 1100
       # Beat 2: only those rooms, the boardroom among them.
       - click: { role: button, name: need attention }
         focus: 'ul[role=list][aria-label=Matches]'
@@ -166,7 +166,7 @@ shots:
         focus: here
         expect: ["Why", "Display on the wrong input", "display-1"]
         zoom: 2.2
-        hold: 1600
+        hold: 1400
       # Beat 3b: the room's health over time, as a status page reads it: its
       # uptime, the record ending degraded, the stretch still ongoing.
       - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Activity")'
@@ -175,7 +175,7 @@ shots:
         focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
         expect: ["Uptime", "outage"]
         zoom: 1.8
-        hold: 1600
+        hold: 1400
       - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Overview")'
         focus: out
         hold: 200
@@ -219,7 +219,7 @@ shots:
         focus: 'aside[data-blade] [data-testid=leaf-identity]'
         expect: ["Video Input", "hdmi1"]
         zoom: 2.4
-        hold: 1200
+        hold: 1000
       # Beat 7: the display's timeline: the alarm, its Video Input and the
       # command on one axis.
       - click: 'aside[data-blade] [data-testid=component-detail] [role=tab]:text-is("Timeline")'
