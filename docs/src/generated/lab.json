@@ -288,7 +288,7 @@
     {
       "id": "read-a-rooms-uptime-over-an-hour",
       "title": "Read a room's uptime over the last hour",
-      "description": "Open the Huddle Room's Activity, read its Uptime over the last 30 days, pick the last hour on the tab rail, and read the Uptime and history redrawn over that hour.",
+      "description": "Open the Huddle Room's Activity on its 30-day window, pick the last hour on the tab rail, and read the Uptime and history redrawn over that hour.",
       "lab": [],
       "setup": []
     },
