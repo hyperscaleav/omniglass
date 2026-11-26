@@ -145,7 +145,10 @@ shots:
       # The room stays down ten minutes before the shot (#2722), so its hour on
       # the timeline at the end reads healthy, down for that stretch, healthy.
       - wait: { seconds: 600 }
-    start: /explore
+    # The last hour in the address: the room's drawer opens on it, so its
+    # Activity, before the fix and after, draws the outage across that hour
+    # (#2741) rather than as a sliver of 30 days.
+    start: /explore?range=1h
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
     steps:
       # Beat 1: the fleet's count, and how many rooms need attention.
@@ -235,23 +238,21 @@ shots:
       # again, as in beat 3b: the outage closed, its length beside the uptime.
       - wait: { seconds: 180 }
         lapse: 0.6
-      # The room's own page opens on Activity with the last hour in the address
-      # (Activity reads its own 30 days; the Timeline takes the range).
-      - goto: /systems/hq-mr86-1?tab=activity&range=1h
-        focus: out
+      # In the same drawer, a tab away (a page load on a 1,000-system lab
+      # stalls the frames for seconds, so the beats stay in the drawer).
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Activity")'
         hold: 200
-      - wait: { selector: '[data-testid=stretch-0]:has-text("Outage"):not(:has-text("ongoing"))' }
-        focus: '[data-testid=history-tab] > div >> nth=0'
+      - wait: { selector: 'aside[data-blade] [data-testid=stretch-0]:has-text("Outage"):not(:has-text("ongoing"))' }
+        focus: 'aside[data-blade] [data-testid=history-tab] > div >> nth=0'
         expect: ["Uptime", "Outage"]
-        zoom: 1.15
+        zoom: 1.8
         hold: 1800
       # Beat 9: its timeline over that hour, closing in on the outage: healthy,
       # down for the ten minutes and the fix, healthy again.
-      - click: '[data-testid=system-detail] [role=tab]:text-is("Timeline")'
-        focus: out
+      - click: 'aside[data-blade] [data-testid=system-detail] [role=tab]:text-is("Timeline")'
         hold: 200
-      - wait: { selector: '[data-testid=timeline-health-row]' }
-        focus: '[data-testid=timeline-alarm-span]'
+      - wait: { selector: 'aside[data-blade] [data-testid=timeline-health-row]' }
+        focus: 'aside[data-blade] [data-testid=timeline-alarm-span]'
         spot: false
         expect: ["outage"]
         zoom: 2.0
