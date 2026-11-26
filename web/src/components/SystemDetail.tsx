@@ -423,7 +423,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
+                <HealthHistory compact now={historyNow()} transitions={health.data?.transitions ?? []} health={health.data?.health} />
                 <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
                   <Show when={windowAlarms().length > 0}>
                     <span class="absolute right-3 top-0 text-[10px] leading-3 text-base-content/40">▲ alarm raised</span>
