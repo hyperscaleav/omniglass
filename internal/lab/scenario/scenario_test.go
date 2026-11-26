@@ -1076,6 +1076,7 @@ standards:
 		{"not a health", base + block(30, stretch("hq-sign-1", 2, 5, "broken")), `health "broken"`},
 		{"before the window", base + block(30, stretch("hq-sign-1", 30, 5, "degraded")), "days_ago 30"},
 		{"no length", base + block(30, stretch("hq-sign-1", 2, 0, "degraded")), "minutes 0"},
+		{"past the window's end", base + block(30, stretch("hq-sign-1", 1, 24*60, "degraded")), "past the end of the window"},
 		{"overlapping", base + block(30, stretch("hq-sign-1", 2, 60*30, "degraded"), stretch("hq-sign-1", 1, 5, "outage")), "overlaps"},
 		{"no system", base + block(30, stretch("", 2, 5, "degraded")), "names no system"},
 		{"unknown field", base + block(30, stretch("hq-sign-1", 2, 5, "degraded")+"      colour: red\n"), `unknown field "colour"`},

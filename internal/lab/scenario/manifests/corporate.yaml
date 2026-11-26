@@ -132,7 +132,10 @@ pushers:
 # rooms the marketing captures visit, each down a few times, each time for the
 # reason an alarm named. The headquarters boardroom (hq-mr86-1) lost its main
 # display twice; the room the credential capture fixes (hq-mr65-59) lost its
-# video bar once.
+# video bar once. Each health is the one that failure rolls up to live: these
+# rooms' slots carry the default degraded impact. Each instance is an endpoint
+# the component has (the boardroom display's snmp agent, the video bar's https
+# API), which the seed checks.
 health_history:
   days: 30
   stretches:
@@ -157,9 +160,9 @@ health_history:
     - system: hq-mr65-59
       component: videobar-1
       rule: reachability-lost
-      instance: http
+      instance: https
       severity: high
       message: Reachability lost
-      health: outage
+      health: degraded
       days_ago: 16
       minutes: 25

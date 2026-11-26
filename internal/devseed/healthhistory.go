@@ -3,6 +3,7 @@ package devseed
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -25,12 +26,14 @@ type HealthHistory struct {
 // HealthHistoryRows turns a scenario's health storyline (#2728) into the rows a
 // lab seeds, given its systems (name to id), the members of the storyline's
 // systems (system name, then component name, to id) and when the lab started
-// (end). Every system reads healthy from the window's start; each stretch is an
-// edge to its health and one back to healthy, and the alarm its rule raised on
-// the component across it. Every row is before end, so the lab's own record
-// follows the seeded past. A system or component the lab lacks is refused.
-// Pure: the same storyline, fleet and end make the same rows.
-func HealthHistoryRows(h *scenario.HealthHistory, systems map[string]string, members map[string]map[string]string, end time.Time) (HealthHistory, error) {
+// (end), with the endpoint names of each component a stretch names (component
+// id to names). Every system reads healthy from the window's start; each
+// stretch is an edge to its health and one back to healthy, and the alarm its
+// rule raised on the component's endpoint across it. Every row is before end,
+// so the lab's own record follows the seeded past. A system, component or
+// endpoint the lab lacks is refused, so a storyline cannot drift from the
+// catalog. Pure: the same storyline, fleet and end make the same rows.
+func HealthHistoryRows(h *scenario.HealthHistory, systems map[string]string, members map[string]map[string]string, endpoints map[string][]string, end time.Time) (HealthHistory, error) {
 	var out HealthHistory
 	if h == nil {
 		return out, nil
@@ -45,6 +48,9 @@ func HealthHistoryRows(h *scenario.HealthHistory, systems map[string]string, mem
 		comp, ok := members[name][s.Component.Name]
 		if !ok {
 			return out, fmt.Errorf("health history: system %q has no component %q", name, s.Component.Name)
+		}
+		if s.Instance != "" && !slices.Contains(endpoints[comp], s.Instance) {
+			return out, fmt.Errorf("health history: %s's %s has no endpoint %q (it has %v)", name, s.Component.Name, s.Instance, endpoints[comp])
 		}
 		byName[name] = append(byName[name], s)
 		from, to := s.Window(end)
@@ -109,7 +115,22 @@ func SeedHealthHistory(ctx context.Context, gw storage.Gateway, h *scenario.Heal
 			members[name][m.ComponentID] = m.ComponentUUID
 		}
 	}
-	rows, err := HealthHistoryRows(h, systems, members, end)
+	endpoints := map[string][]string{}
+	for _, s := range h.Stretches {
+		comp, ok := members[s.System.Name][s.Component.Name]
+		if _, done := endpoints[comp]; !ok || done {
+			continue // HealthHistoryRows names a missing one
+		}
+		eps, err := gw.ListComponentEndpoints(ctx, comp)
+		if err != nil {
+			return fmt.Errorf("health history: endpoints of %s's %s: %w", s.System.Name, s.Component.Name, err)
+		}
+		endpoints[comp] = []string{}
+		for _, e := range eps {
+			endpoints[comp] = append(endpoints[comp], e.Name)
+		}
+	}
+	rows, err := HealthHistoryRows(h, systems, members, endpoints, end)
 	if err != nil {
 		return err
 	}

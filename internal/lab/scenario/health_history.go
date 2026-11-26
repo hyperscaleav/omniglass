@@ -103,6 +103,8 @@ func checkHealthHistory(m *Manifest) []Problem {
 		}
 		if s.Minutes < 1 {
 			add(s.Line, "the stretch on %q lasts minutes %d", s.System.Name, s.Minutes)
+		} else if s.DaysAgo >= 1 && s.Minutes >= s.DaysAgo*24*60 {
+			add(s.Line, "the stretch on %q lasts minutes %d, past the end of the window it starts %d days before", s.System.Name, s.Minutes, s.DaysAgo)
 		}
 		from, to := s.Window(end)
 		bySystem[s.System.Name] = append(bySystem[s.System.Name], span{from, to, s.Line})

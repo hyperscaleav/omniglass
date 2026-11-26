@@ -198,8 +198,9 @@ the 30 days before the lab started and the showcase rooms carry the stretches th
 each with the alarm that explained it, raised and cleared at the time. Every row it lands is labelled
 `devseed`, and the seeded past ends before the lab's own record begins, which follows it
 ([ADR-2726](/architecture/decisions/#adr-2726-a-throwaway-labs-seed-lands-past-health-and-alarms-labelled-as-seeded)).
-It needs a throwaway scale lab (a kept one refuses it), so the perf labs, which never pass it, measure
-a fleet with no made-up past.
+It needs a throwaway scale lab (a kept one refuses it, as a seeded fleet's lab does), so the perf
+labs, which never pass it, measure a fleet with no made-up past. The seed checks the storyline against
+the fleet before it lands anything: a room, component or endpoint the lab does not have is refused.
 `--sso` runs an identity provider (Dex) beside the lab and configures single sign-on against it,
 with a demo person linked to their identity there, for the walkthrough that signs in through it.
 The provider's address is on the lab network, which a script's browser joins and yours does not,

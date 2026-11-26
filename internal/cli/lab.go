@@ -141,7 +141,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	// The delivery table's proof that a refusal reads as loss (#1698).
 	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	// The marketing captures (#2728) photograph a fleet that has been running.
-	cmd.Flags().BoolVar(&scale.healthHistory, "health-history", false, "a throwaway scale lab: seed the scenario's health storyline, 30 days of made-up health and the alarms behind it, for a capture (needs --ephemeral)")
+	cmd.Flags().BoolVar(&scale.healthHistory, "health-history", false, "a throwaway scale lab (not --keep): seed the scenario's health storyline, 30 days of made-up health and the alarms behind it, for a capture")
 	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
@@ -405,6 +405,9 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	if f.scale.induce {
 		return fmt.Errorf("--induce-unregistered is a scale lab's (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
+	}
+	if f.scale.healthHistory {
+		return fmt.Errorf("--health-history seeds a scale scenario's storyline (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
 	}
 	if f.keep {
 		return fmt.Errorf("--keep keeps a scale lab scenario's data (%s); %q is a seeded fleet, whose lab keeps its data already",
