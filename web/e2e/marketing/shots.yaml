@@ -41,6 +41,11 @@ lab:
   # The recording omnibot plays (internal/lab/omnibot): its calls run for real
   # against the lab, its words are recorded, so no capture does live inference.
   omnibot_replay: corporate-outage
+  # The corporate scenario's health storyline (lab --health-history, #2729): 30
+  # days of health behind every room, the showcase rooms with the past outages
+  # the alarms explained, so a capture of a room's Activity reads a fleet that
+  # has been running rather than one born minutes ago.
+  health_history: true
 
 viewport: { width: 1440, height: 900 }
 

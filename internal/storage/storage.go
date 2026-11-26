@@ -1022,6 +1022,12 @@ type Gateway interface {
 	// RecordPlatformMetrics lands the process's own observations on the
 	// platform components, written by the process (#1625).
 	RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error
+	// LandSeededHealth and LandSeededAlarms land a throwaway lab's seeded
+	// past (#2727): health edges and alarms raised and cleared at past times,
+	// labelled with the seed's source, each its own sentinel (a second landing
+	// writes nothing). A lab's only; the lab plan refuses them outside one.
+	LandSeededHealth(ctx context.Context, source string, edges []SeededHealthEdge) (int, error)
+	LandSeededAlarms(ctx context.Context, source string, alarms []SeededAlarm) (int, error)
 	// OutpostCheckins reads every claimed outpost's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error)
