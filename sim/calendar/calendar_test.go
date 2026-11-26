@@ -36,6 +36,8 @@ func TestValidateNamesTheField(t *testing.T) {
 		"slot_mix ":        func(k *Knobs) { k.SlotMix = map[int]float64{} },
 		"attendance":       func(k *Knobs) { k.Attendance = Range{Min: 5, Max: 2} },
 		"attendance.min":   func(k *Knobs) { k.Attendance = Range{Min: 0, Max: 2} },
+		"booking_rate nan": func(k *Knobs) { k.BookingRate = math.NaN() },
+		"slot_mix inf":     func(k *Knobs) { k.SlotMix = map[int]float64{30: math.Inf(1)} },
 		"hours":            func(k *Knobs) { k.Hours = Hours{Start: 10, End: 9} },
 		"slot_mix weight":  func(k *Knobs) { k.SlotMix = map[int]float64{30: -1} },
 	}

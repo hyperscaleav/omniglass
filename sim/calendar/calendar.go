@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -142,7 +143,7 @@ var slotSizes = []int{15, 30, 60}
 // Validate names the first field that is out of range. Pure.
 func (k Knobs) Validate() error {
 	rate := func(name string, v float64) error {
-		if v < 0 || v > 1 {
+		if !(v >= 0 && v <= 1) { // a NaN is refused too
 			return fmt.Errorf("%s %v is not between 0 and 1", name, v)
 		}
 		return nil
@@ -164,8 +165,8 @@ func (k Knobs) Validate() error {
 		if m != 15 && m != 30 && m != 60 {
 			return fmt.Errorf("slot_mix has a %d-minute slot, not 15, 30 or 60", m)
 		}
-		if w < 0 {
-			return fmt.Errorf("slot_mix weight of the %d-minute slot is %v, below 0", m, w)
+		if !(w >= 0) || math.IsInf(w, 0) {
+			return fmt.Errorf("slot_mix weight of the %d-minute slot is %v, not a finite weight of 0 or more", m, w)
 		}
 		total += w
 	}
