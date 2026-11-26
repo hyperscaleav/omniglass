@@ -111,12 +111,14 @@ func TestComponentHealthHistoryRange(t *testing.T) {
 		t.Errorf("until alone returned %d transitions, want %d", len(got.Transitions), n-1)
 	}
 	// The derived start is a range start the caller bounded, so the 40-day-old
-	// edge is carried in; the default window has no such start and carries none.
+	// edge is carried in; the default window carries it in too, from the start
+	// it opens at (#2735), so a reader never takes its first edge for the
+	// health before it.
 	if got.CarriedIn == "" {
 		t.Errorf("until alone: carried_in is absent, want the 40-day-old edge carried in")
 	}
-	if def := read(owner, "/components/mine/health", http.StatusOK); def.CarriedIn != "" {
-		t.Errorf("default window: carried_in = %q, want absent", def.CarriedIn)
+	if def := read(owner, "/components/mine/health", http.StatusOK); def.CarriedIn == "" || def.CarriedIn != got.CarriedIn {
+		t.Errorf("default window: carried_in = %q, want the 40-day-old edge (%q) carried in", def.CarriedIn, got.CarriedIn)
 	}
 	if got := read(owner, "/components/mine/health?since="+at(-1*time.Hour), http.StatusOK); len(got.Transitions) != 0 {
 		t.Errorf("a range after every edge returned %d transitions, want 0", len(got.Transitions))
@@ -193,8 +195,10 @@ func TestHealthHistoryCarriesInTheHealthAtSince(t *testing.T) {
 	if w := read("/components/quiet/health?since=" + at(-60*24*time.Hour)); w.CarriedIn != "" {
 		t.Errorf("since before every edge: carried_in = %q, want absent", w.CarriedIn)
 	}
-	if w := read("/components/quiet/health"); w.CarriedIn != "" {
-		t.Errorf("no since: carried_in = %q, want absent", w.CarriedIn)
+	// No since: the default window opens 30 days ago, after the quiet
+	// component's 40-day-old edges, so their last one is carried in (#2735).
+	if w := read("/components/quiet/health"); w.CarriedIn != "healthy" {
+		t.Errorf("no since: carried_in = %q, want healthy, carried in at the default window's start", w.CarriedIn)
 	}
 
 	// fresh: first recorded inside the range, so nothing was in force.

@@ -529,6 +529,36 @@
    "description": "The current scene a room is in, as reported by a control panel or processor (idle, presentation, or video conference mode)."
   },
   {
+   "name": "app-mode",
+   "data_type": "string",
+   "label": "App Mode",
+   "description": "The application a conferencing component hosts, as it reports it (a unified-communications client, signage, or standalone)."
+  },
+  {
+   "name": "ucc-signin",
+   "data_type": "string",
+   "label": "UCC Sign-in",
+   "description": "The unified-communications account a conferencing component reports it is signed in as; empty when signed out."
+  },
+  {
+   "name": "touch-pair",
+   "data_type": "string",
+   "label": "Touch Pair",
+   "description": "The touch controller a conferencing component reports paired to it, by its hostname; empty when none is paired."
+  },
+  {
+   "name": "camera-state",
+   "data_type": "string",
+   "label": "Camera State",
+   "description": "Whether a component's camera is on (sending video) or off (its privacy shutter closed), as the component reports it."
+  },
+  {
+   "name": "video-resolution",
+   "data_type": "string",
+   "label": "Video Resolution",
+   "description": "The video resolution a component reports it sends, width by height in pixels (3840x2160)."
+  },
+  {
    "name": "serial-number",
    "data_type": "string",
    "label": "Serial number",
@@ -551,6 +581,24 @@
    "data_type": "string",
    "label": "Model number",
    "description": "The manufacturer model number."
+  },
+  {
+   "name": "hardware-revision",
+   "data_type": "string",
+   "label": "Hardware revision",
+   "description": "The hardware revision of the device, as its manufacturer marks it."
+  },
+  {
+   "name": "hostname",
+   "data_type": "string",
+   "label": "Hostname",
+   "description": "The name the device reports for itself on the network."
+  },
+  {
+   "name": "ip-address",
+   "data_type": "string",
+   "label": "IP address",
+   "description": "The primary IP address the device reports it holds."
   },
   {
    "name": "ucc-room-id",
@@ -1327,6 +1375,66 @@
    "description": "How many peripherals (cameras, microphones, touch panels) a component reports attached to it."
   },
   {
+   "name": "packet-loss-ratio",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 4,
+   "label": "Packet Loss",
+   "description": "The share of a call's media packets a component reports lost, as a fraction (0 to 1); 0 is healthy, and 0 when no call is up."
+  },
+  {
+   "name": "jitter",
+   "data_type": "float",
+   "unit": "ms",
+   "precision": 1,
+   "label": "Jitter",
+   "description": "The variation in a call's media packet arrival a component reports, in milliseconds; 0 when no call is up."
+  },
+  {
+   "name": "bitrate",
+   "data_type": "float",
+   "unit": "kbps",
+   "label": "Bitrate",
+   "description": "The rate a component reports sending a call's video at, in kilobits per second; 0 when no call is up."
+  },
+  {
+   "name": "frame-rate",
+   "data_type": "float",
+   "unit": "fps",
+   "label": "Frame Rate",
+   "description": "The frames per second a component reports sending a call's video at; 0 when no call is up."
+  },
+  {
+   "name": "speaker-level",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Speaker Level",
+   "description": "The output level a component reports at its speakers, as a fraction of its range (0 to 1); 0 when it plays nothing."
+  },
+  {
+   "name": "cpu-utilization",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "CPU Utilization",
+   "description": "How busy a component reports its processor (its CPU or its DSP engine), as a fraction of its capacity (0 to 1)."
+  },
+  {
+   "name": "memory-utilization",
+   "data_type": "float",
+   "unit": "ratio",
+   "precision": 3,
+   "label": "Memory Utilization",
+   "description": "How much of its memory a component reports in use, as a fraction of its capacity (0 to 1)."
+  },
+  {
+   "name": "active-channel-count",
+   "data_type": "int",
+   "label": "Active Channel Count",
+   "description": "The channels a component reports active (carrying signal) of those it has."
+  },
+  {
    "name": "storage-utilization",
    "data_type": "float",
    "unit": "ratio",
@@ -1441,6 +1549,16 @@
    "name": "call-ended",
    "label": "Call Ended",
    "description": "A conferencing endpoint left an active call: call-started's closing half, caught natively or derived. The pair brackets a session for usage reads."
+  },
+  {
+   "name": "participant-joined",
+   "label": "Participant Joined",
+   "description": "Someone joined a conferencing endpoint's call in progress. Caught natively where the device reports it; its payload names the call and the count it reached."
+  },
+  {
+   "name": "participant-left",
+   "label": "Participant Left",
+   "description": "Someone left a conferencing endpoint's call in progress: participant-joined's opposite. Its payload names the call and the count left."
   },
   {
    "name": "input-changed",
@@ -2923,6 +3041,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ]
@@ -2970,6 +3089,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3049,6 +3169,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3099,6 +3220,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3149,6 +3271,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3199,6 +3322,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3736,8 +3860,8 @@
    "label": "Kestrel Device API",
    "version": "1.0.0",
    "transport": "https",
-   "polls": 3,
-   "listeners": 7,
+   "polls": 4,
+   "listeners": 10,
    "commands": 3
   },
   {

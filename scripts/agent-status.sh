@@ -8,7 +8,7 @@
 #   agent-status.sh body        the comment's markdown
 #   agent-status.sh conclusion  the check's conclusion: success, neutral or failure
 #   agent-status.sh replies     the replies agent-fix posts on the review threads
-#                               it fixed, as [{comment_id, body}]
+#                               it read, as [{comment_id, thread_id, body, resolve}]
 #
 # Input is one JSON object on stdin. body reads workflow ("agent-fix" or
 # "agent-build"), state ("working", "done" or "failed"), run_url, pushed (the
@@ -20,8 +20,11 @@
 # pushed. A point counts as fixed only when its sha names one of those commits,
 # so the agent cannot claim a fix it did not push. body shows one line per
 # point, ✅ Fixed in <sha> or ↩️ Not changed, with the reasons collapsed under
-# them; replies answers each fixed point that came from a review comment with
-# "✅ Fixed in <sha>" on its thread (#2224). conclusion reads state and pushed.
+# them; replies answers each review thread a point came from (#2224, #2217):
+# "✅ Fixed in <sha>" and resolve for a fixed one, the reason and the thread left
+# open for an unchanged one. An advisory finding the point marks no_change_needed
+# resolves too. replies also reads threads, the PR's review threads with their
+# comments (GraphQL nodes with databaseId and body). conclusion reads state and pushed.
 #
 # Exit 0 with the answer on stdout; 2 when the input is not a JSON object;
 # 64 on bad usage.
@@ -54,16 +57,35 @@ POINTS='
 			fixed: (.status == "fixed" and $real),
 			sha: (if $real then $sha[:7] else "" end),
 			reason: (.reason // "" | oneline | cut(400)),
+			no_change_needed: (.no_change_needed == true),
 			comment_id: (if (.comment_id | type) == "number" and .comment_id >= 1 and (.comment_id | floor) == .comment_id
 				then .comment_id else null end)
 		}] as $points
 '
 
 if [ "$mode" = replies ]; then
+	# One reply per review thread the agent read (#2217), from the points that
+	# name a review comment of it; threads is the PR's reviewThreads, each with
+	# its comments, which finds the thread of a comment and whether the
+	# reviewer marked its finding advisory. A fixed point replies "Fixed in
+	# <sha>" and resolves. An unchanged one replies with its reason and leaves
+	# the thread open for a person, except an advisory finding the agent says
+	# needs no change, which resolves. A fixed point wins over an unchanged one
+	# on the same thread.
 	printf '%s' "$facts" | jq -c "$POINTS"'
-		| [$points[] | select(.fixed and .comment_id != null)]
-		| unique_by(.comment_id)
-		| map({comment_id, body: "✅ Fixed in \(.sha)"})'
+		| (.threads // [] | map(select(type == "object"))) as $threads
+		| [$points[] | select(.comment_id != null) | . as $p
+			| ([$threads[] | select([.comments.nodes[]?.databaseId] | index($p.comment_id) != null)] | first) as $t
+			| $p + {thread_id: ($t.id // ""),
+				advisory: ((($t.comments.nodes // [])[0].body // "") | contains("<!-- agent-review severity=advisory"))}]
+		| group_by(if .thread_id != "" then .thread_id else (.comment_id | tostring) end)
+		| map(sort_by(if .fixed then 0 else 1 end) | first)
+		| sort_by(.comment_id)
+		| map(
+			if .fixed then {comment_id, thread_id, body: "✅ Fixed in \(.sha)", resolve: (.thread_id != "")}
+			elif .no_change_needed and .advisory and .thread_id != "" then
+				{comment_id, thread_id, body: ("↩️ No change needed" + (if .reason != "" then ": \(.reason)" else "" end)), resolve: true}
+			else {comment_id, thread_id, body: ("↩️ Not changed" + (if .reason != "" then ": \(.reason)" else ", left open for a person" end)), resolve: false} end)'
 	exit 0
 fi
 

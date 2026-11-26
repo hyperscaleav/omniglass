@@ -505,6 +505,8 @@ export type AlarmBody = {
   /** What the alarm is about: one open alarm per (component, dedup_key) */
   dedup_key: string;
   id: string;
+  /** What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component */
+  instance?: string;
   /** The name of the location the alarm's component sits in (its plane root's location); absent when the component is unplaced, and on every read but the fleet queue */
   location?: string;
   /** That location's uuid, the stable form of location; only on the fleet queue */
@@ -4365,6 +4367,8 @@ export type HealthAlarmBody = {
   /** The component's uuid */
   component_id: string;
   id: string;
+  /** What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component */
+  instance?: string;
   message: string;
   raised_at: string;
   severity: string;
@@ -4447,7 +4451,7 @@ export type HealthTransitionBody = {
 export type FleetHealthOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it */
+  /** The health in force when the range opened: the last recorded edge before its start, whether the caller bounded the start (an explicit since, or the one derived from until) or the default window opened it. Absent when nothing was recorded before it. A timeline draws the stretch before the first transition from it, and uptime counts that stretch as it */
   carried_in?: string;
   /** When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range */
   first_recorded_at?: string;

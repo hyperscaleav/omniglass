@@ -182,7 +182,7 @@ describe("ogFetch", () => {
 });
 
 // The client keeps openapi-fetch's typing: a route, its params and its body are
-// checked against the spec at compile time. `npm run typecheck` fails if any
+// checked against the spec at compile time. `pnpm run typecheck` fails if any
 // expected error below stops being one; the calls are never sent.
 describe("client typing", () => {
   it("refuses what the spec does not allow", () => {

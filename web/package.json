@@ -3,16 +3,16 @@
   "private": true,
   "type": "module",
   "engines": {
-    "npm": ">=10"
+    "node": ">=26"
   },
-  "packageManager": "npm@10.9.0",
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gen:api": "orval --config orval.config.mjs && node scripts/gen-api-paths.mjs && npm run gen:settings-schema",
+    "gen:api": "orval --config orval.config.mjs && node scripts/gen-api-paths.mjs && pnpm run gen:settings-schema",
     "gen:settings-schema": "node scripts/gen-settings-schema.mjs",
     "test:e2e": "playwright test"
   },

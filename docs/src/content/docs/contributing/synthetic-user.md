@@ -133,7 +133,7 @@ lives in the versioned skill:
 ```text
 Omniglass synthetic user: run tonight's mission. In the hyperscaleav/omniglass clone in this
 environment, git fetch origin and create a fresh detached worktree of origin/main under
-.claude/worktrees/explore-<YYYY-MM-DD>, and work only there: cd web && npm ci, then make.
+.claude/worktrees/explore-<YYYY-MM-DD>, and work only there: cd web && pnpm install --frozen-lockfile, then make.
 Read CLAUDE.md, then read .claude/skills/explore/SKILL.md and follow it end to end: pick the
 mission, hold its lab, pursue the goal as its persona, bring the picked lenses, dry-run then
 file with explorer.mjs (resolving any possible duplicates), release the lab. Find and file

@@ -315,7 +315,7 @@ function DeviceTable(props: { outpost: PlatformSimOutpost; query: Signal<string>
               {(d) => (
                 <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
                   <td class="whitespace-nowrap align-middle">
-                    <Tooltip as={A} href={`/simulation?c=${encodeURIComponent(d.component_id)}`} class="font-medium hover:underline" content="Open the device's drawer on the Simulation page">
+                    <Tooltip as={A} href={`/simulation?c=${encodeURIComponent(d.component_id)}&tab=impairments`} class="font-medium hover:underline" content="Open the device's drawer on the Simulation page">
                       {d.component || d.component_id}
                     </Tooltip>
                   </td>

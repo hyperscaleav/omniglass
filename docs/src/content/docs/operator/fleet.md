@@ -85,7 +85,7 @@ screenshots:
         selector: "role=tab[name='Activity']"
       - action: click
         selector: "[data-testid=stretch-0] button"
-    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
+    alt: "The Activity tab, statuspage style: the 30-day uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
@@ -396,32 +396,42 @@ and the arrow keys step its buckets (Home and End jump to the ends, Escape clear
 
 ::screenshot{#fleet-data}
 
-The **time range** at the end of Overview's tab rail sets that window for every chart on the
-page: the last 1 hour, 6 hours, 24 hours (the default), 7 days or 30 days, each sliding to now,
-or a custom range with a fixed start and end in your local time. The range is part of the
+The **time range** at the end of the tab rail sets that window for every chart on the page and
+for Activity's health history: the last 1 hour, 6 hours, 24 hours, 7 days or 30 days, each
+sliding to now, or a custom range with a fixed start and end in your local time. With no range
+picked, Overview and the Timeline open on the last 24 hours and Activity on the last 30 days, the
+window a status page leads with; the picker on each tab shows the window that tab reads. Pick a
+range on any tab and it holds on every tab, the last 24 hours included. The range is part of the
 address (`?range=7d`, or `?from=` and `?to=` for a custom range), so a link you copy opens on
 the same window for whoever follows it, and an address with a range it cannot read opens on the
 default rather than failing. A custom range is read through the [views](/architecture/views/)
 read, so it is offered only to a caller who holds `view:read`; a preset needs only the
-system's own read. A link carrying a custom range, opened by someone without `view:read`, shows the
-last 24 hours and says why. Activity keeps its fixed windows for now (30 days of health history, 24 hours
-of events and logs), so the control is not on that tab.
+system's own read. A link carrying a custom range, opened by someone without `view:read`, shows each
+tab's default and says why. A system's panel over another page keeps a range of its own: it opens on
+the page's, and a pick in the panel leaves the page's address alone.
 
 ## Activity: the history, the events, the logs
 
-**Activity** reads the way a status page reads: the window's **uptime** up top (the
-health KPI over time), the timeline beside it with one marker per alarm raise, then
+**Activity** reads the way a status page reads: the 30-day **uptime** up top (the
+availability KPI), the timeline beside it with one marker per alarm raise, then
 the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
-expanding to the health changes inside it and the alarms that explain them. An alarm the
+expanding to the health changes inside it and the alarms that explain them. An entry reads
+ongoing only while the system is still away from healthy; the moment it recovers, the entry
+closes at the recovery. An alarm the
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
-Uptime is the healthy share of the time the system has been recorded inside the last 30
-days, never of days it did not exist for. A system recorded minutes ago reads over those
-minutes and the card names its window ("since Nov 23, 01:56 PM"); with no health recorded
-yet it says so instead of showing a percentage. The timeline is labelled at both ends and each
-segment's hover gives its health, from, to and duration; the red and amber triangles under it
-are alarm raises on that same axis.
+Activity's history follows the page's time range: the timeline, the health history and the
+alarms all read over it, the last 30 days until you pick another. Narrow it to the last hour and a
+ten-minute outage is a wide red block, not a sliver at the end of a month.
+
+**Uptime does not follow the range.** It is the availability KPI, the number a status page leads
+with, so it keeps its own fixed window: the healthy share of the last 30 days, never of time the
+system did not exist for. A system younger than that reads over its own life and the card says so
+("since Nov 23, 01:56 PM"); with no health recorded yet it says so instead of showing a percentage.
+The timeline opens at the range's start, drawn in the health the system held as the range opened
+until its first change inside it. It is labelled at both ends and each segment's hover gives its health, from, to
+and duration; the red and amber triangles under it are alarm raises on that same axis.
 
 ::screenshot{#fleet-history}
 

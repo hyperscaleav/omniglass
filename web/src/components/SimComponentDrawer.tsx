@@ -110,6 +110,9 @@ const TAB_KEY = "og-sim-drawer-tab";
 const [tab, setTab] = createSignal<string>(
   (() => { try { const t = sessionStorage.getItem(TAB_KEY); return DRAWER_TABS.some((x) => x.value === t) ? (t as string) : "info"; } catch { return "info"; } })(),
 );
+// isDrawerTab is whether a name is one of the drawer's tabs (a link's ?tab=).
+export const isDrawerTab = (t: string | undefined | null): t is string => DRAWER_TABS.some((x) => x.value === t);
+
 export function chooseDrawerTab(t: string) {
   setTab(t);
   try { sessionStorage.setItem(TAB_KEY, t); } catch { /* storage may be off */ }

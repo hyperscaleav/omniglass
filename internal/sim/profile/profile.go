@@ -544,6 +544,15 @@ type Behavior struct {
 	// and logs-and-continues on failure so a dead collector never blocks
 	// or crashes the behavior. See internal/sim/emit.go.
 	Emit *Emit `yaml:"emit"`
+
+	// Events are named occurrences the behavior reports on the device's
+	// events face once its mutations apply (#2754), as a route's are
+	// (#1145): a video bar's call cycle reporting a call starting and a
+	// participant joining. Each data is a template rendered against the
+	// state the tick left; one that renders empty (all white space) is not
+	// reported that tick, so a template's own condition says when it fires.
+	// A device with no events face ignores them.
+	Events []RouteEvent `yaml:"events"`
 }
 
 // Emit declares a behavior's outbound webhook. Both fields are templates

@@ -40,6 +40,20 @@
 #                                       threads from GraphQL) on stdin and print
 #                                       the reviewer's open threads as the
 #                                       open_threads that review reads
+#   agent-review.sh resolved-advisories read {bots, threads} like threads and print
+#                                       the reviewer's resolved advisory threads in
+#                                       the open_threads shape, for review's
+#                                       resolved_advisories (#2222)
+#   agent-review.sh advisory-threads    read {bots, threads} like threads and print
+#                                       [{thread_id, comment_id}] for the
+#                                       reviewer's unresolved advisory threads,
+#                                       which the workflow resolves once it has
+#                                       posted its review (#2222)
+#   agent-review.sh seen                read {head_sha, event, action, label, force,
+#                                       reviews: [{id, user, type, state,
+#                                       commit_id, body}]} and print "seen: <id>"
+#                                       when the head already has a completed
+#                                       review by an App bot, or "review" (#2277)
 #   agent-review.sh followups           read what review reads and print what to
 #                                       do on each thread the recheck lens
 #                                       judged, as [{comment_id, thread_id,
@@ -82,7 +96,9 @@
 # rechecks?: [{comment_id, status: "fixed" or "open", note}]}],
 # inline (bool, default true), own_pr (bool, default false),
 # open_threads ([{path, line, start_line?, rule, severity, lens?, title?,
-# url?, comment_id?, thread_id?, detail?}], default [])}.
+# url?, comment_id?, thread_id?, detail?}], default []), resolved_advisories
+# (the same shape: the reviewer's resolved advisory threads, which only keep an
+# advisory finding from being posted again, #2222)}.
 # A blocking finding, or one whose severity is not "advisory", makes the review
 # REQUEST_CHANGES; otherwise it is COMMENT. It never approves. With own_pr true
 # (the App posting the review also wrote the PR, and GitHub refuses Request
@@ -168,22 +184,29 @@ case "$mode" in
     # runs the neighbor lens alone: the catalog and the invariants judge code.
     # Code is Go, web, shell, SQL (migrations) and the workflows; a deleted
     # file counts by its old path. An empty diff touches no code.
-    has_code=true
+    # The invariants are split by area (#2216): `invariants` judges the code outside
+    # web/src, `invariants-web` judges web/src, and a lens whose area the diff does
+    # not touch is not dealt. Without a diff, both run.
+    has_code=true has_web=true has_other=true
     if [ -n "$difffile" ] && [ -f "$difffile" ]; then
-      has_code=false
-      if grep -E '^(diff --git a/|--- a/|\+\+\+ b/)' "$difffile" \
+      has_code=false has_web=false has_other=false
+      code_paths=$(grep -E '^(diff --git a/|--- a/|\+\+\+ b/)' "$difffile" \
         | sed -E 's#^diff --git a/(.*) b/.*$#\1#; s#^(--- a/|\+\+\+ b/)##' \
-        | grep -qE '(\.(go|ts|tsx|js|jsx|mjs|cjs|sh|bash|sql)$|^\.github/workflows/)'; then
+        | grep -E '(\.(go|ts|tsx|js|jsx|mjs|cjs|sh|bash|sql)$|^\.github/workflows/)' || true)
+      if [ -n "$code_paths" ]; then
         has_code=true
+        if grep -q '^web/src/' <<<"$code_paths"; then has_web=true; fi
+        if grep -qv '^web/src/' <<<"$code_paths"; then has_other=true; fi
       fi
     fi
 
     if ! $has_code; then
-      jq -c -n --argjson recheck "$recheck" '[{name: "neighbor", task: "Run the neighbor check (procedure step 5): for every behavior the diff flips, grep the docs tree for the claims it falsifies, and check that the docs the diff touches agree with the code. The anti-pattern catalog and the invariants belong to other lenses."}] + $recheck'
+      jq -c -n --argjson recheck "$recheck" '[{name: "neighbor", task: "Run the neighbor check (procedure step 5): for every behavior the diff flips, grep the docs pages and the decision files (docs/src/content/docs and docs/src/content/decisions, not the build log or the generated pages; a stale claim in a decision file is an advisory finding) for the claims it falsifies, and check that the docs the diff touches agree with the code. The anti-pattern catalog and the invariants belong to other lenses."}] + $recheck'
       exit 0
     fi
 
-    printf '%s\n' "${entries[@]}" | jq -R -s -c --argjson shards "$SHARDS" --argjson recheck "$recheck" '
+    printf '%s\n' "${entries[@]}" | jq -R -s -c --argjson shards "$SHARDS" --argjson recheck "$recheck" \
+      --argjson web "$has_web" --argjson other "$has_other" '
       split("\n") | map(select(length > 0)) as $all
       | ($all | length) as $n
       | [range(0; $shards) as $i
@@ -197,18 +220,31 @@ case "$mode" in
             + (.value | join(", ")) + ". The other entries, the invariants and the neighbor "
             + "check belong to other lenses.")
         })
-      + [
+      + (if $other then [
           {name: "invariants",
            task: ("Interrogate the diff against the invariants (procedure step 3): every route "
             + "gated, every applicable query scoped, every privileged mutation audited "
             + "in-transaction, migrations idempotent and never edited, no fixed test ports, "
-            + "tests prove behavior fresh. Load the solidjs skill before judging anything under "
-            + "web/src. The anti-pattern catalog and the neighbor check belong to other lenses.")},
+            + "tests prove behavior fresh."
+            + (if $web then " Judge the files outside web/src; the invariants-web lens judges web/src." else "" end)
+            + " The anti-pattern catalog and the neighbor check belong to other lenses.")}
+        ] else [] end)
+      + (if $web then [
+          {name: "invariants-web",
+           task: ("Interrogate the diff under web/src against the invariants that apply to it "
+            + "(procedure step 3): tests prove behavior fresh, no fixed test ports, no mocked "
+            + "system under test, the permission and scope rules the console must not bypass. "
+            + "Load the solidjs skill before judging anything under web/src. The files outside "
+            + "web/src, the anti-pattern catalog and the neighbor check belong to other lenses.")}
+        ] else [] end)
+      + [
           {name: "neighbor",
            task: ("Run the neighbor check (procedure step 5): for every behavior the diff flips, "
-            + "grep the docs tree for the claims it falsifies, and check that the docs the diff "
-            + "touches agree with the code. The anti-pattern catalog and the invariants belong "
-            + "to other lenses.")}
+            + "grep the docs pages and the decision files (docs/src/content/docs and "
+            + "docs/src/content/decisions) for the claims it falsifies, not the build log or the "
+            + "generated pages, which are history or output; a decision file still stating the "
+            + "old behavior is an advisory finding. Check that the docs the diff touches agree "
+            + "with the code. The anti-pattern catalog and the invariants belong to other lenses.")}
         ]
       + $recheck'
     ;;
@@ -216,7 +252,7 @@ case "$mode" in
   review | followups)
     [ $# -eq 1 ] || { printf 'usage: agent-review.sh %s < results.json\n' "$mode" >&2; exit 64; }
     facts=$(cat)
-    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.head_sha | type == "string") and (.head_sha | length > 0) and (.expected | type == "array") and ((.lenses // []) | type == "array") and ((.open_threads // []) | type == "array")' >/dev/null 2>&1; then
+    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.head_sha | type == "string") and (.head_sha | length > 0) and (.expected | type == "array") and ((.lenses // []) | type == "array") and ((.open_threads // []) | type == "array") and ((.resolved_advisories // []) | type == "array")' >/dev/null 2>&1; then
       printf 'agent-review: stdin is not a lens result set\n' >&2
       exit 2
     fi
@@ -239,6 +275,7 @@ case "$mode" in
         and .line >= ($t.start_line // $t.line) and .line <= $t.line;
       def sorted:
         [(.open_threads // [])[] | select(type == "object")] as $open
+        | [(.resolved_advisories // [])[] | select(type == "object")] as $resolved
         # The recheck lens'"'"'s word on each open thread, or the one-shot
         # reviewer'"'"'s, which rechecks in the same call; no other lens'"'"'s counts.
         | ([.lenses[] | select(.name == "recheck" or .name == "oneshot") | .name as $by | (.rechecks // [])[]
@@ -264,8 +301,13 @@ case "$mode" in
             open: $judged,
             verified: [$judged[] | select(.fixed)],
             carried: [$judged[] | select(.fixed | not)],
-            # A finding an open thread already carries is not posted again.
-            new: [$raw[] | . as $f | select([$open[] | . as $t | $f | matches($t)] | any | not)]
+            # A finding an open thread already carries is not posted again, and an
+            # advisory one that a resolved advisory thread of the reviewer carries
+            # is not either (#2222): advisories are resolved as they are posted, so
+            # without this an advisory no one fixed would come back as a new thread
+            # on every rerun. A blocking finding is new whatever resolved.
+            new: [$raw[] | . as $f | select([$open[] | . as $t | $f | matches($t)] | any | not)
+                | select(($f | blocking) or ([$resolved[] | . as $t | $f | matches($t)] | any | not))]
           };
     '
     if [ "$mode" = followups ]; then
@@ -421,6 +463,62 @@ case "$mode" in
         ]'
     ;;
 
+  resolved-advisories)
+    # Advisories are resolved as they are posted, so they leave the open threads.
+    # Listing the resolved ones lets review keep an advisory no one fixed from
+    # being posted again on every rerun (#2222).
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh resolved-advisories < threads.json\n' >&2; exit 64; }
+    facts=$(cat)
+    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.bots | type == "array") and (.threads | type == "array")' >/dev/null 2>&1; then
+      printf 'agent-review: stdin is not {bots, threads}\n' >&2
+      exit 2
+    fi
+    # threads lists unresolved threads: read the resolved ones as if they were not.
+    # Only a thread resolved on posting counts: it has the reviewer's one comment.
+    # A thread with a reply was resolved by a "Verified fixed" or by a person, and
+    # a finding that comes back on those lines is a regression, so it posts.
+    printf '%s' "$facts" | jq -c '.threads |= map(select(type == "object" and .isResolved == true
+          and ((.comments.totalCount // (.comments.nodes | length)) <= 1)) | .isResolved = false)' \
+      | bash "$0" threads | jq -c '[.[] | select(.severity == "advisory")]'
+    ;;
+
+  advisory-threads)
+    # An advisory finding stays inline for a reader but must not hold the merge
+    # open, since "Protect main" counts every unresolved thread (#2222). The
+    # workflow resolves what this lists after it posts a review; a blocking
+    # finding, and anything unreadable (which counts as blocking), is left open.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh advisory-threads < threads.json\n' >&2; exit 64; }
+    facts=$(cat)
+    open=$(bash "$0" threads <<<"$facts") || exit $?
+    jq -c '[.[] | select(.severity == "advisory" and (.thread_id // "") != "") | {thread_id, comment_id}]' <<<"$open"
+    ;;
+
+  seen)
+    # Do not pay for a second review of a head that was already reviewed (#2277):
+    # a reopen, a relabel, a draft flipped to ready, or a manual run. A completed
+    # review is one by an App bot (a person's cannot be mistaken for it) on this
+    # head, carrying the round marker every review ends with, and neither pending
+    # nor dismissed. A push (synchronize), force, and the review:deep label
+    # always review; a new commit has no review of its own anyway.
+    [ $# -eq 1 ] || { printf 'usage: agent-review.sh seen < facts.json\n' >&2; exit 64; }
+    facts=$(cat)
+    if ! printf '%s' "$facts" | jq -e 'type == "object" and (.head_sha | type == "string") and (.head_sha | length) > 0 and (.reviews | type == "array")' >/dev/null 2>&1; then
+      printf 'agent-review: stdin is not {head_sha, reviews}\n' >&2
+      exit 2
+    fi
+    printf '%s' "$facts" | jq -r '
+      if .force == true or .action == "synchronize" or .label == "review:deep" then "review"
+      else
+        .head_sha as $head
+        | [.reviews[]? | select(type == "object")
+            | select(.commit_id == $head)
+            | select(.type == "Bot")
+            | select(.state == "COMMENTED" or .state == "CHANGES_REQUESTED" or .state == "APPROVED")
+            | select((.body // "") | contains("<!-- agent-review round"))]
+        | if length == 0 then "review" else "seen: \(last.id)" end
+      end'
+    ;;
+
   context)
     [ $# -ge 3 ] && [ $# -le 6 ] || { printf 'usage: agent-review.sh context <out-dir> <diff-file> [open-threads-file [issue-file [last-reviewed-sha]]]\n' >&2; exit 64; }
     outdir=$2
@@ -513,7 +611,7 @@ BRIEF
         [ "$p" = /dev/null ] && continue
         [ -f "$p" ] || continue
         case "$p" in
-          *.png | *.jpg | *.jpeg | *.gif | *.webp | *.ico | *.pdf | *.woff | *.woff2 | *.lock | */package-lock.json | package-lock.json | go.sum) continue ;;
+          *.png | *.jpg | *.jpeg | *.gif | *.webp | *.ico | *.pdf | *.woff | *.woff2 | *.lock | */package-lock.json | package-lock.json | */pnpm-lock.yaml | pnpm-lock.yaml | go.sum) continue ;;
         esac
         grep -Iq . "$p" 2>/dev/null || continue
         if [ "$(wc -c < "$pr")" -gt "$budget" ]; then left+=("$p"); continue; fi

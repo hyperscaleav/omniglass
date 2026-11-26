@@ -707,7 +707,7 @@ describe("the component leaf refreshes (#934)", () => {
 
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 
-  it("polls its reachability, vitals, alarms and health, one request per read", async () => {
+  it("polls its reachability, properties, vitals, alarms and health, one request per read", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const gets: string[] = [];
     const later = new Date().toISOString();
@@ -723,6 +723,15 @@ describe("the component leaf refreshes (#934)", () => {
       if (url.includes("/alarms")) {
         return json({ health: "degraded", alarms: [{ id: "al-2", component: "videobar-1", component_id: uuidFor("cf-c-bar"), severity: "warning", message: "Reachability lost", raised_at: later, active: true, acknowledged: false }] });
       }
+      if (url.endsWith("/properties")) {
+        return json({
+          properties: [
+            { property_type_name: "firmware-version", value: "2.2.0", is_set: false, from_contract: true },
+            // Only observed (a polled input): no value, its reading in the reconciliation, as the lab's displays read.
+            { property_type_name: "video-input", label: "Video Input", data_type: "string", required: false, is_set: false, from_contract: false, reconciliation: { want: null, told: "hdmi1", is: "hdmi1", is_instance: "snmp", drift: false } },
+          ],
+        });
+      }
       if (url.endsWith("/views/fleet")) return json(view);
       if (url.endsWith("/outposts")) return json({ outposts: [{ name: "edge-1", enrolled: true, last_heartbeat_at: later }] });
       if (url.endsWith("/outposts/edge-1")) return json({ name: "edge-1", enrolled: true, last_heartbeat_at: later });
@@ -732,8 +741,17 @@ describe("the component leaf refreshes (#934)", () => {
     // Before the poll: the stale sample, no Uptime, the old alarm.
     expect(screen.getByTestId("collection-ssh").textContent).toContain("check the component or the path");
     expect(screen.getByTestId("leaf-vitals").textContent).not.toContain("Uptime");
+    expect(screen.getByTestId("leaf-identity").textContent).toContain("2.1.4");
 
     await vi.advanceTimersByTimeAsync(10_000);
+
+    // A property the device moved (firmware here, an input after Set input)
+    // lands without a reload.
+    expect(screen.getByTestId("leaf-identity").textContent).toContain("2.2.0");
+    // The observed input reads as its own row: the label, then its value beside it.
+    const input = [...screen.getByTestId("leaf-identity").querySelectorAll("dt")].find((dt) => dt.textContent === "Video Input");
+    expect(input?.nextElementSibling?.tagName).toBe("DD");
+    expect(input?.nextElementSibling?.textContent).toBe("hdmi1");
 
     expect(screen.getByTestId("collection-ssh").textContent).toBe("collecting");
     expect(screen.getByTestId("leaf-vitals").textContent).toContain("Uptime");
@@ -742,7 +760,7 @@ describe("the component leaf refreshes (#934)", () => {
     expect(screen.getByTestId("leaf-header").textContent).toContain("degraded");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each read polled, as one request, not one per endpoint or per series.
-    for (const p of ["/reachability", "/metrics", "/alarms", "/outposts/edge-1"]) {
+    for (const p of ["/reachability", "/properties", "/metrics", "/alarms", "/outposts/edge-1"]) {
       expect(count(p)).toBeGreaterThanOrEqual(1);
       expect(count(p)).toBeLessThanOrEqual(2);
     }

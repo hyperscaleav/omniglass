@@ -67,7 +67,7 @@ func TestAgentReviewLensesDealEveryCatalogEntryOnce(t *testing.T) {
 	for _, l := range lenses {
 		got = append(got, l.Name)
 	}
-	if strings.Join(got, ",") != "catalog-1,catalog-2,catalog-3,catalog-4,catalog-5,catalog-6,invariants,neighbor" {
+	if strings.Join(got, ",") != "catalog-1,catalog-2,catalog-3,catalog-4,catalog-5,catalog-6,invariants,invariants-web,neighbor" {
 		t.Fatalf("lenses = %v", got)
 	}
 	for _, c := range "abcdefg" {
@@ -249,6 +249,80 @@ func TestAgentReviewLensesFilterByDiff(t *testing.T) {
 	}
 	if !strings.Contains(out4, "invariants") {
 		t.Fatalf("no diff: invariants lens missing: %s", out4)
+	}
+}
+
+// The invariants lens is split by area so no one lens judges the whole of a
+// mixed diff (#2216): `invariants` takes the code outside web/src, and
+// `invariants-web` takes web/src and carries the solidjs skill. A lens whose
+// area the diff does not touch is not dealt, and the neighbor lens greps the
+// docs pages and the decision files, never the build log or generated files.
+func TestAgentReviewLensesSplitInvariantsByArea(t *testing.T) {
+	dir := catalog(t, "a-entry.md", "b-entry.md")
+	names := func(diff string) (map[string]string, string) {
+		f := filepath.Join(t.TempDir(), "x.diff")
+		if err := os.WriteFile(f, []byte(diff), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, code := agentReview(t, "", "lenses", dir, f)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+		var ls []lens
+		if err := json.Unmarshal([]byte(out), &ls); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		m := map[string]string{}
+		for _, l := range ls {
+			m[l.Name] = l.Task
+		}
+		return m, out
+	}
+	// Go only: invariants, no web lens, and no solidjs skill to load.
+	goOnly, _ := names("+++ b/internal/x.go\n")
+	if _, ok := goOnly["invariants"]; !ok {
+		t.Fatalf("go diff: no invariants lens")
+	}
+	if _, ok := goOnly["invariants-web"]; ok {
+		t.Errorf("go diff: invariants-web dealt with no web/src in the diff")
+	}
+	if strings.Contains(goOnly["invariants"], "solidjs") {
+		t.Errorf("go diff: the invariants lens loads the solidjs skill with no web/src in the diff")
+	}
+	// Web only: invariants-web, and no invariants lens with nothing outside web/src.
+	webOnly, _ := names("+++ b/web/src/App.tsx\n")
+	if _, ok := webOnly["invariants-web"]; !ok {
+		t.Fatalf("web diff: no invariants-web lens")
+	}
+	if _, ok := webOnly["invariants"]; ok {
+		t.Errorf("web diff: an invariants lens with nothing outside web/src to judge")
+	}
+	if !strings.Contains(webOnly["invariants-web"], "solidjs") {
+		t.Errorf("web diff: invariants-web does not load the solidjs skill")
+	}
+	// Both: two lenses that split the work, each naming the other's area.
+	both, _ := names("+++ b/internal/x.go\n+++ b/web/src/App.tsx\n")
+	if both["invariants"] == "" || both["invariants-web"] == "" {
+		t.Fatalf("mixed diff: lenses %v, want invariants and invariants-web", both)
+	}
+	if !strings.Contains(both["invariants"], "outside web/src") {
+		t.Errorf("mixed diff: invariants does not leave web/src to the other lens: %s", both["invariants"])
+	}
+	// No diff at all (a full run): every lens, including both invariants lenses.
+	all, _ := agentReview(t, "", "lenses", dir)
+	if !strings.Contains(all, `"invariants"`) || !strings.Contains(all, `"invariants-web"`) {
+		t.Errorf("no diff: lenses %s, want both invariants lenses", all)
+	}
+	// The neighbor lens greps the docs pages and the decision files (an ADR can
+	// still state behavior a diff flips), and skips only the build log and the
+	// generated pages.
+	for _, want := range []string{"docs/src/content/docs", "docs/src/content/decisions", "not the build log or the generated pages", "advisory"} {
+		if !strings.Contains(both["neighbor"], want) {
+			t.Errorf("neighbor task lacks %q: %s", want, both["neighbor"])
+		}
+	}
+	if strings.Contains(both["neighbor"], "not the build log, the decision files") {
+		t.Errorf("neighbor task still skips the decision files: %s", both["neighbor"])
 	}
 }
 
@@ -1239,6 +1313,140 @@ func TestAgentReviewReplyResult(t *testing.T) {
 		if out, _ := agentReview(t, in, "reply-result"); out != want {
 			t.Errorf("%q: got %s want %s", in, out, want)
 		}
+	}
+}
+
+// Advisory findings stay inline but never block a merge (#2222): after a review
+// posts, the reviewer resolves its own unresolved advisory threads, and only
+// those. A blocking thread, an already resolved one and a person's stay as they
+// are, so a blocking finding still holds the merge open.
+func TestAgentReviewAdvisoryThreadsListsOnlyTheReviewersOwnAdvisories(t *testing.T) {
+	in := `{"bots":["hyperscale-reviewer[bot]"],"threads":[
+		{"id":"T1","isResolved":false,"isOutdated":false,"path":"x.go","line":5,"comments":{"nodes":[{"databaseId":11,"author":{"login":"hyperscale-reviewer"},
+			"body":"**⚠️ Nit**\n\n<!-- agent-review severity=advisory lens=a rule=r1 -->"}]}},
+		{"id":"T2","isResolved":false,"isOutdated":false,"path":"x.go","line":9,"comments":{"nodes":[{"databaseId":12,"author":{"login":"hyperscale-reviewer"},
+			"body":"**❌ Bug**\n\n<!-- agent-review severity=blocking lens=a rule=r2 -->"}]}},
+		{"id":"T3","isResolved":true,"isOutdated":false,"path":"x.go","line":1,"comments":{"nodes":[{"databaseId":13,"author":{"login":"hyperscale-reviewer"},
+			"body":"**⚠️ Old**\n\n<!-- agent-review severity=advisory lens=a rule=r3 -->"}]}},
+		{"id":"T4","isResolved":false,"isOutdated":false,"path":"x.go","line":2,"comments":{"nodes":[{"databaseId":14,"author":{"login":"fullmetal-fred"},
+			"body":"<!-- agent-review severity=advisory lens=a rule=r4 -->"}]}},
+		{"id":"T5","isResolved":false,"isOutdated":true,"path":"y.go","line":null,"originalLine":3,"comments":{"nodes":[{"databaseId":15,"author":{"login":"hyperscale-reviewer"},
+			"body":"**⚠️ Moved**\n\n<!-- agent-review severity=advisory lens=a rule=r5 -->"}]}},
+		{"id":"T6","isResolved":false,"isOutdated":false,"path":"z.go","line":4,"comments":{"nodes":[{"databaseId":16,"author":{"login":"hyperscale-reviewer"},"body":"unreadable"}]}}
+	]}`
+	out, code := agentReview(t, in, "advisory-threads")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	if want := `[{"thread_id":"T1","comment_id":11},{"thread_id":"T5","comment_id":15}]`; out != want {
+		t.Fatalf("got %s\nwant %s", out, want)
+	}
+	if _, code := agentReview(t, `{"threads":[]}`, "advisory-threads"); code != 2 {
+		t.Fatalf("input with no bots: exit %d, want 2", code)
+	}
+}
+
+// A resolved advisory thread still dedupes (#2222): resolving advisories on
+// posting drops them out of the open threads, so without this an advisory no one
+// fixed would be posted again as a new resolved thread on every rerun. Only an
+// advisory finding is deduped against them; a blocking finding on the same line
+// is new and still posts, and a different rule or line is new.
+func TestAgentReviewDoesNotRepostAResolvedAdvisory(t *testing.T) {
+	const resolved = `"resolved_advisories":[{"path":"x.go","line":5,"start_line":3,"rule":"r1","severity":"advisory","comment_id":31,"thread_id":"T31"}]`
+	lens := func(findings string) string {
+		return `{"head_sha":"abcdef1234","expected":["a"],` + resolved + `,"lenses":[{"name":"a","findings":[` + findings + `]}]}`
+	}
+	f := func(sev, path string, line int, rule string) string {
+		return `{"severity":"` + sev + `","path":"` + path + `","line":` + strconv.Itoa(line) + `,"rule":"` + rule + `","failure":"f","fix":"x"}`
+	}
+	r := reviewOf(t, lens(f("advisory", "x.go", 4, "r1")))
+	if len(r.Comments) != 0 || strings.Contains(r.Body, "1 advisory") {
+		t.Fatalf("a resolved advisory was posted again: %+v", r)
+	}
+	for name, finding := range map[string]string{
+		"blocking on the same line": f("blocking", "x.go", 4, "r1"),
+		"another rule":              f("advisory", "x.go", 4, "r2"),
+		"outside its lines":         f("advisory", "x.go", 9, "r1"),
+		"another file":              f("advisory", "y.go", 4, "r1"),
+	} {
+		if r := reviewOf(t, lens(finding)); len(r.Comments) != 1 {
+			t.Errorf("%s: got %d inline comments, want 1: %+v", name, len(r.Comments), r)
+		}
+	}
+	// A resolved advisory is not an open thread: it is not carried or rechecked.
+	out, _ := agentReview(t, lens(""), "followups")
+	if out != "[]" {
+		t.Errorf("followups on a resolved advisory = %s, want []", out)
+	}
+	// A thread resolved after a "Verified fixed" reply (two comments) is not a
+	// resolved-on-posting advisory: the finding coming back on its lines is a
+	// regression and posts, rather than being dropped as a repeat.
+	verified := `{"bots":["hyperscale-reviewer[bot]"],"threads":[
+		{"id":"T9","isResolved":true,"isOutdated":false,"path":"x.go","line":5,"comments":{"totalCount":2,"nodes":[{"databaseId":41,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=advisory lens=a rule=r1 -->"}]}}]}`
+	if out, _ := agentReview(t, verified, "resolved-advisories"); out != "[]" {
+		t.Errorf("a verified-fixed thread listed as resolved on posting: %s", out)
+	}
+	// resolved-advisories lists the reviewer's resolved advisory threads in the open-thread shape.
+	in := `{"bots":["hyperscale-reviewer[bot]"],"threads":[
+		{"id":"T1","isResolved":true,"isOutdated":false,"path":"x.go","line":5,"comments":{"nodes":[{"databaseId":11,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=advisory lens=a rule=r1 -->"}]}},
+		{"id":"T2","isResolved":true,"isOutdated":false,"path":"x.go","line":7,"comments":{"nodes":[{"databaseId":12,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=blocking lens=a rule=r2 -->"}]}},
+		{"id":"T3","isResolved":false,"isOutdated":false,"path":"x.go","line":8,"comments":{"nodes":[{"databaseId":13,"author":{"login":"hyperscale-reviewer"},"body":"<!-- agent-review severity=advisory lens=a rule=r3 -->"}]}}]}`
+	out, code := agentReview(t, in, "resolved-advisories")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil || len(got) != 1 || got[0]["rule"] != "r1" || got[0]["severity"] != "advisory" {
+		t.Fatalf("resolved-advisories = %s (%v)", out, err)
+	}
+}
+
+// A head the reviewer has already reviewed costs no second review (#2277): a
+// reopen, a relabel, a draft flipped to ready or a manual run on a head that
+// has a completed review by an App bot with the round marker says "seen". A new
+// commit, a forced run and the review:deep label always review.
+func TestAgentReviewSeenSkipsAReviewedHead(t *testing.T) {
+	const head = "abcdef1234567890abcdef1234567890abcdef12"
+	marker := `ok\n<!-- agent-review round blocking=0 head=abcdef1234567890abcdef1234567890abcdef12 -->`
+	rev := func(id int, user, typ, state, commit, body string) string {
+		return `{"id":` + strconv.Itoa(id) + `,"user":"` + user + `","type":"` + typ + `","state":"` + state + `","commit_id":"` + commit + `","body":"` + body + `"}`
+	}
+	seen := func(event, action, label string, force bool, reviews ...string) string {
+		in := `{"head_sha":"` + head + `","event":"` + event + `","action":"` + action + `","label":"` + label +
+			`","force":` + strconv.FormatBool(force) + `,"reviews":[` + strings.Join(reviews, ",") + `]}`
+		out, code := agentReview(t, in, "seen")
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+		return out
+	}
+	done := rev(7, "reviewer[bot]", "Bot", "COMMENTED", head, marker)
+	cases := []struct {
+		name, want string
+		got        string
+	}{
+		{"reopened on a reviewed head", "seen: 7", seen("pull_request", "reopened", "", false, done)},
+		{"ready_for_review on a reviewed head", "seen: 7", seen("pull_request", "ready_for_review", "", false, done)},
+		{"a changes-requested review counts", "seen: 8", seen("pull_request", "reopened", "", false, rev(8, "reviewer[bot]", "Bot", "CHANGES_REQUESTED", head, marker))},
+		{"the newest of several is named", "seen: 9", seen("pull_request", "reopened", "", false, done, rev(9, "agent[bot]", "Bot", "COMMENTED", head, marker))},
+		{"a manual run on a reviewed head", "seen: 7", seen("workflow_dispatch", "", "", false, done)},
+		{"a push always reviews", "review", seen("pull_request", "synchronize", "", false, done)},
+		{"a forced manual run reviews", "review", seen("workflow_dispatch", "", "", true, done)},
+		{"review:deep always reviews", "review", seen("pull_request", "labeled", "review:deep", false, done)},
+		{"another head has no review of this one", "review", seen("pull_request", "reopened", "", false, rev(7, "reviewer[bot]", "Bot", "COMMENTED", "1111111111111111111111111111111111111111", marker))},
+		{"a pending review is not complete", "review", seen("pull_request", "reopened", "", false, rev(7, "reviewer[bot]", "Bot", "PENDING", head, marker))},
+		{"a dismissed review is not", "review", seen("pull_request", "reopened", "", false, rev(7, "reviewer[bot]", "Bot", "DISMISSED", head, marker))},
+		{"a person's review is not the reviewer's", "review", seen("pull_request", "reopened", "", false, rev(7, "fred", "User", "COMMENTED", head, marker))},
+		{"a bot review with no round marker is not the reviewer's", "review", seen("pull_request", "reopened", "", false, rev(7, "dependabot[bot]", "Bot", "COMMENTED", head, "bump"))},
+		{"no reviews", "review", seen("pull_request", "reopened", "", false)},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, c.got, c.want)
+		}
+	}
+	if _, code := agentReview(t, `{"reviews":[]}`, "seen"); code != 2 {
+		t.Fatalf("input with no head: exit %d, want 2", code)
 	}
 }
 

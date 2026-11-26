@@ -33,7 +33,8 @@ The subsystem a change touches, named to match the [glossary](/reference/glossar
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity` `area:fleet`
-`area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
+`area:collection` `area:ingest` `area:expr` `area:messaging` `area:ui` `area:assistant`
+`area:outpost` `area:lab` `area:ci` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.
@@ -92,6 +93,7 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/developer/pr-previews/); removing it tears the preview down | yes |
 | `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
+| `run:test` | on a draft PR, runs the checks a draft skips (`docs-build`, `docs-shots` verify, `migrations`, the `goreleaser` snapshot) now instead of at `ready_for_review`; a ready PR runs them anyway | yes |
 | `run:dev-gha` | on an issue, has a Claude Code agent in GitHub Actions build the ticket into a PR ([agents in CI](/contributing/agents-in-ci/)); only a maintainer's label counts, and the label comes off as the build starts | yes |
 
 `run:preview` is live today (the [PR previews guide](/developer/pr-previews/) covers it, and
@@ -139,10 +141,11 @@ name is [#1136](https://github.com/hyperscaleav/omniglass/issues/1136).
   the label does nothing until they are resolved.
 - **Forks:** fork PRs are skipped (their token cannot push).
 
-`run:test` and `run:build` are retired, not reserved: the full test suite is the merge gate, so it
-runs on every PR rather than on demand (ruled on #214: a test outside the CI gate is a gate
-defect), and the release build runs on every PR that touches its config, so neither has a task to
-run, and a leftover label of either name does nothing. A `run:<task>` label is added in the same
+`run:build` is retired, not reserved: the release build runs on every PR that touches its config, so it
+has no task to run, and a leftover label of that name does nothing. `run:test` was retired the same way
+(ruled on #214: a test outside the CI gate is a gate defect) and is back with a narrower task (#2309): a
+ready PR still runs the full suite as the merge gate, and the label only lets a draft run the checks it
+skips before it is ready. A `run:<task>` label is added in the same
 PR that wires its workflow, never reserved ahead of it, since a label that silently does nothing
 breaks the promise above.
 

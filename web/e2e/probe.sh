@@ -71,7 +71,7 @@ replay)
   mkdir -p "$rep"
   : >"$rep/raw.jsonl"
   (cd web && OG_TOKEN="$OG_OWNER_TOKEN" OG_PROBE_OUT="$ROOT/$rep/raw.jsonl" OG_PROBE_DIR="$dir" OG_PROBE_ONLY="$id" OG_PROBE_STILLS=1 \
-    npx playwright test e2e/probe.spec.ts --workers=1 --reporter=line --output="$ROOT/$rep/test-results") || true
+    node_modules/.bin/playwright test e2e/probe.spec.ts --workers=1 --reporter=line --output="$ROOT/$rep/test-results") || true
   node web/e2e/digest.mjs "$rep/raw.jsonl" "$rep/digest.json" >/dev/null
   echo "probe: replay of $id in $rep"
   if grep -q '"kind":"walkthrough","surface":"walkthrough:'"$id"'","ok":true' "$rep/raw.jsonl"; then
@@ -126,7 +126,7 @@ walk=1
 # written regardless.
 rc=0
 lab_pw env OG_PROBE_OUT="/w/$OUT/raw.jsonl" OG_PROBE_WALKTHROUGHS="$walk" \
-  npx playwright test e2e/probe.spec.ts --workers=1 --reporter=line || rc=$?
+  node_modules/.bin/playwright test e2e/probe.spec.ts --workers=1 --reporter=line || rc=$?
 lab_assert_intact
 [ "$rc" -eq 0 ] || echo "probe: the probe spec exited $rc; the digest still records every surface it reached" >&2
 [ -s "$OUT/raw.jsonl" ] || { echo "probe: no events recorded" >&2; exit 1; }

@@ -76,6 +76,7 @@ type healthAlarmBody struct {
 	ComponentID string    `json:"component_id" doc:"The component's uuid"`
 	Severity    string    `json:"severity"`
 	Message     string    `json:"message"`
+	Instance    string    `json:"instance,omitempty" doc:"What a rule's alarm is about within its component: the instance of the sample its rule judged, such as the endpoint a reachability alarm names. Two alarms of one rule on one component differ only here. Absent for a hand-raised alarm and for a rule that judges one series per component"`
 	RaisedAt    time.Time `json:"raised_at"`
 	// The acknowledgement, with the same names and rules as the component alarm
 	// list (alarmBody), so a system page can show and offer it without opening
@@ -160,7 +161,7 @@ type fleetHealthOutput struct {
 		Members         []healthMemberBody     `json:"members" doc:"Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location"`
 		Systems         []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions     []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
-		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
+		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when the range opened: the last recorded edge before its start, whether the caller bounded the start (an explicit since, or the one derived from until) or the default window opened it. Absent when nothing was recorded before it. A timeline draws the stretch before the first transition from it, and uptime counts that stretch as it"`
 		FirstRecordedAt *time.Time             `json:"first_recorded_at,omitempty" doc:"When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range"`
 	}
 }
@@ -226,6 +227,7 @@ func toHealthAlarmBodies(alarms []storage.Alarm) []healthAlarmBody {
 			ComponentID: a.ComponentID,
 			Severity:    a.Severity,
 			Message:     a.Message,
+			Instance:    a.Instance(),
 			RaisedAt:    a.RaisedAt,
 
 			AcknowledgedAt: a.AcknowledgedAt,

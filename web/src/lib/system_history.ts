@@ -15,6 +15,9 @@ export type MemberAlarmRow = {
   id: string;
   severity: string;
   message: string;
+  // What the alarm is about within its component (the endpoint a
+  // reachability alarm names), "" when it has none.
+  instance: string;
   component: string;
   componentId: string;
   raisedAt: string;
@@ -22,19 +25,24 @@ export type MemberAlarmRow = {
   ongoing: boolean;
 };
 
-export function memberAlarmRows(members: MemberAlarms[], now: number, windowHours: number, levels?: SeverityLevel[] | null): MemberAlarmRow[] {
+// memberAlarmRows keeps the alarms that were raised inside the window
+// [from, to]: an open-ended `to` is a window that runs to now (a preset), a set
+// one a custom range that ended before it (#2741), whose later raises are not in it.
+export function memberAlarmRows(members: MemberAlarms[], window: { from: number; to?: number }, levels?: SeverityLevel[] | null): MemberAlarmRow[] {
   const bySeverity = compareSeverity(levels);
-  const start = now - windowHours * 3600_000;
+  const start = window.from;
   const rows: MemberAlarmRow[] = [];
   for (const m of members) {
     for (const a of m.alarms ?? []) {
       const clearedAt = (a as { cleared_at?: string }).cleared_at;
       const activeInWindow = a.active || (clearedAt ? Date.parse(clearedAt) >= start : Date.parse(a.raised_at) >= start);
       if (!activeInWindow) continue;
+      if (window.to !== undefined && Date.parse(a.raised_at) > window.to) continue;
       rows.push({
         id: a.id,
         severity: a.severity,
         message: a.message,
+        instance: a.instance ?? "",
         component: m.component,
         componentId: m.componentId,
         raisedAt: a.raised_at,
@@ -88,18 +96,22 @@ export type UnhealthyStretch = {
 
 // stretchesOf groups consecutive unhealthy spans into stretches, ongoing
 // first and then newest first: one entry per contiguous stretch away from
-// healthy, however many health changes it contained.
-export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretch[] {
+// healthy, however many health changes it contained. Only the newest stretch
+// can be ongoing, and only while the system's `current` health is not healthy
+// (#2721): right after a recovery the history's now is the recovery itself, the
+// recovered span has no length and is gone, and the history ends on the
+// stretch just left, which is over.
+export function stretchesOf(spans: Span<string>[], now: number, current: string | null | undefined): UnhealthyStretch[] {
   const out: UnhealthyStretch[] = [];
   let cur: Span<string>[] = [];
-  const flush = () => {
+  const flush = (last: boolean) => {
     if (cur.length === 0) return;
     const from = cur[0].from;
     const to = cur[cur.length - 1].to;
     out.push({
       from,
       to,
-      ongoing: Math.abs(to - now) < 1000,
+      ongoing: last && !!current && current !== "healthy",
       worst: [...cur].sort((a, b) => healthRank(b.value as never) - healthRank(a.value as never))[0].value,
       spans: cur,
     });
@@ -109,10 +121,10 @@ export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretc
     // A stretch that held under half a second (an edge recorded the instant
     // the next one was) is not an entry: "Commissioning, 0s" says nothing.
     if (s.to - s.from < 500 && Math.abs(s.to - now) >= 1000) continue;
-    if (s.value === "healthy") flush();
+    if (s.value === "healthy") flush(false);
     else cur.push(s);
   }
-  flush();
+  flush(true);
   return out.sort((a, b) => Number(b.ongoing) - Number(a.ongoing) || b.from - a.from);
 }
 

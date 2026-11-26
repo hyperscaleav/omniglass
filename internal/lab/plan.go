@@ -288,6 +288,12 @@ type Options struct {
 	// throwaway lab takes it, and never a scale lab, whose figures are the
 	// measurement.
 	PlatformHistory bool
+	// HealthHistory seeds the scale scenario's health storyline (#2728,
+	// ADR-2726): 30 days of health behind every system and the past alarms
+	// that explain the showcase rooms' stretches, so a capture reads a fleet
+	// that had been running. Made up, so only a throwaway lab takes it, and
+	// only a scale lab has a scenario storyline; the perf labs never ask.
+	HealthHistory bool
 	// SSO runs an identity provider beside the lab (#2362), Dex with the
 	// lab's demo client and person (sso.go), and has the seed configure
 	// single sign-on against it and link the demo person, so a walkthrough
@@ -570,6 +576,12 @@ func Plan(o Options) (Spec, error) {
 	if o.InduceUnregistered && !o.Scale() {
 		return Spec{}, fmt.Errorf("--induce-unregistered is a scale lab's: it needs --systems")
 	}
+	if o.HealthHistory && !o.Scale() {
+		return Spec{}, fmt.Errorf("--health-history seeds a scale scenario's storyline, so it needs --systems")
+	}
+	if o.HealthHistory && !o.Ephemeral {
+		return Spec{}, fmt.Errorf("--health-history seeds made-up health history for a capture, so it needs a throwaway (--ephemeral) lab: a lab you keep reads its own")
+	}
 	if o.PlatformHistory && o.Scale() {
 		return Spec{}, fmt.Errorf("a scale lab's platform figures are its measurement, so it cannot take --platform-history")
 	}
@@ -679,6 +691,9 @@ func Plan(o Options) (Spec, error) {
 			"--user", LoginUser, "--password", LoginPassword}
 		if o.InduceUnregistered {
 			seedCmd = append(seedCmd, "--induce-unregistered")
+		}
+		if o.HealthHistory {
+			seedCmd = append(seedCmd, "--health-history")
 		}
 		seedCmd = append(seedCmd, "--omnibot-replay", replay)
 		if !o.Ephemeral {

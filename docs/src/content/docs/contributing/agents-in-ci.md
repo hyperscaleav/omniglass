@@ -65,6 +65,23 @@ moves the ticket to In Review. The model follows the ticket's tier: Sonnet 5.5 (
 stops early comments on the issue with its link; one that runs out of room leaves the PR a
 draft saying what is left.
 
+Before it marks the PR ready, the builder reviews its own work the way agent-review will, because each
+reviewer round costs 30 to 40 minutes (#2600). The prompt names the steps in order: `/adversarial-review`
+on the full diff (the same anti-pattern catalog the reviewer's lenses check), then the neighbor check, then
+`make preflight`, then `gh pr ready`. The neighbor check lists every UI label, user-facing term, flag, route
+or identifier the diff added, renamed or removed and greps the whole docs tree for each old and new spelling,
+fixing the hits or naming them in the PR body's Docs line. It is the same check `/ship-slice` step 5 holds a
+person to; a docs lint catches a label a page quotes, this catches the terms a page teaches.
+
+The PR body is the template filled in, never a free-form one: `gh` ignores the template when it
+is given a body, so the agent copies `.github/pull_request_template.md` to `body.md`, fills the
+Demo section (`demo: <id>` or `demo: none (<reason>)`), runs the demo tag lint on it
+(`PR_BODY="$(cat body.md)" node web/e2e/walkthrough-pr.mjs tag`) and opens the PR with
+`--body-file`. The workflow-written bodies carry a tag too: the rescue body says `demo: none`, and
+a body left for the expired-token path is linted by the workflow, from main's copy of the lint,
+before it opens the PR; a body that fails keeps everything the agent wrote and has only its demo
+tag lines rewritten to `demo: none (<reason>)`, since main's copy does not know a demo this PR adds.
+
 The App's token lasts an hour, and a build can run longer. When the agent's push or `gh` call
 fails for that, it leaves the branch name, and the PR's title and body if none is open yet, in
 files under the runner's temp folder and keeps working. After it stops, the workflow mints a
@@ -92,8 +109,14 @@ and a read-only token:
 | Lens | Sweeps |
 | --- | --- |
 | `catalog-1`, `catalog-2`, ... | the [anti-pattern catalog](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review/references/anti-patterns), dealt into even shards in name order (`SHARDS` in `scripts/agent-review.sh` sets how many), so a new entry joins a shard without a workflow change |
-| `invariants` | the skill's invariants: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test |
-| `neighbor` | the docs claims the diff falsifies |
+| `invariants` | the skill's invariants for the code outside `web/src`: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test; not dealt when the diff touches nothing outside `web/src` |
+| `invariants-web` | the invariants that apply to `web/src`, with the solidjs skill loaded; not dealt when the diff touches no `web/src` code (#2216) |
+| `neighbor` | the docs claims the diff falsifies, grepped in the docs pages and the decision files (`docs/src/content/docs` and `docs/src/content/decisions`; not the build log or the generated pages), where a decision file still stating the old behavior is an advisory finding |
+
+Splitting `invariants` by area and scoping the `neighbor` grep keep any one lens from judging the whole of a
+mixed diff. The lens jobs check out one commit, and read the PR's whole diff from `.agent-review/pr.diff`
+(and, in a re-review, the changes since the last reviewed head from `.agent-review/review.diff`), both computed
+once in `plan`, where the history is, so no lens fetches it.
 
 A lens posts nothing. It returns its surviving findings as JSON, and the `agent-review` job,
 which waits for every lens, posts them as one review: a finding on a diff line becomes an inline
@@ -111,7 +134,7 @@ sit in collapsed `<details>` blocks under them.
 
 A re-review starts from what changed. After the first review, a push is reviewed from the head the
 reviewer last reviewed: the PR's own commits since, with what a merge from `main` brought in left
-out. That diff is where the lenses look first, not a fence: they read any code, pull up the whole
+out. That diff is where the lenses look first, not a fence: they read any code, read the whole
 PR diff, and run `go build`, `go vet` and `go test` when a finding turns on what the code does, and
 they raise a finding wherever the new changes cause or expose a problem. A force push that
 rewrites that history, or a last review that left a blocking finding in its body rather than on a
@@ -140,6 +163,18 @@ The reviewer talks on the threads it opened, and its newest review is the one th
   the thread and resolves it when the reply settles the point, because the finding was wrong or the reason
   given holds. Otherwise it says what is still missing and leaves the thread open. A reply that also
   mentions `@claude` still starts agent-fix.
+- **Advisories are resolved as they are posted (#2222).** "Protect main" counts every unresolved review
+  thread, so an advisory that stayed open would block the merge on each rerun. The reviewer posts an
+  advisory finding inline as usual, then resolves its own advisory threads once the review is up
+  (`advisory-threads`): they stay readable on the diff, collapsed as resolved, and a review with only
+  advisory findings leaves no unresolved thread. A blocking finding keeps its thread open and the review
+  still requests changes. A resolved advisory is no longer carried forward or rechecked, which is the
+  point: it never made the review request changes. It still keeps a repeat from being posted: an
+  advisory finding on the lines of one of the reviewer's resolved advisory threads, with the same
+  rule, is not posted again (`resolved-advisories`), so an advisory nobody fixes does not come back as a
+  new resolved thread on each rerun. A blocking finding there is new and posts, and so does one that comes back on a thread resolved
+  after a reply ("Verified fixed", or a person's): only a thread resolved on posting, which still has
+  just the reviewer's one comment, counts.
 - **Verified fixed resolves.** A thread the reviewer replies "Verified fixed" on is resolved in the same run,
   advisory threads included; `thread-of` finds a thread from its comment when the open list has no id.
 - **Supersede.** Each review's first line carries the head it covers (`... · head <sha>`). After posting,
@@ -198,6 +233,19 @@ review. The `plan` job waits for the PR's other checks, 15 minutes at most, then
 holds: the check goes red and says why. Push a fix that turns the PR green, and that push is
 reviewed. A `review:deep` label is never held.
 
+### A reviewed head is not reviewed twice
+
+agent-review runs on opened, synchronize, reopened, ready_for_review, labeled and a manual dispatch,
+so the same head commit can come up more than once. Before any wait or model call, `plan` asks
+`agent-review.sh seen` (#2277): is there a completed review on this head by an App bot (not pending,
+not dismissed, carrying the round marker every review ends with)? If so the run makes no model call
+and says so in its job summary, naming the review. A PR run then re-reads the reviewer's ruling, so the
+required check still reports what the earlier review said; a manual run just stops.
+
+A push of a new commit always reviews, since the new head has no review of its own. So do the
+`review:deep` label and a manual run started with `force: true`. A draft that was skipped as a draft
+has no review, so marking it ready reviews it.
+
 ## Asking for a fix
 
 Mention `@hyperscale-agent` in a PR comment or a review comment, or submit a review that requests
@@ -208,11 +256,31 @@ too. The agent reads only the comment or review that started it. Write the ask t
 @hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
 ```
 
+agent-fix reviews its own round before it pushes (#2600): `/adversarial-review` on the commits it made in
+that run (not what a merge of `main` brought in), then the same neighbor check for every label, term, flag,
+route or identifier those commits added, renamed or removed. One self-review per round, scoped to the round's
+diff, so a fix does not add findings of its own and start another round.
+
 agent-fix answers each point on one line in its status comment, `✅ <point> · Fixed in <sha>`
-or `↩️ <point> · Not changed`, with its reasons collapsed under them, and replies
-`✅ Fixed in <sha>` on each review thread a commit it pushed fixed. A point counts as fixed only
-when its commit is one the run pushed. It never resolves a thread: the reviewer's recheck does
-that once it has seen the fix.
+or `↩️ <point> · Not changed`, with its reasons collapsed under them. A point counts as fixed
+only when its commit is one the run pushed.
+
+agent-fix also answers each review thread it read, as the agent App, never a person (#2217). The
+agent gives every thread its own point, including the open threads from earlier reviews, and the
+workflow does the rest after the run:
+
+- **Fixed.** A thread a commit this run pushed fixed gets `✅ Fixed in <sha>` and is resolved. A
+  thread an earlier commit already fixed is not this run's to claim: it is left open, and the
+  reviewer resolves it once a re-review no longer raises it.
+- **Not changed.** A thread the agent read and left gets `↩️ Not changed: <reason>` and stays open
+  for a person. The exception is an advisory finding (the reviewer's comment says
+  `severity=advisory`) where the agent marks no change as the right answer: it gets
+  `↩️ No change needed: <reason>` and is resolved. A blocking finding is never resolved this way.
+- **One reply per thread.** Several points on one thread make one reply, and a fixed point wins.
+
+A PR whose agent-review says ship and whose threads agents addressed can merge without anyone
+resolving a thread by hand. The reviewer still resolves its own threads that a later review no
+longer raises, as [above](#the-reviewer-on-its-threads).
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a

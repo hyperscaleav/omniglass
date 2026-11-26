@@ -1,0 +1,8 @@
+# The selftest's list naming an omnibot recording the lab does not ship: the run
+# fails before the lab starts, naming it.
+lab: { scenario: dev, systems: 1, omnibot_replay: no-such-recording }
+shots:
+  - id: ghost
+    kind: still
+    alt: A still that is never recorded.
+    start: /explore

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"sync"
 	"text/template"
+	"time"
 )
 
 // behaviorFuncs returns the FuncMap behaviors get parsed against. It
@@ -27,7 +28,15 @@ import (
 //	randStep step v -> v + uniform(-step, +step), float64
 //	round n v    -> v rounded to n decimal places (negative n rounds to tens, hundreds, ...)
 //	sigfig n v   -> v rounded to n significant digits (n <= 0 returns v unchanged)
-func behaviorFuncs(rng *deviceRand) template.FuncMap {
+//	now          -> the device clock's unix seconds (#2754)
+//	nextSlot t m -> the next wall-clock boundary of an m-minute slot strictly after unix t
+//	randInt lo hi-> a uniform integer in [lo, hi], from the device's source
+//	chance p     -> true with probability p, from the device's source
+//
+// clock is the device's wall clock (time.Now unless a test pins it): the
+// one place a behavior reads the time, so a schedule a test drives through a
+// simulated day is the schedule a lab runs.
+func behaviorFuncs(rng *deviceRand, clock func() time.Time) template.FuncMap {
 	funcs := template.FuncMap{}
 	for name, fn := range templateFuncs {
 		funcs[name] = fn
@@ -46,7 +55,50 @@ func behaviorFuncs(rng *deviceRand) template.FuncMap {
 		}
 		return f + rng.uniform(-step, step)
 	}
+	funcs["now"] = func() int64 { return clock().Unix() }
+	funcs["nextSlot"] = nextSlot
+	funcs["randInt"] = func(lo, hi any) (int64, error) {
+		l, _, err := toFloat(lo)
+		if err != nil {
+			return 0, err
+		}
+		h, _, err := toFloat(hi)
+		if err != nil {
+			return 0, err
+		}
+		return rng.intn(int64(l), int64(h)), nil
+	}
+	funcs["chance"] = func(p float64) bool { return rng.uniform(0, 1) < p }
 	return funcs
+}
+
+// nextSlot is the next boundary of an m-minute slot strictly after unix t,
+// boundaries counted from the epoch, so a 30-minute slot falls on the hour
+// and the half hour.
+func nextSlot(t, minutes any) (int64, error) {
+	tf, _, err := toFloat(t)
+	if err != nil {
+		return 0, err
+	}
+	mf, _, err := toFloat(minutes)
+	if err != nil {
+		return 0, err
+	}
+	size := int64(mf) * 60
+	if size <= 0 {
+		return 0, fmt.Errorf("nextSlot: a slot of %v minutes", minutes)
+	}
+	return (int64(tf)/size + 1) * size, nil
+}
+
+// intn returns a uniform integer in [lo, hi]. Safe for concurrent callers.
+func (d *deviceRand) intn(lo, hi int64) int64 {
+	if hi < lo {
+		lo, hi = hi, lo
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return lo + d.rng.Int63n(hi-lo+1)
 }
 
 // deviceRand wraps math/rand.Rand with a mutex so multiple behavior

@@ -28,8 +28,7 @@ describe("memberAlarmRows", () => {
           { id: "a2", severity: "warning", message: "Input signal lost", raised_at: iso(60), cleared_at: iso(59), active: false },
         ]),
       ],
-      now,
-      30 * 24,
+      { from: now - 30 * 24 * 3600_000 },
       SEEDED_LEVELS,
     );
 
@@ -40,21 +39,49 @@ describe("memberAlarmRows", () => {
     expect(r[1].ongoing).toBe(false);
   });
 
+  // One rule raises one alarm per endpoint, so two alarms of one rule on one
+  // component read apart only by their instance.
+  it("carries each alarm's instance, none for an alarm without one", () => {
+    const r = memberAlarmRows(
+      [alarms("display-1", "c-disp", [
+        { id: "snmp", severity: "high", message: "Reachability lost", instance: "snmp", raised_at: iso(2), active: true },
+        { id: "http", severity: "high", message: "Reachability lost", instance: "http", raised_at: iso(3), active: true },
+        { id: "hand", severity: "warning", message: "Bezel cracked", raised_at: iso(4), active: true },
+      ])],
+      { from: now - 24 * 3600_000 },
+      SEEDED_LEVELS,
+    );
+    expect(r.map((x) => [x.id, x.instance])).toEqual([["snmp", "snmp"], ["http", "http"], ["hand", ""]]);
+  });
+
   it("keeps an alarm raised before the window when it was still active inside it", () => {
     const r = memberAlarmRows(
       [alarms("x", "cx", [{ id: "old", severity: "high", message: "m", raised_at: iso(31 * 24), cleared_at: iso(29 * 24), active: false }])],
-      now,
-      30 * 24,
+      { from: now - 30 * 24 * 3600_000 },
       SEEDED_LEVELS,
     );
     expect(r).toHaveLength(1);
     const gone = memberAlarmRows(
       [alarms("x", "cx", [{ id: "gone", severity: "high", message: "m", raised_at: iso(40 * 24), cleared_at: iso(35 * 24), active: false }])],
-      now,
-      30 * 24,
+      { from: now - 30 * 24 * 3600_000 },
       SEEDED_LEVELS,
     );
     expect(gone).toHaveLength(0);
+  });
+
+  // A custom range ends before now (#2741): an alarm raised after its end,
+  // still open or not, is not in it.
+  it("a window that ends in the past leaves out an alarm raised after it", () => {
+    const r = memberAlarmRows(
+      [alarms("x", "cx", [
+        { id: "inside", severity: "high", message: "m", raised_at: iso(5), cleared_at: iso(4), active: false },
+        { id: "open-before", severity: "high", message: "m", raised_at: iso(6), active: true },
+        { id: "after", severity: "high", message: "m", raised_at: iso(1), active: true },
+      ])],
+      { from: now - 10 * 3600_000, to: now - 2 * 3600_000 },
+      SEEDED_LEVELS,
+    );
+    expect(r.map((x) => x.id).sort()).toEqual(["inside", "open-before"]);
   });
 });
 
@@ -91,7 +118,7 @@ describe("stretchesOf", () => {
       span("healthy", 180, 72),
       span("incomplete", 72, 0),
     ];
-    const inc = stretchesOf(spans, now);
+    const inc = stretchesOf(spans, now, "incomplete");
     expect(inc).toHaveLength(2);
     // Ongoing first, then newest.
     expect(inc[0].ongoing).toBe(true);
@@ -103,7 +130,25 @@ describe("stretchesOf", () => {
   });
 
   it("a fully healthy window has no unhealthy stretches", () => {
-    expect(stretchesOf([span("healthy", 720, 0)], now)).toHaveLength(0);
+    expect(stretchesOf([span("healthy", 720, 0)], now, "healthy")).toHaveLength(0);
+  });
+
+  // #2721: right after a recovery the history's now is the recovery's own
+  // timestamp, so the recovered span has no length, is dropped, and the
+  // history ends on the stretch just left. It is not ongoing: the system is
+  // healthy. The same history with the system still degraded is.
+  it("calls the newest stretch ongoing only while the system is away from healthy", () => {
+    const spans = [span("healthy", 720, 12), span("degraded", 12, 0)];
+    const recovered = stretchesOf(spans, now, "healthy");
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0].ongoing).toBe(false);
+    expect(recovered[0].to).toBe(now);
+    expect(stretchesOf(spans, now, "degraded")[0].ongoing).toBe(true);
+  });
+
+  it("never calls an older stretch ongoing, whatever the system reads now", () => {
+    const spans = [span("healthy", 720, 200), span("degraded", 200, 180), span("healthy", 180, 0)];
+    expect(stretchesOf(spans, now, "degraded")[0].ongoing).toBe(false);
   });
 });
 
@@ -115,21 +160,20 @@ describe("stretchReasons", () => {
         { id: "a2", severity: "warning", message: "Unrelated, later", raised_at: iso(10), active: true },
       ]),
     ],
-    now,
-    30 * 24,
+    { from: now - 30 * 24 * 3600_000 },
     SEEDED_LEVELS,
   );
 
   it("keeps only the alarms overlapping the stretch", () => {
     const spans = [span("healthy", 720, 200), span("degraded", 200, 180), span("healthy", 180, 0)];
-    const inc = stretchesOf(spans, now)[0];
+    const inc = stretchesOf(spans, now, "healthy")[0];
     const reasons = stretchReasons(inc, rows);
     expect(reasons.map((r) => r.id)).toEqual(["a1"]);
   });
 
   it("an ongoing alarm overlaps an ongoing stretch", () => {
     const spans = [span("healthy", 720, 12), span("degraded", 12, 0)];
-    const inc = stretchesOf(spans, now)[0];
+    const inc = stretchesOf(spans, now, "degraded")[0];
     expect(stretchReasons(inc, rows).map((r) => r.id)).toEqual(["a2"]);
   });
 });

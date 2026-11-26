@@ -1,9 +1,12 @@
 package sim
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -23,8 +26,12 @@ type behaviorEntry struct {
 	// after its mutations apply each tick (best-effort, off the tick
 	// goroutine). nil means no emit.
 	Emit *emitAction
-	stop chan struct{}
-	done chan struct{}
+	// Events are the named events the behavior reports after its mutations
+	// (#2754), each data template compiled once against the behavior's
+	// FuncMap; one that renders empty is not reported that tick.
+	Events []routeEvent
+	stop   chan struct{}
+	done   chan struct{}
 }
 
 // AddBehaviorFromProfile compiles a profile-declared behavior and
@@ -36,9 +43,9 @@ type behaviorEntry struct {
 //
 //   - Name must be non-empty (used for logging and phase offsetting).
 //   - Schedule.Interval must parse as a Go duration and be positive.
-//   - At least one mutation must be declared (an empty behavior just
-//     burns a goroutine, so we reject at load time rather than ship
-//     the foot-gun).
+//   - At least one mutation, emit or event must be declared (an empty
+//     behavior just burns a goroutine, so we reject at load time rather
+//     than ship the foot-gun).
 //
 // Behaviors that fail validation cause LoadDevices to return an error
 // so a malformed profile fails loudly at startup rather than silently
@@ -60,12 +67,12 @@ func (d *Device) AddBehaviorFromProfile(b *profile.Behavior) error {
 	if interval <= 0 {
 		return fmt.Errorf("behavior %q: schedule.interval must be positive (got %s)", b.Name, interval)
 	}
-	if len(b.Mutations) == 0 && b.Emit == nil {
-		return fmt.Errorf("behavior %q has no mutations or emit", b.Name)
+	if len(b.Mutations) == 0 && b.Emit == nil && len(b.Events) == 0 {
+		return fmt.Errorf("behavior %q has no mutations, emit or events", b.Name)
 	}
 
 	d.ensureRand()
-	funcs := behaviorFuncs(d.rand)
+	funcs := behaviorFuncs(d.rand, d.clock)
 	muts, err := compileBehaviorMutationList(b.Mutations, funcs)
 	if err != nil {
 		return fmt.Errorf("behavior %q: %w", b.Name, err)
@@ -74,12 +81,17 @@ func (d *Device) AddBehaviorFromProfile(b *profile.Behavior) error {
 	if err != nil {
 		return fmt.Errorf("behavior %q: %w", b.Name, err)
 	}
+	evs, err := compileNamedEvents("behavior "+strconv.Quote(b.Name), b.Events, funcs)
+	if err != nil {
+		return err
+	}
 
 	d.behaviors = append(d.behaviors, behaviorEntry{
 		Name:      b.Name,
 		Interval:  interval,
 		Mutations: muts,
 		Emit:      emit,
+		Events:    evs,
 	})
 	return nil
 }
@@ -192,7 +204,10 @@ func (d *Device) tickBehavior(b *behaviorEntry) {
 		DeviceID: d.DeviceID,
 		IP:       d.LoopbackIP.String(),
 	}
-	diffs, errs := applyMutations(d.state, muts, data)
+	// Only what the tick changed fans out (#2754): a timer that rewrites a
+	// watched path with the value it already holds (a call cycle keeping an
+	// idle call idle) streams nothing and bumps no version.
+	diffs, errs := applyChangedMutations(d.state, muts, data)
 	if len(diffs) > 0 {
 		d.Version++
 		if d.DiffPublisher != nil {
@@ -204,6 +219,22 @@ func (d *Device) tickBehavior(b *behaviorEntry) {
 			})
 		}
 		d.fanoutToSessions(diffs)
+	}
+	// The behavior's named events (#2754), after its changes, rendered
+	// against the state they left, in the same numbered stream; one whose
+	// data renders empty is not this tick's.
+	if d.events != nil {
+		for _, ev := range b.Events {
+			var buf bytes.Buffer
+			if err := ev.data.Execute(&buf, data); err != nil {
+				slog.Warn("behavior event not rendered", "device_id", d.DeviceID, "behavior", b.Name, "event", ev.name, "error", err)
+				continue
+			}
+			if strings.TrimSpace(buf.String()) == "" {
+				continue
+			}
+			d.events.publish(ev.name, strings.TrimSpace(buf.String()))
+		}
 	}
 	// Emit the outbound webhook after mutations apply, so the body
 	// renders against post-mutation state (a "meeting started" emit sees
@@ -232,6 +263,25 @@ func (d *Device) tickBehavior(b *behaviorEntry) {
 			"error", err,
 		)
 	}
+}
+
+// TickBehavior fires one tick of the named behavior now, as its timer would,
+// and reports whether the device has it: a test stepping a device through
+// its cycle without waiting on the clock.
+func (d *Device) TickBehavior(name string) bool {
+	d.behaviorMu.Lock()
+	var b *behaviorEntry
+	for i := range d.behaviors {
+		if d.behaviors[i].Name == name {
+			b = &d.behaviors[i]
+		}
+	}
+	d.behaviorMu.Unlock()
+	if b == nil {
+		return false
+	}
+	d.tickBehavior(b)
+	return true
 }
 
 // ensureRand lazily initializes the per-device random source on first

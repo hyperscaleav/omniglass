@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # What make preflight needs on a GitHub runner beyond Go, Node and Docker
 # (#2231), for the agent workflows: the protoc pair make gen runs, pnpm for the
-# docs build, and the ICMP sysctl test-go-rest's capability gate wants. The pins
+# console and the docs build (#2705), and the ICMP sysctl test-go-rest's capability gate wants. The pins
 # match gen-drift.yml and docs-build.yml; scripts/preflight_test.go fails when
 # they drift apart.
 set -euo pipefail

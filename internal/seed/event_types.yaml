@@ -39,6 +39,17 @@ event_types:
     description: >-
       A conferencing endpoint left an active call: call-started's closing half,
       caught natively or derived. The pair brackets a session for usage reads.
+  - name: participant-joined
+    label: Participant Joined
+    description: >-
+      Someone joined a conferencing endpoint's call in progress. Caught natively
+      where the device reports it; its payload names the call and the count it
+      reached.
+  - name: participant-left
+    label: Participant Left
+    description: >-
+      Someone left a conferencing endpoint's call in progress: participant-joined's
+      opposite. Its payload names the call and the count left.
   - name: input-changed
     label: Input Changed
     description: >-

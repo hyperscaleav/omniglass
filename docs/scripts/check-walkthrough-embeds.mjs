@@ -60,7 +60,7 @@ for (const page of html(dist)) {
 }
 
 if (problems.length) {
-  console.error(`${problems.length} walkthrough embed problem(s); build through \`corepack pnpm build\` in docs/, which forces Astro when a walkthrough changes (or run \`corepack pnpm astro build --force\`):`);
+  console.error(`${problems.length} walkthrough embed problem(s); build through \`pnpm build\` in docs/, which forces Astro when a walkthrough changes (or run \`pnpm astro build --force\`):`);
   for (const p of [...new Set(problems)]) console.error('  ' + p);
   process.exit(1);
 }

@@ -245,12 +245,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: steps.gate.outputs.decision == 'run'
+        with:
+          version: 10
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.gate.outputs.decision == 'run'
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       # protoc, pnpm and the ICMP sysctl, so make preflight runs what the
       # required checks run (#2231).
@@ -316,7 +321,14 @@ jobs:
             message with the line "Refs #${{ steps.gate.outputs.issue }}"; never write Fixes
             or Closes in a commit. Do NOT push mid-run: every push to this PR starts a full
             agent-review, so push once, to ${{ steps.gate.outputs.head }}, at the very end,
-            after your last commit and a green make preflight. Before each commit, run that
+            after your last commit and a green make preflight. A fix can add findings of its
+            own and start another round, so before that push review this round's work the way
+            the reviewer will, scoped to the commits you made in this run, not what a merge of
+            main brought in (git log --first-parent --no-merges ${{ steps.status.outputs.head_sha }}..HEAD, each
+            read with git show): run /adversarial-review on them and fix what it finds, then the neighbor check, which lists every UI label,
+            user-facing term, flag, route or identifier your changes added, renamed or removed
+            and greps the whole docs tree for each old and new spelling, fixing every hit.
+            One self-review per round, then push. Before each commit, run that
             point's tests (make test-short at least) and scripts/agent-sync.sh guard
             origin/main. make preflight runs what the PR's required checks run (make gen
             with a drift check, make test, the docs build, the migration check) and fails if
@@ -339,12 +351,19 @@ jobs:
             ${{ runner.temp }}/agent-points.json, a JSON array with one object per point:
             point (the point in a few words, one line), status ("fixed" or "unchanged"),
             sha (the commit that fixed it, for a fixed point), reason (one or two sentences:
-            what you changed, or why you did not) and comment_id (the number in the review
-            comment's id, when the point came from one). The workflow posts one line per point
-            on the PR and replies on each thread you fixed. Anything else worth saying, such as
-            the preflight step that stayed red, goes in a few lines in
-            ${{ runner.temp }}/agent-summary.md. Do not post PR comments or resolve threads
-            yourself.
+            what you changed, or why you did not), comment_id (the number in the review
+            comment's id, when the point came from one) and, for an unchanged point on an
+            advisory finding where no change is the right answer, no_change_needed: true.
+            Give every thread you read its own point, the open threads listed from earlier
+            reviews included. Only a commit you make in this run counts as a fix: a thread
+            an earlier commit already fixed is "unchanged", and the reviewer resolves it once
+            it no longer raises it. The workflow posts one line per point on the PR,
+            and as the agent App replies on each thread (naming the commit for a fixed one, the
+            reason for one you left) and resolves the fixed ones. A thread you did not change
+            stays open for a person. Anything else worth saying, such as the preflight step
+            that stayed red, goes in a few lines in
+            ${{ runner.temp }}/agent-summary.md. Do not post PR comments, reply on threads or
+            resolve threads yourself.
 
             The run's GitHub token lasts an hour, and a long run can outlast it. If a git push
             or gh command fails with an authentication error (401, 403 or "Bad credentials"),
@@ -551,8 +570,8 @@ jobs:
           fi
 
       # Edit the status comment to what the run did, one line per point of the
-      # feedback, reply "Fixed in <sha>" on each review thread a pushed commit
-      # fixed, and close the check: success when it pushed, neutral when it
+      # feedback, reply on each review thread the agent read and resolve the ones
+      # a pushed commit fixed (#2217), and close the check: success when it pushed, neutral when it
       # pushed nothing, failure when the run broke.
       - name: Show what the agent did
         if: always() && steps.status.outcome == 'success'
@@ -607,12 +626,28 @@ jobs:
           body=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" body)
           gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent \
             || echo "::warning::could not update the status comment (${COMMENT}); it still says agent-fix is working"
-          # main's agent-status.sh before #2224 has no replies; then there are none.
-          replies=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" replies 2>/dev/null) || replies='[]'
+          # Reply on each review thread the agent read, as the agent App (#2217):
+          # "Fixed in <sha>" and resolved for a fixed one, the reason and the
+          # thread left open for one it did not change. The PR's threads say which
+          # thread a comment is in and whether its finding is advisory. main's
+          # agent-status.sh before #2224 has no replies; then there are none.
+          threads='[]'
+          if [ "$(jq 'length' <<<"$points")" -gt 0 ]; then
+            threads=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO##*/}" -F number="$NUMBER" \
+              -f query='query($owner: String!, $name: String!, $number: Int!, $endCursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes { id comments(first: 50) { nodes { databaseId body } } } } } } }' \
+              --jq '.data.repository.pullRequest.reviewThreads.nodes[]' | jq -s -c '.') || threads='[]'
+          fi
+          replies=$(printf '%s' "$facts" | jq -c --argjson threads "$threads" '. + {threads: $threads}' \
+            | bash "${RUNNER_TEMP}/agent-status.sh" replies 2>/dev/null) || replies='[]'
           jq -c '.[]' <<<"$replies" | while IFS= read -r r; do
             id=$(jq -r .comment_id <<<"$r")
             gh api -X POST "repos/${REPO}/pulls/${NUMBER}/comments/${id}/replies" -f body="$(jq -r .body <<<"$r")" --silent \
-              || echo "::warning::could not reply on review comment ${id}"
+              || { echo "::warning::could not reply on review comment ${id}"; continue; }
+            tid=$(jq -r '.thread_id' <<<"$r")
+            if [ "$(jq -r .resolve <<<"$r")" = true ] && [ -n "$tid" ]; then
+              gh api graphql -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' -F id="$tid" --silent \
+                || echo "::warning::could not resolve the thread of review comment ${id}"
+            fi
           done
           if [ -n "$CHECK" ]; then
             conclusion=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" conclusion)

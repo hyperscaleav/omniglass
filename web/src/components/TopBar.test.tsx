@@ -7,8 +7,14 @@ import TopBar from "./TopBar";
 // The top bar opens omnibot's panel (#1167) only for a person the shell says
 // may run it: no handler, no button.
 
+// /auth/me answers as the server does for nobody signed in (401), so a widget that
+// reads the current user (the inbox bell) sees null rather than a list body.
 beforeEach(() => {
-  vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [] }), { headers: { "Content-Type": "application/json" } }));
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (new URL(url, "http://x").pathname.endsWith("/auth/me")) return new Response(null, { status: 401 });
+    return new Response(JSON.stringify({ items: [] }), { headers: { "Content-Type": "application/json" } });
+  });
 });
 
 afterEach(() => {

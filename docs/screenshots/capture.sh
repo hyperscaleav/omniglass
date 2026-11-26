@@ -48,6 +48,14 @@ cd "$ROOT"
 # drift (#771, #855). See web/e2e/lib/lab.sh.
 . web/e2e/lib/lab.sh
 
+# The capturing host's CPU, in the log (#1860): the raster path is pinned in the
+# capture browser (docs-shots.mjs), and this line is the evidence of which hosts
+# a baseline was byte-compared on, in CI and on a laptop alike.
+cpu_model="$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ *//' || true)"
+cpu_flags=" $(grep -m1 '^flags' /proc/cpuinfo 2>/dev/null || true) "
+yn() { case "$cpu_flags" in *" $1 "* | *" $1"[[:space:]]*) echo yes ;; *) echo no ;; esac; }
+echo "capture: cpu '${cpu_model:-unknown}' avx2=$(yn avx2) avx512f=$(yn avx512f)" >&2
+
 OUT="${DOCS_SHOTS_OUT:-docs/public/screenshots}"
 BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 
@@ -81,6 +89,39 @@ for i in $(seq 1 90); do
   sleep 2
 done
 
+# The dev user's inbox holds exactly the outpost-silent entry before any shot
+# (#2292): the alarm opening is not the entry arriving, since a rule's action
+# queues it and the tick delivers it a moment later, and the inbox shot is a
+# different page, empty or populated, depending on which side of that it lands.
+# Wait for that entry by its alarm's subject, not for any raised entry, so
+# another platform alarm told to the admins first cannot end the wait early; and
+# for the count to be one, so the shot holds the same page every capture. LOUD
+# past the deadline, like the wait above.
+for i in $(seq 1 60); do
+  held="$(curl -fsS -H "Authorization: Bearer $LAB_TOKEN" "$LAB_HOST_URL/api/v1/auth/me/notifications" |
+    jq '([.notifications[] | select(.transition == "raised" and (.subject | test("Outpost silent")))] | length) == 1
+      and (.notifications | length) == 1')"
+  [ "$held" = true ] && break
+  [ "$i" = 60 ] && { echo "capture: the dev user's inbox did not hold exactly the outpost-silent entry after 120s" >&2; exit 1; }
+  sleep 2
+done
+
+# A second person for the inbox's empty state (#2292): the fleet viewer, whom no
+# action rule tells about the platform's alarms (they go to admins and owners),
+# so their inbox is genuinely empty and the shot is the page a person with
+# nothing told to them sees. Signed in here, before any shot, so the one login
+# row and session sit in the audit trail the same way on every capture; a shot
+# marked `as: viewer` carries this session as its token (docs-shots.mjs).
+# LOUD: no session, no empty-state shot.
+jar="$(mktemp)"
+curl -fsS -c "$jar" -H 'Content-Type: application/json' -d '{"username":"viewer","password":"dev"}' \
+  "$LAB_HOST_URL/api/v1/auth/login" >/dev/null || { echo "capture: the viewer could not sign in" >&2; exit 1; }
+viewer_token="$(awk '$6 == "og-session" { print $7 }' "$jar")"
+rm "$jar"
+[ -n "$viewer_token" ] || { echo "capture: the viewer's sign-in set no session" >&2; exit 1; }
+[ "$(curl -fsS -H "Authorization: Bearer $viewer_token" "$LAB_HOST_URL/api/v1/auth/me/notifications" | jq '.notifications | length')" = 0 ] ||
+  { echo "capture: the viewer's inbox is not empty" >&2; exit 1; }
+
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
 # failure: every CLI write here lands an audit row, so a write that silently
 # failed shifts the audit page by one row and the zero-tolerance gate reads
@@ -102,7 +143,7 @@ out="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$agent_
 mkdir -p "$OUT" "$BASELINE"
 lab_run -v "$ROOT:/w" -w /w \
   --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-  -e OG_TOKEN="$LAB_TOKEN" -e OG_E2E_BASE="$LAB_SERVER_URL" -e DOCS_SHOTS_OUT="$OUT" -e DOCS_SHOTS_BASELINE="$BASELINE" \
+  -e OG_TOKEN="$LAB_TOKEN" -e OG_TOKEN_VIEWER="$viewer_token" -e OG_E2E_BASE="$LAB_SERVER_URL" -e DOCS_SHOTS_OUT="$OUT" -e DOCS_SHOTS_BASELINE="$BASELINE" \
   -e DOCS_SHOTS_TZ="${DOCS_SHOTS_TZ:-}" \
   "$LAB_PWIMG" node web/e2e/docs-shots.mjs
 # The shots are only a capture of the console if the lab that served them

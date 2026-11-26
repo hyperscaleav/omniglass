@@ -34,7 +34,10 @@ operational checklist.
   [the lab guide](docs/src/content/docs/developer/lab.mdx).
 - **Go and Node** are needed for `make test` (the Go tiers and the SPA's typecheck and vitest
   suite), `make gen`, and the console's fast loop below. `make dev` builds the `make` outputs and
-  runs `npm install` in `web/`, so the loop is ready; it starts nothing.
+  runs `pnpm install` in `web/`, so the loop is ready; it starts nothing. Node is the major in
+  `.nvmrc` (CI's setup-node reads it too, and `nvm use` picks it up). The console and the docs
+  site both install with pnpm 10 (`npm install -g pnpm@10`), since Node no longer ships corepack;
+  in `web/`, pnpm switches itself to the exact version `package.json`'s `packageManager` names.
 
 ### The console's fast loop
 
@@ -42,11 +45,11 @@ Run a lab in one terminal and the console from source in another:
 
 ```bash
 ./bin/omniglass lab run       # terminal 1: the lab, console on http://127.0.0.1:8080/web
-cd web && npm run dev         # terminal 2: the console from source with hot reload, /api proxied to the lab
+cd web && pnpm run dev        # terminal 2: the console from source with hot reload, /api proxied to the lab
 ```
 
 The Vite dev server proxies to `http://127.0.0.1:8080`; for a lab on another `--port`, set
-`OMNIGLASS_LAB_URL` (`OMNIGLASS_LAB_URL=http://127.0.0.1:8081 npm run dev`). A change to server,
+`OMNIGLASS_LAB_URL` (`OMNIGLASS_LAB_URL=http://127.0.0.1:8081 pnpm run dev`). A change to server,
 outpost or simulator Go code needs `make` again (the image rebuilds from cache), then the lab.
 
 ## Workflow

@@ -372,6 +372,13 @@ func TestWriterMismatchRefused(t *testing.T) {
 				return f.gw.AdmitWrite(f.ctx, "property", writerclass.Process, "endpoint-reachable", "ssh")
 			}},
 		},
+		// The lab seed lands health as the process does (#2727), held to the same class.
+		"landOwnerHistory": {
+			{"a seed as the process writing a collected key", func() error { return f.gw.AdmitWrite(f.ctx, "property", writerclass.Process, "video-input", "") }},
+			{"a seed as the process writing a probe key", func() error {
+				return f.gw.AdmitWrite(f.ctx, "property", writerclass.Process, "endpoint-reachable", "ssh")
+			}},
+		},
 		"IssueCommand": {
 			{"a command opening the verdict", func() error {
 				_, err := f.gw.IssueCommand(f.ctx, f.actor, "component", comp.ID, "legacy-forge", "ssh", json.RawMessage(`"up"`), nil)

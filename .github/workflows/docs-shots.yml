@@ -25,30 +25,67 @@ name: docs-shots
 
 on:
   pull_request:
+    # ready_for_review runs a draft's skipped checks; labeled starts a draft's opt-in (run:test).
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    # The same capture inputs as push below (#860), so a seed-only PR runs verify. It
+    # is the cheap structural job; the recapture itself runs on main after the merge.
     paths:
       - docs/**
       - web/**
+      - internal/devseed/**
+      - internal/seed/**
+      - db/migrations/**
+      - Makefile
+      - Dockerfile*
+      - .github/workflows/docs-shots.yml
+  # The recapture runs on main, so its trigger is every input to a capture (#860):
+  # the console (web/**), the pages and their frontmatter (docs/**), the dev seed
+  # fleet the captured console renders, the boot seed and the migrations behind it
+  # (a new catalog row moves a count), and what builds the lab image the capture
+  # drives (the Makefile, the Dockerfile) and this workflow. The rest of internal/**
+  # is left out on purpose: the recapture builds the image and takes minutes, and a
+  # server change that moves a pixel does so through one of these inputs or through
+  # web/**. A new input that shapes what the console renders joins this list, and
+  # the pull_request list above in the same edit (scripts/docs_shots_paths_test.go
+  # holds them equal). A PR compares no pixels (verify is structural); the pixels
+  # are recaptured here, on main, after the merge.
   push:
     branches: [main, "release/**"]
     paths:
       - docs/**
       - web/**
+      - internal/devseed/**
+      - internal/seed/**
+      - db/migrations/**
+      - Makefile
+      - Dockerfile*
+      - .github/workflows/docs-shots.yml
 
 permissions:
   contents: read
 
 jobs:
   verify:
+    # A draft runs none of this (#2309): marking it ready runs it on the current
+    # head, and a run:test label on a draft opts in. The job reports skipped on a
+    # draft, so the check is not missing. Pushes and queue entries always run.
+    if: >-
+      github.event_name != 'pull_request'
+      || ((!github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run:test'))
+        && (github.event.action != 'labeled' || github.event.label.name == 'run:test'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 10
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
       - name: Install web deps
-        run: cd web && npm ci
+        run: cd web && pnpm install --frozen-lockfile
       - name: Verify screenshots are declared and present
         run: make docs-shots-verify
       - name: Guard existing shots against a PR's edit
@@ -81,11 +118,14 @@ jobs:
           persist-credentials: false
       # make docs-shots builds the lab (make: the image and the binary, with only
       # Docker), so the job needs no Go toolchain.
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 10
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version-file: .nvmrc
       - name: Install web deps
-        run: cd web && npm ci
+        run: cd web && pnpm install --frozen-lockfile
       - name: Recapture both shot sets on the merged tree
         run: make docs-shots
       - name: Mint the agent App token

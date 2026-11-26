@@ -262,7 +262,7 @@ async function signIn(browser, base, user, password) {
   await page.goto(`${base}/web/login`);
   await page.locator('#login-username').fill(user);
   await page.locator('#login-password').fill(password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL((u) => !u.pathname.endsWith('/login'));
   const state = await ctx.storageState();
   await ctx.close();

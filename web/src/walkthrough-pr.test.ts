@@ -17,6 +17,7 @@ import {
   legOutcome,
   freshnessReport,
   demoTag,
+  retagBody,
   rawUrl,
   selectDemos,
   tapeEvidenceFiles,
@@ -722,5 +723,20 @@ describe("the freshness report the nightly run files", () => {
 
   it("refuses an id that is not a safe path segment", () => {
     expect(() => report({ recorded: [], failed: ["../x"], unstarted: [] }, NONE)).toThrow('tape id "../x"');
+  });
+});
+
+describe("retagBody", () => {
+  it("rewrites only the tag lines to demo: none, keeping the rest of the body", () => {
+    const body = "## Outcome\n\nCloses #1\n\n## Demo\n\n<!-- demo: example -->\ndemo: new-walkthrough\n\n```\ndemo: quoted\n```\n\n## Risk\n";
+    const out = retagBody(body, "its demo is added by this PR");
+    expect(out).toBe(body.replace("\ndemo: new-walkthrough\n", "\ndemo: none (its demo is added by this PR)\n"));
+    expect(demoTag(out)).toEqual({ none: "its demo is added by this PR" });
+  });
+  it("rewrites every tag line, a bullet's included, and keeps CRLF", () => {
+    expect(retagBody("- demo: a\r\ndemo: b\r\n", "r")).toBe("demo: none (r)\r\ndemo: none (r)\r\n");
+  });
+  it("appends a Demo line when the body has no tag", () => {
+    expect(demoTag(retagBody("## Outcome\n\nx\n", "no tag"))).toEqual({ none: "no tag" });
   });
 });

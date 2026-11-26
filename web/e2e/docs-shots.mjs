@@ -85,7 +85,12 @@ for (const s of specs) {
 
 await mkdir(OUT, { recursive: true });
 await mkdir(BASELINE, { recursive: true });
-const browser = await chromium.launch();
+// Skia picks its raster pipeline per CPU at runtime (SSE2, AVX2, AVX-512), and the
+// paths round a gradient pixel differently by a level (#1860: the users page's
+// avatar, #774). --disable-skia-runtime-opts turns the runtime dispatch off, so
+// every host rasterizes through the one baseline path and a baseline is the same
+// bytes on whatever CPU the capture runs. The exact comparison is never loosened.
+const browser = await chromium.launch({ args: ['--disable-skia-runtime-opts'] });
 
 for (const spec of specs) {
   const ctx = await browser.newContext({
@@ -98,8 +103,14 @@ for (const spec of specs) {
   // Attached before navigation so a font file that 404s or never arrives is
   // recorded rather than inferred from the raster later (#775).
   const failedFontRequests = watchFontRequests(page);
-  if ((spec.auth ?? true) && TOKEN) {
-    await page.addInitScript((t) => localStorage.setItem('og-token', t), TOKEN);
+  // `as: viewer` shoots the page as another seeded person, whose session the
+  // capture script signed in and hands over as OG_TOKEN_VIEWER (the empty inbox,
+  // #2292). A shot that names a person without a token fails, never falls back
+  // to the admin's page.
+  const token = spec.as ? process.env[`OG_TOKEN_${String(spec.as).toUpperCase()}`] : TOKEN;
+  if (spec.as && !token) throw new Error(`${spec.id}: as: ${spec.as} but OG_TOKEN_${String(spec.as).toUpperCase()} is not set`);
+  if ((spec.auth ?? true) && token) {
+    await page.addInitScript((t) => localStorage.setItem('og-token', t), token);
   }
   // Not networkidle: a page bound to live data holds its views stream open.
   await gotoSettled(page, BASE + spec.path);

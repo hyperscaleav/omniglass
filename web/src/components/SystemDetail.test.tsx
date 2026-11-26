@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -28,6 +28,8 @@ import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
 import { clickDelete } from "./configure.testkit";
 import { answerConfirms } from "../lib/confirm.testkit";
+import { fmtTime } from "../lib/format";
+import { seedSystemHealth } from "../lib/health.testkit";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
 // so a blade shows every section, tab and action its page shows.
@@ -70,7 +72,7 @@ function seed(actions: string[] = ["update", "delete", "rename"]) {
   seedSeverityLevels(qc);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
-  qc.setQueryData([...systemHealthKey(SID)], health);
+  seedSystemHealth(qc, SID, health);
   qc.setQueryData([...systemSlotsKey(SID)], [
     { name: "room-mic", label: "Room Microphone", quorum: 1, assigned: 1, impact: "degraded", from_standard: true, accepted_types: [], pinned_products: [], assigned_to: ["mic-1"], positions: [1], position_labels: [] },
   ]);
@@ -178,12 +180,31 @@ describe("one body in two hosts", () => {
     requestTriage(undefined);
   });
 
+  // One rule raises one alarm per endpoint: a display down on both its
+  // endpoints reads two Reachability lost rows, each naming its endpoint.
+  it("names each alarm's endpoint, so two alarms of one rule on one component read apart", async () => {
+    const qc = seed();
+    const a = health.slots![0].alarms![0];
+    seedSystemHealth(qc, SID, {
+      ...health,
+      slots: [{ ...health.slots![0], alarms: [
+        { ...a, id: "al-snmp", message: "Reachability lost", instance: "snmp" },
+        { ...a, id: "al-http", message: "Reachability lost", instance: "http" },
+      ] }],
+    });
+    mountPage(undefined, qc);
+    const why = await screen.findByTestId("alarm-strip");
+    await waitFor(() => expect(within(why).getAllByTestId("alarm-instance")).toHaveLength(2));
+    expect(within(why).getAllByTestId("alarm-instance").map((e) => e.textContent).sort()).toEqual(["on http", "on snmp"]);
+    expect(why.textContent).toContain("Reachability lost on snmp");
+  });
+
   // Snooze is offered on a system's alarm as on a component's (#2448): Snooze
   // while it is not snoozed, the chip and Unsnooze once it is.
   it("an unsnoozed alarm offers Snooze, a snoozed one its chip and Unsnooze, page and blade", async () => {
     const snoozed = (until?: string) => {
       const qc = seed();
-      qc.setQueryData([...systemHealthKey(SID)], {
+      seedSystemHealth(qc, SID, {
         ...health,
         slots: [{ ...health.slots![0], alarms: [{ ...health.slots![0].alarms![0], ...(until ? { snoozed_until: until, snoozed_by: "alice" } : {}) }] }],
       });
@@ -226,7 +247,7 @@ describe("a system with no components (#2464)", () => {
   const blank = () => {
     const qc = seed();
     qc.setQueryData([...FLEET_VIEW_KEY], { ...view, systems: [{ ...view.systems![0], dots: [] }] });
-    qc.setQueryData([...systemHealthKey(SID)], { ...health, slots: [], alarms: [] });
+    seedSystemHealth(qc, SID, { ...health, slots: [], alarms: [] });
     qc.setQueryData([...systemSlotsKey(SID)], []);
     qc.setQueryData([...SYSTEMS_KEY], [{ id: SID, name: "boardroom", label: "Boardroom", location_id: uuidFor("sd-room"), actions: ["update"] }]);
     return qc;
@@ -327,5 +348,277 @@ describe("the blade's tab and edit are its own", () => {
     fireEvent.click(await within(blade).findByRole("tab", { name: "Configure" }));
     await clickDelete(blade);
     await waitFor(() => expect(r.controller().stack()).toEqual([]));
+  });
+});
+
+// #2723: the Activity tab's history moves with the 5 s health poll that feeds
+// it, not once a minute, so right after a recovery its record catches up with
+// the header within one poll and nobody has to refresh.
+describe("the Activity tab's history keeps time with the poll", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("a recovery's healthy time reaches Uptime within one 5 s poll", async () => {
+    const recovered = Date.parse("2026-08-20T17:00:00Z");
+    vi.useFakeTimers({ now: recovered, shouldAdvanceTime: true });
+    const qc = seed();
+    seedSystemHealth(qc, SID, {
+      ...health,
+      health: "healthy",
+      slots: [],
+      transitions: [
+        { ts: new Date(recovered - 60_000).toISOString(), health: "healthy" },
+        { ts: new Date(recovered - 30_000).toISOString(), health: "degraded" },
+        { ts: new Date(recovered).toISOString(), health: "healthy" },
+      ],
+    });
+    mountPage(`/web/systems/${SID}`, qc);
+    fireEvent.click(await screen.findByRole("tab", { name: "Activity" }));
+    const kpi = await screen.findByTestId("uptime-kpi");
+    // Healthy 30 s of the 60 s recorded so far.
+    await waitFor(() => expect(kpi.textContent).toContain("50.0"));
+    vi.advanceTimersByTime(5_000);
+    // 35 s healthy of 65 s: the history took the poll's next now.
+    await waitFor(() => expect(kpi.textContent).toContain("53.8"));
+  });
+});
+
+// #2741: the Activity tab follows the page's one range, as Overview and the
+// Timeline do. With no range in the address it opens on the last 30 days (its
+// status-page default); a range once picked governs every tab.
+describe("the Activity tab follows the page's range (#2741)", () => {
+  const NOW = Date.parse("2026-08-20T16:00:00Z");
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const HOUR = 3600_000;
+  // Healthy when the hour opened, in outage for its last half.
+  const hourly = {
+    ...health,
+    health: "outage",
+    carried_in: "healthy",
+    first_recorded_at: "2026-07-01T00:00:00Z",
+    transitions: [{ ts: iso(NOW - HOUR / 2), health: "outage" }],
+  } as unknown as FleetHealth;
+
+  // Every health read goes through fetch: a ranged read (one with since) is
+  // answered with `body`, the unranged current read with `bare`. `hold` keeps
+  // a ranged read in flight, for the moment between a pick and its answer.
+  const stubHealth = (body: unknown = hourly, bare: unknown = body, hold: (u: URL) => boolean = () => false) => {
+    const reads: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const url = new URL(req.url);
+        if (url.pathname.endsWith(`/systems/${SID}/health`)) {
+          reads.push(url);
+          const ranged = url.searchParams.has("since");
+          if (ranged && hold(url)) return new Promise<Response>(() => {});
+          return new Response(JSON.stringify(ranged ? body : bare), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        const out = req.method === "POST" ? { results: [], cursor: "" } : [];
+        return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    return reads;
+  };
+  // A cache with no health in it, so the page's own read is the one drawn.
+  const unseeded = () => {
+    const qc = seed();
+    qc.removeQueries({ queryKey: [...systemHealthKey(SID)] });
+    return qc;
+  };
+  const since = (u: URL) => Date.parse(u.searchParams.get("since") ?? "");
+  const rangedOf = (reads: URL[]) => reads.filter((u) => u.searchParams.has("since"));
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(NOW));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("a failed ranged read says so on Activity and offers Retry, which reads it again", async () => {
+    let failing = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const url = new URL(req.url);
+        if (url.pathname.endsWith(`/systems/${SID}/health`)) {
+          const ranged = url.searchParams.has("since");
+          if (ranged && failing) return new Response(JSON.stringify({ title: "Bad Request", status: 400, detail: "since is malformed" }), { status: 400, headers: { "content-type": "application/problem+json" } });
+          return new Response(JSON.stringify(hourly), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        const out = req.method === "POST" ? { results: [], cursor: "" } : [];
+        return new Response(JSON.stringify(out), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const alert = await screen.findByTestId("history-error");
+    expect(alert.textContent).toContain("since is malformed");
+    // Uptime is the 30-day KPI from the current read: a failed ranged read
+    // leaves it standing.
+    const kpi = screen.getByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    expect(kpi.textContent).toContain("%");
+    failing = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.queryByTestId("history-error")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("stretch-list").textContent).toContain("ongoing"));
+  });
+
+  it("with range=1h, the history read carries that hour while Uptime stays the 30-day KPI", async () => {
+    const reads = stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    await waitFor(() => expect(rangedOf(reads).length).toBeGreaterThan(0));
+    expect(since(rangedOf(reads)[0])).toBe(NOW - HOUR);
+    expect(rangedOf(reads)[0].searchParams.get("until")).toBeNull();
+    const kpi = await screen.findByTestId("uptime-kpi");
+    // Out for the last half hour of 30 days: 99.9%, whatever the picker says.
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    expect(kpi.textContent).toContain("99.9%");
+    expect(kpi.textContent).not.toContain("of the last hour");
+    expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 1 hour");
+  });
+
+  it("with no range given, Activity reads the last 30 days and the Timeline the last 24 hours", async () => {
+    const reads = stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
+    await waitFor(() => expect(rangedOf(reads).length).toBeGreaterThan(0));
+    expect(since(rangedOf(reads)[0])).toBe(NOW - 30 * 24 * HOUR);
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 30 days");
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours"));
+    expect(window.location.search).not.toContain("range=");
+  });
+
+  it("the history bar starts at the range's start, the carried-in health before the first edge", async () => {
+    stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const strip = await screen.findByTestId("health-history-full");
+    await waitFor(() => expect(within(strip).getByTestId("strip-start").textContent).toBe(fmtTime(iso(NOW - HOUR))));
+    const segs = [...strip.querySelectorAll("[data-segment]")].map((el) => el.getAttribute("data-segment")!.split(":")[0]);
+    expect(segs).toEqual(["healthy", "outage"]);
+  });
+
+  it("the picker shows on Activity, and a pick there moves the Timeline's range too", async () => {
+    stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
+    fireEvent.click(await screen.findByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
+    await waitFor(() => expect(window.location.search).toContain("range=7d"));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 30 days");
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+  });
+
+  // The default alarm read holds the active alarms and those cleared in the
+  // last 30 days; a custom range reads its own, so an old outage keeps the
+  // alarms that explain it.
+  it("a custom range reads its health and its alarms over that range", async () => {
+    const reads: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const url = new URL(req.url);
+        reads.push(url);
+        const body = url.pathname.endsWith("/health") ? old : url.pathname.endsWith("/alarms") ? { alarms: [] } : [];
+        return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    const from = NOW - 60 * 24 * HOUR;
+    const to = from + 2 * HOUR;
+    // Healthy when the range opened, out for its second hour.
+    const old = { ...hourly, first_recorded_at: "2026-01-01T00:00:00Z", transitions: [{ ts: iso(from + HOUR), health: "outage" }] };
+    const qc = unseeded();
+    qc.removeQueries({ queryKey: [...systemAlarmsKey(SID)] });
+    mountPage(`/web/systems/${SID}?tab=activity&from=${iso(from)}&to=${iso(to)}`, qc);
+    await waitFor(() => expect(reads.some((u) => u.pathname.endsWith(`/systems/${SID}/alarms`))).toBe(true));
+    const alarmsRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/alarms`))!;
+    expect(alarmsRead.searchParams.get("since")).toBe(iso(from));
+    expect(alarmsRead.searchParams.get("until")).toBe(iso(to));
+    await waitFor(() => expect(reads.some((u) => u.pathname.endsWith(`/systems/${SID}/health`) && u.searchParams.has("since"))).toBe(true));
+    const healthRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/health`) && u.searchParams.has("since"))!;
+    expect(healthRead.searchParams.get("since")).toBe(iso(from));
+    expect(healthRead.searchParams.get("until")).toBe(iso(to));
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    // The bar ends at the range's end, not now.
+    expect(within(screen.getByTestId("health-history-full")).getByTestId("strip-end").textContent).toBe(fmtTime(iso(to)));
+  });
+
+  // Review of #2741: the header's since-when is the current report's last edge,
+  // whatever window Activity reads. An outage that began 3 h ago still reads
+  // "since then · 3h" with range=1h, though no edge falls inside that hour.
+  it("the header's since-when reads the current report, not the ranged one", async () => {
+    const opened = NOW - 3 * HOUR;
+    const bare = { ...hourly, carried_in: undefined, transitions: [{ ts: iso(NOW - 40 * 24 * HOUR), health: "healthy" }, { ts: iso(opened), health: "outage" }] };
+    const ranged = { ...hourly, carried_in: "outage", transitions: [] };
+    stubHealth(ranged, bare);
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    const line = await screen.findByTestId("since-line");
+    expect(line.textContent).toContain(fmtTime(iso(opened)));
+    expect(line.textContent).toContain("3h");
+  });
+
+  // The current report keeps the 5 s poll on every tab, so the panels that
+  // share its key (the slots on Configure, a location's system summaries)
+  // move with it.
+  it("polls the unranged current report on Configure", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    vi.setSystemTime(new Date(NOW));
+    const reads = stubHealth();
+    mountPage(`/web/systems/${SID}?tab=configure`);
+    const bare = () => reads.filter((u) => !u.searchParams.has("since")).length;
+    // The mount's own first reads are not a poll.
+    await vi.advanceTimersByTimeAsync(0);
+    const atMount = bare();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(bare()).toBeGreaterThan(atMount);
+  });
+
+  // A pick's own read is in flight: Activity draws nothing from the range it
+  // left, rather than that range's report measured as the new one.
+  it("while a new range's read is in flight, the history draws nothing from the old range and Uptime keeps its 30 days", async () => {
+    stubHealth(hourly, hourly, (u) => since(u) === NOW - 30 * 24 * HOUR);
+    mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
+    await screen.findByTestId("stretch-list");
+    fireEvent.click(screen.getByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-30d"));
+    await waitFor(() => expect(window.location.search).toContain("range=30d"));
+    await waitFor(() => expect(screen.queryByTestId("stretch-list")).toBeNull());
+    expect(screen.getByTestId("history-tab").textContent).toContain("Reading the range.");
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("99.9%");
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 30 days");
+  });
+
+  // A custom range from before the system existed holds no record: the bar is
+  // not painted in today's health, no stretch is listed, and Uptime says so.
+  it("a past custom range before the first record draws nothing and says so", async () => {
+    const from = NOW - 60 * 24 * HOUR;
+    const to = from + 2 * HOUR;
+    const young = { ...hourly, health: "outage", carried_in: undefined, first_recorded_at: iso(NOW - 10 * 24 * HOUR), transitions: [] };
+    stubHealth(young);
+    mountPage(`/web/systems/${SID}?tab=activity&from=${iso(from)}&to=${iso(to)}`, unseeded());
+    await waitFor(() => expect(screen.getByTestId("history-tab").textContent).toContain("Nothing recorded in this window."));
+    expect(screen.getByTestId("health-history-full").querySelectorAll("[data-segment]").length).toBe(0);
+    expect(screen.queryByTestId("stretch-list")).toBeNull();
+  });
+
+  // The address leaves the 24-hour default out, so on this page a pick of 24
+  // hours has to say so: otherwise Activity would fall back to its 30 days.
+  it("a pick of the last 24 hours on Activity holds there", async () => {
+    stubHealth();
+    mountPage(`/web/systems/${SID}?tab=activity`, unseeded());
+    fireEvent.click(await screen.findByTestId("time-range-trigger"));
+    fireEvent.click(await screen.findByTestId("time-range-preset-24h"));
+    await waitFor(() => expect(window.location.search).toContain("range=24h"));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours"));
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 30 days");
   });
 });

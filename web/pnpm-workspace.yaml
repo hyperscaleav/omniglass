@@ -1,0 +1,6 @@
+# An install fails on any dependency install script not decided below (#2705);
+# scripts/web_pnpm_test.go records why each one runs or does not.
+strictDepBuilds: true
+allowBuilds:
+  esbuild: true
+  fsevents: false
