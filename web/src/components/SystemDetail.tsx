@@ -249,7 +249,9 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       historyWindow().end,
     ),
   );
-  const uptimeWindow = createMemo(() =>
+  // What the range holds: measured only to tell an empty window from a
+  // healthy one; never shown as Uptime, which is the 30-day KPI below.
+  const rangeMeasure = createMemo(() =>
     uptimeOver({
       transitions: history.data?.transitions ?? [],
       health: windowHealth(),
@@ -259,7 +261,24 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       now: historyNow(),
     }),
   );
-  const uptime = () => (history.data ? uptimeWindow().pct : null);
+  // Uptime is the availability KPI over a fixed rolling 30 days (#2607,
+  // health.md's service levels), not a troubleshooting readout: it reads the
+  // current report, whose default window is those 30 days, whatever range the
+  // picker holds.
+  const kpiNow = createMemo(() => {
+    const t = health.data?.transitions ?? [];
+    return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
+  });
+  const uptimeKpi = createMemo(() =>
+    uptimeOver({
+      transitions: health.data?.transitions ?? [],
+      health: health.data?.health,
+      carriedIn: health.data?.carried_in,
+      firstRecordedAt: health.data?.first_recorded_at,
+      now: kpiNow(),
+    }),
+  );
+  const uptime = () => (health.data ? uptimeKpi().pct : null);
   const stretches = createMemo(() => stretchesOf(healthSpans(), historyWindow().end, windowHealth()));
   // What an empty stretch list says: still reading, nothing recorded in the
   // window, or healthy all the way through it.
@@ -271,7 +290,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       ? "The range could not be read."
       : !history.data
         ? "Reading the range."
-        : uptimeWindow().pct === null
+        : rangeMeasure().pct === null
           ? "Nothing recorded in this window."
           : "Nothing in this window. The system held healthy the whole way.";
   // A good uptime wears the muted healthy green (#1067); one that should
@@ -478,7 +497,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
             </Show>
             <div class="flex flex-wrap items-stretch gap-3">
               <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
-                <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
+                <Eyebrow label="Uptime" hint="The healthy share of the last 30 days (or of the system's life, if younger): the availability KPI a status page leads with. It keeps its own fixed window; the time range above sets the history beside it, not this number." />
                 <span
                   class="font-mono text-3xl tabular-nums"
                   classList={{
@@ -491,7 +510,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     {uptime()}<span class="text-lg">%</span>
                   </Show>
                 </span>
-                <span class="text-[10px] text-base-content/45">{history.data ? uptimeWindow().label : historyError() ? "not read" : "reading the range"}</span>
+                <span class="text-[10px] text-base-content/45">{health.data ? uptimeKpi().label : "reading"}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory
