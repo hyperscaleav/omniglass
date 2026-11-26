@@ -32,6 +32,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/tail"
 	"github.com/hyperscaleav/omniglass/sim/impair"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/multitracer"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -1399,6 +1400,9 @@ type PG struct {
 	// binding reads after its history (ADR-1830); nil in a PG built without
 	// NewPG, which publishes nothing.
 	tail *tail.Hub
+	// changes publishes the change lane's notices on tail when the
+	// transaction that noted them commits (#2731).
+	changes *changeTracer
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -1490,8 +1494,10 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: the database DSN ($OMNIGLASS_DSN or $DATABASE_URL) does not parse: %s", pgParseReason(err))
 	}
+	p.changes = newChangeTracer(p.tail)
+	cfg.ConnConfig.Tracer = p.changes
 	if p.tracer != nil {
-		cfg.ConnConfig.Tracer = p.tracer
+		cfg.ConnConfig.Tracer = multitracer.New(p.tracer, p.changes)
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

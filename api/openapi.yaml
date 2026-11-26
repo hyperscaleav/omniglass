@@ -15638,6 +15638,33 @@ components:
         - primitive
         - kind
       type: object
+    ViewChangedEvent:
+      additionalProperties: false
+      properties:
+        id:
+          description: The entity's uuid
+          type: string
+        kind:
+          description: "The entity's kind: component or system"
+          type: string
+        op:
+          description: "What happened to it: update (its state moved; refetch it)"
+          type: string
+        topic:
+          description: The topic as the watch named it, kind:ref
+          type: string
+        v:
+          description: The tail sequence of the newest change this notice stands for
+          format: int64
+          minimum: 0
+          type: integer
+      required:
+        - topic
+        - kind
+        - id
+        - op
+        - v
+      type: object
     ViewEntityBody:
       additionalProperties: false
       properties:
@@ -15864,6 +15891,9 @@ components:
           type:
             - array
             - "null"
+        topics:
+          description: "The topics' position is one the tail no longer holds (too old, or from before a server restart): changes may have been missed, so refetch everything the topics show, and reconnect with no topics_cursor"
+          type: boolean
       required:
         - bindings
       type: object
@@ -27752,17 +27782,32 @@ paths:
       x-omniglass-permission: view:read
   /views:watch:
     get:
-      description: "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most 16 watches open; past it the open is a 429."
+      description: "Streams the rows that land for every binding, and a changed notice for every topic a write moved, as Server-Sent Events, one connection for all of them (ADR-1830, ADR-2731). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. A topic (kind:ref, a component or a system) needs <kind>:read and resolves in scope at connect as a literal ref does, an out-of-scope one the same 404; a changed event names it when a write moved its state (its health recomputed, a slot or member changed), at most once each 250 milliseconds, and carries no data: the client refetches the route it reads. The topics resume after topics_cursor (else Last-Event-ID, else now); a position the tail no longer holds is a reset with topics set, and the client refetches what they show. An event bears the stream's position only once every changed notice before it has gone out, so a reconnect from any id misses no change. One user holds at most 16 watches open; past it the open is a 429. On server shutdown each stream ends with a final mark."
       operationId: watch-views
       parameters:
-        - description: "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)"
+        - description: "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now). Give bindings, topics, or both"
           explode: false
           in: query
           name: bindings
-          required: true
           schema:
-            description: "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)"
+            description: "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now). Give bindings, topics, or both"
             maxLength: 32768
+            type: string
+        - description: "The entities whose changes the stream names, comma separated, each kind:ref (component or system, by name, uuid or dotted address; at most 32). A changed event says one moved: refetch its route. Give bindings, topics, or both"
+          explode: false
+          in: query
+          name: topics
+          schema:
+            description: "The entities whose changes the stream names, comma separated, each kind:ref (component or system, by name, uuid or dotted address; at most 32). A changed event says one moved: refetch its route. Give bindings, topics, or both"
+            maxLength: 8192
+            type: string
+        - description: "The position the topics resume after: the last event id the client received. Unset, Last-Event-ID; unset too, the topics follow from now"
+          explode: false
+          in: query
+          name: topics_cursor
+          schema:
+            description: "The position the topics resume after: the last event id the client received. Unset, Last-Event-ID; unset too, the topics follow from now"
+            maxLength: 64
             type: string
         - description: Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position
           explode: false
@@ -27774,11 +27819,11 @@ paths:
             maximum: 900
             minimum: 1
             type: integer
-        - description: "The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later"
+        - description: "The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later, and the topics from it"
           in: header
           name: Last-Event-ID
           schema:
-            description: "The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later"
+            description: "The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later, and the topics from it"
             maxLength: 64
             type: string
       responses:
@@ -27833,6 +27878,21 @@ paths:
                         - event
                         - data
                       title: Event rows
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/ViewChangedEvent"
+                        event:
+                          const: changed
+                          description: The event name
+                          type: string
+                        id:
+                          description: The cursor after the event, the resume point; absent on reset
+                          type: string
+                      required:
+                        - event
+                        - data
+                      title: Event changed
                       type: object
                 title: Server Sent Events
                 type: array

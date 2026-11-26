@@ -351,6 +351,41 @@ describe("the blade's tab and edit are its own", () => {
   });
 });
 
+describe("the system follows its topic live (#2731)", () => {
+  it("a changed notice on the stream refetches the system's health, and the page shows it without a refresh", async () => {
+    let ctl!: ReadableStreamDefaultController<Uint8Array>;
+    const watches: string[] = [];
+    let healthReads = 0;
+    const cleared = { ...health, health: "healthy", slots: [{ ...health.slots![0], impaired: false, down: [], alarms: [] }] };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/views:watch")) {
+        watches.push(decodeURIComponent(url));
+        const body = new ReadableStream<Uint8Array>({ start: (c) => (ctl = c) });
+        return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+      }
+      if (url.includes(`/systems/${SID}/health`)) {
+        healthReads++;
+        // The first read is the refresh a newly opened stream makes of what
+        // was read before it; the next is the notice's.
+        return new Response(JSON.stringify(healthReads === 1 ? health : cleared), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(null, { status: 204 });
+    });
+    mountPage();
+    await screen.findAllByText("No route to host");
+    await waitFor(() => expect(watches.some((w) => w.includes(`topics=system:${SID}`))).toBe(true));
+    const send = (event: string, data: unknown, id: string) =>
+      ctl.enqueue(new TextEncoder().encode(`id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    send("mark", { cursor: "boot.1" }, "boot.1");
+    await waitFor(() => expect(healthReads).toBe(1));
+    expect(screen.queryAllByText("No route to host").length).toBeGreaterThan(0);
+    send("changed", { topic: `system:${SID}`, kind: "system", id: SID, op: "update", v: 2 }, "boot.2");
+    await waitFor(() => expect(healthReads).toBe(2));
+    await waitFor(() => expect(screen.queryByText("No route to host")).toBeNull());
+  });
+});
+
 // #2723: the Activity tab's history moves with the 5 s health poll that feeds
 // it, not once a minute, so right after a recovery its record catches up with
 // the header within one poll and nobody has to refresh.
@@ -566,10 +601,9 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     expect(line.textContent).toContain("3h");
   });
 
-  // The current report keeps the 5 s poll on every tab, so the panels that
-  // share its key (the slots on Configure, a location's system summaries)
-  // move with it.
-  it("polls the unranged current report on Configure", async () => {
+  // The current report follows the system's topic on every tab (#2731), never
+  // a timer: no read repeats on its own.
+  it("does not poll the unranged current report on Configure", async () => {
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     vi.setSystemTime(new Date(NOW));
     const reads = stubHealth();
@@ -579,7 +613,7 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     await vi.advanceTimersByTimeAsync(0);
     const atMount = bare();
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(bare()).toBeGreaterThan(atMount);
+    expect(bare()).toBe(atMount);
   });
 
   // A pick's own read is in flight: Activity draws nothing from the range it

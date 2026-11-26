@@ -52,6 +52,7 @@ import { DEFAULT_RANGE, HISTORY_DEFAULT_RANGE, rangePhrase, resolveRange, useHos
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
+import { liveQuery } from "../lib/live";
 import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
@@ -131,14 +132,16 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const activityRange = (): TimeRange => rangeOr(HISTORY_DEFAULT_RANGE);
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  // The current report: the header, Why, the slots and the components read
-  // it on every tab, and the panels that share its key (the slots on
-  // Configure, a location's system summaries) move with its poll.
-  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
-  const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
-  // Each member's own health, polled off the system's members read: the
-  // fleet view's dots (read once) stand in until it answers.
-  const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
+  // The system's health, slots and members follow its topic on the tab's one
+  // live stream (#2731): every write that moves any of them recomputes the
+  // system, which names it, and each read refetches then, never on a timer.
+  const topics = () => [`system:${id()}`];
+  const health = liveQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), topics: topics() }));
+  const declared = liveQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), topics: topics() }));
+  // Each member's own health, off the system's members read (a member's
+  // health moving recomputes the system it staffs): the fleet view's dots
+  // (read once) stand in until it answers.
+  const membersQ = liveQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), topics: topics() }));
 
   const system = createMemo(() => (view.data?.systems ?? []).find((s) => s.id === id()));
 
@@ -203,22 +206,22 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   // transitions cover the range, and the health in force when it opened
   // (carried_in) comes with it. A new range draws nothing until its own read
   // lands, so no figure is the old range's report measured as the new one.
-  const history = useQuery(() => {
+  const history = liveQuery(() => {
     const r = activityRange();
     return {
+      topics: topics(),
       queryKey: systemHealthRangeKey(id(), r),
       queryFn: () => systemHealth(id(), r),
       enabled: tab() === "activity",
-      refetchInterval: LEAF_POLL_MS,
     };
   });
-  const alarmHistory = useQuery(() => {
+  const alarmHistory = liveQuery(() => {
     const r = activityRange();
     return {
+      topics: topics(),
       queryKey: systemAlarmsRangeKey(id(), r),
       queryFn: () => systemAlarms(id(), r),
       enabled: tab() === "activity",
-      refetchInterval: LEAF_POLL_MS,
     };
   });
   // The history's now: the coarse clock, but never behind the report's own

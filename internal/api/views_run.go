@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -53,6 +52,8 @@ const (
 type viewWatchLimits struct {
 	perUser             int
 	lifetime, heartbeat time.Duration
+	// shutdown ends every stream with its position when the server stops.
+	shutdown *StreamShutdown
 }
 
 func (l viewWatchLimits) withDefaults() viewWatchLimits {
@@ -425,12 +426,15 @@ type viewMarkEvent struct {
 
 type viewResetEvent struct {
 	Bindings []int `json:"bindings" doc:"The bindings whose cursor the tail no longer holds; re-run their history"`
+	Topics   bool  `json:"topics,omitempty" doc:"The topics' position is one the tail no longer holds (too old, or from before a server restart): changes may have been missed, so refetch everything the topics show, and reconnect with no topics_cursor"`
 }
 
 type watchViewsInput struct {
-	Bindings        string `query:"bindings" required:"true" maxLength:"32768" doc:"The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)"`
+	Bindings        string `query:"bindings" maxLength:"32768" doc:"The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now). Give bindings, topics, or both"`
+	Topics          string `query:"topics" maxLength:"8192" doc:"The entities whose changes the stream names, comma separated, each kind:ref (component or system, by name, uuid or dotted address; at most 32). A changed event says one moved: refetch its route. Give bindings, topics, or both"`
+	TopicsCursor    string `query:"topics_cursor" maxLength:"64" doc:"The position the topics resume after: the last event id the client received. Unset, Last-Event-ID; unset too, the topics follow from now"`
 	DurationSeconds int    `query:"duration_seconds" minimum:"1" maximum:"900" doc:"Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position"`
-	LastEventID     string `header:"Last-Event-ID" maxLength:"64" doc:"The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later"`
+	LastEventID     string `header:"Last-Event-ID" maxLength:"64" doc:"The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later, and the topics from it"`
 }
 
 type viewWatchBinding struct {
@@ -541,6 +545,7 @@ func viewTailRows(matches []viewMatch, commits []tail.Commit, seqs []uint64, now
 func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, log *slog.Logger, limits viewWatchLimits) {
 	limits = limits.withDefaults()
 	watches := newWaitLimiter(viewWatchesTotal, limits.perUser)
+	shutdown := limits.shutdown
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "run-views",
 		Extensions:  mcpExposed(),
@@ -571,26 +576,36 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 		Method:      http.MethodGet,
 		Path:        "/views:watch",
 		Summary:     "Follow view bindings live over one SSE stream",
-		Description: fmt.Sprintf("Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (%d minutes, or duration_seconds) with its position, and on each %d second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most %d watches open; past it the open is a 429.", int(viewWatchLifetime.Minutes()), int(viewWatchHeartbeat.Seconds()), viewWatchesPerUser),
+		Description: fmt.Sprintf("Streams the rows that land for every binding, and a changed notice for every topic a write moved, as Server-Sent Events, one connection for all of them (ADR-1830, ADR-2731). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (%d minutes, or duration_seconds) with its position, and on each %d second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. A topic (kind:ref, a component or a system) needs <kind>:read and resolves in scope at connect as a literal ref does, an out-of-scope one the same 404; a changed event names it when a write moved its state (its health recomputed, a slot or member changed), at most once each %d milliseconds, and carries no data: the client refetches the route it reads. The topics resume after topics_cursor (else Last-Event-ID, else now); a position the tail no longer holds is a reset with topics set, and the client refetches what they show. An event bears the stream's position only once every changed notice before it has gone out, so a reconnect from any id misses no change. One user holds at most %d watches open; past it the open is a 429. On server shutdown each stream ends with a final mark.", int(viewWatchLifetime.Minutes()), int(viewWatchHeartbeat.Seconds()), changeTopicEvery.Milliseconds(), viewWatchesPerUser),
 	}, "view", "read")
 	op.Responses = map[string]*huma.Response{"200": {Description: "The event stream", Content: map[string]*huma.MediaType{
 		"text/event-stream": {Schema: viewWatchSchema(api)},
 	}}}
 	huma.Register(api, op, func(ctx context.Context, in *watchViewsInput) (*huma.StreamResponse, error) {
+		if in.Bindings == "" && strings.TrimSpace(in.Topics) == "" {
+			return nil, huma.Error422UnprocessableEntity("give bindings, topics, or both")
+		}
 		var raw []viewWatchBinding
-		dec := json.NewDecoder(strings.NewReader(in.Bindings))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&raw); err != nil {
-			return nil, huma.Error422UnprocessableEntity("bindings is a JSON array of bindings: "+err.Error(),
-				&huma.ErrorDetail{Message: err.Error(), Location: "query.bindings"})
+		var bindings []storage.ViewBinding
+		if in.Bindings != "" {
+			dec := json.NewDecoder(strings.NewReader(in.Bindings))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&raw); err != nil {
+				return nil, huma.Error422UnprocessableEntity("bindings is a JSON array of bindings: "+err.Error(),
+					&huma.ErrorDetail{Message: err.Error(), Location: "query.bindings"})
+			}
+			bodies := make([]viewBindingBody, len(raw))
+			for i, r := range raw {
+				bodies[i] = r.viewBindingBody
+			}
+			var err error
+			if bindings, err = viewBindings(ctx, a, bodies, "query.bindings"); err != nil {
+				return nil, err
+			}
 		}
-		bodies := make([]viewBindingBody, len(raw))
-		for i, r := range raw {
-			bodies[i] = r.viewBindingBody
-		}
-		bindings, err := viewBindings(ctx, a, bodies, "query.bindings")
+		topics, err := parseTopics(in.Topics)
 		if err != nil {
-			return nil, err
+			return nil, huma.Error422UnprocessableEntity(err.Error(), &huma.ErrorDetail{Message: err.Error(), Location: "query.topics"})
 		}
 		hub := gw.ViewTail()
 		if hub == nil {
@@ -605,6 +620,19 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 		}
 		matches := make([]viewMatch, len(bindings))
 		var reset []int
+		// Notices publish only while a stream follows topics. The place is
+		// taken before the stream's position is, so no change after that
+		// position goes unpublished; a refused open gives it back.
+		release := func() {}
+		if len(topics) > 0 {
+			release = hub.FollowChanges()
+		}
+		opened := false
+		defer func() {
+			if !opened {
+				release()
+			}
+		}()
 		now := hub.Cursor()
 		for i, b := range bindings {
 			ents, err := gw.ResolveViewEntities(ctx, b)
@@ -625,6 +653,34 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 			after = max(after, resume)
 			matches[i] = newViewMatch(b, ents, after)
 		}
+		var follow *topicMatch
+		resetTopics := false
+		if len(topics) > 0 {
+			byOwner, err := resolveTopics(ctx, a, gw, topics)
+			if err != nil {
+				return nil, viewReadErr(ctx, log, err)
+			}
+			follow = &topicMatch{byOwner: byOwner}
+			// The topics resume from the client's position; one this boot's
+			// tail cannot order (another boot's, or malformed) may have missed
+			// changes, so it resets. No position follows from now.
+			from := in.TopicsCursor
+			if from == "" {
+				from = in.LastEventID
+			}
+			resumes := from != ""
+			if !resumes {
+				from = now
+			}
+			if follow.after, err = hub.Seq(from); err != nil {
+				resetTopics = true
+			} else if resumes && hub.ChangesDroppedSince(follow.after) {
+				// A notice went unpublished while no stream followed topics
+				// (the gap of a reconnect), so the position cannot vouch for
+				// what it missed.
+				resetTopics = true
+			}
+		}
 		life := limits.lifetime
 		if d := time.Duration(in.DurationSeconds) * time.Second; d > 0 && d < life {
 			life = d
@@ -635,49 +691,83 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 		if !watches.acquire(user) {
 			return nil, huma.NewError(http.StatusTooManyRequests, fmt.Sprintf("too many open watches: a user holds at most %d; close one, or bind more on one watch", limits.perUser))
 		}
+		opened = true
 		return &huma.StreamResponse{Body: func(hctx huma.Context) {
 			defer watches.release(user)
-			hctx.SetHeader("Content-Type", "text/event-stream")
-			hctx.SetHeader("Cache-Control", "no-store")
-			hctx.SetStatus(http.StatusOK)
-			w := &sseWriter{w: hctx.BodyWriter()}
+			defer release()
+			defer startSSE(hctx, "no-store")()
+			w := newSSEWriter(hctx.BodyWriter())
 			stands := func() bool { return a.callerStands(ctx) }
-			streamViews(hctx.Context(), hub, w, matches, reset, viewWatchClock{life: life, beat: limits.heartbeat, stands: stands})
+			streamViews(hctx.Context(), hub, w, viewStream{matches: matches, topics: follow, reset: reset, resetTopics: resetTopics},
+				viewWatchClock{life: life, beat: limits.heartbeat, stands: stands, shutdown: shutdown.Done(), every: changeTopicEvery})
 		}}, nil
 	})
 }
 
 // viewWatchClock is one stream's time: it ends after life, and every beat
 // it sends its position and asks stands whether its caller still holds the
-// credential and the grants it opened with.
+// credential and the grants it opened with. It ends, with its position, when
+// shutdown closes, and names a topic at most once every every.
 type viewWatchClock struct {
 	life, beat time.Duration
 	stands     func() bool
+	shutdown   <-chan struct{}
+	every      time.Duration
 }
 
-// streamViews follows the tail for matches until the client leaves, the
-// stream's life ends, or its caller no longer stands.
-func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []viewMatch, reset []int, clock viewWatchClock) {
+// viewStream is what one watch follows: its bindings, its topics (nil for
+// none), and what already needs a reset at open.
+type viewStream struct {
+	matches     []viewMatch
+	topics      *topicMatch
+	reset       []int
+	resetTopics bool
+}
+
+// streamViews follows the tail for a watch's bindings and topics until the
+// client leaves, the stream's life ends, the server shuts down, or its caller
+// no longer stands.
+//
+// A changed notice waits for its topic's window (changeTopicEvery). While one
+// waits, no event carries the stream's position as its id, so a reconnect
+// from any id the stream sent misses no change and repeats none. Rows never
+// wait (a storm across several topics could hold them forever): sent while a
+// notice waits, a rows event carries its cursor in its body alone, which is
+// what a binding resumes from.
+func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, s viewStream, clock viewWatchClock) {
+	matches, reset := s.matches, s.reset
 	pos := ^uint64(0)
 	for _, m := range matches {
 		pos = min(pos, m.after)
 	}
+	if s.topics != nil && !s.resetTopics {
+		pos = min(pos, s.topics.after)
+	}
 	cursor := ""
-	if len(reset) == 0 {
+	resetTopics := s.resetTopics
+	if len(reset) == 0 && !resetTopics {
 		if _, _, err := hub.Read(hubCursor(hub, pos), 1); err != nil {
-			// The slowest binding's cursor has left the ring: name every
-			// binding the ring no longer reaches.
+			// The slowest position has left the ring: name every binding the
+			// ring no longer reaches, and the topics when theirs has gone.
 			for i, m := range matches {
 				if _, _, err := hub.Read(hubCursor(hub, m.after), 1); err != nil {
 					reset = append(reset, i)
+				}
+			}
+			if s.topics != nil {
+				if _, _, err := hub.Read(hubCursor(hub, s.topics.after), 1); err != nil {
+					resetTopics = true
 				}
 			}
 		} else {
 			cursor = hubCursor(hub, pos)
 		}
 	}
-	if len(reset) > 0 {
-		_ = w.send("", "reset", viewResetEvent{Bindings: reset})
+	if len(reset) > 0 || resetTopics {
+		_ = w.send("", "reset", viewResetEvent{Bindings: reset, Topics: resetTopics})
+		return
+	}
+	if err := w.retry(sseRetry); err != nil {
 		return
 	}
 	if err := w.send(cursor, "mark", viewMarkEvent{Cursor: cursor}); err != nil {
@@ -687,17 +777,67 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []vie
 	defer done.Stop()
 	beat := time.NewTicker(clock.beat)
 	defer beat.Stop()
+	every := clock.every
+	if every <= 0 {
+		every = changeTopicEvery
+	}
+	co := newChangeCoalescer(every)
 	sent := cursor
+	var rows []viewTailBindingBody
+	// flush sends the notices due at now (every one when force is set), then
+	// the rows read. The last event carries the stream's position as its id
+	// unless a notice still waits.
+	flush := func(force bool) error {
+		ready := co.due(time.Now(), force)
+		waiting := co.holding()
+		for i, ev := range ready {
+			id := ""
+			if !waiting && len(rows) == 0 && i == len(ready)-1 {
+				id = cursor
+			}
+			if err := w.send(id, "changed", ev); err != nil {
+				return err
+			}
+			if id != "" {
+				sent = cursor
+			}
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		id := cursor
+		if waiting {
+			id = ""
+		}
+		if err := w.send(id, "rows", viewRowsEvent{Cursor: cursor, Bindings: rows}); err != nil {
+			return err
+		}
+		rows = nil
+		if id != "" {
+			sent = cursor
+		}
+		return nil
+	}
+	// end sends what the stream holds and its position, then ends it.
+	end := func(always bool) {
+		if flush(true) != nil {
+			return
+		}
+		if always || sent != cursor {
+			_ = w.send(cursor, "mark", viewMarkEvent{Cursor: cursor})
+		}
+	}
 	for {
 		wake := hub.Wait()
 		commits, next, err := hub.Read(cursor, viewTailBatch)
 		if err != nil {
-			// The client fell a whole ring behind: every binding re-reads.
+			// The client fell a whole ring behind: every binding re-reads,
+			// and every topic refetches.
 			all := make([]int, len(matches))
 			for i := range all {
 				all[i] = i
 			}
-			_ = w.send("", "reset", viewResetEvent{Bindings: all})
+			_ = w.send("", "reset", viewResetEvent{Bindings: all, Topics: s.topics != nil})
 			return
 		}
 		if len(commits) > 0 {
@@ -705,22 +845,38 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []vie
 			for i, c := range commits {
 				seqs[i], _ = hub.Seq(c.Cursor)
 			}
-			if rows := viewTailRows(matches, commits, seqs, time.Now()); len(rows) > 0 {
-				if err := w.send(next, "rows", viewRowsEvent{Cursor: next, Bindings: rows}); err != nil {
-					return
+			rows = mergeTailRows(rows, viewTailRows(matches, commits, seqs, time.Now()))
+			if s.topics != nil {
+				for _, ev := range s.topics.changes(commits, seqs) {
+					co.add(ev)
 				}
-				sent = next
 			}
 			cursor = next
+			if err := flush(false); err != nil {
+				return
+			}
 			continue
+		}
+		var due <-chan time.Time
+		var dueTimer *time.Timer
+		if at := co.next(); !at.IsZero() {
+			dueTimer = time.NewTimer(time.Until(at))
+			due = dueTimer.C
+		}
+		stop := func() {
+			if dueTimer != nil {
+				dueTimer.Stop()
+			}
 		}
 		select {
 		case <-ctx.Done():
+			stop()
+			return
+		case <-clock.shutdown:
+			end(true)
 			return
 		case <-done.C:
-			if sent != cursor {
-				_ = w.send(cursor, "mark", viewMarkEvent{Cursor: cursor})
-			}
+			end(false)
 			return
 		case <-beat.C:
 			// A caller whose session ended or whose grants changed gets no
@@ -729,12 +885,23 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []vie
 			if !clock.stands() {
 				return
 			}
+			// A held notice comes due inside its window, and carries the
+			// position then.
+			if co.holding() {
+				stop()
+				continue
+			}
 			if err := w.send(cursor, "mark", viewMarkEvent{Cursor: cursor}); err != nil {
 				return
 			}
 			sent = cursor
+		case <-due:
+			if err := flush(false); err != nil {
+				return
+			}
 		case <-wake:
 		}
+		stop()
 	}
 }
 
@@ -743,35 +910,6 @@ func hubCursor(hub *tail.Hub, seq uint64) string {
 	cur := hub.Cursor()
 	boot, _, _ := strings.Cut(cur, ".")
 	return fmt.Sprintf("%s.%d", boot, seq)
-}
-
-// sseWriter frames Server-Sent Events and flushes each one.
-type sseWriter struct {
-	w io.Writer
-}
-
-func (s *sseWriter) send(id, event string, data any) error {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	var buf strings.Builder
-	if id != "" {
-		buf.WriteString("id: " + id + "\n")
-	}
-	buf.WriteString("event: " + event + "\ndata: ")
-	buf.Write(b)
-	buf.WriteString("\n\n")
-	if _, err := s.w.Write([]byte(buf.String())); err != nil {
-		return err
-	}
-	if rw, ok := s.w.(http.ResponseWriter); ok {
-		return http.NewResponseController(rw).Flush()
-	}
-	if f, ok := s.w.(http.Flusher); ok {
-		f.Flush()
-	}
-	return nil
 }
 
 // viewWatchSchema publishes the stream's three events in the spec, the shape
@@ -798,6 +936,7 @@ func viewWatchSchema(api huma.API) *huma.Schema {
 			msg("mark", viewMarkEvent{}, "mark"),
 			msg("reset", viewResetEvent{}, "reset"),
 			msg("rows", viewRowsEvent{}, "rows"),
+			msg("changed", viewChangedEvent{}, "changed"),
 		}}},
 	}
 }
