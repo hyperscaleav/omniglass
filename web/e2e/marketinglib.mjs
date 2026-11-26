@@ -699,10 +699,13 @@ export function frameFor(box, vp, zoom) {
   );
   const scale = Math.min(CAMERA.maxZoom, Math.max(CAMERA.minZoom, zoom ?? fit));
   // Along one axis: the box's middle, or, when the box overflows the frame's
-  // inner span there, the point that puts its start a margin inside the frame.
+  // inner span there, the point that puts its start a margin inside the frame;
+  // then held so the frame never reaches past the capture (a box at its edge
+  // sits off centre rather than beside empty backdrop).
   const axis = (/** @type {number} */ start, /** @type {number} */ size, /** @type {number} */ view) => {
     const span = view / scale;
-    return size > span * (1 - 2 * CAMERA.margin) ? start - span * CAMERA.margin + span / 2 : start + size / 2;
+    const want = size > span * (1 - 2 * CAMERA.margin) ? start - span * CAMERA.margin + span / 2 : start + size / 2;
+    return Math.min(view - span / 2, Math.max(span / 2, want));
   };
   return {
     scale: round(scale),

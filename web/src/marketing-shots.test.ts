@@ -384,10 +384,17 @@ describe("frameFor", () => {
     expect(frameFor({ x: 0, y: 0, width: 1440, height: 900 }, vp).scale).toBe(1);
   });
 
-  it("takes a zoom over the fit, and centres the box even at the capture's edge", () => {
-    // A chip in the top-left corner sits in the middle of the frame.
-    const f = frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5);
-    expect(f).toEqual({ scale: 1.5, x: 30, y: 20 });
+  it("takes a zoom over the fit, and centres the box away from the capture's edges", () => {
+    const f = frameFor({ x: 600, y: 400, width: 40, height: 20 }, vp, 1.5);
+    expect(f).toEqual({ scale: 1.5, x: 620, y: 410 });
+  });
+
+  it("never looks past the capture: a box at its edge sits off centre instead", () => {
+    // At 1.5 the frame is 960 x 600: a chip in the top-left corner puts the
+    // frame's centre 480 x 300 in, not on the chip, so no backdrop shows.
+    expect(frameFor({ x: 10, y: 10, width: 40, height: 20 }, vp, 1.5)).toEqual({ scale: 1.5, x: 480, y: 300 });
+    // At 2 the frame is 720 x 450: a span at the right end, 1300 to 1400.
+    expect(frameFor({ x: 1300, y: 400, width: 100, height: 14 }, vp, 2)).toEqual({ scale: 2, x: 1080, y: 407 });
   });
 
   it("keeps a box taller than the frame's top in view, a margin in", () => {
