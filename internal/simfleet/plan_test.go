@@ -182,7 +182,7 @@ func TestPlanGivesAControlledVideoBarItsHTTPSAndWSSEndpoints(t *testing.T) {
 		DriverOf:   func(string) string { return "kestrel-api" },
 		PortOffset: 10000,
 	}
-	got, err := Plan([]Component{{ID: "c1", Product: "kestrel-vroom", Control: true}, {ID: "c2", Product: "kestrel-vroom"}}, nil, cat)
+	got, err := Plan([]Component{{ID: "c1", Product: "bar", Control: true}, {ID: "c2", Product: "bar"}}, nil, cat)
 	if err != nil {
 		t.Fatal(err)
 	}

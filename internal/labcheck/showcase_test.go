@@ -42,8 +42,8 @@ func TestReadShowcaseCountsWhatTheDeviceSays(t *testing.T) {
 			map[string]any{"component": "display-1", "component_id": "c-display"},
 			map[string]any{"component": "videobar-1", "component_id": "c-bar"},
 		}},
-		"/api/v1/components/c-display": map[string]any{"name": "display-1", "product": "boreal-edge-86"},
-		"/api/v1/components/c-bar":     map[string]any{"name": "videobar-1", "product": "kestrel-vroom"},
+		"/api/v1/components/c-display": map[string]any{"name": "display-1", "product": "display-product"},
+		"/api/v1/components/c-bar":     map[string]any{"name": "videobar-1", "product": "bar-product"},
 		"/api/v1/components/c-bar/metrics": map[string]any{"metrics": []any{
 			map[string]any{"metric_type_name": "jitter", "is_sampled": true},
 			map[string]any{"metric_type_name": "tls-handshake-time", "is_sampled": true, "instance": "https"},
@@ -69,7 +69,7 @@ func TestReadShowcaseCountsWhatTheDeviceSays(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(body)
 	}))
 	t.Cleanup(srv.Close)
-	got, err := labcheck.ReadShowcase(context.Background(), srv.Client(), srv.URL, "hq-divisible-conference-1", "kestrel-vroom")
+	got, err := labcheck.ReadShowcase(context.Background(), srv.Client(), srv.URL, "hq-divisible-conference-1", "bar-product")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestReadShowcaseCountsWhatTheDeviceSays(t *testing.T) {
 	if got != want {
 		t.Fatalf("read %+v, want %+v", got, want)
 	}
-	if _, err := labcheck.ReadShowcase(context.Background(), srv.Client(), srv.URL, "hq-divisible-conference-1", "polaris-dsp-16"); err == nil {
+	if _, err := labcheck.ReadShowcase(context.Background(), srv.Client(), srv.URL, "hq-divisible-conference-1", "dsp-product"); err == nil {
 		t.Fatal("a system with no member of the product read as a showcase, want an error")
 	}
 }
