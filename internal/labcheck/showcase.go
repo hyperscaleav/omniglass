@@ -1,6 +1,7 @@
 package labcheck
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -57,6 +58,66 @@ func (f Floor) Short(s Showcase) []string {
 // at base: the one place the showcase floor reads the lab.
 func ReadShowcase(ctx context.Context, c *http.Client, base, system, product string) (Showcase, error) {
 	r := reader{ctx: ctx, c: c, base: base}
+	name, id, err := r.member(system, product)
+	if err != nil {
+		return Showcase{}, err
+	}
+	return r.showcase(name, id)
+}
+
+// Fire is one operation fired at a simulated component, as the component's
+// simulation:fire API takes it.
+type Fire struct {
+	Surface string `json:"surface"`
+	Method  string `json:"method,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Body    string `json:"body,omitempty"`
+}
+
+// FireOnShowcase fires op at the member of system on product through its
+// simulation:fire API: the live gate dials a call on the showcase bar, so its
+// floor holds whatever the room's schedule puts in the warm-up. A device
+// answer outside 2xx, or an error the simulator reports, is an error.
+func FireOnShowcase(ctx context.Context, c *http.Client, base, system, product string, op Fire) error {
+	r := reader{ctx: ctx, c: c, base: base}
+	_, id, err := r.member(system, product)
+	if err != nil {
+		return err
+	}
+	body, err := json.Marshal(op)
+	if err != nil {
+		return err
+	}
+	path := "/components/" + url.PathEscape(id) + "/simulation:fire"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1"+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST %s: %s", path, resp.Status)
+	}
+	var res struct {
+		Status int    `json:"status"`
+		Body   string `json:"body"`
+		Error  string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return err
+	}
+	if res.Error != "" || res.Status/100 != 2 {
+		return fmt.Errorf("%s %s on %s answered %d %s%s", op.Method, op.Path, system, res.Status, res.Body, res.Error)
+	}
+	return nil
+}
+
+// member is the name and id of system's member on product.
+func (r reader) member(system, product string) (string, string, error) {
 	var members struct {
 		Members []struct {
 			Component   string `json:"component"`
@@ -64,20 +125,20 @@ func ReadShowcase(ctx context.Context, c *http.Client, base, system, product str
 		} `json:"members"`
 	}
 	if err := r.get("/systems/"+url.PathEscape(system)+"/members", &members); err != nil {
-		return Showcase{}, err
+		return "", "", err
 	}
 	for _, m := range members.Members {
 		var comp struct {
 			Product string `json:"product"`
 		}
 		if err := r.get("/components/"+url.PathEscape(m.ComponentID), &comp); err != nil {
-			return Showcase{}, err
+			return "", "", err
 		}
 		if comp.Product == product {
-			return r.showcase(m.Component, m.ComponentID)
+			return m.Component, m.ComponentID, nil
 		}
 	}
-	return Showcase{}, fmt.Errorf("system %s has no %s member", system, product)
+	return "", "", fmt.Errorf("system %s has no %s member", system, product)
 }
 
 func (r reader) showcase(name, id string) (Showcase, error) {

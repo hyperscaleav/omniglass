@@ -33,7 +33,8 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 // with a divisible conference room), the hq conference room's video bar
 // reaches the showcase floor within the warm-up: 20 metrics, 8 properties,
 // an event it caught itself and a log line, over its https API and its
-// websocket control socket. The DSP beside it is logged, for the footprint
+// websocket control socket, once a call is dialed on it (its own schedule
+// may put no meeting in the warm-up). The DSP beside it is logged, for the footprint
 // reading. It runs under a project of its own and tears down what it made.
 func TestIntegrationCorporateVideoBarTalks(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
@@ -111,9 +112,25 @@ func TestIntegrationCorporateVideoBarTalks(t *testing.T) {
 	base := vars["LAB_HOST_URL"]
 	client := &http.Client{Timeout: 30 * time.Second, Transport: bearer{token: vars["LAB_TOKEN"], next: http.DefaultTransport}}
 
-	// The warm-up: a call comes round every 90 s and the status poll runs
-	// every 30 s, so five minutes holds several of each.
+	// The room keeps a meeting schedule, which may put no meeting in the
+	// warm-up, so the gate dials a call on the bar first, as a demo would:
+	// the call starts at once and runs half an hour. A fire can meet the
+	// simulator before it serves the bar, so it is retried for a while.
 	const system = "hq-divisible-conference-1"
+	dial := labcheck.Fire{Surface: "http-api", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c-showcase","participants":4}`}
+	for fireBy := time.Now().Add(2 * time.Minute); ; {
+		err := labcheck.FireOnShowcase(ctx, client, base, system, "kestrel-vroom", dial)
+		if err == nil {
+			break
+		}
+		if time.Now().After(fireBy) {
+			t.Fatalf("could not dial a call on %s's video bar: %v", system, err)
+		}
+		time.Sleep(5 * time.Second)
+	}
+
+	// The warm-up: the status poll runs every 30 s and the dialed call's
+	// events and log lines arrive at once, so five minutes holds them all.
 	warm := time.Now().Add(5 * time.Minute)
 	for {
 		bar, err := labcheck.ReadShowcase(ctx, client, base, system, "kestrel-vroom")

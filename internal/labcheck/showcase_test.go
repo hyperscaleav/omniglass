@@ -81,3 +81,48 @@ func TestReadShowcaseCountsWhatTheDeviceSays(t *testing.T) {
 		t.Fatal("a system with no member of the product read as a showcase, want an error")
 	}
 }
+
+// FireOnShowcase fires one operation at the system's member of the product
+// through the component's simulation:fire API (#2754): the live gate dials a
+// call on the showcase bar, so the floor holds whether or not the room's
+// schedule puts a meeting in the warm-up.
+func TestFireOnShowcaseFiresAtTheMember(t *testing.T) {
+	var fired map[string]any
+	var firedAt string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v1/systems/hq-divisible-conference-1/members":
+			_ = json.NewEncoder(w).Encode(map[string]any{"members": []any{map[string]any{"component": "videobar-1", "component_id": "c-bar"}}})
+		case r.URL.Path == "/api/v1/components/c-bar":
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "videobar-1", "product": "bar-product"})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/simulation:fire"):
+			firedAt = r.URL.Path
+			_ = json.NewDecoder(r.Body).Decode(&fired)
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": 200, "body": `{"ok":true}`})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	op := labcheck.Fire{Surface: "http-api", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c-showcase"}`}
+	if err := labcheck.FireOnShowcase(context.Background(), srv.Client(), srv.URL, "hq-divisible-conference-1", "bar-product", op); err != nil {
+		t.Fatal(err)
+	}
+	if firedAt != "/api/v1/components/c-bar/simulation:fire" || fired["surface"] != "http-api" || fired["method"] != "POST" || fired["path"] != "/api/call/dial" || fired["body"] != `{"id":"c-showcase"}` {
+		t.Fatalf("fired %v at %s, want the dial at the bar's simulation:fire", fired, firedAt)
+	}
+	op.Path = "/api/refused"
+	srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v1/systems/hq-divisible-conference-1/members":
+			_ = json.NewEncoder(w).Encode(map[string]any{"members": []any{map[string]any{"component": "videobar-1", "component_id": "c-bar"}}})
+		case r.URL.Path == "/api/v1/components/c-bar":
+			_ = json.NewEncoder(w).Encode(map[string]any{"product": "bar-product"})
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": 404, "body": "404 page not found"})
+		}
+	})
+	if err := labcheck.FireOnShowcase(context.Background(), srv.Client(), srv.URL, "hq-divisible-conference-1", "bar-product", op); err == nil {
+		t.Fatal("a fire the device answered 404, want an error")
+	}
+}
