@@ -254,7 +254,7 @@ shots:
       - wait: { selector: 'aside[data-blade] [data-testid=timeline-health-row]' }
         focus: 'aside[data-blade] [data-testid=timeline-alarm-span]'
         spot: false
-        expect: ["outage"]
+        expect: ["Health", "This system"]
         zoom: 2.0
         hold: 2200
 
