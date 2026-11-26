@@ -300,6 +300,9 @@ shots:
   # in their slots.
   - id: fleet-explore
     kind: loop
+    # 12: the camera closes in on each click and lands before it acts (#2752),
+    # which a 9 second loop of several clicks cannot spare.
+    max_seconds: 12
     alt: "Expanding Headquarters in the Omniglass fleet outline to its building, a floor and its rooms, then opening a meeting room to its system: a display, panels and a video bar, each product in its slot."
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Headquarters")' }
@@ -347,6 +350,9 @@ shots:
   # every poll), so the endpoint reads rejected and the outpost stops asking.
   - id: credential-fix
     kind: loop
+    # 12: the camera closes in on each click and lands before it acts (#2752),
+    # which a 9 second loop of several clicks cannot spare.
+    max_seconds: 12
     alt: "A video bar whose login the device refuses: the endpoint reads rejected with the device's 401, the login is corrected in place on the endpoint, and it reads reachable, responsive and authenticated again."
     setup:
       - post: /secrets
