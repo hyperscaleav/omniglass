@@ -20,7 +20,7 @@ import { load } from 'js-yaml';
 /** @typedef {({ kind: 'call' } & Call) | ({ kind: 'await' } & Await) | { kind: 'pause', seconds: number }} SetupItem */
 /** @typedef {string | { role: string, name?: string, exact?: boolean } | { text: string, exact?: boolean } | { selector: string }} Target */
 /** @typedef {'out' | 'here' | Target} Focus */
-/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, lapse?: number, seconds?: number, expect?: string[] }} Step */
+/** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, spot?: false, lapse?: number, seconds?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
 /** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
@@ -51,7 +51,7 @@ export const DEFAULT_WAIT_MS = 15_000;
 const MAX_HOLD_MS = 8000;
 
 export const STEP_KINDS = ['goto', 'click', 'hover', 'type', 'select', 'press', 'wait', 'call'];
-const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'fast', 'lapse', 'expect'];
+const STEP_KEYS = [...STEP_KINDS, 'hold', 'focus', 'zoom', 'spot', 'fast', 'lapse', 'expect'];
 // The longest a lapse may play: past this, a wait is the story, not a pause in it.
 const MAX_LAPSE_SECONDS = 5;
 
@@ -224,6 +224,14 @@ function parseStep(raw, n, label = 'step') {
     }
     if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: zoom goes with a focus on a target`);
     step.zoom = o.zoom;
+  }
+  // spot: false lights the whole frame on this focus instead of dimming all but
+  // its target, for a target that points the camera at a region rather than
+  // being the one thing to read (an outage's alarm bar, with the lanes above it).
+  if ('spot' in o) {
+    if (o.spot !== false) problems.push(`${where}: spot takes only false, to light the whole frame`);
+    else if (!('focus' in o) || o.focus === 'out') problems.push(`${where}: spot goes with a focus on a target`);
+    else step.spot = false;
   }
   // expect: the text a beat's frame must hold as the beat ends, each string
   // found within what is on screen inside the frame. It goes with the focus that
@@ -674,7 +682,7 @@ export function referencedResources(items, start) {
 }
 
 /** @typedef {{ x: number, y: number, width: number, height: number }} Box */
-/** @typedef {{ t: number, box: Box | null, zoom?: number }} FocusEvent */
+/** @typedef {{ t: number, box: Box | null, zoom?: number, spot?: false }} FocusEvent */
 /** @typedef {{ at: number, dur: number, scale: number, x: number, y: number, spot: Box | null }} CameraMove */
 
 /**
@@ -798,7 +806,7 @@ export function cameraTrack(events, vp, duration) {
     if (f.scale === cur.scale && f.x === cur.x && f.y === cur.y) continue;
     const at = round(Math.max(0, e.t, free));
     if (at + CAMERA.ease > duration) break;
-    moves.push({ at, dur: CAMERA.ease, ...f, spot: spotFor(e.box, vp) });
+    moves.push({ at, dur: CAMERA.ease, ...f, spot: e.spot === false ? null : spotFor(e.box, vp) });
     cur = f;
     free = at + CAMERA.ease;
   }

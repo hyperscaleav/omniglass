@@ -315,6 +315,19 @@ describe("focus and zoom on a step", () => {
     ]);
   });
 
+  it("takes spot: false on a focus on a target, and names it anywhere else", () => {
+    const ok = parseShots(LOOP("      - click: a\n        focus: here\n        spot: false\n"));
+    expect(ok.problems).toEqual([]);
+    expect(ok.list?.shots[0].steps[0].spot).toBe(false);
+    const { problems } = parseShots(
+      LOOP("      - click: a\n        focus: here\n        spot: true\n" + "      - click: b\n        spot: false\n"),
+    );
+    expect(problems).toEqual([
+      "shot a-loop: step 1 (click): spot takes only false, to light the whole frame",
+      "shot a-loop: step 2 (click): spot goes with a focus on a target",
+    ]);
+  });
+
   it("refuses a focus on a still and on a loop's prep, which is cut", () => {
     const still = parseShots(`${LAB}shots:\n${STILL}    steps:\n      - click: a\n        focus: here\n`);
     expect(still.problems).toEqual(["shot a-still: step 1 has a focus: the camera moves on a loop only"]);
@@ -433,6 +446,11 @@ describe("cameraTrack", () => {
       { at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425, spot: { x: 588, y: 388, width: 124, height: 74 } },
       { at: 6 - CAMERA.ease, dur: CAMERA.ease, scale: 1, x: 720, y: 450, spot: null },
     ]);
+  });
+
+  it("lights the whole frame on a focus that asks for no spot", () => {
+    const moves = cameraTrack([{ t: 1, box, zoom: 1.5, spot: false }], vp, 6);
+    expect(moves[0]).toEqual({ at: 1, dur: CAMERA.ease, scale: 1.5, x: 650, y: 425, spot: null });
   });
 
   it("waits for a move to land before the next, and drops one that changes nothing", () => {

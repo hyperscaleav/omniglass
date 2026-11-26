@@ -8,11 +8,13 @@
 # grammar (goto, click, hover, type, select, press, wait; `hold` lingers after a
 # step) without captions. On a loop, a step's `focus` moves the camera as the
 # step starts: `here` eases the frame onto the step's own target, a target
-# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 2) sets
+# eases it onto that, and `out` back to the whole frame; `zoom` (1 to 3) sets
 # the scale instead of fitting the box. The target lands in the middle of the
-# frame, even at the capture's edge (the console's dark base shows past it), so
-# focus the information itself, not the row or panel around it. A clip that
-# ends zoomed eases out before it loops.
+# frame, or as near it as the capture's edge allows (the frame never looks past
+# the capture), so focus the information itself, not the row or panel around
+# it. The rest of the frame dims round the target; `spot: false` keeps it all
+# lit, for a target that only aims the camera. A clip that ends zoomed eases
+# out before it loops.
 #
 # A focus opens a beat, which runs until the next focus. Its `expect` names the
 # text its bullet rests on; the recorder reads the text on screen inside the
@@ -241,7 +243,7 @@ shots:
       - wait: { selector: '[data-testid=stretch-0]:has-text("Outage"):not(:has-text("ongoing"))' }
         focus: '[data-testid=history-tab] > div >> nth=0'
         expect: ["Uptime", "Outage"]
-        zoom: 1.8
+        zoom: 1.15
         hold: 1800
       # Beat 9: its timeline over that hour, closing in on the outage: healthy,
       # down for the ten minutes and the fix, healthy again.
@@ -250,6 +252,7 @@ shots:
         hold: 200
       - wait: { selector: '[data-testid=timeline-health-row]' }
         focus: '[data-testid=timeline-alarm-span]'
+        spot: false
         expect: ["outage"]
         zoom: 2.0
         hold: 2200

@@ -596,7 +596,7 @@ async function logFocus(page, step, cam, own) {
   }
   if (!box) throw new Error('the focus has no box on screen');
   const t = cam.now();
-  cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}) });
+  cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}), ...(step.spot === false ? { spot: false } : {}) });
   const { rect, onScreen } = frameRect(frameFor(box, cam.vp, step.zoom), cam.vp);
   cam.open = { step: step.n, from: t, frame: rect, onScreen, ...(step.expect ? { expect: step.expect } : {}) };
 }

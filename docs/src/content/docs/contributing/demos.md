@@ -500,8 +500,9 @@ A loop has a camera. A step's `focus` moves it: `here` frames the step's own tar
 (`text`, `role`, `selector`, as a step names one) frames that, and `out` returns to the whole frame. `zoom`
 (1 to 3) sets how close; without it the camera fits the target with a margin, never past 3x. A loop is
 watched on a phone too, where the console's 13-pixel text needs 2x or more to read. The camera
-eases over 0.6 s and centres the target, even near the capture's edge, where the frame shows the console's
-own dark base past it; so focus the thing the beat is about, not the panel around it. A target bigger than
+eases over 0.6 s and centres the target, or comes as near it as the capture's edge allows: the frame never
+looks past the capture, so a target at its edge sits off centre; focus the thing the beat is about, not the
+panel around it. A target bigger than
 the frame at its `zoom` (a whole card) keeps its top and left edges in view instead, so its heading shows. It eases back to the whole frame before the loop
 ends, so the loop's seam lands on the full view: the recorder keeps recording for that last ease when the
 final step leaves the camera zoomed. A focus on a still, or on a loop's prep, fails the parse.
@@ -521,7 +522,9 @@ is still crisp (past 2x the frame is upscaled, a little soft), and writes where 
 as long as it was shown, into one steady clip; a [Revideo](https://github.com/midrender/revideo) (MIT)
 project in `web/e2e/marketing/compose/` (installed once, with the repo's pinned pnpm, in the Playwright
 image) then renders the pans and zooms over it, offline, with its telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
-half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a click shows a
+half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a focus with
+`spot: false` keeps the whole frame lit, for a target that only aims the camera (an outage's alarm bar, with
+the health lanes above it, which the beat is about); a click shows a
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
 
