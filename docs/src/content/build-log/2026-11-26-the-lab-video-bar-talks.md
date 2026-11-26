@@ -12,7 +12,7 @@ seconds (`call-started`, `participant-joined`, `participant-left`, `call-ended`,
 `event: log` line in the codec's idiom), and drifts its call stats and its own load every 30 seconds;
 no tick is faster than 15 seconds. The catalog gained the metrics a codec's call reports
 (`packet-loss-ratio`, a loss ratio where 0 is healthy, `jitter`, `bitrate`, `frame-rate`,
-`speaker-level`) and a component's own load (`cpu-utilization`, `memory-utilization`,
+`speaker-level`; the microphones' level reuses `audio-level`) and a component's own load (`cpu-utilization`, `memory-utilization`,
 `active-channel-count`), the properties a bar reports of itself (`app-mode`, `ucc-signin`,
 `touch-pair`, `camera-state`, `video-resolution`) and the identity beside its serial
 (`hardware-revision`, `hostname`, `ip-address`), and the events `participant-joined` and

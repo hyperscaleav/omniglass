@@ -27,7 +27,9 @@
   "audio": {
     "volume": {{ .State | get "status" | get "audio" | get "volume" }},
     "mic_mute": {{ .State | get "status" | get "audio" | get "mic_mute" }},
-    "speaker_level": {{ .State | get "status" | get "audio" | get "speaker_level" }}
+    "speaker_level": {{ .State | get "status" | get "audio" | get "speaker_level" }},
+    {{/* @field status.audio.mic_level_db number "Microphone array input level, dBFS" */}}
+    "mic_level_db": {{ .State | get "status" | get "audio" | get "mic_level_db" }}
   },
   "video": {
     "camera_on": {{ .State | get "status" | get "video" | get "camera_on" }},

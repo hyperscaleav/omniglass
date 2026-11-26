@@ -524,6 +524,7 @@ drivers:
             - { name: fan-speed, extract: { jsonpath: device.fan_rpm } }
             - { name: memory-utilization, extract: { jsonpath: device.memory_used } }
             - { name: speaker-level, extract: { jsonpath: audio.speaker_level }, transform: { scale: 0.01 } }
+            - { name: audio-level, extract: { jsonpath: audio.mic_level_db } }
             - { name: packet-loss-ratio, extract: { jsonpath: media.packet_loss } }
             - { name: jitter, extract: { jsonpath: media.jitter_ms } }
             - { name: bitrate, extract: { jsonpath: media.bitrate_kbps } }

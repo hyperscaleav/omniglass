@@ -322,6 +322,10 @@ behaviors:
         value: '{{ if .State.status.call.active }}{{ round 0 (clamp 24.0 30.0 (randStep 3.0 .State.status.media.frame_rate)) }}{{ else }}0{{ end }}'
       - path: status.audio.speaker_level
         value: '{{ if .State.status.call.active }}{{ round 0 (clamp 10.0 85.0 (randStep 15.0 .State.status.audio.speaker_level)) }}{{ else }}0{{ end }}'
+      # The microphones' input level, in dBFS: a talking room in a call, a
+      # quiet one's -60 when idle.
+      - path: status.audio.mic_level_db
+        value: '{{ if .State.status.call.active }}{{ round 1 (clamp -50.0 -6.0 (randStep 6.0 .State.status.audio.mic_level_db)) }}{{ else }}-60{{ end }}'
       - path: status.device.cpu_load
         value: '{{ if .State.status.call.active }}{{ round 0 (clamp 35.0 80.0 (randStep 8.0 .State.status.device.cpu_load)) }}{{ else }}{{ round 0 (clamp 8.0 25.0 (randStep 4.0 .State.status.device.cpu_load)) }}{{ end }}'
       - path: status.device.temperature
@@ -389,6 +393,8 @@ defaults:
       volume: 50
       mic_mute: false
       speaker_level: 50
+      # The microphone array's input level, dBFS (media_stats drifts it).
+      mic_level_db: -60
     video:
       camera_on: true
       resolution: "3840x2160"

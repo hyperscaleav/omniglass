@@ -230,6 +230,7 @@ func TestKestrelAPIStatusPollReadsTheBarsStateAndCallStats(t *testing.T) {
 		"bitrate":            ratio("status.media.bitrate_kbps"),
 		"frame-rate":         ratio("status.media.frame_rate"),
 		"speaker-level":      ratio("status.audio.speaker_level") / 100,
+		"audio-level":        ratio("status.audio.mic_level_db"),
 	}
 	for name, want := range metrics {
 		e, ok := got[name]

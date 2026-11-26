@@ -136,7 +136,8 @@ func TestTheVRoomsCallCycleReportsACallAndItsParticipants(t *testing.T) {
 
 // The call stats drift while a call is up and rest at zero when the room is
 // idle (#2754): packet loss a ratio (0 to 1), jitter in milliseconds, the
-// bitrate in kbps, the frame rate, the speaker level 0 to 100. The codec's
+// bitrate in kbps, the frame rate, the speaker level 0 to 100, and the
+// microphones' input level in dBFS (a quiet room's -60 when idle). The codec's
 // own load and temperature drift whether or not it is in a call.
 func TestTheVRoomsCallStatsDriftOnlyInACall(t *testing.T) {
 	d := loadVRoom(t, "hq-conf-1-videobar-1")
@@ -157,6 +158,9 @@ func TestTheVRoomsCallStatsDriftOnlyInACall(t *testing.T) {
 	if v := num("status.device.cpu_load"); v <= 0 || v > 100 {
 		t.Errorf("idle cpu_load = %v, want a percentage", v)
 	}
+	if v := num("status.audio.mic_level_db"); v != -60 {
+		t.Errorf("idle mic_level_db = %v, want the quiet room's -60 dBFS", v)
+	}
 	tickByName(t, d, "call_cycle") // the call starts
 	for range 4 {
 		tickByName(t, d, "media_stats")
@@ -174,6 +178,9 @@ func TestTheVRoomsCallStatsDriftOnlyInACall(t *testing.T) {
 		}
 		if v := num("status.audio.speaker_level"); v <= 0 || v > 100 {
 			t.Errorf("speaker_level = %v, want a call's", v)
+		}
+		if v := num("status.audio.mic_level_db"); v < -50 || v > -6 {
+			t.Errorf("mic_level_db = %v, want a talking room's", v)
 		}
 	}
 	// A lossy stretch is a WARN line on the network facility.
