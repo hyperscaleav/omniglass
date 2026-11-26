@@ -165,3 +165,26 @@ func TestPolarisDSPRebootRestoresTheProgramOutput(t *testing.T) {
 		t.Errorf("SNMP mute after a reboot = %q, want false", v)
 	}
 }
+
+// TestPolarisDSPServesItsInventoryOverSNMP (#2754): the agent answers the
+// DSP's hostname at sysName and its hardware revision, address and MAC beside
+// its serial on the Polaris arc, each the text its state holds.
+func TestPolarisDSPServesItsInventoryOverSNMP(t *testing.T) {
+	d := startDSP(t)
+	want := map[string]string{
+		"1.3.6.1.2.1.1.5.0":       "configuration.network.hostname",
+		"1.3.6.1.4.1.55540.5.3.0": "configuration.device.hardware_revision",
+		"1.3.6.1.4.1.55540.5.4.0": "status.network.ipv4.address",
+		"1.3.6.1.4.1.55540.5.5.0": "status.network.ipv4.mac",
+	}
+	oids := make([]string, 0, len(want))
+	for oid := range want {
+		oids = append(oids, oid)
+	}
+	for _, v := range ampSNMP(t, d, oids...) {
+		path := want[v.Name[1:]]
+		if got, served := snmpText(v), fmt.Sprint(d.ReadPath(path)); got != served || served == "" {
+			t.Errorf("%s = %q, want %s's %q", v.Name, got, path, served)
+		}
+	}
+}
