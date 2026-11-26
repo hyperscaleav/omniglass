@@ -292,16 +292,20 @@ calc, notification and sweep figures are on [workers](/architecture/workers/#mea
 ## The live console
 
 The console follows live data over HTTP, never the bus, so the live path has no authorization model
-of its own. `GET /views:watch` is one Server-Sent Events stream per page that carries every binding's
+of its own. `GET /views:watch` is one Server-Sent Events stream per tab that carries every binding's
 new rows from the ingest landing point, each binding resuming from the cursor its `POST /views:run`
 history was read at, with no gap and no duplicate at the seam. It is gated and scoped as the history
 read is, and bounded in lifetime so its scope never goes stale
 ([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor),
-[views](/architecture/views/)).
+[views](/architecture/views/)). Beside the rows it names the topics a write moved (a component or a
+system whose health recomputed, which an alarm's raise or clear, a slot or a member change makes), as
+`changed` notices published after the write commits, so the console refetches a record's read only
+when it changed
+([ADR-2731](/architecture/decisions/#adr-2731-the-console-follows-state-over-its-one-live-stream-and-polling-is-guarded-out)).
 
-:::design[Derived rows and record changes on the live stream, tracked in #1830]
-The tail carries what the ingest lanes land. Rows a calc or event rule derives, and record changes
-such as an alarm's transition, are not on it yet.
+:::design[Derived rows and collection changes on the live stream, tracked in #1830 and #2732]
+The tail carries what the ingest lanes land and the entity changes a health recompute names. Rows a
+calc or event rule derives, and a change to a scoped collection (a list page's), are not on it yet.
 :::
 
 :::design[The JetStream KV and object store, tracked in #529]

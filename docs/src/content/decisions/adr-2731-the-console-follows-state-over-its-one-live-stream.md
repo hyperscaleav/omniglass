@@ -37,8 +37,10 @@ refs: [2731, 2724, 1830, 2732]
      the topics it named, not its caller's scope.
   5. **Coalesced per topic.** A stream names a topic at most once each 250 ms: the first notice goes
      out at once, the rest of a burst waits and goes out as the newest at the window's end. While one
-     waits, the rows behind it wait too, so no event's id moves the client past a notice it has not had;
-     a reconnect from any id misses no change and repeats none.
+     waits, no event carries the stream's position as its id, so a reconnect from any id misses no
+     change and repeats none. Rows never wait (a storm across several topics could hold them for good):
+     sent while a notice waits, a rows event carries its cursor only in its body, which is what a
+     binding resumes from.
   6. **The console resumes from `topics_cursor`.** A reconnecting EventSource's `Last-Event-ID` resumes
      the topics, but the console passes `topics_cursor` instead, because `Last-Event-ID` would also move
      a newly joined binding past its history's cursor. A stream opened with no position refetches what

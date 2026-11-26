@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/tail"
 )
 
@@ -307,3 +308,43 @@ func TestStreamViewsResetsTopicsPastTheRing(t *testing.T) {
 }
 
 var _ http.ResponseWriter = (*deadlineRecorder)(nil)
+
+// Rows never wait on a held notice: a binding's rows go out at once, without
+// the stream's position as their id while the notice waits, and the position
+// follows once it has gone out.
+func TestStreamViewsSendsRowsPastAHeldNotice(t *testing.T) {
+	t.Parallel()
+	hub := tail.New(64, 0)
+	start, _ := hub.Seq(hub.Cursor())
+	buf := &syncBuffer{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	b := storage.ViewBinding{Primitive: tail.LaneMetric, Kind: "component", Keys: []string{"k"}, Window: time.Hour}
+	m := newViewMatch(b, []storage.ViewEntity{{ID: "c1"}}, start)
+	go func() {
+		defer close(done)
+		streamViews(ctx, hub, newSSEWriter(buf), viewStream{matches: []viewMatch{m}, topics: &topicMatch{after: start, byOwner: map[string][]string{"system:s1": {"system:s1"}}}},
+			viewWatchClock{life: time.Minute, beat: time.Minute, stands: func() bool { return true }, every: time.Hour})
+	}()
+	defer func() { cancel(); <-done }()
+	waitUntil(t, "the opening mark", func() bool { return len(buf.frames()) > 0 })
+	hub.Publish(change("s1"))
+	waitUntil(t, "the first notice", func() bool { return len(buf.changed()) == 1 })
+	hub.Publish(change("s1"))
+	if err := hub.Commit(func() error { return nil }, []tail.Row{{Lane: tail.LaneMetric, OwnerKind: "component", OwnerID: "c1", Key: "k", TS: time.Now(), Number: 7}}); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, "the rows past the held notice", func() bool {
+		for _, f := range buf.frames() {
+			if f.event == "rows" {
+				return true
+			}
+		}
+		return false
+	})
+	for _, f := range buf.frames() {
+		if f.event == "rows" && f.id != "" {
+			t.Fatalf("rows sent while a notice waits carried the position %q as their id", f.id)
+		}
+	}
+}

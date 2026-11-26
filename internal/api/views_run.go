@@ -708,9 +708,11 @@ type viewStream struct {
 // no longer stands.
 //
 // A changed notice waits for its topic's window (changeTopicEvery). While one
-// waits, the rows behind it wait too (at most that window), so no event's id
-// moves the client's position past a notice it has not had: a reconnect from
-// any id the stream sent misses no change and repeats none.
+// waits, no event carries the stream's position as its id, so a reconnect
+// from any id the stream sent misses no change and repeats none. Rows never
+// wait (a storm across several topics could hold them forever): sent while a
+// notice waits, a rows event carries its cursor in its body alone, which is
+// what a binding resumes from.
 func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, s viewStream, clock viewWatchClock) {
 	matches, reset := s.matches, s.reset
 	pos := ^uint64(0)
@@ -761,9 +763,9 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, s viewStream,
 	co := newChangeCoalescer(every)
 	sent := cursor
 	var rows []viewTailBindingBody
-	// flush sends the notices due at now (every one when force is set), then,
-	// once none waits, the rows held and the stream's position: the last
-	// event carries the cursor as its id.
+	// flush sends the notices due at now (every one when force is set), then
+	// the rows read. The last event carries the stream's position as its id
+	// unless a notice still waits.
 	flush := func(force bool) error {
 		ready := co.due(time.Now(), force)
 		waiting := co.holding()
@@ -779,13 +781,20 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, s viewStream,
 				sent = cursor
 			}
 		}
-		if waiting || len(rows) == 0 {
+		if len(rows) == 0 {
 			return nil
 		}
-		if err := w.send(cursor, "rows", viewRowsEvent{Cursor: cursor, Bindings: rows}); err != nil {
+		id := cursor
+		if waiting {
+			id = ""
+		}
+		if err := w.send(id, "rows", viewRowsEvent{Cursor: cursor, Bindings: rows}); err != nil {
 			return err
 		}
-		rows, sent = nil, cursor
+		rows = nil
+		if id != "" {
+			sent = cursor
+		}
 		return nil
 	}
 	// end sends what the stream holds and its position, then ends it.
