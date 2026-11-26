@@ -26,7 +26,10 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 
 ## Running it
 
-- `omniglass sim run` serves the dev fleet. `omniglass sim mail` runs the simulated mail server.
+- `omniglass sim run` runs beside an outpost with that outpost's credential (the same
+  `OMNIGLASS_SERVER`, `OMNIGLASS_OUTPOST_NAME` and `OMNIGLASS_OUTPOST_TOKEN` as `outpost run`),
+  pulls the devices placed on that outpost and serves them. `omniglass sim mail` runs the
+  simulated mail server.
 - `make lab` brings up a server, an outpost and a simulated fleet together;
   `make test-lab LAB_RUN=<test>` runs one lab scenario test.
 - `make bench-sim` serves a 1,000-device fleet and reports startup time.
