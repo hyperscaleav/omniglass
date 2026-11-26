@@ -242,7 +242,11 @@ for a new `id` (a new file cannot conflict, and the docs build needs it), and it
 `.github/screenshots/<n>/`. A **guard** in the `verify` job (`scripts/docs-shots-guard.sh`) fails a PR whose
 diff modifies, deletes or renames an existing file under `docs/public/screenshots/` or
 `docs/screenshots/baseline/`; the recapture branch alone is exempt. `docs-shots-verify` still checks every
-PR's shots are declared and present. The `freshness` comparison (`make docs-shots-check`) does not run on
+PR's shots are declared and present. The workflow runs on a PR or a push to `main` or a release branch that
+touches an input to a capture: `docs/**`, `web/**`, the dev seed (`internal/devseed/**`), the boot seed
+(`internal/seed/**`), `db/migrations/**`, the `Makefile`, the `Dockerfile` and `docs-shots.yml` itself (#860).
+A seed-only PR runs the structural `verify` job; the recapture runs on main after it merges, so a seed change that
+moves a shot is recaptured instead of waiting for a later `docs/**` or `web/**` push. The `freshness` comparison (`make docs-shots-check`) does not run on
 pull requests, so a stale shot never reads red on a PR; `make docs-shots-check` stays the local proof that a
 recapture is stable.
 
