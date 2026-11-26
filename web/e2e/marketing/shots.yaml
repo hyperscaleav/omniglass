@@ -180,7 +180,7 @@ shots:
         expect: ["Hq Annex 1 05"]
         zoom: 2.6
         hold: 900
-      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) > span:last-child'
+      - hover: 'ul[role=list][aria-label=Matches] li:has(:text-is("Hq Annex 1 05")) [data-testid=health]'
         focus: here
         zoom: 2.6
         hold: 1000
