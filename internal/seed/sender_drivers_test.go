@@ -3,8 +3,8 @@ package seed
 import (
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // A simulated service a scale lab seeds as a webhook sender (#1747) names

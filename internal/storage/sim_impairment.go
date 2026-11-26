@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 )
 
 // ErrSimImpairmentInvalid is an impairment the network could not apply (a

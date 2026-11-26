@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // A command's status from issue to settlement, end to end (#1155): the API

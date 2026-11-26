@@ -12,7 +12,7 @@ summary: "A simulated system is built to a standard: each role staffed with a si
   staffable); a role nothing simulated fits is left short and listed with the reason. Components are
   named as an unnamed create names them. The system, components, endpoints and role assignments land
   in one transaction, each through the ordinary create with the caller's scope and audit row. The lab's
-  room archetypes (`internal/sim/profiles/systems`) are not an operator concept; they remain only as
+  room archetypes (`sim/profiles/systems`) are not an operator concept; they remain only as
   the simulator's internal fleet compiler input (#914).
 - **Context:** #911 proposed adding a system from the lab's archetypes. Their roles and component mixes
   did not match the platform's standards (a "codec" slot holding a video bar, products with no seeded

@@ -18,5 +18,5 @@
   names (`user_grant.scope_id` is text, not a foreign key), so deleting one system in a lab
   404'd its push every tick and starved every system after it in the grant's order. Fixed by
   pushing each system on its own and collapsing the tick's failures into one error, the first
-  named and the rest counted (`pushOwners`, internal/sim/push.go;
+  named and the rest counted (`pushOwners`, sim/push.go;
   `TestPushFaceKeepsPushingPastAGoneSystem`).

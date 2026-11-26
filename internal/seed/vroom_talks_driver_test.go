@@ -14,10 +14,10 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
-	"github.com/hyperscaleav/omniglass/internal/sim"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
+	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // shippedCatalog is the catalog a shipped driver validates against, read

@@ -7,7 +7,7 @@ refs: [914, 911, 1553, 1266]
 ---
 
 - **Date:** 2026-11-12 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/)
-- **Decision:** The embedded simulator catalog (`internal/sim/profiles`) holds device profiles,
+- **Decision:** The embedded simulator catalog (`sim/profiles`) holds device profiles,
   surfaces and templates, and nothing above a device. The room archetypes (`systems/*.yaml`), the fleet
   manifests (`fleets/*.yaml`), `profile.SystemProfile`, `Store.Systems`, and the manifest parse and
   compile path (`fleet.Manifest`, `ParseManifestFS`, `Compile`) are deleted, with no shim and no

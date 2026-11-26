@@ -10,8 +10,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 )
 
 // faultStory is one of the dev fleet's seeded faults (#2434) as a test reads

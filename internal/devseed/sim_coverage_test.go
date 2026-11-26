@@ -7,8 +7,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // TestEverySeededComponentIsSimulatedOrAccountedFor holds the lab to "every
@@ -20,7 +20,7 @@ import (
 //
 // No component is without a product: nothing can simulate one (the simulator
 // serves products), so a fixture adding one fails here. The catalog test
-// (internal/sim) holds coverage.yaml itself true; this holds the fleet the lab
+// (sim) holds coverage.yaml itself true; this holds the fleet the lab
 // actually places to it, so a fixture adding a component of an unserved,
 // unlisted product fails here, naming the product and its components.
 func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {

@@ -25,8 +25,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/settings"
-	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 	"github.com/hyperscaleav/omniglass/internal/sso"
+	"github.com/hyperscaleav/omniglass/sim/simoutpost"
 )
 
 // Defaults for the options a user does not set.

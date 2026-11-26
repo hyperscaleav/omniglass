@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/fleet"
+	"github.com/hyperscaleav/omniglass/sim/fleet"
 )
 
 // MaxSystems bounds the size knob: the name generator's space of distinct

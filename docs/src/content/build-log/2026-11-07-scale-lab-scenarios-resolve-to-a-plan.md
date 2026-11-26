@@ -37,7 +37,7 @@ simulator fleet's name generator, now exported as `fleet.NameGenerator`, seeded 
 plan is deterministic. The shipped catalog is read without a database through new `seed`
 accessors.
 
-The simulator's older fleet manifests (`internal/sim/profiles/fleets`, compiled by
-`internal/sim/fleet`) describe sites and devices by profile rather than by standard and product.
+The simulator's older fleet manifests (`sim/profiles/fleets`, compiled by
+`sim/fleet`) describe sites and devices by profile rather than by standard and product.
 Once bring-up consumes these plans they could be retired in favor of scenarios. That retirement is
 left to #914.

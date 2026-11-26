@@ -441,7 +441,7 @@ compress-bench:
 # once rather than after the tests finish. The two module/build cache volumes
 # are shared across runs on purpose.
 NETADMIN_IMG ?= golang:1.26
-NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
+NETADMIN_PKGS ?= ./sim/impair/ ./internal/e2e/
 NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:
 	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; go=$$net-go; \
@@ -460,7 +460,7 @@ test-netadmin:
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.
 bench-sim:
-	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./internal/sim/
+	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./sim/
 
 # Browser-driven e2e of the console against the built binary (#1267): builds
 # (make), brings up a throwaway lab of the empty scenario (web/e2e/lib/lab.sh)

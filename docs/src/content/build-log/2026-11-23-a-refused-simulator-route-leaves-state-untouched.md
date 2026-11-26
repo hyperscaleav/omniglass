@@ -13,4 +13,4 @@ validation or write), state is restored to exactly what it was and no diffs are 
 optional mutation that fails is still skipped and logged while the rest apply. Behavior ticks,
 overrides and command mutations keep the per-mutation semantics of `applyMutations`. Regression
 tests: `TestApplyRouteMutations_*` and `TestServeHTTP_VroomDialRefusedLeavesStateUntouched` in
-`internal/sim`.
+`sim`.

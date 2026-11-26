@@ -5,7 +5,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/simoutpost"
+	"github.com/hyperscaleav/omniglass/sim/simoutpost"
 
 	"fmt"
 	"slices"
