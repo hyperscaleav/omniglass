@@ -13,7 +13,7 @@ export const SYSTEM_PAGE_READS: readonly string[] = [
   "/severity-levels",
   "/standards",
   "/systems",
-  "/systems/{system}/health",
+  "/systems/{system}/health?since={since}",
   "/systems/{system}/members",
   "/systems/{system}/metrics",
   "/systems/{system}/metrics/{metric}/samples?hours=24&resolution=300",

@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-
 import Systems from "./Systems";
 import { withTopBar } from "../lib/testheader";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
+import { SYSTEM_HEALTH_PREFIX, systemHealthRangeKey, type FleetHealth } from "../lib/health";
+import { seedSystemHealth } from "../lib/health.testkit";
+import { HISTORY_DEFAULT_RANGE } from "../lib/time_range";
 import { systemSlotsKey } from "../lib/system_slots";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
@@ -133,7 +135,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("szp-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update"] }]);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
+  seedSystemHealth(qc, uuidFor("szp-sys"), healthOverride);
   qc.setQueryData([...systemSlotsKey(uuidFor("szp-sys"))], declared);
   qc.setQueryData([...systemMembersKey(uuidFor("szp-sys"))], membersOverride ?? memberRowsOf(view, uuidFor("szp-sys")));
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
@@ -504,7 +506,7 @@ describe("the map tab (#791)", () => {
     const before = screen.getByTestId("mapmarker-room-mic-1");
     // A real change (a new transition), so structural sharing hands the page
     // a new payload and everything derived from it recomputes.
-    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], {
+    seedSystemHealth(r.qc, uuidFor("szp-sys"), {
       ...health,
       transitions: [...(health.transitions ?? []), { ts: "2026-08-16T09:00:00Z", health: "degraded" }],
     });
@@ -913,9 +915,10 @@ describe("the metrics grid on the system page (#794, #2424)", () => {
       expect(screen.queryByLabelText("From")).toBeNull();
     });
 
-    it("carries no range control on Activity, whose reads keep their own fixed windows", () => {
+    // Activity follows the range too (#2741), opening on its 30 days.
+    it("carries the range control on Activity, showing the window it reads", () => {
       mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`, health, METRICS);
-      expect(screen.queryByTestId("time-range-trigger")).toBeNull();
+      expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 30 days");
     });
   });
 
@@ -989,8 +992,8 @@ describe("the location is context, the system the subject (#872)", () => {
 
   it("offers Retry when a read fails, instead of a blank", async () => {
     const r = mount();
-    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], undefined);
-    r.qc.getQueryCache().find({ queryKey: [...systemHealthKey(uuidFor("szp-sys"))] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
+    r.qc.setQueryData([...systemHealthRangeKey(uuidFor("szp-sys"), HISTORY_DEFAULT_RANGE)], undefined);
+    r.qc.getQueryCache().find({ queryKey: [...systemHealthRangeKey(uuidFor("szp-sys"), HISTORY_DEFAULT_RANGE)] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
     expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
@@ -1076,7 +1079,7 @@ describe("the location configures beside its system (#872)", () => {
 
   it("gives an unplaced system no Location section", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-other")}?tab=configure`);
-    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, slots: [], transitions: [] });
+    seedSystemHealth(r.qc, uuidFor("szp-other"), { ...health, slots: [], transitions: [] });
     r.qc.setQueryData([...systemSlotsKey(uuidFor("szp-other"))], []);
     r.qc.setQueryData([...systemMetricsKey(uuidFor("szp-other"))], []);
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
@@ -1255,7 +1258,7 @@ describe("the system view refreshes (#940)", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
       gets.push(new URL(url).pathname);
-      if (url.endsWith("/health")) return json(moved());
+      if (new URL(url).pathname.endsWith("/health")) return json(moved());
       if (url.endsWith("/members")) return json({ system: "boardroom", members: memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "outage" }) });
       if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
@@ -1304,7 +1307,7 @@ describe("the system view refreshes (#940)", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
       gets.push(new URL(url).pathname);
-      if (url.endsWith("/health")) return json(calm);
+      if (new URL(url).pathname.endsWith("/health")) return json(calm);
       if (url.endsWith("/members")) return json({ members: memberRowsOf(big, uuidFor("szp-sys")) });
       if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
@@ -1377,7 +1380,7 @@ describe("the lab's system page load", () => {
         const req = input instanceof Request ? input : new Request(String(input));
         const u = new URL(req.url);
         const path = u.pathname.replace(/^\/api\/v1/, "");
-        const query = u.search.replace(/instance=[^&]*/, "instance={instance}");
+        const query = u.search.replace(/instance=[^&]*/, "instance={instance}").replace(/since=[^&]*/, "since={since}");
         reads.add(
           (path.replace(id, "{system}").replace(/\/metrics\/[^/]+\/samples$/, "/metrics/{metric}/samples") + query),
         );

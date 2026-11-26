@@ -29,6 +29,7 @@ import { seedSeverityLevels } from "../lib/testseverity";
 import { clickDelete } from "./configure.testkit";
 import { answerConfirms } from "../lib/confirm.testkit";
 import { fmtTime } from "../lib/format";
+import { seedSystemHealth } from "../lib/health.testkit";
 
 // SystemDetail (#2423): the system page and the system blade render ONE body,
 // so a blade shows every section, tab and action its page shows.
@@ -71,7 +72,7 @@ function seed(actions: string[] = ["update", "delete", "rename"]) {
   seedSeverityLevels(qc);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...FLEET_VIEW_KEY], view);
-  qc.setQueryData([...systemHealthKey(SID)], health);
+  seedSystemHealth(qc, SID, health);
   qc.setQueryData([...systemSlotsKey(SID)], [
     { name: "room-mic", label: "Room Microphone", quorum: 1, assigned: 1, impact: "degraded", from_standard: true, accepted_types: [], pinned_products: [], assigned_to: ["mic-1"], positions: [1], position_labels: [] },
   ]);
@@ -184,7 +185,7 @@ describe("one body in two hosts", () => {
   it("names each alarm's endpoint, so two alarms of one rule on one component read apart", async () => {
     const qc = seed();
     const a = health.slots![0].alarms![0];
-    qc.setQueryData([...systemHealthKey(SID)], {
+    seedSystemHealth(qc, SID, {
       ...health,
       slots: [{ ...health.slots![0], alarms: [
         { ...a, id: "al-snmp", message: "Reachability lost", instance: "snmp" },
@@ -203,7 +204,7 @@ describe("one body in two hosts", () => {
   it("an unsnoozed alarm offers Snooze, a snoozed one its chip and Unsnooze, page and blade", async () => {
     const snoozed = (until?: string) => {
       const qc = seed();
-      qc.setQueryData([...systemHealthKey(SID)], {
+      seedSystemHealth(qc, SID, {
         ...health,
         slots: [{ ...health.slots![0], alarms: [{ ...health.slots![0].alarms![0], ...(until ? { snoozed_until: until, snoozed_by: "alice" } : {}) }] }],
       });
@@ -246,7 +247,7 @@ describe("a system with no components (#2464)", () => {
   const blank = () => {
     const qc = seed();
     qc.setQueryData([...FLEET_VIEW_KEY], { ...view, systems: [{ ...view.systems![0], dots: [] }] });
-    qc.setQueryData([...systemHealthKey(SID)], { ...health, slots: [], alarms: [] });
+    seedSystemHealth(qc, SID, { ...health, slots: [], alarms: [] });
     qc.setQueryData([...systemSlotsKey(SID)], []);
     qc.setQueryData([...SYSTEMS_KEY], [{ id: SID, name: "boardroom", label: "Boardroom", location_id: uuidFor("sd-room"), actions: ["update"] }]);
     return qc;
@@ -360,7 +361,7 @@ describe("the Activity tab's history keeps time with the poll", () => {
     const recovered = Date.parse("2026-08-20T17:00:00Z");
     vi.useFakeTimers({ now: recovered, shouldAdvanceTime: true });
     const qc = seed();
-    qc.setQueryData([...systemHealthKey(SID)], {
+    seedSystemHealth(qc, SID, {
       ...health,
       health: "healthy",
       slots: [],
@@ -475,6 +476,42 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 7 days"));
     fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
     await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+  });
+
+  // The default alarm read holds the active alarms and those cleared in the
+  // last 30 days; a custom range reads its own, so an old outage keeps the
+  // alarms that explain it.
+  it("a custom range reads its health and its alarms over that range", async () => {
+    const reads: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const req = input instanceof Request ? input : new Request(String(input));
+        const url = new URL(req.url);
+        reads.push(url);
+        const body = url.pathname.endsWith("/health") ? old : url.pathname.endsWith("/alarms") ? { alarms: [] } : [];
+        return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    const from = NOW - 60 * 24 * HOUR;
+    const to = from + 2 * HOUR;
+    // Healthy when the range opened, out for its second hour.
+    const old = { ...hourly, first_recorded_at: "2026-01-01T00:00:00Z", transitions: [{ ts: iso(from + HOUR), health: "outage" }] };
+    const qc = unseeded();
+    qc.removeQueries({ queryKey: [...systemAlarmsKey(SID)] });
+    mountPage(`/web/systems/${SID}?tab=activity&from=${iso(from)}&to=${iso(to)}`, qc);
+    await waitFor(() => expect(reads.some((u) => u.pathname.endsWith(`/systems/${SID}/alarms`))).toBe(true));
+    const alarmsRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/alarms`))!;
+    expect(alarmsRead.searchParams.get("since")).toBe(iso(from));
+    expect(alarmsRead.searchParams.get("until")).toBe(iso(to));
+    const healthRead = reads.find((u) => u.pathname.endsWith(`/systems/${SID}/health`))!;
+    expect(healthRead.searchParams.get("since")).toBe(iso(from));
+    expect(healthRead.searchParams.get("until")).toBe(iso(to));
+    const kpi = await screen.findByTestId("uptime-kpi");
+    await waitFor(() => expect(kpi.textContent).toContain(`${fmtTime(iso(from))} → ${fmtTime(iso(to))}`));
+    expect(kpi.textContent).toContain("50.0%");
+    // The bar ends at the range's end, not now.
+    expect(within(screen.getByTestId("health-history-full")).getByTestId("strip-end").textContent).toBe(fmtTime(iso(to)));
   });
 
   // The address leaves the 24-hour default out, so on this page a pick of 24

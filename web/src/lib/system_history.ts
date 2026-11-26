@@ -25,15 +25,19 @@ export type MemberAlarmRow = {
   ongoing: boolean;
 };
 
-export function memberAlarmRows(members: MemberAlarms[], now: number, windowHours: number, levels?: SeverityLevel[] | null): MemberAlarmRow[] {
+// memberAlarmRows keeps the alarms that were raised inside the window
+// [from, to]: an open-ended `to` is a window that runs to now (a preset), a set
+// one a custom range that ended before it (#2741), whose later raises are not in it.
+export function memberAlarmRows(members: MemberAlarms[], window: { from: number; to?: number }, levels?: SeverityLevel[] | null): MemberAlarmRow[] {
   const bySeverity = compareSeverity(levels);
-  const start = now - windowHours * 3600_000;
+  const start = window.from;
   const rows: MemberAlarmRow[] = [];
   for (const m of members) {
     for (const a of m.alarms ?? []) {
       const clearedAt = (a as { cleared_at?: string }).cleared_at;
       const activeInWindow = a.active || (clearedAt ? Date.parse(clearedAt) >= start : Date.parse(a.raised_at) >= start);
       if (!activeInWindow) continue;
+      if (window.to !== undefined && Date.parse(a.raised_at) > window.to) continue;
       rows.push({
         id: a.id,
         severity: a.severity,

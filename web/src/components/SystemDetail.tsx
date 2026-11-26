@@ -14,7 +14,7 @@ import AddComponentLink from "./AddComponentLink";
 import SystemEmpty from "./SystemEmpty";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
-import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
+import { systemHealth, systemHealthRangeKey, healthOf, type FleetHealth } from "../lib/health";
 import { systemSlots, systemSlotsKey } from "../lib/system_slots";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
@@ -33,7 +33,7 @@ import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import { systemAlarms, systemAlarmsKey } from "../lib/alarms";
+import { systemAlarms, systemAlarmsRangeKey } from "../lib/alarms";
 import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
@@ -41,13 +41,13 @@ import AlarmActions from "./AlarmActions";
 import { SnoozedBadge } from "./SnoozeButton";
 import { uptimeOver } from "../lib/uptime";
 import { stretchReasons, memberAlarmRows, stretchesOf, markerX, type MemberAlarms } from "../lib/system_history";
-import { spans as timelineSpans } from "../lib/timeline";
+import { spans as timelineSpans, withCarriedIn } from "../lib/timeline";
 import OccurrenceList from "./OccurrenceList";
 import TimeRangePicker from "./TimeRangePicker";
 import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
 import { CursorProvider } from "../lib/cursor";
-import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, HISTORY_DEFAULT_RANGE, rangePhrase, resolveRange, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
@@ -109,8 +109,41 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const now = createClock(CLOCK_TICK_MS);
   const coarse = createClock(HISTORY_TICK_MS);
 
+  // The one time range (#2304), held in the address: the metrics grid, the
+  // timeline and the Activity tab's history read over it (#2741), and the
+  // picker on the tab rail writes it. With none given, Activity opens on the
+  // last 30 days a status page leads with and Overview and the Timeline on 24
+  // hours; a range once picked governs every tab, so every pick is written to
+  // the address, 24 hours included. A blade opens on its page's range and keeps
+  // its own.
+  const { given, setRange } = useHostTimeRange(props.host, { explicit: true });
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads each tab's default
+  // instead, and the host says why rather than drawing empty charts (#2304).
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => given()?.kind === "absolute" && !!me.data && !canViews();
+  const rangeOr = (fallback: TimeRange): TimeRange => {
+    const g = given();
+    return g && !rangeDenied() ? g : fallback;
+  };
+  const range = (): TimeRange => rangeOr(DEFAULT_RANGE);
+  const activityRange = (): TimeRange => rangeOr(HISTORY_DEFAULT_RANGE);
+
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
+  // The report over Activity's range: its history covers that range, and the
+  // health in force when it opened (carried_in) comes with it. The current
+  // health the header reads is the same whatever the range, so a new range
+  // keeps this system's last report on screen while its own read lands.
+  const health = useQuery(() => {
+    const r = activityRange();
+    const sid = id();
+    return {
+      queryKey: systemHealthRangeKey(sid, r),
+      queryFn: () => systemHealth(sid, r),
+      refetchInterval: LEAF_POLL_MS,
+      placeholderData: (prev: FleetHealth | undefined, prevQuery?: { queryKey: readonly unknown[] }) => (prevQuery?.queryKey[1] === sid ? prev : undefined),
+    };
+  });
   const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
   // Each member's own health, polled off the system's members read: the
   // fleet view's dots (read once) stand in until it answers.
@@ -175,22 +208,15 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const all = [...b.cards, ...b.groups.flatMap((g) => g.memberCards)];
     return all.map((c) => ({ name: c.name, componentId: c.componentId }));
   });
-  const alarmHistory = useQuery(() => ({
-    queryKey: systemAlarmsKey(id()),
-    queryFn: () => systemAlarms(id()),
-    enabled: tab() === "activity",
-    refetchInterval: LEAF_POLL_MS,
-  }));
-  // The one time range (#2304), held in the address: the metrics grid and the
-  // timeline read over it, and the picker on the tab rail writes it. A blade
-  // opens on the default and keeps its own.
-  const { range: asked, setRange } = useHostTimeRange(props.host);
-  // An absolute range reads through the views read, which needs view:read: a
-  // shared link opened by a caller without it reads the default instead, and
-  // the host says why rather than drawing empty charts (#2304).
-  const canViews = () => can(me.data, "view", "read");
-  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
-  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
+  const alarmHistory = useQuery(() => {
+    const r = activityRange();
+    return {
+      queryKey: systemAlarmsRangeKey(id(), r),
+      queryFn: () => systemAlarms(id(), r),
+      enabled: tab() === "activity",
+      refetchInterval: LEAF_POLL_MS,
+    };
+  });
   // The history's now: the coarse clock, but never behind the report's own
   // last edge, which a poll can bring in between two ticks (a stretch that
   // opened seconds ago would otherwise have a negative length and vanish).
@@ -198,8 +224,22 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const t = health.data?.transitions ?? [];
     return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
   });
+  // Activity's window on the history's clock: a preset slides to now, a custom
+  // range that ended before now stops at its end, and then nothing in it is
+  // ongoing.
+  const historyWindow = createMemo(() => {
+    const { from, to } = resolveRange(activityRange(), historyNow());
+    const reachesNow = to >= historyNow();
+    return { from, end: reachesNow ? historyNow() : to, reachesNow };
+  });
+  // The spans open at the window's start with the health carried in, so the
+  // bar, Uptime and the stretch list describe the same window.
   const healthSpans = createMemo(() =>
-    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.health ?? null, historyNow()),
+    timelineSpans(
+      withCarriedIn((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.carried_in, historyWindow().from),
+      health.data?.health ?? null,
+      historyWindow().end,
+    ),
   );
   const uptimeWindow = createMemo(() =>
     uptimeOver({
@@ -207,11 +247,12 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       health: health.data?.health,
       carriedIn: health.data?.carried_in,
       firstRecordedAt: health.data?.first_recorded_at,
+      range: activityRange(),
       now: historyNow(),
     }),
   );
   const uptime = () => uptimeWindow().pct;
-  const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow(), health.data?.health));
+  const stretches = createMemo(() => stretchesOf(healthSpans(), historyWindow().end, historyWindow().reachesNow ? health.data?.health : null));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -229,7 +270,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       componentId: m.componentId,
       alarms: byComponent.get(m.componentId) ?? [],
     }));
-    return memberAlarmRows(members, historyNow(), 30 * 24, scale().levels);
+    const w = historyWindow();
+    return memberAlarmRows(members, { from: w.from, to: w.reachesNow ? undefined : w.end }, scale().levels);
   });
   const otherAlarms = createMemo(() => {
     const inStretch = new Set(stretches().flatMap((inc) => stretchReasons(inc, windowAlarms()).map((r) => r.id)));
@@ -362,13 +404,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
               endRef={setRailEnd}
               state={tabState}
               guard={leave}
-              // The range governs Overview's metrics and the Timeline; Activity
-              // keeps its own fixed windows, so the control is not offered there.
-              end={tab() === "overview" || tab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
+              // The range governs every tab but Configure; on Activity the
+              // picker shows the window Activity reads (#2741).
+              end={tab() !== "configure" ? <TimeRangePicker range={tab() === "activity" ? activityRange() : range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
             <Show when={rangeDenied()}>
               <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
-                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+                This link's custom range is read through views, which needs view:read. Showing {rangePhrase(tab() === "activity" ? HISTORY_DEFAULT_RANGE : DEFAULT_RANGE)} instead.
               </p>
             </Show>
             <Show when={tab() === "configure"}>
@@ -423,7 +465,16 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                 <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact now={historyNow()} transitions={health.data?.transitions ?? []} health={health.data?.health} />
+                <HealthHistory
+                  compact
+                  now={historyWindow().end}
+                  from={historyWindow().from}
+                  carriedIn={health.data?.carried_in}
+                  endLabel={historyWindow().reachesNow ? undefined : fmtTime(new Date(historyWindow().end).toISOString())}
+                  window={`the recorded edges over ${rangePhrase(activityRange())}`}
+                  transitions={health.data?.transitions ?? []}
+                  health={health.data?.health}
+                />
                 <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
                   <Show when={windowAlarms().length > 0}>
                     <span class="absolute right-3 top-0 text-[10px] leading-3 text-base-content/40">▲ alarm raised</span>
@@ -434,7 +485,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
-                        style={{ left: `${markerX(inc.raisedAt, historyNow(), Math.max(historyNow() - (healthSpans()[0]?.from ?? historyNow() - 30 * 24 * 3600_000), 1)) * 100}%` }}
+                        style={{ left: `${markerX(inc.raisedAt, historyWindow().end, Math.max(historyWindow().end - (healthSpans()[0]?.from ?? historyWindow().from), 1)) * 100}%` }}
                         content={`${inc.message} · ${inc.component}`}
                       />
                     )}

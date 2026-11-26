@@ -3,6 +3,7 @@ import type { AlarmBody, AlarmTimelineEntryBody } from "../api/api.gen";
 import { compareSeverity, type SeverityLevel } from "./severity";
 import { fmtClock, fmtDay } from "./format";
 import { durationText } from "./timeline";
+import { rangeQuery, type TimeRange } from "./time_range";
 
 // The alarms data layer: thin typed wrappers over the generated client, plus the
 // pure ordering and splitting the panel renders.
@@ -54,10 +55,17 @@ export async function componentAlarms(name: string): Promise<Alarm[]> {
 // whatever their age and those cleared in the last 30 days, each naming its
 // component. A system's Activity polls it, one request however many members
 // the system has, rather than one alarms read per member.
+//
+// The default read covers every preset range; a custom range (#2741) reads the
+// alarms raised during it instead, so an outage older than 30 days keeps the
+// alarms that explain it. Its key sits under the system's.
 export const systemAlarmsKey = (name: string) => ["system-alarms", name] as const;
+export const systemAlarmsRangeKey = (name: string, range?: TimeRange) =>
+  range?.kind === "absolute" ? ([...systemAlarmsKey(name), range] as const) : systemAlarmsKey(name);
 
-export async function systemAlarms(name: string): Promise<Alarm[]> {
-  const { data, error } = await api.GET("/systems/{name}/alarms", { params: { path: { name } } });
+export async function systemAlarms(name: string, range?: TimeRange): Promise<Alarm[]> {
+  const query = range?.kind === "absolute" ? rangeQuery(range, Date.now()) : undefined;
+  const { data, error } = await api.GET("/systems/{name}/alarms", { params: { path: { name }, query } });
   if (error) throw error;
   return (data?.alarms ?? []) as Alarm[];
 }
