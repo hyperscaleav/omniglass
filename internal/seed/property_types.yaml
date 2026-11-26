@@ -296,6 +296,32 @@ property_types:
     validation: { enum: [idle, presentation, vc] }
     label: Scene State
     description: The current scene a room is in, as reported by a control panel or processor (idle, presentation, or video conference mode).
+  # A video bar's own state, read off its API (#2754): the platform it hosts,
+  # the account it is signed in as, the touch controller paired to it, and
+  # its camera.
+  - name: app-mode
+    data_type: string
+    validation: { enum: [ucc, signage, standalone] }
+    label: App Mode
+    description: The application a conferencing component hosts, as it reports it (a unified-communications client, signage, or standalone).
+  - name: ucc-signin
+    data_type: string
+    label: UCC Sign-in
+    description: The unified-communications account a conferencing component reports it is signed in as; empty when signed out.
+  - name: touch-pair
+    data_type: string
+    label: Touch Pair
+    description: The touch controller a conferencing component reports paired to it, by its hostname; empty when none is paired.
+  - name: camera-state
+    data_type: string
+    validation: { enum: ["on", "off"] }
+    label: Camera State
+    description: Whether a component's camera is on (sending video) or off (its privacy shutter closed), as the component reports it.
+  - name: video-resolution
+    data_type: string
+    validation: { pattern: "^[0-9]+x[0-9]+$" }
+    label: Video Resolution
+    description: The video resolution a component reports it sends, width by height in pixels (3840x2160).
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string
@@ -314,6 +340,21 @@ property_types:
     data_type: string
     label: Model number
     description: The manufacturer model number.
+  # Inventory a device reports of itself (#2754), beside the serial, model
+  # and firmware above: slow-changing, read on a driver's identity poll and
+  # shown under the component's "What it is".
+  - name: hardware-revision
+    data_type: string
+    label: Hardware revision
+    description: The hardware revision of the device, as its manufacturer marks it.
+  - name: hostname
+    data_type: string
+    label: Hostname
+    description: The name the device reports for itself on the network.
+  - name: ip-address
+    data_type: string
+    label: IP address
+    description: The primary IP address the device reports it holds.
   # Identity match keys (#1282): the key an identity binding ties a conduit's
   # reported value to an owner by. A key is a registered property type, so
   # every driver reporting it shares one name.

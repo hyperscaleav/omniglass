@@ -265,6 +265,25 @@ func (d *Device) tickBehavior(b *behaviorEntry) {
 	}
 }
 
+// TickBehavior fires one tick of the named behavior now, as its timer would,
+// and reports whether the device has it: a test stepping a device through
+// its cycle without waiting on the clock.
+func (d *Device) TickBehavior(name string) bool {
+	d.behaviorMu.Lock()
+	var b *behaviorEntry
+	for i := range d.behaviors {
+		if d.behaviors[i].Name == name {
+			b = &d.behaviors[i]
+		}
+	}
+	d.behaviorMu.Unlock()
+	if b == nil {
+		return false
+	}
+	d.tickBehavior(b)
+	return true
+}
+
 // ensureRand lazily initializes the per-device random source on first
 // use. Behaviors are the only consumer today; deferring construction
 // to AddBehaviorFromProfile keeps unrelated tests / device fixtures

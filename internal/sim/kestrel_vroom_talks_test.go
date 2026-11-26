@@ -38,13 +38,9 @@ func loadVRoom(t *testing.T, id string) *Device {
 // tickByName fires one tick of the named behavior.
 func tickByName(t *testing.T, d *Device, name string) {
 	t.Helper()
-	for i := range d.behaviors {
-		if d.behaviors[i].Name == name {
-			d.tickBehavior(&d.behaviors[i])
-			return
-		}
+	if !d.TickBehavior(name) {
+		t.Fatalf("kestrel-vroom has no behavior %q", name)
 	}
-	t.Fatalf("kestrel-vroom has no behavior %q", name)
 }
 
 // The VRoom talks on its own (#2754): a call about every 90 s, started and

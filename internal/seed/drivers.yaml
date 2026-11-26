@@ -273,21 +273,49 @@ drivers:
         - { name: port, kind: number, default: "161" }
         - { name: community, kind: secret, secret_type: snmp-community, required: true }
       polls:
+        # Identity and inventory (#2754): sysName is MIB-II's, the hardware
+        # revision, address and MAC sit beside the serial on the Polaris arc.
         - name: identity
           schedule: { every: 5m }
-          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.4.1.55540.5.2.0", "1.3.6.1.4.1.55540.5.1.0"] }
+          request:
+            get:
+              - "1.3.6.1.2.1.1.1.0"
+              - "1.3.6.1.4.1.55540.5.2.0"
+              - "1.3.6.1.4.1.55540.5.1.0"
+              - "1.3.6.1.2.1.1.5.0"
+              - "1.3.6.1.4.1.55540.5.3.0"
+              - "1.3.6.1.4.1.55540.5.4.0"
+              - "1.3.6.1.4.1.55540.5.5.0"
           emits:
             - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
             - { name: serial-number, extract: { oid: "1.3.6.1.4.1.55540.5.2.0" } }
             - { name: firmware-version, extract: { oid: "1.3.6.1.4.1.55540.5.1.0" } }
+            - { name: hostname, extract: { oid: "1.3.6.1.2.1.1.5.0" } }
+            - { name: hardware-revision, extract: { oid: "1.3.6.1.4.1.55540.5.3.0" } }
+            - { name: ip-address, extract: { oid: "1.3.6.1.4.1.55540.5.4.0" } }
+            - { name: mac-address, extract: { oid: "1.3.6.1.4.1.55540.5.5.0" } }
+        # The program output, and the DSP engine's own load (in percent, the
+        # canon's ratio), temperature, fan and active channels (#2754), all
+        # served at .2 all along.
         - name: status
           schedule: { every: 30s }
           request:
-            get: ["1.3.6.1.2.1.1.3.0", "1.3.6.1.4.1.55540.2.5.0", "1.3.6.1.4.1.55540.2.6.0"]
+            get:
+              - "1.3.6.1.2.1.1.3.0"
+              - "1.3.6.1.4.1.55540.2.5.0"
+              - "1.3.6.1.4.1.55540.2.6.0"
+              - "1.3.6.1.4.1.55540.2.1.0"
+              - "1.3.6.1.4.1.55540.2.2.0"
+              - "1.3.6.1.4.1.55540.2.3.0"
+              - "1.3.6.1.4.1.55540.2.4.0"
           emits:
             - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
             - { name: mute, extract: { oid: "1.3.6.1.4.1.55540.2.5.0" } }
             - { name: audio-level, extract: { oid: "1.3.6.1.4.1.55540.2.6.0" } }
+            - { name: cpu-utilization, extract: { oid: "1.3.6.1.4.1.55540.2.1.0" }, transform: { scale: 0.01 } }
+            - { name: active-channel-count, extract: { oid: "1.3.6.1.4.1.55540.2.2.0" } }
+            - { name: temperature, extract: { oid: "1.3.6.1.4.1.55540.2.3.0" } }
+            - { name: fan-speed, extract: { oid: "1.3.6.1.4.1.55540.2.4.0" } }
   - id: ferrite-pdu-snmp
     label: Ferrite PDU SNMP
     version: "1.0.0"
@@ -434,7 +462,36 @@ drivers:
               message: { value: "Call ended" }
               attributes:
                 call_id: { extract: { jsonpath: id } }
+        # Someone joining or leaving the call in progress (#2754), each a
+        # named occurrence carrying the call's id and the count it left.
+        - name: participant-joined
+          match: { event: participant-joined }
+          emits:
+            - name: participant-joined
+              message: { value: "Participant joined" }
+              attributes:
+                call_id: { extract: { jsonpath: call_id } }
+                participants: { extract: { jsonpath: participants }, transform: { cast: int } }
+        - name: participant-left
+          match: { event: participant-left }
+          emits:
+            - name: participant-left
+              message: { value: "Participant left" }
+              attributes:
+                call_id: { extract: { jsonpath: call_id } }
+                participants: { extract: { jsonpath: participants }, transform: { cast: int } }
+        # The bar's log stream on the same feed (#2754): each `event: log` is
+        # one line, its severity, facility and text as the codec writes them.
+        - name: logs
+          match: { event: log }
+          emits:
+            - log:
+                severity: { extract: { jsonpath: severity } }
+                facility: { extract: { jsonpath: facility } }
+              message: { extract: { jsonpath: text } }
       polls:
+        # The bar's identity and inventory, slow-changing, on a slow poll: the
+        # rows the console shows under "What it is" (#2754).
         - name: system
           schedule: { every: 5m }
           request: { path: /api/system }
@@ -442,8 +499,35 @@ drivers:
             - { name: model-number, extract: { jsonpath: model } }
             - { name: serial-number, extract: { jsonpath: serial } }
             - { name: firmware-version, extract: { jsonpath: firmware } }
+            - { name: hardware-revision, extract: { jsonpath: hardware_revision } }
+            - { name: hostname, extract: { jsonpath: hostname } }
+            - { name: ip-address, extract: { jsonpath: ip_address } }
+            - { name: mac-address, extract: { jsonpath: mac_address } }
             - { name: uptime, extract: { jsonpath: uptime } }
             - { name: power-state, extract: { jsonpath: power } }
+        # The bar's whole status (#2754): its app, pairing, presentation and
+        # camera as properties (kept on change), and its own load and the
+        # call's media stats as metrics on the cadence. Fractions the bar
+        # reports in percent are scaled to the canon's ratio.
+        - name: status
+          schedule: { every: 30s }
+          request: { path: /api/status }
+          emits:
+            - { name: app-mode, extract: { jsonpath: app.mode } }
+            - { name: ucc-signin, extract: { jsonpath: app.ucc_signin } }
+            - { name: touch-pair, extract: { jsonpath: app.touch_pair } }
+            - { name: content-sharing-state, extract: { jsonpath: app.local_presentation }, transform: { map: { "true": sharing, "false": idle } } }
+            - { name: camera-state, extract: { jsonpath: video.camera_on }, transform: { map: { "true": "on", "false": "off" } } }
+            - { name: video-resolution, extract: { jsonpath: video.resolution } }
+            - { name: cpu-utilization, extract: { jsonpath: device.cpu_load }, transform: { scale: 0.01 } }
+            - { name: temperature, extract: { jsonpath: device.temperature } }
+            - { name: fan-speed, extract: { jsonpath: device.fan_rpm } }
+            - { name: memory-utilization, extract: { jsonpath: device.memory_used } }
+            - { name: speaker-level, extract: { jsonpath: audio.speaker_level }, transform: { scale: 0.01 } }
+            - { name: packet-loss-ratio, extract: { jsonpath: media.packet_loss } }
+            - { name: jitter, extract: { jsonpath: media.jitter_ms } }
+            - { name: bitrate, extract: { jsonpath: media.bitrate_kbps } }
+            - { name: frame-rate, extract: { jsonpath: media.frame_rate } }
         - name: call
           schedule: { every: 30s }
           request: { path: /api/call }
@@ -581,7 +665,7 @@ drivers:
         # subscribe, sent on every connection before anything else, rides
         # the first listener.
         - name: call-change
-          arm: ['{"type":"subscribe","paths":["status.audio.volume","status.audio.mic_mute","status.call","status.device.power"]}']
+          arm: ['{"type":"subscribe","paths":["status.audio.volume","status.audio.mic_mute","status.call.active","status.call.participants","status.device.power"]}']
           match: { field: { path: path, equals: status.call.active } }
           emits:
             - { name: call-state, extract: { jsonpath: value }, transform: { map: { "true": active, "false": idle } } }
