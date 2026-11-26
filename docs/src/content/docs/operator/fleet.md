@@ -85,7 +85,7 @@ screenshots:
         selector: "role=tab[name='Activity']"
       - action: click
         selector: "[data-testid=stretch-0] button"
-    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
+    alt: "The Activity tab, statuspage style: the 30-day uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
@@ -412,8 +412,8 @@ the page's, and a pick in the panel leaves the page's address alone.
 
 ## Activity: the history, the events, the logs
 
-**Activity** reads the way a status page reads: the window's **uptime** up top (the
-health KPI over time), the timeline beside it with one marker per alarm raise, then
+**Activity** reads the way a status page reads: the 30-day **uptime** up top (the
+availability KPI), the timeline beside it with one marker per alarm raise, then
 the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
 expanding to the health changes inside it and the alarms that explain them. An entry reads
 ongoing only while the system is still away from healthy; the moment it recovers, the entry
@@ -421,18 +421,16 @@ closes at the recovery. An alarm the
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
-Activity follows the page's time range: Uptime, the timeline, the health history and the alarms
-all read over it, the last 30 days until you pick another. Narrow it to the last hour and a
-ten-minute outage is a wide red block beside that hour's Uptime, not a sliver at the end of a
-month.
+Activity's history follows the page's time range: the timeline, the health history and the
+alarms all read over it, the last 30 days until you pick another. Narrow it to the last hour and a
+ten-minute outage is a wide red block, not a sliver at the end of a month.
 
-Uptime is the healthy share of the time the system has been recorded inside the range, never of
-time it did not exist for, and the card names the window it measured ("of the last hour", "of the
-last 30 days", or a custom range by its dates). A system younger than the range reads over its own
-life and the card says so ("since Nov 23, 01:56 PM"); with no health recorded yet it says so
-instead of showing a percentage. The timeline opens at the range's start, drawn in the health the
-system held as the range opened until its first change inside it, so the bar and Uptime describe
-the same window. It is labelled at both ends and each segment's hover gives its health, from, to
+**Uptime does not follow the range.** It is the availability KPI, the number a status page leads
+with, so it keeps its own fixed window: the healthy share of the last 30 days, never of time the
+system did not exist for. A system younger than that reads over its own life and the card says so
+("since Nov 23, 01:56 PM"); with no health recorded yet it says so instead of showing a percentage.
+The timeline opens at the range's start, drawn in the health the system held as the range opened
+until its first change inside it. It is labelled at both ends and each segment's hover gives its health, from, to
 and duration; the red and amber triangles under it are alarm raises on that same axis.
 
 ::screenshot{#fleet-history}

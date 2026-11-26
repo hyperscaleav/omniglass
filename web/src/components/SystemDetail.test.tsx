@@ -457,23 +457,28 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
     const alert = await screen.findByTestId("history-error");
     expect(alert.textContent).toContain("since is malformed");
+    // Uptime is the 30-day KPI from the current read: a failed ranged read
+    // leaves it standing.
     const kpi = screen.getByTestId("uptime-kpi");
-    expect(kpi.textContent).not.toContain("reading the range");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    expect(kpi.textContent).toContain("%");
     failing = false;
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
-    await waitFor(() => expect(kpi.textContent).toContain("of the last hour"));
-    expect(screen.queryByTestId("history-error")).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId("history-error")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("stretch-list").textContent).toContain("ongoing"));
   });
 
-  it("with range=1h, the health read carries that hour and Uptime is that hour's, labelled for it", async () => {
+  it("with range=1h, the history read carries that hour while Uptime stays the 30-day KPI", async () => {
     const reads = stubHealth();
     mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
     await waitFor(() => expect(rangedOf(reads).length).toBeGreaterThan(0));
     expect(since(rangedOf(reads)[0])).toBe(NOW - HOUR);
     expect(rangedOf(reads)[0].searchParams.get("until")).toBeNull();
     const kpi = await screen.findByTestId("uptime-kpi");
-    await waitFor(() => expect(kpi.textContent).toContain("of the last hour"));
-    expect(kpi.textContent).toContain("50.0%");
+    // Out for the last half hour of 30 days: 99.9%, whatever the picker says.
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
+    expect(kpi.textContent).toContain("99.9%");
+    expect(kpi.textContent).not.toContain("of the last hour");
     expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 1 hour");
   });
 
@@ -505,7 +510,8 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     fireEvent.click(await screen.findByTestId("time-range-trigger"));
     fireEvent.click(await screen.findByTestId("time-range-preset-7d"));
     await waitFor(() => expect(window.location.search).toContain("range=7d"));
-    await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 7 days"));
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 30 days");
     fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
     await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 7 days"));
   });
@@ -541,8 +547,7 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     expect(healthRead.searchParams.get("since")).toBe(iso(from));
     expect(healthRead.searchParams.get("until")).toBe(iso(to));
     const kpi = await screen.findByTestId("uptime-kpi");
-    await waitFor(() => expect(kpi.textContent).toContain(`${fmtTime(iso(from))} → ${fmtTime(iso(to))}`));
-    expect(kpi.textContent).toContain("50.0%");
+    await waitFor(() => expect(kpi.textContent).toContain("of the last 30 days"));
     // The bar ends at the range's end, not now.
     expect(within(screen.getByTestId("health-history-full")).getByTestId("strip-end").textContent).toBe(fmtTime(iso(to)));
   });
@@ -579,17 +584,17 @@ describe("the Activity tab follows the page's range (#2741)", () => {
 
   // A pick's own read is in flight: Activity draws nothing from the range it
   // left, rather than that range's report measured as the new one.
-  it("while a new range's read is in flight, Uptime shows no figure from the old range", async () => {
+  it("while a new range's read is in flight, the history draws nothing from the old range and Uptime keeps its 30 days", async () => {
     stubHealth(hourly, hourly, (u) => since(u) === NOW - 30 * 24 * HOUR);
     mountPage(`/web/systems/${SID}?tab=activity&range=1h`, unseeded());
-    const kpi = await screen.findByTestId("uptime-kpi");
-    await waitFor(() => expect(kpi.textContent).toContain("50.0%"));
+    await screen.findByTestId("stretch-list");
     fireEvent.click(screen.getByTestId("time-range-trigger"));
     fireEvent.click(await screen.findByTestId("time-range-preset-30d"));
     await waitFor(() => expect(window.location.search).toContain("range=30d"));
-    await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).not.toContain("%"));
-    expect(screen.getByTestId("uptime-kpi").textContent).not.toContain("of the last 30 days");
-    expect(screen.queryByTestId("stretch-list")).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId("stretch-list")).toBeNull());
+    expect(screen.getByTestId("history-tab").textContent).toContain("Reading the range.");
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("99.9%");
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 30 days");
   });
 
   // A custom range from before the system existed holds no record: the bar is
@@ -600,8 +605,7 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     const young = { ...hourly, health: "outage", carried_in: undefined, first_recorded_at: iso(NOW - 10 * 24 * HOUR), transitions: [] };
     stubHealth(young);
     mountPage(`/web/systems/${SID}?tab=activity&from=${iso(from)}&to=${iso(to)}`, unseeded());
-    const kpi = await screen.findByTestId("uptime-kpi");
-    await waitFor(() => expect(kpi.textContent).toContain("nothing recorded in this range"));
+    await waitFor(() => expect(screen.getByTestId("history-tab").textContent).toContain("Nothing recorded in this window."));
     expect(screen.getByTestId("health-history-full").querySelectorAll("[data-segment]").length).toBe(0);
     expect(screen.queryByTestId("stretch-list")).toBeNull();
   });
@@ -614,7 +618,7 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     fireEvent.click(await screen.findByTestId("time-range-trigger"));
     fireEvent.click(await screen.findByTestId("time-range-preset-24h"));
     await waitFor(() => expect(window.location.search).toContain("range=24h"));
-    await waitFor(() => expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 24 hours"));
-    expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours");
+    await waitFor(() => expect(screen.getByTestId("time-range-trigger").textContent).toContain("Last 24 hours"));
+    expect(screen.getByTestId("uptime-kpi").textContent).toContain("of the last 30 days");
   });
 });
