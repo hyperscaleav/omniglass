@@ -504,10 +504,11 @@ shots:
         expect: ["Timeline"]
         zoom: 1.2
         hold: 1200
-      - hover: '[data-testid=timeline-events-row] g[role=button][aria-label*="call-started"]'
+      - hover: '[data-testid=timeline-events-row] g[role=button] >> nth=0'
         hold: 1200
-      # 9. One event it sent itself, opened.
-      - click: '[data-testid=timeline-events-row] g[role=button][aria-label*="call-started"]'
+      # 9. One event it sent itself, opened: the earliest marker, the call the
+      # setup dialed at lab start.
+      - click: '[data-testid=timeline-events-row] g[role=button] >> nth=0'
         hold: 300
       - wait: { selector: '[data-testid=timeline-detail]' }
         focus: here
