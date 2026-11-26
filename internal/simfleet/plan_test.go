@@ -169,6 +169,38 @@ func TestPlanAddsTheControlFaceOnlyWhereAsked(t *testing.T) {
 	}
 }
 
+// A video bar asked for its second face gets its control socket beside its
+// https API (#2754): kestrel-api on 443 and kestrel-ws on 9443 at the same
+// address, both behind the bar's simulated login, the ports lifted as the
+// simulator lifts them; one not asked keeps the https API alone.
+func TestPlanGivesAControlledVideoBarItsHTTPSAndWSSEndpoints(t *testing.T) {
+	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{
+		{Protocol: "http", Port: 443, TLS: true}, {Protocol: "websocket", Port: 9443, TLS: true},
+	}}
+	cat := Catalog{
+		ProfileFor: func(string) (*profile.DeviceProfile, bool) { return prof, true },
+		DriverOf:   func(string) string { return "kestrel-api" },
+		PortOffset: 10000,
+	}
+	got, err := Plan([]Component{{ID: "c1", Product: "kestrel-vroom", Control: true}, {ID: "c2", Product: "kestrel-vroom"}}, nil, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := got[0].Endpoints
+	if len(e) != 2 || e[0].Driver != "kestrel-api" || e[1].Driver != "kestrel-ws" {
+		t.Fatalf("controlled bar endpoints = %+v, want kestrel-api then kestrel-ws", e)
+	}
+	if in := e[0].Inputs; in["port"] != "10443" || in["login"] != KestrelLoginSecret {
+		t.Errorf("https inputs = %v, want the lifted 443 and the bar's login", in)
+	}
+	if in := e[1].Inputs; in["host"] != got[0].Address || in["port"] != "9443" || in["login"] != KestrelLoginSecret {
+		t.Errorf("wss inputs = %v, want the bar's address, its 9443 and the bar's login", in)
+	}
+	if e := got[1].Endpoints; len(e) != 1 || e[0].Driver != "kestrel-api" {
+		t.Fatalf("uncontrolled bar endpoints = %+v, want the https API alone", e)
+	}
+}
+
 // Every control face is an attach the plan knows the inputs and secret of.
 func TestEveryControlFaceIsAnAttach(t *testing.T) {
 	for reads, ctl := range Control {
