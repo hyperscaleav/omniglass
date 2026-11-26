@@ -21,6 +21,7 @@ var SampleWritePaths = map[string][]writerclass.Writer{
 	"writePropertySets":     {writerclass.Outpost, writerclass.Push, writerclass.Fanout, writerclass.CalcRule},
 	"writeEventSets":        {writerclass.Outpost, writerclass.Push, writerclass.Fanout},
 	"recordHealth":          {writerclass.Process},
+	"landOwnerHistory":      {writerclass.Process},
 	"IssueCommand":          {writerclass.Command},
 	"writeReplyObservation": {writerclass.CommandReply},
 	"writeLifecycleEvent":   {writerclass.Command},

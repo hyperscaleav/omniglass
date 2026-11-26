@@ -43,11 +43,16 @@ lab:
   # The recording omnibot plays (internal/lab/omnibot): its calls run for real
   # against the lab, its words are recorded, so no capture does live inference.
   omnibot_replay: corporate-outage
+  # The corporate scenario's health storyline (lab --health-history, #2729): 30
+  # days of health behind every room, the showcase rooms with the past outages
+  # the alarms explained, so a capture of a room's Activity reads a fleet that
+  # has been running rather than one born minutes ago.
+  health_history: true
 
 viewport: { width: 1440, height: 900 }
 
 # Off camera, before the first shot: the main display of five rooms at other
-# sites unplugged, so the fleet reads mixed (some healthy rooms, some degraded,
+# sites unplugged, so the fleet reads mixed (some healthy rooms, some down,
 # each display down) rather than uniformly green. The shipped reachability rule
 # raises its High alarm on each; the wait holds until the fifth is open.
 setup:
@@ -115,7 +120,7 @@ shots:
   # those rooms; the headquarters boardroom's Why, naming its main display; the
   # alarm snoozed from that row; the display plugged back in (off camera, the
   # wait for the console to see it sped up under its badge), the room reading
-  # healthy and its Why clear; its Activity, the stretch it spent degraded in
+  # healthy and its Why clear; its Activity, the stretch it spent down in
   # its health history. It leaves the boardroom healthy, as the outage clip
   # below expects to find it.
   - id: omniglass-teaser
@@ -366,7 +371,7 @@ shots:
         hold: 1500
 
   # Health & Alarms. The page's bullets, in order:
-  #   1. A degraded room names the alarm and the slot it affects.
+  #   1. A room that is down names the alarm and the slot it takes down.
   #   2. One click opens the component behind it.
   #   3. Its outage and vitals, beside the rooms it serves.
   # The main display of hq-mr86-1 is unplugged as the clip starts: the shipped
@@ -417,11 +422,11 @@ shots:
         zoom: 1.1
         hold: 2200
 
-  # The same room, still: degraded, its Why card naming the alarm and the slot
+  # The same room, still: down, its Why card naming the alarm and the slot
   # it impairs, and the components that still answer.
   - id: system-why
     kind: still
-    alt: "An Omniglass system view reading degraded: the Why card naming the High reachability alarm on the main display and the slot it impairs, above the components that still answer."
+    alt: "An Omniglass system view reading down: the Why card naming the High reachability alarm on the main display and the slot it takes down, above the components that still answer."
     start: /systems/hq-mr86-1
     ready: { text: Reachability lost }
 
@@ -429,7 +434,7 @@ shots:
   #   1. Ask about a room in plain words.
   #   2. Its thinking and every call it makes, shown as it runs.
   #   3. The cause and the next step. It asks before any change.
-  # Asked from the degraded boardroom itself, so the question is the one the
+  # Asked from the downed boardroom itself, so the question is the one the
   # recording answers. The recording plays at a live model's pace (its think
   # and reasoning, internal/lab/omnibot/corporate-outage.yaml): Working while
   # it thinks, a Thinking line before each call, the calls running for real
@@ -438,14 +443,14 @@ shots:
   - id: omnibot-ask
     kind: loop
     max_seconds: 14
-    alt: "Asking Omniglass's assistant why a degraded boardroom is degraded: it thinks, reads the room's health and the display's reachability, shown as calls, then names the display as the cause and the next step, and says it will ask before changing anything."
+    alt: "Asking Omniglass's assistant why a boardroom is down: it thinks, reads the room's health and the display's reachability, shown as calls, then names the display as the cause and the next step, and says it will ask before changing anything."
     start: /systems/hq-mr86-1
     ready: { text: Reachability lost }
     steps:
       - click: 'button[aria-label="Ask omnibot"]'
         hold: 200
       # Beat 1: the question.
-      - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "Why is the 86-inch meeting room degraded?" }
+      - type: { target: 'textarea[aria-label="Ask omnibot"]', text: "Why is the 86-inch meeting room down?" }
         focus: here
         zoom: 1.7
         hold: 300

@@ -27,14 +27,39 @@ on:
   pull_request:
     # ready_for_review runs a draft's skipped checks; labeled starts a draft's opt-in (run:test).
     types: [opened, synchronize, reopened, ready_for_review, labeled]
+    # The same capture inputs as push below (#860), so a seed-only PR runs verify. It
+    # is the cheap structural job; the recapture itself runs on main after the merge.
     paths:
       - docs/**
       - web/**
+      - internal/devseed/**
+      - internal/seed/**
+      - db/migrations/**
+      - Makefile
+      - Dockerfile*
+      - .github/workflows/docs-shots.yml
+  # The recapture runs on main, so its trigger is every input to a capture (#860):
+  # the console (web/**), the pages and their frontmatter (docs/**), the dev seed
+  # fleet the captured console renders, the boot seed and the migrations behind it
+  # (a new catalog row moves a count), and what builds the lab image the capture
+  # drives (the Makefile, the Dockerfile) and this workflow. The rest of internal/**
+  # is left out on purpose: the recapture builds the image and takes minutes, and a
+  # server change that moves a pixel does so through one of these inputs or through
+  # web/**. A new input that shapes what the console renders joins this list, and
+  # the pull_request list above in the same edit (scripts/docs_shots_paths_test.go
+  # holds them equal). A PR compares no pixels (verify is structural); the pixels
+  # are recaptured here, on main, after the merge.
   push:
     branches: [main, "release/**"]
     paths:
       - docs/**
       - web/**
+      - internal/devseed/**
+      - internal/seed/**
+      - db/migrations/**
+      - Makefile
+      - Dockerfile*
+      - .github/workflows/docs-shots.yml
 
 permissions:
   contents: read

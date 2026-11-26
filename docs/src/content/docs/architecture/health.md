@@ -86,6 +86,10 @@ differently in different slots: a dead confidence monitor is not a dead main dis
 | `degraded` | the system works, worse | a slot that costs quality, not the meeting |
 | `none` | nothing | a slot you track but do not depend on |
 
+The shipped meeting-room templates (`meeting-room` and its sized variants) declare their **main display**
+`outage`: a meeting room whose display is dark, unreachable or on the wrong input does not work, so the
+room reads down rather than worse. Their other slots keep the default (#2736).
+
 **Quorum is the redundancy knob.** A quorum of 1 with two components assigned tolerates one failure; a
 quorum of 2 with two assigned is impaired the moment either goes out. Redundancy is the gap between
 assigned and needed, with no separate vocabulary.
@@ -142,6 +146,12 @@ The carrier already exists. Each component, system and location owns a `health` 
 [owner arc](/architecture/core-entities/#ownership-the-exclusive-arc). There is no `health_history`
 table: it would be a second, worse copy. An owner's first value is always recorded, even `healthy`, so
 "healthy since we started watching" differs from "never evaluated".
+
+One instance writes health history it did not derive: a throwaway lab seeded with `--health-history`
+lands 30 days of past edges (and the alarms that explain them) so it reads like a fleet that had been
+running. Those rows carry `source='devseed'`, go before each owner's own record (never after or
+over it, so the newest row is still the platform's own), and exist on no other instance
+([ADR-2726](/architecture/decisions/#adr-2726-a-throwaway-labs-seed-lands-past-health-and-alarms-labelled-as-seeded)).
 
 Computing health on read would keep no history at all. Computing on read and writing the result through
 is worse: the history looks real but is sampled by whoever opens a page, so a room that broke on Friday
@@ -241,8 +251,9 @@ a duplicated explanation. **A component's** is the same envelope with no slots a
 
 All three carry the **recorded transitions**, oldest first, one entry per change: the availability
 strip's data and the answer to "since when". The range is `since` and `until` (RFC 3339), defaulting to
-the last 30 days; `since` after `until` is a 400. When the caller bounds the start, `carried_in` is the
-health in force as the range opened, and `first_recorded_at` says when the owner was first recorded.
+the last 30 days; `since` after `until` is a 400. `carried_in` is the health in force as the range
+opened, on an explicit `since` and on the default window alike (#2735); only a whole-history read, which
+has no start, carries none. `first_recorded_at` says when the owner was first recorded.
 
 The console renders health as **HealthBadge**, **HealthHistory** and **AlarmsPanel** on the component,
 system and location detail views. Healthy reads green, and a muted green in the outline, so it never

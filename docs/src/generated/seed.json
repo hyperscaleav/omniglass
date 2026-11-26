@@ -2923,6 +2923,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ]
@@ -2970,6 +2971,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3049,6 +3051,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3099,6 +3102,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3149,6 +3153,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],
@@ -3199,6 +3204,7 @@
      {
       "name": "main-display",
       "label": "Main Display",
+      "impact": "outage",
       "accepted_types": [
        "display"
       ],

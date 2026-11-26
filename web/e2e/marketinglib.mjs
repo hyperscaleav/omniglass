@@ -22,7 +22,7 @@ import { load } from 'js-yaml';
 /** @typedef {'out' | 'here' | Target} Focus */
 /** @typedef {{ n: number, kind: string, method?: 'PUT' | 'POST' | 'PATCH', body?: Record<string, unknown>, path?: string, key?: string, target?: Target, text?: string, value?: string, replace?: boolean, timeout: number, hold: number, focus?: Focus, zoom?: number, spot?: false, lapse?: number, seconds?: number, expect?: string[] }} Step */
 /** @typedef {{ id: string, kind: 'still' | 'loop', alt: string, viewport: Viewport, start: string, ready: Target | null, setup: SetupItem[], prep: Step[], steps: Step[], maxSeconds: number }} Shot */
-/** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string }, setup: SetupItem[], shots: Shot[] }} ShotList */
+/** @typedef {{ lab: { scenario: string, systems: number, omnibotReplay: string, healthHistory: boolean }, setup: SetupItem[], shots: Shot[] }} ShotList */
 
 // A loop plays long enough to read and short enough to stay lively: 5 to 9
 // seconds, and small enough to ship on a page: 1.5 MB.
@@ -425,6 +425,11 @@ export function parseShots(text) {
   if (!isObj(lab) || !isStr(lab.scenario) || !Number.isInteger(lab.systems) || lab.systems < 1) {
     problems.push('lab must be { scenario, systems (a positive whole number), omnibot_replay? }');
   }
+  // health_history (#2729): the lab seeds its scenario's health storyline, so
+  // the captures read a fleet that has been running (lab --health-history).
+  if (isObj(lab) && lab.health_history !== undefined && typeof lab.health_history !== 'boolean') {
+    problems.push("lab health_history is true or false: whether the lab seeds its scenario's health storyline");
+  }
   const [defaultViewport, vp] = parseViewport(d.viewport, 'the list');
   problems.push(...vp);
   const [setup, sp] = parseSetup(d.setup, 'the list');
@@ -503,7 +508,7 @@ export function parseShots(text) {
   if (problems.length > 0) return { list: null, problems };
   return {
     list: {
-      lab: { scenario: lab.scenario, systems: lab.systems, omnibotReplay: lab.omnibot_replay ?? '' },
+      lab: { scenario: lab.scenario, systems: lab.systems, omnibotReplay: lab.omnibot_replay ?? '', healthHistory: lab.health_history === true },
       setup,
       shots,
     },

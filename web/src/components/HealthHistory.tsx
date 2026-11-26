@@ -50,13 +50,18 @@ export default function HealthHistory(props: {
   // itself (the history tab's health history list) and would otherwise say
   // everything twice.
   compact?: boolean;
+  // The caller's clock, for a surface whose other readings share one now (the
+  // system Activity tab, #2723) so the bar's newest segment ends where they do.
+  now?: number;
 }) {
-  // Pinned at setup, like the availability strip: a strip whose "now" moved under
-  // it would re-weight every segment on an unrelated re-render.
-  const now = Date.now();
+  // Pinned at setup unless the caller drives it, like the availability strip: a
+  // strip whose "now" moved under it would re-weight every segment on an
+  // unrelated re-render.
+  const pinned = Date.now();
+  const now = () => props.now ?? pinned;
   const edges = () => props.transitions ?? [];
   const list = createMemo<Span<string>[]>(() =>
-    spans(edges().map((t) => ({ ts: t.ts, value: t.health })), props.health ?? null, now),
+    spans(edges().map((t) => ({ ts: t.ts, value: t.health })), props.health ?? null, now()),
   );
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());
@@ -66,7 +71,7 @@ export default function HealthHistory(props: {
       ...s,
       tip:
         s.to > s.from
-          ? `${s.value}: ${fmtTime(new Date(s.from).toISOString())} to ${s.to >= now - 1000 ? "now" : fmtTime(new Date(s.to).toISOString())} (${durationText(s.to - s.from)})`
+          ? `${s.value}: ${fmtTime(new Date(s.from).toISOString())} to ${s.to >= now() - 1000 ? "now" : fmtTime(new Date(s.to).toISOString())} (${durationText(s.to - s.from)})`
           : undefined,
     })),
   );

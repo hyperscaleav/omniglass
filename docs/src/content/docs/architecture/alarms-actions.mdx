@@ -671,6 +671,7 @@ not mutually exclusive.
     component_id: 'The component the alarm is about',
     acknowledged_at: 'When a person first recorded seeing it; NULL while nobody has. Orthogonal to cleared_at',
     acknowledged_by: 'Who recorded it; ON DELETE SET NULL, so purging a user keeps the time, and audit_log keeps the name',
+    source: 'Empty for every alarm the platform raises; devseed for an alarm a throwaway lab seeded in the past (ADR-2726)',
   }}
 />
 
