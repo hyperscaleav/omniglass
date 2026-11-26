@@ -334,13 +334,64 @@ shots:
         zoom: 1.6
         hold: 1500
 
-  # The fleet at full size: every campus on the page, the count, and the
-  # attention markers the staged faults put there.
+  # One room to thousands (the architect's storyboard, 2026-11-26): the
+  # fleet's count; down its eighteen campuses, each with its system count and
+  # the attention marks the staged faults put there; one regional office
+  # opened to its building and floors; the outposts, one at each site, each up;
+  # and search across all of it.
   - id: fleet-scale
-    kind: still
-    alt: "The Omniglass Explore view of a 1,000-system corporate lab: eighteen campuses each with its system count, and warning markers on the sites with a room that needs attention."
+    kind: loop
+    # 20: five beats over the whole corporate lab, each closed in on (#2752).
+    max_seconds: 20
+    alt: "Omniglass at the size of a 1,000-system corporate fleet: the count of systems, eighteen campuses down the outline with their system counts and attention marks, one regional office opened to its building and floors, the outposts that collect it, one at each site and each up, and a search across all of it answering at once."
     start: /explore
     ready: { selector: '[role=treeitem]:has-text("Regional Office 04")' }
+    steps:
+      # 1. The count.
+      - wait: { selector: '[data-testid=explore-counts]' }
+        focus: here
+        expect: ["systems"]
+        zoom: 2.4
+        hold: 1300
+      # 2. The sites: the top of the outline, then down to its last campus.
+      - wait: { selector: '[role=treeitem][aria-level="1"]:has-text("Headquarters")' }
+        focus: '[role=treeitem][aria-level="1"]:has-text("Branch Office 01")'
+        expect: ["Branch Office 01", "Branch Office 02"]
+        zoom: 1.5
+        hold: 1000
+      - hover: '[role=treeitem][aria-level="1"]:has-text("Regional Office 06")'
+        focus: here
+        expect: ["Regional Office 06"]
+        zoom: 1.5
+        hold: 1000
+      # 3. One site opens: a regional office, its building, its floors.
+      - click: '[role=treeitem][aria-level="1"]:has(:text-is("Regional Office 04")) svg >> nth=0'
+        hold: 300
+      - click: '[role=treeitem][aria-level="2"]:has(:text-is("Regional 04 Main")) svg >> nth=0'
+        hold: 300
+      - wait: { selector: '[role=treeitem][aria-level="3"]' }
+        focus: '[role=treeitem][aria-level="2"]:has(:text-is("Regional 04 Main"))'
+        expect: ["Regional 04 Main"]
+        zoom: 1.6
+        hold: 1400
+      # 4. Outposts at each site: one per campus, each up.
+      - click: { role: link, name: Outposts }
+        hold: 300
+      - wait: { selector: 'table:has-text("edge-hq")' }
+        focus: 'table:has-text("edge-hq")'
+        expect: ["edge-hq"]
+        zoom: 1.3
+        hold: 1800
+      # 5. Search across all of it.
+      - press: Control+k
+        hold: 200
+      - type: { target: { role: combobox, name: Search the console }, text: 'mr86' }
+        hold: 300
+      - wait: { selector: '[role=option]' }
+        focus: '[role=listbox]'
+        expect: ["mr86"]
+        zoom: 1.6
+        hold: 1800
 
   # Collection. The page's bullets, in order:
   #   1. A refused login reads as refused, with the device's answer.

@@ -164,7 +164,7 @@ describe("parseShots", () => {
       "fleet-overview": "loop",
       "omniglass-teaser": "loop",
       "fleet-explore": "loop",
-      "fleet-scale": "still",
+      "fleet-scale": "loop",
       "credential-fix": "loop",
       "alarm-outage": "loop",
       "system-why": "still",
