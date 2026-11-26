@@ -10,8 +10,10 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
 
@@ -269,9 +271,17 @@ func checkForkMatches(t *testing.T, gw storage.Gateway, tm template.Template) {
 	if err != nil {
 		t.Fatalf("slots of %s: %v", tm.Name, err)
 	}
+	// A slot's impact forks with it (#2736): unset in the template is the
+	// stored default, degraded.
+	impact := func(v string) string {
+		if v == "" {
+			return "degraded"
+		}
+		return v
+	}
 	got := map[string]string{}
 	for _, r := range slots {
-		got[r.Name] = slotKey(r.Quorum, r.AcceptedTypes, r.PinnedProducts, r.Alternate)
+		got[r.Name] = slotKey(r.Quorum, r.AcceptedTypes, r.PinnedProducts, r.Alternate) + " impact=" + impact(r.Impact)
 	}
 	want := map[string]string{}
 	for _, r := range tm.Standard.Slots {
@@ -279,7 +289,7 @@ func checkForkMatches(t *testing.T, gw storage.Gateway, tm template.Template) {
 		if r.Choice != "" {
 			alt = r.Choice + "/" + r.Alternate
 		}
-		want[r.Name] = slotKey(r.Quorate(), r.AcceptedTypes, r.PinnedProducts, alt)
+		want[r.Name] = slotKey(r.Quorate(), r.AcceptedTypes, r.PinnedProducts, alt) + " impact=" + impact(r.Impact)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("%s slots = %v, want %v", tm.Name, got, want)
@@ -355,5 +365,65 @@ func TestShippedMeetingRoomsGoDownWithTheirMainDisplay(t *testing.T) {
 		if !seen {
 			t.Errorf("%s has no main-display slot", name)
 		}
+	}
+}
+
+// #2736: a room on a shipped meeting-room standard goes down when its main
+// display fails, and only degrades when a slot that costs quality (its
+// scheduling panel) fails. Built on the forked standard, through the real
+// health rollup.
+func TestAShippedMeetingRoomGoesDownWithItsDisplay(t *testing.T) {
+	gw := seeded(t)
+	ctx := context.Background()
+	if _, err := template.CreateAllStandards(ctx, gw, template.Shipped(), ""); err != nil {
+		t.Fatalf("fork all: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	parent := "hq"
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-1", LocationType: "room", ParentName: &parent}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	std, room := "meeting-room", "room-1"
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "boardroom", StandardID: &std, LocationName: &room}, all, all); err != nil {
+		t.Fatal(err)
+	}
+	for slot, ctype := range map[string]string{"video-bar": "video-bar", "main-display": "display", "touch-control": "touch-panel", "scheduling-panel": "scheduling-panel"} {
+		p := storagetest.MintProduct(t, ctx, gw, ctype)
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: slot + "-1", ProductName: &p.Name}, all, all, all, all); err != nil {
+			t.Fatal(err)
+		}
+		if err := gw.AssignSlot(ctx, "", "boardroom", slot, slot+"-1", all, all, all, all); err != nil {
+			t.Fatalf("assign %s: %v", slot, err)
+		}
+	}
+	health := func() string {
+		t.Helper()
+		rep, err := gw.SystemHealth(ctx, "boardroom", storage.HealthRange{}, all, all)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep.Verdict
+	}
+	if h := health(); h != "healthy" {
+		t.Fatalf("a staffed meeting room reads %q, want healthy", h)
+	}
+	panel, err := gw.RaiseAlarm(ctx, "", "scheduling-panel-1", storage.AlarmSpec{Severity: "high", Message: "panel offline"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := health(); h != "degraded" {
+		t.Errorf("with its scheduling panel down the room reads %q, want degraded", h)
+	}
+	if err := gw.ClearAlarm(ctx, "", "scheduling-panel-1", panel.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.RaiseAlarm(ctx, "", "main-display-1", storage.AlarmSpec{Severity: "high", Message: "display dark"}); err != nil {
+		t.Fatal(err)
+	}
+	if h := health(); h != "outage" {
+		t.Errorf("with its main display down the room reads %q, want outage", h)
 	}
 }
