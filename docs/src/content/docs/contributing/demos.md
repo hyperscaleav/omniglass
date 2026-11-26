@@ -467,7 +467,10 @@ is not counted as using the declaration.
 The stills and loops on the hyperscaleav.com Omniglass page are recorded from a real corporate lab, not
 mocked, so a UI change is one command away from a reshoot (#2299). `make marketing-shots
 MARKETING_DEST=<dir>` brings up a corporate lab (`omniglass lab run --scenario corporate --systems 1000`,
-playing the `corporate-outage` omnibot recording, so no capture does live inference), plays every shot in
+playing the `corporate-outage` omnibot recording, so no capture does live inference, and seeding the
+scenario's health storyline with `--health-history`, so every room has 30 days of health behind it and
+the showcase rooms the outages their alarms explained; the shot list's `lab:` block turns that on with
+`health_history: true`), plays every shot in
 [`web/e2e/marketing/shots.yaml`](https://github.com/hyperscaleav/omniglass/blob/main/web/e2e/marketing/shots.yaml),
 and writes the files and a `shots.json` manifest into the directory. The landing repo points it at
 `public/images/omniglass/shots/` and reads only the manifest, so a reshoot that keeps the shot ids updates

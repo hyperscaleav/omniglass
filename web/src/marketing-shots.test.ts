@@ -46,7 +46,7 @@ describe("parseShots", () => {
   it("accepts a minimal list and defaults the viewport", () => {
     const { list, problems } = parseShots(`${LAB}shots:\n${STILL}`);
     expect(problems).toEqual([]);
-    expect(list?.lab).toEqual({ scenario: "corporate", systems: 1000, omnibotReplay: "" });
+    expect(list?.lab).toEqual({ scenario: "corporate", systems: 1000, omnibotReplay: "", healthHistory: false });
     expect(list?.shots[0].viewport).toEqual({ width: 1440, height: 900 });
   });
 
@@ -131,6 +131,15 @@ describe("parseShots", () => {
     expect(bad.problems.join("\n")).toContain("the list setup item 2 must be one of put, post, patch or wait");
   });
 
+  it("takes a health_history switch on the lab, off unless set, and refuses one that is not a boolean", () => {
+    const shots = "shots:\n  - id: s\n    kind: still\n    alt: x\n    start: /a\n";
+    expect(parseShots(`lab: { scenario: corporate, systems: 1000 }\n${shots}`).list?.lab.healthHistory).toBe(false);
+    expect(parseShots(`lab: { scenario: corporate, systems: 1000, health_history: true }\n${shots}`).list?.lab.healthHistory).toBe(true);
+    expect(parseShots(`lab: { scenario: corporate, systems: 1000, health_history: yes please }\n${shots}`).problems).toContain(
+      "lab health_history is true or false: whether the lab seeds its scenario's health storyline",
+    );
+  });
+
   it("rejects a lab without a size, and a non-YAML list", () => {
     expect(parseShots("lab: { scenario: corporate }\nshots: []\n").problems).toContain(
       "lab must be { scenario, systems (a positive whole number), omnibot_replay? }",
@@ -142,7 +151,8 @@ describe("parseShots", () => {
     const text = readFileSync(join(__dirname, "../e2e/marketing/shots.yaml"), "utf8");
     const { list, problems } = parseShots(text);
     expect(problems).toEqual([]);
-    expect(list?.lab).toMatchObject({ scenario: "corporate", systems: 1000, omnibotReplay: "corporate-outage" });
+    // The captures' lab seeds the corporate storyline's 30 days of health (#2729).
+    expect(list?.lab).toMatchObject({ scenario: "corporate", systems: 1000, omnibotReplay: "corporate-outage", healthHistory: true });
     const byId = Object.fromEntries((list?.shots ?? []).map((s: { id: string; kind: string }) => [s.id, s.kind]));
     expect(byId).toEqual({
       "fleet-overview": "loop",

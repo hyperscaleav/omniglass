@@ -213,10 +213,12 @@ fi
 
 # ---- record ------------------------------------------------------------------
 preflight
-read -r SCENARIO SYSTEMS REPLAY < <(mk lab-args "$SHOTS_W")
+read -r SCENARIO SYSTEMS HISTORY REPLAY < <(mk lab-args "$SHOTS_W")
 LABFLAGS=()
 # A scale scenario takes a size; a seeded fleet (dev) has its own.
 [ "$SCENARIO" != corporate ] || LABFLAGS+=(--systems "$SYSTEMS")
+# The scenario's health storyline (#2729): 30 days of health behind the fleet.
+[ "$HISTORY" != true ] || LABFLAGS+=(--health-history)
 [ -z "$REPLAY" ] || LABFLAGS+=(--omnibot-replay "$REPLAY")
 
 lab_init ogmkt
