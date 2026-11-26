@@ -25,7 +25,7 @@
 import { appendFileSync, existsSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { dirname, join } from 'node:path';
-import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, expandAddress, frameFor, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
+import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblems, buildManifest, cameraTail, FRAME_FALLBACK_SECONDS, concatList, conditionMet, destProblem, clickFrame, expandAddress, followFrame, frameFor, landWaitMs, frameRect, lapseSpeed, loopMaxBytes, missingText, overrunReport, parseShots, pick, pointerX, referencedResources, replayProblems, retime, shotFiles, stepAuthoredSeconds, thinFrames } from './marketinglib.mjs';
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
@@ -356,6 +356,7 @@ async function record(browser, base, storageState, shot, out, api) {
     cam.now = () => (Date.now() - t0) / 1000;
     const frames = loop ? await startFrames(ctx, page, t0) : null;
     if (frames) cam.fresh = (since) => frames.fresh(since, FRESH_FRAME_MS);
+    if (loop) cam.frame = frameFor(null, cam.vp);
     if (loop) await page.mouse.move(cursor.x, cursor.y);
     /** @type {{ n: number, kind: string, target: string, from: number, to: number, authored: number }[]} */
     const timed = [];
@@ -386,7 +387,8 @@ async function record(browser, base, storageState, shot, out, api) {
       // The camera track's input: where each focus landed, in viewport pixels and
       // seconds from the clip's first frame. The compositor turns it into moves.
       // The lapses, in real time, mark the stretches played faster: the
-      // compositor badges them so a sped-up wait never passes for real time.
+      // compositor shows its corner clock over them so a sped-up wait never
+      // passes for real time.
       writeFileSync(join(out, `${shot.id}.camera.json`), JSON.stringify({ viewport: { width, height }, events, lapses: cam.lapses }, null, 2));
       // Each beat: when it opened, was checked and ended, the part of the capture
       // its frame shows, and the text on screen inside that frame once its step
@@ -504,7 +506,7 @@ function writeFrames(frames, out, id) {
 
 /** @typedef {{ step: number, from: number, at: number, to: number, frame: import('./marketinglib.mjs').Box, seen: string[], expect?: string[], missing?: string[] }} Beat */
 /** @typedef {{ step: number, from: number, frame: import('./marketinglib.mjs').Box, onScreen: import('./marketinglib.mjs').Box, expect?: string[], at?: number, seen?: string[] }} OpenBeat */
-/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null, fresh?: (since: number) => Promise<boolean> }} Camera */
+/** @typedef {{ events: import('./marketinglib.mjs').FocusEvent[], lapses: import('./marketinglib.mjs').Lapse[], now: () => number, vp: { width: number, height: number }, beats: Beat[], open: OpenBeat | null, fresh?: (since: number) => Promise<boolean>, frame?: { scale: number, x: number, y: number } }} Camera */
 
 const round3 = (/** @type {number} */ n) => Math.round(n * 1000) / 1000;
 
@@ -605,7 +607,10 @@ async function closeBeat(page, cam) {
  */
 async function logFocus(page, step, cam, own) {
   if (step.focus === undefined) return;
-  if (step.focus === 'out') return void cam.events.push({ t: cam.now(), box: null });
+  if (step.focus === 'out') {
+    cam.frame = frameFor(null, cam.vp);
+    return void cam.events.push({ t: cam.now(), box: null });
+  }
   const el = step.focus === 'here' ? own : locate(page, step.focus).filter({ visible: true }).first();
   if (!el) throw new Error('focus here needs a step with a target');
   // The console re-renders as a page settles (a blade closing, a route's table
@@ -625,6 +630,7 @@ async function logFocus(page, step, cam, own) {
   }
   const t = cam.now();
   cam.events.push({ t, box, ...(step.zoom ? { zoom: step.zoom } : {}), ...(step.spot === false ? { spot: false } : {}) });
+  cam.frame = frameFor(box, cam.vp, step.zoom);
   const { rect, onScreen } = frameRect(frameFor(box, cam.vp, step.zoom), cam.vp);
   cam.open = { step: step.n, from: t, frame: rect, onScreen, ...(step.expect ? { expect: step.expect } : {}) };
 }
@@ -694,11 +700,24 @@ async function play(page, base, step, cursor, loop, cam, api) {
       if (!later) await logFocus(page, step, cam, el);
       const box = await el.boundingBox();
       if (!box) throw new Error('the target has no box on screen');
+      // The camera follows the pointer: a step with no focus of its own pans to
+      // its target as the pointer glides. A hover keeps the zoom held; a click,
+      // a select or a typed field closes in far enough to read what is clicked
+      // (clickFrame), so no click happens off screen or too small to see.
+      let moved = false;
+      if (loop && step.focus === undefined && cam.frame) {
+        const f = step.kind === 'hover' ? followFrame(box, cam.frame, cam.vp) : clickFrame(box, cam.frame, cam.vp);
+        if (f) {
+          cam.events.push({ t: cam.now(), box, zoom: f.scale, spot: false, follow: true });
+          cam.frame = f;
+          moved = true;
+        }
+      }
       const x = pointerX(step.kind, box);
       const y = box.y + box.height / 2;
       await page.mouse.move(x, y, { steps: 6 });
       Object.assign(cursor, { x, y });
-      if (loop) await page.waitForTimeout(PACE.glide);
+      if (loop) await page.waitForTimeout(PACE.glide + landWaitMs(moved));
       if (step.kind === 'click') await el.click({ timeout: ACT_TIMEOUT });
       else if (step.kind === 'type') {
         await el.click({ timeout: ACT_TIMEOUT });
