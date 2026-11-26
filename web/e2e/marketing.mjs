@@ -29,6 +29,9 @@ import { CAPTURE_CSS, LOOP_MAX_SECONDS, PACE, beatEnds, beatStill, budgetProblem
 import { describeTarget, locate } from './walkthroughlib.mjs';
 
 const ACT_TIMEOUT = 15_000;
+// How long the browser may refuse screenshots (a navigation on camera) before
+// the frame loop calls it a failure.
+const FRAME_REFUSAL_MS = 10_000;
 // Loops record at twice the viewport's pixels, so the camera's zoom stays sharp.
 // Pacing (PACE, marketinglib.mjs) is shared with the parse, which holds a loop's
 // own spend to its maximum.
@@ -421,9 +424,24 @@ async function startFrames(ctx, page, origin) {
   const frames = [];
   let running = true;
   const taking = (async () => {
+    // A navigation on camera (a goto step, #2722) swaps the page out for a
+    // moment, and the browser refuses a screenshot while it does. That frame is
+    // skipped (the one before it holds on screen a little longer); a refusal
+    // that lasts past FRAME_REFUSAL_MS is a real failure and fails the shot.
+    let refusedSince = 0;
     while (running) {
       const a = Date.now();
-      const r = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true });
+      let r;
+      try {
+        r = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 92, optimizeForSpeed: true });
+      } catch (e) {
+        if (!running) break;
+        refusedSince ||= a;
+        if (Date.now() - refusedSince > FRAME_REFUSAL_MS) throw e;
+        await new Promise((res) => setTimeout(res, 50));
+        continue;
+      }
+      refusedSince = 0;
       frames.push({ t: ((a + Date.now()) / 2 - origin) / 1000, data: r.data });
     }
   })();
