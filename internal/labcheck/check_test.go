@@ -105,7 +105,7 @@ func TestAComponentWithOnlyIdentityAndUptimeFailsCollected(t *testing.T) {
 	s.Components[0].Values = []labcheck.Value{
 		{Key: "model-number", Class: writerclass.Collected}, {Key: "serial-number", Class: writerclass.Collected},
 		{Key: "firmware-version", Class: writerclass.Collected}, {Key: "uptime", Class: writerclass.Collected},
-		// The inventory a device reports of itself (#2754) is identity too.
+		// The rest of what a device reports of itself (#2754) is identity too.
 		{Key: "hardware-revision", Class: writerclass.Collected}, {Key: "hostname", Class: writerclass.Collected},
 		{Key: "ip-address", Class: writerclass.Collected}, {Key: "mac-address", Class: writerclass.Collected},
 		{Key: probekeys.TCPOpen, Class: writerclass.OutpostProbe},

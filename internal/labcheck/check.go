@@ -92,7 +92,7 @@ type Gaps = map[devseed.Tier]map[string]devseed.TierGap
 
 // beyondClassSignal are the collected keys that do not count as a class signal
 // (ADR-0131): the identity a device reports about itself (the declared
-// attribute set of the property catalog and the inventory beside it (#2754),
+// attribute set of the property catalog and the identity facts beside it (#2754),
 // and the key an identity binding ties by) and uptime, which every generic
 // SNMP device reads.
 var beyondClassSignal = []string{

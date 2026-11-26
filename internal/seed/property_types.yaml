@@ -340,8 +340,8 @@ property_types:
     data_type: string
     label: Model number
     description: The manufacturer model number.
-  # Inventory a device reports of itself (#2754), beside the serial, model
-  # and firmware above: slow-changing, read on a driver's identity poll and
+  # More of the identity a device reports of itself (#2754), beside the
+  # serial, model and firmware above: slow-changing, read on a driver's identity poll and
   # shown under the component's "What it is".
   - name: hardware-revision
     data_type: string

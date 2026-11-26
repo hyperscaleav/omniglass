@@ -166,10 +166,10 @@ func TestPolarisDSPRebootRestoresTheProgramOutput(t *testing.T) {
 	}
 }
 
-// TestPolarisDSPServesItsInventoryOverSNMP (#2754): the agent answers the
+// TestPolarisDSPServesItsIdentityOverSNMP (#2754): the agent answers the
 // DSP's hostname at sysName and its hardware revision, address and MAC beside
 // its serial on the Polaris arc, each the text its state holds.
-func TestPolarisDSPServesItsInventoryOverSNMP(t *testing.T) {
+func TestPolarisDSPServesItsIdentityOverSNMP(t *testing.T) {
 	d := startDSP(t)
 	want := map[string]string{
 		"1.3.6.1.2.1.1.5.0":       "configuration.network.hostname",

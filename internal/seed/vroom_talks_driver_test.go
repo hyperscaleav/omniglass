@@ -247,11 +247,11 @@ func TestKestrelAPIStatusPollReadsTheBarsStateAndCallStats(t *testing.T) {
 	}
 }
 
-// kestrel-api's system poll reads the bar's inventory (#2754): beside the
+// kestrel-api's system poll reads the bar's identity (#2754): beside the
 // model, serial and firmware it always read, the hardware revision, the
 // hostname, the address and the MAC, slow-changing properties on the 5 min
 // identity poll that the console shows under "What it is".
-func TestKestrelAPISystemPollReadsTheBarsInventory(t *testing.T) {
+func TestKestrelAPISystemPollReadsTheBarsIdentity(t *testing.T) {
 	cat := loadShippedCatalog(t)
 	d := vroomInACall(t)
 	req, emits := function(t, shippedSpec(t, "kestrel-api"), "system")
@@ -311,8 +311,8 @@ func TestKestrelAPIListenersLandParticipantsAndLogLines(t *testing.T) {
 
 // polaris-dsp-snmp reads what the DSP's agent already served and no driver
 // collected (#2754): its DSP load (a ratio), temperature, fan and active
-// channel count on the status poll, and its inventory on the identity poll.
-func TestPolarisDSPSNMPReadsTheDSPsLoadAndInventory(t *testing.T) {
+// channel count on the status poll, and its identity on the identity poll.
+func TestPolarisDSPSNMPReadsTheDSPsLoadAndIdentity(t *testing.T) {
 	cat := loadShippedCatalog(t)
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {

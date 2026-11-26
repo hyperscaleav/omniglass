@@ -273,7 +273,7 @@ drivers:
         - { name: port, kind: number, default: "161" }
         - { name: community, kind: secret, secret_type: snmp-community, required: true }
       polls:
-        # Identity and inventory (#2754): sysName is MIB-II's, the hardware
+        # Identity (#2754): sysName is MIB-II's, the hardware
         # revision, address and MAC sit beside the serial on the Polaris arc.
         - name: identity
           schedule: { every: 5m }
@@ -490,7 +490,7 @@ drivers:
                 facility: { extract: { jsonpath: facility } }
               message: { extract: { jsonpath: text } }
       polls:
-        # The bar's identity and inventory, slow-changing, on a slow poll: the
+        # The bar's identity, slow-changing, on a slow poll: the
         # rows the console shows under "What it is" (#2754).
         - name: system
           schedule: { every: 5m }

@@ -30,7 +30,7 @@ Everything a simulated device is comes from the catalog embedded in the binary
 
 - a **device profile** (`devices/*.yaml`) declares a product's identity, its protocol surfaces (each
   a protocol, a port, its auth, and the routes, commands, OIDs and subscriptions it answers), its
-  behaviors (values that drift on an interval), its computed fields (values derived on read, such as
+  behaviors (state that moves on an interval, and the named events it reports), its computed fields (values derived on read, such as
   uptime from a boot time) and its default state;
 - a **surface fragment** (`surfaces/*.yaml`) is what two profiles share, taken in with `include:`;
   the loader refuses an unknown fragment or one a surface restates
@@ -306,6 +306,28 @@ delivery sent twice. These are the faces the shipped drivers' event, log and web
 against
 ([ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s),
 [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+
+### A device talks on its own
+
+A behavior is a timer on one device: each tick applies its changes to the live state, then reports
+its **named events** on the device's events face, as a route does, each rendered against the state
+the tick left. An event whose data renders empty is not one that tick reports, so the template's own
+condition says when it fires; and a tick streams only what it changed, so a timer that rewrites a
+watched path with the value it already holds puts nothing on the feed. No behavior in a shipped
+profile ticks faster than 15 seconds: a device gets richer by reporting more kinds of signal, not
+more samples (#1360).
+
+The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab places a call about every
+90 seconds on its own: a 15-second call cycle starts it (`call-started`, with a fresh call id and two
+to six participants), walks its participants one at a time (`participant-joined`,
+`participant-left`), shares the room's laptop for a stretch, and ends it a minute in (`call-ended`).
+Each occurrence is also an `event: log` line in the codec's idiom (a severity, a facility such as
+`kvroom.call`, and its text). A second behavior, every 30 seconds, drifts the call's packet loss (a
+ratio), jitter, bitrate, frame rate and speaker level while a call is up and rests them at zero when
+the room is idle, drifts the codec's own load, temperature, fan and memory, and writes the WARN line
+a bar's network log does when loss runs high. The `kestrel-api` driver lands all of it from one held
+feed and two polls, and in the corporate lab's conference rooms the bar's websocket control socket is
+a second endpoint beside its https API ([the scale lab](/developer/lab/#scale-lab-scenarios)).
 
 ### A simulated service posts from the start
 

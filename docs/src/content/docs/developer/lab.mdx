@@ -52,6 +52,11 @@ stale the moment every owner it covers carries the tier, so a closed issue canno
 `make test-lab`, which CI may run on lab-touching changes only. The check is a function of a base URL and a client, so
 the scale lab runs the same judgment against a lab of any size.
 
+One device is also held to a **showcase floor**, the most a single device says: on a 20-system
+corporate lab (the smallest with a divisible conference room), `make test-lab` holds the headquarters
+conference room's video bar to 20 metrics, 8 properties, an event it caught itself and a log line
+within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754).
+
 `make test-lab` builds the image first and runs the lab's integration tests against the
 `omniglass:dev-<build id>` tag its own build made, so another checkout rebuilding `omniglass:dev` on
 the same Docker host cannot change what it tests. `make test-lab-image` runs the same tests and
@@ -260,6 +265,14 @@ outpost runs them:
 
 Both arrive on the server's [push lane](#reading-the-delivery-table), so `lab measure` reads their
 loss beside the outposts'.
+
+A standard's `control` list names the slots whose devices are wired with a **second face** as well,
+another endpoint on the same device: the boardroom displays (`mr86`) get their web admin beside their
+SNMP agent, so a demo can switch an input from the console, and the divisible conference rooms' video
+bars get their websocket control socket (`kestrel-ws`, wss on 9443) beside their https API, so one bar
+talks over two protocols (#2754). Every video bar in the lab calls, drifts its call stats and logs on
+its own ([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about four
+events and five log lines a bar every 90 seconds, beside its polls.
 
 ```sh
 omniglass lab run --scenario corporate --systems 300
@@ -1157,7 +1170,7 @@ standards:
       main-display: boreal-edge-65
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
-    control: [main-display]     # optional: slots whose devices also take commands
+    control: [main-display]     # optional: slots whose devices also get their second face
 archetypes:
   - name: hq
     label: Headquarters
