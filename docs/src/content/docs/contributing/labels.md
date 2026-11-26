@@ -33,7 +33,8 @@ The subsystem a change touches, named to match the [glossary](/reference/glossar
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity` `area:fleet`
-`area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
+`area:collection` `area:ingest` `area:expr` `area:messaging` `area:ui` `area:assistant`
+`area:outpost` `area:lab` `area:ci` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.
