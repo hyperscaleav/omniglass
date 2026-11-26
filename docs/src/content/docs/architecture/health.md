@@ -251,8 +251,9 @@ a duplicated explanation. **A component's** is the same envelope with no slots a
 
 All three carry the **recorded transitions**, oldest first, one entry per change: the availability
 strip's data and the answer to "since when". The range is `since` and `until` (RFC 3339), defaulting to
-the last 30 days; `since` after `until` is a 400. When the caller bounds the start, `carried_in` is the
-health in force as the range opened, and `first_recorded_at` says when the owner was first recorded.
+the last 30 days; `since` after `until` is a 400. `carried_in` is the health in force as the range
+opened, on an explicit `since` and on the default window alike (#2735); only a whole-history read, which
+has no start, carries none. `first_recorded_at` says when the owner was first recorded.
 
 The console renders health as **HealthBadge**, **HealthHistory** and **AlarmsPanel** on the component,
 system and location detail views. Healthy reads green, and a muted green in the outline, so it never
