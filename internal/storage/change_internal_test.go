@@ -40,6 +40,7 @@ func end(tr *changeTracer, conn *pgx.Conn, sql, tag string, err error) {
 func TestChangeTracerPublishesOnlyOnCommit(t *testing.T) {
 	t.Parallel()
 	hub := tail.New(64, 0)
+	defer hub.FollowChanges()()
 	tr := newChangeTracer(hub)
 	a, b := new(pgx.Conn), new(pgx.Conn)
 	change := func(id string) tail.Row {

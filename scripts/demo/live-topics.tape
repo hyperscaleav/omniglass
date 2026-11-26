@@ -12,14 +12,14 @@ Enter
 Wait
 Show
 
-Type "# Follow Touch Panel 2's topic for five seconds, in the background"
+Type "# Follow Touch Panel 2's topic for eight seconds, in the background"
 Enter
 Wait
-Type `omniglass view watch --topics component:panel-2 --duration-seconds 5 > watch.txt &`
+Type `omniglass view watch --topics component:panel-2 --duration-seconds 8 > watch.txt &`
 Enter
 Wait
 Hide
-Type `demo_hush 'sleep 1'`
+Type `demo_hush 'sleep 3'`
 Enter
 Wait
 Show

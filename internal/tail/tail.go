@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -113,6 +114,8 @@ type Hub struct {
 	oldest   uint64
 	maxBytes int
 	wake     chan struct{}
+	// followers counts the streams following change notices (#2731).
+	followers atomic.Int64
 }
 
 // New returns a hub whose ring holds the last commits commits, and of those
@@ -171,6 +174,29 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 	h.mu.Unlock()
 	close(wake)
 	return nil
+}
+
+// FollowChanges registers a stream that follows the change lane and returns
+// its release. While none is registered PublishChanges drops its notices, so
+// a recompute storm nobody follows never lands a commit on the ring and
+// evicts sample rows a binding's cursor resumes from (#2731).
+func (h *Hub) FollowChanges() func() {
+	if h == nil {
+		return func() {}
+	}
+	h.followers.Add(1)
+	var once sync.Once
+	return func() { once.Do(func() { h.followers.Add(-1) }) }
+}
+
+// Following reports whether any stream follows the change lane.
+func (h *Hub) Following() bool { return h != nil && h.followers.Load() > 0 }
+
+// PublishChanges publishes change notices, only while a stream follows them.
+func (h *Hub) PublishChanges(rows []Row) {
+	if h.Following() {
+		h.Publish(rows)
+	}
 }
 
 // Publish lands rows that are already durable as the next commit: the change

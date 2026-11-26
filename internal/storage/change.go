@@ -87,7 +87,7 @@ func (t *changeTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data p
 	}
 	t.mu.Unlock()
 	if end == txCommit && held && data.Err == nil && data.CommandTag.String() != "ROLLBACK" {
-		t.hub.Publish(rows)
+		t.hub.PublishChanges(rows)
 	}
 }
 
@@ -112,5 +112,5 @@ func (p *PG) noteChange(q txQuerier, kind, id string) {
 		p.changes.note(tx.Conn(), r)
 		return
 	}
-	p.tail.Publish([]tail.Row{r})
+	p.tail.PublishChanges([]tail.Row{r})
 }

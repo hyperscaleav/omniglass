@@ -417,3 +417,25 @@ func TestPublishOnNilHub(t *testing.T) {
 	var h *tail.Hub
 	h.Publish([]tail.Row{{Lane: tail.LaneChange}})
 }
+
+// Change notices publish only while a stream follows the change lane, and
+// the registration releases once.
+func TestPublishChangesNeedsAFollower(t *testing.T) {
+	h := tail.New(8, 0)
+	row := tail.Row{Lane: tail.LaneChange, OwnerKind: "system", OwnerID: "s1", Key: tail.ChangeUpdate}
+	start := h.Cursor()
+	h.PublishChanges([]tail.Row{row})
+	if h.Cursor() != start {
+		t.Fatal("a notice published with no follower")
+	}
+	release := h.FollowChanges()
+	h.PublishChanges([]tail.Row{row})
+	if h.Cursor() == start {
+		t.Fatal("a notice did not publish for a follower")
+	}
+	release()
+	release()
+	if h.Following() {
+		t.Fatal("still following after release")
+	}
+}

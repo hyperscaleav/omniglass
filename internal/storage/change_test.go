@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -49,6 +50,7 @@ func TestHealthRecomputePublishesChanges(t *testing.T) {
 		return false
 	}
 
+	defer f.gw.ViewTail().FollowChanges()()
 	cursor := f.gw.ViewTail().Cursor()
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "mic dead"}); err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -73,5 +75,43 @@ func TestHealthRecomputePublishesChanges(t *testing.T) {
 	}
 	if got, _ = changesSince(t, f.gw, cursor); len(got) != 0 {
 		t.Fatalf("a failed write published %v", got)
+	}
+}
+
+// A recompute storm nobody follows leaves the ring alone (#2731): with no
+// stream following topics, change notices publish nothing, so a binding's
+// cursor taken before the storm still resumes after it; the same storm with
+// a follower is what fills the ring.
+func TestChangeStormWithNoFollowerLeavesCursorResumable(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	hub := f.gw.ViewTail()
+	cursor := hub.Cursor()
+	// Well past the ring: every alarm raise is a health recompute.
+	for i := 0; i < 20; i++ {
+		spec := storage.AlarmSpec{Severity: "high", Message: "storm", DedupKey: fmt.Sprintf("k%d", i)}
+		if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", spec); err != nil {
+			t.Fatalf("raise alarm: %v", err)
+		}
+	}
+	commits, _, err := hub.Read(cursor, 0)
+	if err != nil {
+		t.Fatalf("the cursor from before the storm no longer resumes: %v", err)
+	}
+	for _, c := range commits {
+		for _, r := range c.Rows {
+			if r.Lane == tail.LaneChange {
+				t.Fatalf("a change notice published with no follower: %+v", r)
+			}
+		}
+	}
+
+	defer hub.FollowChanges()()
+	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "high", Message: "followed", DedupKey: "f"}); err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+	if got, _ := changesSince(t, f.gw, cursor); len(got) == 0 {
+		t.Fatal("a followed recompute published no notice")
 	}
 }

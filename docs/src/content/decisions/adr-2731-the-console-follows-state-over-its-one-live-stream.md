@@ -59,6 +59,14 @@ refs: [2731, 2724, 1830, 2732]
      `new EventSource`, and a `setTimeout` that reads or re-schedules itself, outside `lib/clock.ts`
      (the UI tick) and `lib/live.ts`. `web/src/polling-allowlist.json` names the files still polling: a
      file not on it that polls fails, and one on it that no longer polls fails, so the list only shrinks.
+  10. **Notices publish only while a stream follows topics.** Change notices share the tail's ring, so
+     a recompute storm (an alarm storm, a fleet-wide ingest) with no topic follower would land a commit per
+     recompute and evict sample rows, resetting every chart binding's cursor. The hub counts the streams
+     following topics (`FollowChanges`, taken before the stream's position so no later change is missed)
+     and `PublishChanges` drops a notice while the count is zero. We chose this over a second bounded
+     ring because it keeps one cursor per stream (point 2); while someone does follow topics, a storm still
+     shares the ring, bounded by the one-notice-per-topic-per-window coalescing on the send side only.
+     A topic cursor resumed after a gap with no followers resets, as one the ring no longer holds does.
 - **Divergence from the issue:** the issue drew the change hub as a sibling of the tail ring; one ring
   keeps one cursor per stream (point 2). Collection topics (a scoped list, at most once a second) are not
   in this slice: the system page needs entity topics only, and #2732 tracks them.

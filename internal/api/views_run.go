@@ -620,6 +620,19 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 		}
 		matches := make([]viewMatch, len(bindings))
 		var reset []int
+		// Notices publish only while a stream follows topics. The place is
+		// taken before the stream's position is, so no change after that
+		// position goes unpublished; a refused open gives it back.
+		release := func() {}
+		if len(topics) > 0 {
+			release = hub.FollowChanges()
+		}
+		opened := false
+		defer func() {
+			if !opened {
+				release()
+			}
+		}()
 		now := hub.Cursor()
 		for i, b := range bindings {
 			ents, err := gw.ResolveViewEntities(ctx, b)
@@ -672,8 +685,10 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 		if !watches.acquire(user) {
 			return nil, huma.NewError(http.StatusTooManyRequests, fmt.Sprintf("too many open watches: a user holds at most %d; close one, or bind more on one watch", limits.perUser))
 		}
+		opened = true
 		return &huma.StreamResponse{Body: func(hctx huma.Context) {
 			defer watches.release(user)
+			defer release()
 			defer startSSE(hctx, "no-store")()
 			w := newSSEWriter(hctx.BodyWriter())
 			stands := func() bool { return a.callerStands(ctx) }
