@@ -2,7 +2,7 @@ import { For, Show, createMemo } from "solid-js";
 import Eyebrow from "./Eyebrow";
 import StateStrip from "./StateStrip";
 import { fmtTime, rel } from "../lib/format";
-import { durationText, share, spans, type Span } from "../lib/timeline";
+import { durationText, share, spans, withCarriedIn, type Span } from "../lib/timeline";
 import type { HealthTransition } from "../lib/health";
 
 // HealthHistory renders the recorded EDGES: the moments this system or location
@@ -53,6 +53,17 @@ export default function HealthHistory(props: {
   // The caller's clock, for a surface whose other readings share one now (the
   // system Activity tab, #2723) so the bar's newest segment ends where they do.
   now?: number;
+  // The window's start and the health in force then (the read's carried_in,
+  // #2741): the bar opens at the start, so it covers the same window as the
+  // Uptime beside it. With nothing carried in it opens at the first edge.
+  from?: number;
+  carriedIn?: string | null;
+  // What the bar's right end is called: "now" unless the window ended before
+  // it (a custom range), when it names that end.
+  endLabel?: string;
+  // The window's short name beside the label ("Last 1 hour"). Without it the
+  // strip names the span it covers from `from`, else the read's default.
+  windowLabel?: string;
 }) {
   // Pinned at setup unless the caller drives it, like the availability strip: a
   // strip whose "now" moved under it would re-weight every segment on an
@@ -61,7 +72,7 @@ export default function HealthHistory(props: {
   const now = () => props.now ?? pinned;
   const edges = () => props.transitions ?? [];
   const list = createMemo<Span<string>[]>(() =>
-    spans(edges().map((t) => ({ ts: t.ts, value: t.health })), props.health ?? null, now()),
+    spans(withCarriedIn(edges().map((t) => ({ ts: t.ts, value: t.health })), props.carriedIn, props.from), props.health ?? null, now()),
   );
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());
@@ -71,12 +82,13 @@ export default function HealthHistory(props: {
       ...s,
       tip:
         s.to > s.from
-          ? `${s.value}: ${fmtTime(new Date(s.from).toISOString())} to ${s.to >= now() - 1000 ? "now" : fmtTime(new Date(s.to).toISOString())} (${durationText(s.to - s.from)})`
+          ? `${s.value}: ${fmtTime(new Date(s.from).toISOString())} to ${s.to >= now() - 1000 ? (props.endLabel ?? "now") : fmtTime(new Date(s.to).toISOString())} (${durationText(s.to - s.from)})`
           : undefined,
     })),
   );
   const startLabel = () => (list().length && list()[0].to > list()[0].from ? fmtTime(new Date(list()[0].from).toISOString()) : undefined);
   const healthy = createMemo(() => share(list(), (v) => v === "healthy"));
+  const windowName = () => props.windowLabel ?? (props.from === undefined ? "30 days" : durationText(now() - props.from));
 
   return (
     <div class="flex flex-col gap-2">
@@ -86,12 +98,12 @@ export default function HealthHistory(props: {
       <Eyebrow
         label="History"
         hint={`One entry per change, never a sample: ${props.window ?? "the recorded edges over the last 30 days"}. This is what answers "when exactly did it go unhealthy", read back weeks later.`}
-        right={<Show when={!props.compact}><span class="shrink-0 text-[10.5px] text-base-content/40">30 days</span></Show>}
+        right={<Show when={!props.compact}><span data-testid="history-window" class="shrink-0 text-[10.5px] text-base-content/40">{windowName()}</span></Show>}
       />
 
       {/* In compact form the surface beside this strip owns the number (the
           history tab's uptime card), so the trailing hint would say it twice. */}
-      <StateStrip segments={segments()} startLabel={startLabel()} endLabel={startLabel() ? "now" : undefined} tone={tone} height="h-2.5" title="Health over the recorded window">
+      <StateStrip segments={segments()} startLabel={startLabel()} endLabel={startLabel() ? (props.endLabel ?? "now") : undefined} tone={tone} height="h-2.5" title="Health over the recorded window">
         <Show when={!props.compact}>
           <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
             <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>

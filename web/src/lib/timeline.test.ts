@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { spans, share, durationText } from "./timeline";
+import { spans, share, durationText, withCarriedIn } from "./timeline";
 
 const now = Date.parse("2026-07-20T12:00:00Z");
 const ago = (ms: number) => new Date(now - ms).toISOString();
@@ -65,5 +65,32 @@ describe("durationText", () => {
     expect(durationText(3 * 3_600_000 + 12 * 60_000)).toBe("3h 12m");
     expect(durationText(50 * 3_600_000)).toBe("2d 2h");
     expect(durationText(48 * 3_600_000)).toBe("2d");
+  });
+});
+
+// A window opens at its start (#2741): the health in force then (a read's
+// carried_in) is an edge at the window's left edge, so the strip begins where
+// the range does rather than at the first change inside it.
+describe("withCarriedIn", () => {
+  const from = Date.parse("2026-08-20T15:00:00Z");
+  const at = (m: number) => new Date(from + m * 60_000).toISOString();
+
+  it("puts the carried-in value at the window's start, ahead of the first edge inside it", () => {
+    expect(withCarriedIn([{ ts: at(30), value: "outage" }], "healthy", from)).toEqual([
+      { ts: at(0), value: "healthy" },
+      { ts: at(30), value: "outage" },
+    ]);
+  });
+
+  it("fills a window with no edge inside it", () => {
+    expect(withCarriedIn([], "degraded", from)).toEqual([{ ts: at(0), value: "degraded" }]);
+  });
+
+  it("leaves the edges alone with nothing carried in, or an edge already at the start", () => {
+    const edges = [{ ts: at(30), value: "outage" }];
+    expect(withCarriedIn(edges, undefined, from)).toBe(edges);
+    expect(withCarriedIn(edges, null, from)).toBe(edges);
+    const atStart = [{ ts: at(0), value: "outage" }];
+    expect(withCarriedIn(atStart, "healthy", from)).toBe(atStart);
   });
 });
