@@ -24,7 +24,7 @@ make
 ```
 
 With a [release binary](/deployment/install/#download-a-binary) there is nothing to build: run
-`omniglass lab run`. The first run takes a few minutes; later ones, under one. It prints one line per
+`omniglass lab run`, which pulls its own release's image by the digest stamped in at release. The first run takes a few minutes; later ones, under one. It prints one line per
 stage, then where to go:
 
 ```text
