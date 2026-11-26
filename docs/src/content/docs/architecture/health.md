@@ -143,6 +143,12 @@ The carrier already exists. Each component, system and location owns a `health` 
 table: it would be a second, worse copy. An owner's first value is always recorded, even `healthy`, so
 "healthy since we started watching" differs from "never evaluated".
 
+One instance writes health history it did not derive: a throwaway lab seeded with `--health-history`
+lands 30 days of past edges (and the alarms that explain them) so it reads like a fleet that had been
+running. Those rows carry `source='devseed'`, go before each owner's own record (never after or
+over it, so the newest row is still the platform's own), and exist on no other instance
+([ADR-2726](/architecture/decisions/#adr-2726-a-throwaway-labs-seed-lands-past-health-and-alarms-labelled-as-seeded)).
+
 Computing health on read would keep no history at all. Computing on read and writing the result through
 is worse: the history looks real but is sampled by whoever opens a page, so a room that broke on Friday
 night and was opened on Monday reads as breaking on Monday.
