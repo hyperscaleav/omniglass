@@ -92,18 +92,22 @@ export type UnhealthyStretch = {
 
 // stretchesOf groups consecutive unhealthy spans into stretches, ongoing
 // first and then newest first: one entry per contiguous stretch away from
-// healthy, however many health changes it contained.
-export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretch[] {
+// healthy, however many health changes it contained. Only the newest stretch
+// can be ongoing, and only while the system's `current` health is not healthy
+// (#2721): right after a recovery the history's now is the recovery itself, the
+// recovered span has no length and is gone, and the history ends on the
+// stretch just left, which is over.
+export function stretchesOf(spans: Span<string>[], now: number, current: string | null | undefined): UnhealthyStretch[] {
   const out: UnhealthyStretch[] = [];
   let cur: Span<string>[] = [];
-  const flush = () => {
+  const flush = (last: boolean) => {
     if (cur.length === 0) return;
     const from = cur[0].from;
     const to = cur[cur.length - 1].to;
     out.push({
       from,
       to,
-      ongoing: Math.abs(to - now) < 1000,
+      ongoing: last && !!current && current !== "healthy",
       worst: [...cur].sort((a, b) => healthRank(b.value as never) - healthRank(a.value as never))[0].value,
       spans: cur,
     });
@@ -113,10 +117,10 @@ export function stretchesOf(spans: Span<string>[], now: number): UnhealthyStretc
     // A stretch that held under half a second (an edge recorded the instant
     // the next one was) is not an entry: "Commissioning, 0s" says nothing.
     if (s.to - s.from < 500 && Math.abs(s.to - now) >= 1000) continue;
-    if (s.value === "healthy") flush();
+    if (s.value === "healthy") flush(false);
     else cur.push(s);
   }
-  flush();
+  flush(true);
   return out.sort((a, b) => Number(b.ongoing) - Number(a.ongoing) || b.from - a.from);
 }
 

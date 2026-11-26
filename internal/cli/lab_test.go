@@ -33,7 +33,7 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	}
 	// A scale lab's proving knobs are for the integration tests, not a
 	// learner's help, and the induced refusal is off unless asked (#1698).
-	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered"} {
+	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
 		f := cmd.Flags().Lookup(name)
 		if f == nil {
 			t.Errorf("lab run has no --%s", name)
@@ -43,8 +43,10 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 			t.Errorf("--%s shows in a learner's help", name)
 		}
 	}
-	if f := cmd.Flags().Lookup("induce-unregistered"); f != nil && f.DefValue != "false" {
-		t.Errorf("--induce-unregistered defaults to %s, want off", f.DefValue)
+	for _, name := range []string{"induce-unregistered", "health-history"} {
+		if f := cmd.Flags().Lookup(name); f != nil && f.DefValue != "false" {
+			t.Errorf("--%s defaults to %s, want off", name, f.DefValue)
+		}
 	}
 }
 
@@ -160,6 +162,7 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
 		{[]string{"--scenario", "corporate", "--systems", "20", "--sso", "--plan"}, "--sso is a seeded fleet's"},
 		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
+		{[]string{"--scenario", "dev", "--health-history"}, "--health-history seeds a scale scenario's storyline"},
 		{[]string{"--scenario", "dev", "--omnibot-key-env", "OMNIGLASS_TEST_NO_SUCH_KEY"}, "OMNIGLASS_TEST_NO_SUCH_KEY is not set"},
 		{[]string{"--scenario", "dev", "--omnibot-replay", "nope"}, "omnibot recordings: corporate-outage, default"},
 		{[]string{"--scenario", "corporate", "--systems", "20", "--omnibot-replay", "nope"}, "omnibot recordings: corporate-outage, default"},

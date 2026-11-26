@@ -83,3 +83,23 @@ describe("HealthHistory", () => {
     expect(queryByText(/held/)).toBeNull();
   });
 });
+
+// #2723: a caller that owns the clock moves the bar's newest segment with it.
+describe("HealthHistory with a caller's now", () => {
+  it("draws the newest segment up to the now it is given", () => {
+    const t0 = Date.parse("2026-08-20T17:00:00Z");
+    const weights = (now: number) => {
+      const { container, unmount } = render(() => (
+        <HealthHistory compact now={now} health="healthy" transitions={[at(new Date(t0 - 60_000).toISOString(), "degraded"), at(new Date(t0).toISOString(), "healthy")]} />
+      ));
+      const flex = [...container.querySelectorAll<HTMLElement>("[data-segment]")].map((el) => parseFloat(el.style.flexGrow));
+      unmount();
+      return flex;
+    };
+    const early = weights(t0 + 5_000);
+    const later = weights(t0 + 60_000);
+    // Degraded held 60 s; healthy has held 5 s then 60 s, so its share grows.
+    expect(early[1] / early[0]).toBeCloseTo(5 / 60, 1);
+    expect(later[1] / later[0]).toBeCloseTo(1, 1);
+  });
+});

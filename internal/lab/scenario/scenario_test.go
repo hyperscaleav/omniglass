@@ -1034,3 +1034,85 @@ func TestCorporateControlsOnlyTheBoardroomDisplays(t *testing.T) {
 		t.Fatal("no boardroom display is controlled at 100 systems")
 	}
 }
+
+// #2728: a scenario may declare a health storyline, the past a lab seeded with
+// --health-history carries: a window of days, and the stretches its showcase
+// rooms spent away from healthy, each with the alarm that explained it.
+func TestValidateChecksHealthHistory(t *testing.T) {
+	base := `name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+` + oneArchetype
+	stretch := func(system string, daysAgo, minutes int, health string) string {
+		return fmt.Sprintf("    - system: %s\n      component: panel-1\n      rule: reachability-lost\n      instance: snmp\n      severity: high\n      message: Reachability lost\n      health: %s\n      days_ago: %d\n      minutes: %d\n",
+			system, health, daysAgo, minutes)
+	}
+	block := func(days int, stretches ...string) string {
+		return fmt.Sprintf("health_history:\n  days: %d\n  stretches:\n%s", days, strings.Join(stretches, ""))
+	}
+	good := base + block(30, stretch("hq-sign-1", 12, 40, "degraded"), stretch("hq-sign-1", 4, 15, "outage"))
+	m, err := Parse("t.yaml", []byte(good))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(m, fakeCatalog()); err != nil {
+		t.Fatalf("a health storyline is refused: %v", err)
+	}
+	if m.HealthHistory == nil || m.HealthHistory.Days != 30 || len(m.HealthHistory.Stretches) != 2 {
+		t.Fatalf("parsed storyline = %+v, want 30 days and two stretches", m.HealthHistory)
+	}
+	if s := m.HealthHistory.Stretches[0]; s.System.Name != "hq-sign-1" || s.Component.Name != "panel-1" || s.Rule.Name != "reachability-lost" ||
+		s.Instance != "snmp" || s.Severity != "high" || s.Health != "degraded" || s.DaysAgo != 12 || s.Minutes != 40 {
+		t.Errorf("first stretch = %+v", s)
+	}
+	for _, tc := range []struct{ name, yaml, want string }{
+		{"no days", base + block(0, stretch("hq-sign-1", 1, 5, "degraded")), "health_history days 0"},
+		{"past the window the health read serves", base + block(31, stretch("hq-sign-1", 1, 5, "degraded")), "health_history days 31"},
+		{"healthy is not a stretch", base + block(30, stretch("hq-sign-1", 2, 5, "healthy")), `health "healthy"`},
+		{"not a health", base + block(30, stretch("hq-sign-1", 2, 5, "broken")), `health "broken"`},
+		{"before the window", base + block(30, stretch("hq-sign-1", 30, 5, "degraded")), "days_ago 30"},
+		{"no length", base + block(30, stretch("hq-sign-1", 2, 0, "degraded")), "minutes 0"},
+		{"past the window's end", base + block(30, stretch("hq-sign-1", 1, 24*60, "degraded")), "past the end of the window"},
+		{"overlapping", base + block(30, stretch("hq-sign-1", 2, 60*30, "degraded"), stretch("hq-sign-1", 1, 5, "outage")), "overlaps"},
+		{"no system", base + block(30, stretch("", 2, 5, "degraded")), "names no system"},
+		{"unknown field", base + block(30, stretch("hq-sign-1", 2, 5, "degraded")+"      colour: red\n"), `unknown field "colour"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := Parse("t.yaml", []byte(tc.yaml))
+			if err == nil {
+				err = Validate(m, fakeCatalog())
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want an error containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// The shipped corporate storyline names rooms its plan has at the sizes the
+// marketing shots and the perf labs run, so a lab seeded with it never names a
+// room that is not there.
+func TestShippedCorporateHealthHistoryNamesItsRooms(t *testing.T) {
+	m, err := Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.HealthHistory == nil || len(m.HealthHistory.Stretches) == 0 {
+		t.Fatal("corporate declares no health storyline")
+	}
+	cat, err := ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Resolve(m, cat, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if missing := plan.MissingStorylineSystems(m.HealthHistory); len(missing) > 0 {
+		t.Errorf("the storyline names systems a 1000-system plan lacks: %v", missing)
+	}
+}

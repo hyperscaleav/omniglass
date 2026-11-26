@@ -412,7 +412,9 @@ of events and logs), so the control is not on that tab.
 **Activity** reads the way a status page reads: the window's **uptime** up top (the
 health KPI over time), the timeline beside it with one marker per alarm raise, then
 the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
-expanding to the health changes inside it and the alarms that explain them. An alarm the
+expanding to the health changes inside it and the alarms that explain them. An entry reads
+ongoing only while the system is still away from healthy; the moment it recovers, the entry
+closes at the recovery. An alarm the
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 

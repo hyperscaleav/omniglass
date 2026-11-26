@@ -77,7 +77,9 @@ COMPOSE=web/e2e/marketing/compose
 # The camera pass's packages, installed once in the Playwright image (it renders
 # with that image's Chromium, so puppeteer downloads none) with the repo's one
 # pnpm (#2717): the image has none, so the pinned version goes on a scratch
-# prefix first, a tool install rather than the project's.
+# prefix first, a tool install rather than the project's. Its store stays in the
+# container's /tmp: by default pnpm puts it on the project's filesystem, which is
+# the bind mount, and so at the repository root (#2719).
 compose_deps() {
   [ -d "$COMPOSE/node_modules/@revideo/renderer" ] && return 0
   echo "installing the camera pass (web/e2e/marketing/compose)" >&2
@@ -85,7 +87,7 @@ compose_deps() {
   pnpm=$(node -p 'require("./'"$COMPOSE"'/package.json").packageManager') || return 1
   docker run --rm "${LAB_LABEL_ARGS[@]}" --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -e PUPPETEER_SKIP_DOWNLOAD=1 -e DISABLE_TELEMETRY=true -v "$ROOT:/w" -w "/w/$COMPOSE" "$LAB_PWIMG" \
-    sh -c 'npm install -g --prefix /tmp/pnpm "$1" --no-audit --no-fund >/dev/null && /tmp/pnpm/bin/pnpm install --frozen-lockfile' sh "$pnpm" &
+    sh -c 'npm install -g --prefix /tmp/pnpm "$1" --no-audit --no-fund >/dev/null && /tmp/pnpm/bin/pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store' sh "$pnpm" &
   LAB_FG_PID=$!
   wait "$LAB_FG_PID" || { LAB_FG_PID=""; return 1; }
   LAB_FG_PID=""
@@ -213,10 +215,12 @@ fi
 
 # ---- record ------------------------------------------------------------------
 preflight
-read -r SCENARIO SYSTEMS REPLAY < <(mk lab-args "$SHOTS_W")
+read -r SCENARIO SYSTEMS HISTORY REPLAY < <(mk lab-args "$SHOTS_W")
 LABFLAGS=()
 # A scale scenario takes a size; a seeded fleet (dev) has its own.
 [ "$SCENARIO" != corporate ] || LABFLAGS+=(--systems "$SYSTEMS")
+# The scenario's health storyline (#2729): 30 days of health behind the fleet.
+[ "$HISTORY" != true ] || LABFLAGS+=(--health-history)
 [ -z "$REPLAY" ] || LABFLAGS+=(--omnibot-replay "$REPLAY")
 
 lab_init ogmkt

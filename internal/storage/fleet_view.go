@@ -112,9 +112,10 @@ func recordedHealth(ownerCol, table, fallback string) string {
 // this component" (#1454), given an expression for its uuid: an alarm was ever
 // raised on it (cleared ones count, the history outlives the fix), or one of
 // its endpoints has delivered a batch (endpoint_live, #933). Until then there
-// is nothing to call it healthy on.
+// is nothing to call it healthy on. An alarm a lab seeded in the past (a
+// non-empty source, #2727) observed nothing, so it does not count.
 func componentObservedSQL(idExpr string) string {
-	return `(exists (select 1 from alarm oa where oa.component_id = ` + idExpr + `)
+	return `(exists (select 1 from alarm oa where oa.component_id = ` + idExpr + ` and oa.source = '')
 		or exists (select 1 from endpoint oe join endpoint_live ol on ol.endpoint_id = oe.id where oe.component = ` + idExpr + `))`
 }
 

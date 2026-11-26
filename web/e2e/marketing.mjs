@@ -9,7 +9,7 @@
 //   node e2e/marketing.mjs check <shots.yaml> <dest>   before the lab: the list parses,
 //                                                      the destination is usable, the
 //                                                      omnibot recording is shipped
-//   node e2e/marketing.mjs lab-args <shots.yaml>       "<scenario> <systems> <replay>"
+//   node e2e/marketing.mjs lab-args <shots.yaml>       "<scenario> <systems> <true|false> <replay>"
 //   node e2e/marketing.mjs capture <shots.yaml> <out> [id...]  play the shots, or only those ids
 //                                                      (needs the lab's
 //                                                      OG_E2E_BASE, OG_TOKEN, OG_E2E_USER,
@@ -70,7 +70,8 @@ async function main() {
     console.log(`marketing: ${list.shots.length} shots, destination ${dest}`);
   } else if (mode === 'lab-args') {
     const l = readList(args[0]).lab;
-    console.log(`${l.scenario} ${l.systems} ${l.omnibotReplay}`);
+    // The health switch prints as a word before the replay, which may be empty.
+    console.log(`${l.scenario} ${l.systems} ${l.healthHistory} ${l.omnibotReplay}`);
   } else if (mode === 'ids') {
     for (const s of readList(args[0]).shots) console.log(s.id, s.kind, s.maxSeconds);
   } else if (mode === 'budget') {

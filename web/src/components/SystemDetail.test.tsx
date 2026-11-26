@@ -383,3 +383,34 @@ describe("the system follows its topic live (#2731)", () => {
     await waitFor(() => expect(screen.queryByText("No route to host")).toBeNull());
   });
 });
+
+// #2723: the Activity tab's history moves with the 5 s health poll that feeds
+// it, not once a minute, so right after a recovery its record catches up with
+// the header within one poll and nobody has to refresh.
+describe("the Activity tab's history keeps time with the poll", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("a recovery's healthy time reaches Uptime within one 5 s poll", async () => {
+    const recovered = Date.parse("2026-08-20T17:00:00Z");
+    vi.useFakeTimers({ now: recovered, shouldAdvanceTime: true });
+    const qc = seed();
+    qc.setQueryData([...systemHealthKey(SID)], {
+      ...health,
+      health: "healthy",
+      slots: [],
+      transitions: [
+        { ts: new Date(recovered - 60_000).toISOString(), health: "healthy" },
+        { ts: new Date(recovered - 30_000).toISOString(), health: "degraded" },
+        { ts: new Date(recovered).toISOString(), health: "healthy" },
+      ],
+    });
+    mountPage(`/web/systems/${SID}`, qc);
+    fireEvent.click(await screen.findByRole("tab", { name: "Activity" }));
+    const kpi = await screen.findByTestId("uptime-kpi");
+    // Healthy 30 s of the 60 s recorded so far.
+    await waitFor(() => expect(kpi.textContent).toContain("50.0"));
+    vi.advanceTimersByTime(5_000);
+    // 35 s healthy of 65 s: the history took the poll's next now.
+    await waitFor(() => expect(kpi.textContent).toContain("53.8"));
+  });
+});

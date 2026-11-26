@@ -41,6 +41,9 @@ type Manifest struct {
 	// a webhook face (a signed-webhook sender, #1747), how many a site, and
 	// how many of the site's systems each is scoped to.
 	Pushers []Pusher `yaml:"pushers"`
+	// HealthHistory is the past a lab seeded with --health-history carries
+	// (#2728); nil when the scenario declares none.
+	HealthHistory *HealthHistory `yaml:"health_history"`
 }
 
 // Pusher is one outside actor a scenario places at every site, PerSite of
@@ -232,7 +235,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "health_history"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file

@@ -107,7 +107,7 @@ describe("stretchesOf", () => {
       span("healthy", 180, 72),
       span("incomplete", 72, 0),
     ];
-    const inc = stretchesOf(spans, now);
+    const inc = stretchesOf(spans, now, "incomplete");
     expect(inc).toHaveLength(2);
     // Ongoing first, then newest.
     expect(inc[0].ongoing).toBe(true);
@@ -119,7 +119,25 @@ describe("stretchesOf", () => {
   });
 
   it("a fully healthy window has no unhealthy stretches", () => {
-    expect(stretchesOf([span("healthy", 720, 0)], now)).toHaveLength(0);
+    expect(stretchesOf([span("healthy", 720, 0)], now, "healthy")).toHaveLength(0);
+  });
+
+  // #2721: right after a recovery the history's now is the recovery's own
+  // timestamp, so the recovered span has no length, is dropped, and the
+  // history ends on the stretch just left. It is not ongoing: the system is
+  // healthy. The same history with the system still degraded is.
+  it("calls the newest stretch ongoing only while the system is away from healthy", () => {
+    const spans = [span("healthy", 720, 12), span("degraded", 12, 0)];
+    const recovered = stretchesOf(spans, now, "healthy");
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0].ongoing).toBe(false);
+    expect(recovered[0].to).toBe(now);
+    expect(stretchesOf(spans, now, "degraded")[0].ongoing).toBe(true);
+  });
+
+  it("never calls an older stretch ongoing, whatever the system reads now", () => {
+    const spans = [span("healthy", 720, 200), span("degraded", 200, 180), span("healthy", 180, 0)];
+    expect(stretchesOf(spans, now, "degraded")[0].ongoing).toBe(false);
   });
 });
 
@@ -138,14 +156,14 @@ describe("stretchReasons", () => {
 
   it("keeps only the alarms overlapping the stretch", () => {
     const spans = [span("healthy", 720, 200), span("degraded", 200, 180), span("healthy", 180, 0)];
-    const inc = stretchesOf(spans, now)[0];
+    const inc = stretchesOf(spans, now, "healthy")[0];
     const reasons = stretchReasons(inc, rows);
     expect(reasons.map((r) => r.id)).toEqual(["a1"]);
   });
 
   it("an ongoing alarm overlaps an ongoing stretch", () => {
     const spans = [span("healthy", 720, 12), span("degraded", 12, 0)];
-    const inc = stretchesOf(spans, now)[0];
+    const inc = stretchesOf(spans, now, "degraded")[0];
     expect(stretchReasons(inc, rows).map((r) => r.id)).toEqual(["a2"]);
   });
 });
