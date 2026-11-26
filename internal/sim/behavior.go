@@ -72,7 +72,7 @@ func (d *Device) AddBehaviorFromProfile(b *profile.Behavior) error {
 	}
 
 	d.ensureRand()
-	funcs := behaviorFuncs(d.rand)
+	funcs := behaviorFuncs(d.rand, d.clock)
 	muts, err := compileBehaviorMutationList(b.Mutations, funcs)
 	if err != nil {
 		return fmt.Errorf("behavior %q: %w", b.Name, err)

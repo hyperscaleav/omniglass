@@ -972,7 +972,8 @@ func NewDevice(deviceID, hostname string, ip net.IP, profileName string, version
 }
 
 // SetClock overrides the device's clock source. Tests use it to make
-// elapsed computed fields deterministic; production never calls it, so
+// elapsed computed fields and the wall clock a behavior reads (#2754)
+// deterministic; production never calls it, so
 // d.now stays time.Now. Safe to call only before the device starts
 // serving (the engine installs computed fields and starts listeners on a
 // single goroutine).

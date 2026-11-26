@@ -73,7 +73,7 @@ func (d *Device) SetBehaviorOverrides(specs []BehaviorOverrideSpec) error {
 			Path:     spec.Path,
 			Value:    spec.Expression,
 			Optional: true,
-		}}, behaviorFuncs(d.rand))
+		}}, behaviorFuncs(d.rand, d.clock))
 		if err != nil {
 			return fmt.Errorf("override %q on %q: %w", spec.OverrideID, spec.Path, err)
 		}

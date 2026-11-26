@@ -255,7 +255,7 @@ func TestFilterOverriddenMutations_LiteralPathSkip(t *testing.T) {
 	muts, err := compileBehaviorMutationList([]profile.Mutation{
 		{Path: "status.dsp.cpu_load", Value: "90"},
 		{Path: "status.device.uptime", Value: "5"},
-	}, behaviorFuncs(newDeviceRand(d.DeviceID)))
+	}, behaviorFuncs(newDeviceRand(d.DeviceID), d.clock))
 	if err != nil {
 		t.Fatalf("compileBehaviorMutationList: %v", err)
 	}
