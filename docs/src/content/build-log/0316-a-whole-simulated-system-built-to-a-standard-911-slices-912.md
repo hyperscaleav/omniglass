@@ -6,7 +6,7 @@ refs: [911, 912, 913]
 
 An operator adds a simulated system in one step: `POST /nodes/{name}/simulation/systems` (`omniglass
 simulation add-system`) builds a system to a standard, staffing each of the standard's roles with a
-simulated product that fits its accepted types and pins (`internal/simfleet.PlanSystem`, pure), and
+simulated product that fits its accepted types and pins (`sim/simfleet.PlanSystem`, pure), and
 creates the system, the components, their endpoints and the role assignments in one transaction. The
 system, component, role and endpoint creates were split into a public begin-and-commit wrapper over a
 `...Tx` body, so the composite is the ordinary creates with the caller's own scopes and audit rows,

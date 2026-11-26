@@ -11,8 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/settings"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/hyperscaleav/omniglass/internal/tail"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 )
 
 // UnimplementedGateway is a no-op Gateway for tests and codegen stubs that must

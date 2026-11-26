@@ -25,7 +25,7 @@ transition under the listen task, and each transition is a node self-log carryin
 no session table ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 Proven at three tiers: the state machine over fakes (`internal/collection/session_test.go`), the real
 held line connection over a real socket (`linesession_integration_test.go`) and against the
-simulator's NVP listener (`internal/sim/session_hold_test.go`: three polls ride one connection, the
+simulator's NVP listener (`sim/session_hold_test.go`: three polls ride one connection, the
 listener killed mid-session reads recovering, then up once it returns), and end to end
 (`internal/node/run_session_test.go`: the shipped `newtron-nvp` driver attached, the real node and
 bus, the `session-state` series on the server reading establishing, up, recovering, up through a

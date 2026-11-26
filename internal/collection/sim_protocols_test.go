@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // profileProtocols is the interface protocols the simulator's device profile
@@ -63,7 +63,7 @@ func profileProtocols(t *testing.T) []string {
 // vocabulary names it, and one removed fails until the vocabulary drops it.
 // The schema is an editor aid, though, and nothing validates a profile against
 // it: the simulator's own sources are held to the vocabulary in
-// internal/sim (TestEveryProtocolTheSimulatorReportsAndServesIsOneTheHubCounts).
+// sim (TestEveryProtocolTheSimulatorReportsAndServesIsOneTheHubCounts).
 func TestSimProtocolsAreTheProfileSchemasLessWhatNeverReportsAHit(t *testing.T) {
 	want := slices.DeleteFunc(profileProtocols(t), func(p string) bool { return p == "icmp" || p == "https" })
 	slices.Sort(want)

@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
-	"github.com/hyperscaleav/omniglass/internal/simfleet"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
 // A driver that has a spec and simulated products is one the seed attaches,

@@ -8,7 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 )
 
 // SimDevice is one component a simulator beside an outpost may serve: the
@@ -147,7 +147,7 @@ type SimWebhook struct {
 }
 
 // simulatedBlock is the address block the dev seed and the simulated fleet's
-// plan allocate simulated components from (internal/simfleet), and nothing
+// plan allocate simulated components from (sim/simfleet), and nothing
 // else does.
 var simulatedBlock = &net.IPNet{IP: net.IPv4(127, 60, 0, 0), Mask: net.CIDRMask(16, 32)}
 

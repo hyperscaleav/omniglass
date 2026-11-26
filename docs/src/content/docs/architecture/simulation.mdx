@@ -10,7 +10,7 @@ sidebar:
 
 import CollectionMethods from '../../../components/CollectionMethods.astro';
 
-Omniglass ships a device simulator in the same binary (`internal/sim`). It serves a fleet of
+Omniglass ships a device simulator in the same binary (the top-level `sim/` tree, see its README). It serves a fleet of
 fictional AV and IT devices, each on its own loopback address, speaking the protocols real gear
 speaks (HTTP and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols and the same over TLS, UDP,
 WebSocket, server-sent events, signed webhooks), all from one live state per device. An outpost
@@ -26,7 +26,7 @@ work against devices they can break on purpose. The operator's walk-through is t
 ## The catalog
 
 Everything a simulated device is comes from the catalog embedded in the binary
-(`internal/sim/profiles`), so nothing is read from disk:
+(`sim/profiles`), so nothing is read from disk:
 
 - a **device profile** (`devices/*.yaml`) declares a product's identity, its protocol surfaces (each
   a protocol, a port, its auth, and the routes, commands, OIDs and subscriptions it answers), its
@@ -162,7 +162,7 @@ saw and the devices it is serving.
 
 The server accepts hits only for components it handed that outpost, by a closed set of protocols
 (`http`, `snmp`, `ssh`, `telnet`, `tcp`, `udp`, `websocket`), and keeps them in memory as a live
-signal (`internal/simhub`). `GET /outposts/{name}/simulation` (`omniglass outpost simulation
+signal (`sim/simhub`). `GET /outposts/{name}/simulation` (`omniglass outpost simulation
 <outpost>`) joins them to the outpost's devices, each with a `status`: `running`, `starting`,
 `failed` or `offline`. These are the simulator's own words, so they never borrow reachability's or
 health's values. A simulator silent for a hundred seconds is forgotten, and deleting the outpost
@@ -172,7 +172,7 @@ is accepted while the server runs as one ([scaling](/architecture/scaling/)).
 ### What an endpoint observed
 
 A hit says a device was touched, not whether every request arrived or how each ended. For that, every
-simulated endpoint keeps an **observation** (`internal/sim/observe.go`): counters that never reset, so
+simulated endpoint keeps an **observation** (`sim/observe.go`): counters that never reset, so
 a reader takes two reads and the difference. It counts three units, each matched with what the outpost
 tallies sending:
 
@@ -226,7 +226,7 @@ and the unprivileged-port sysctl, so it binds the profiles' real ports and ping 
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an address
 in `127.60.0.0/16` and endpoints on the dev outpost, `edge-hq`. A product whose driver has a spec gets
 that driver attached, with the credential its face demands seeded as a platform secret; the attach
-table is `internal/simfleet`. A product whose driver is still a stub gets a reachability probe on its
+table is `sim/simfleet`. A product whose driver is still a stub gets a reachability probe on its
 profile's port. For a simulator that may not bind below 1024, `omniglass seed-dev --sim-port-offset
 10000` aims the endpoints at the lifted ports.
 

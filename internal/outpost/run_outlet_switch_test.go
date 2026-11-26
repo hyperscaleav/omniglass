@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestSwitchingAnOutletOffHoldsWhatItFeeds drives #1653 over the real wire:

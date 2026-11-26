@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostFerritePDUReadsOutletsCurrentAndVoltage (#1368): the shipped

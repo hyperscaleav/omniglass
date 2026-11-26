@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
-	"github.com/hyperscaleav/omniglass/internal/simfleet"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
 // TestSimSecretsHoldWhatTheFacesDemand: each secret a simulated attach

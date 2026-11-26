@@ -17,7 +17,7 @@ import (
 
 // The session state machine (#816) over a faked held connection. The fake is
 // the necessary half of the capability carve-out; the real line session
-// against the simulator's listener (internal/sim) closes the increment.
+// against the simulator's listener (sim) closes the increment.
 
 // fakeHeldConn answers every exchange by echoing the line, counts the
 // exchanges it served, and dies when the test kills it.

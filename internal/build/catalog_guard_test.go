@@ -122,11 +122,11 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 			return err
 		}
 		text := string(src)
-		// The simulator's tests name its own profiles (internal/sim/profiles),
+		// The simulator's tests name its own profiles (sim/profiles),
 		// which share the seed's fictional model names but live in a separate
 		// embedded catalog: a seed rename cannot break them. A simulator test
 		// that reads the seed is borrowing it like any other.
-		if strings.HasPrefix(rel, "internal/sim/") && !strings.Contains(text, `"github.com/hyperscaleav/omniglass/internal/seed"`) {
+		if strings.HasPrefix(rel, "sim/") && !strings.Contains(text, `"github.com/hyperscaleav/omniglass/internal/seed"`) {
 			return nil
 		}
 		for _, sku := range skus {

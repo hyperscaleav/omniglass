@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
-	"github.com/hyperscaleav/omniglass/internal/sim"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // shippedSpec is a seeded driver's spec, parsed as the write path parses it.

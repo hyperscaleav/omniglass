@@ -107,7 +107,7 @@ type SimWebhook struct {
 }
 
 // SimImpairment is what is wrong with a simulated device: unplugged (dark
-// on every protocol), or a degraded link. internal/sim/impair applies it.
+// on every protocol), or a degraded link. sim/impair applies it.
 type SimImpairment struct {
 	Unplugged bool    `json:"unplugged"`
 	LatencyMs int     `json:"latency_ms"`

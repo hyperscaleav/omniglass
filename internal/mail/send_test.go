@@ -8,7 +8,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/mail"
-	"github.com/hyperscaleav/omniglass/internal/mailsim"
+	"github.com/hyperscaleav/omniglass/sim/mailsim"
 )
 
 // The SMTP session against the mail sim (#1317): the relay is judged by the
