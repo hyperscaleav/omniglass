@@ -13,8 +13,10 @@
 # frame, or as near it as the capture's edge allows (the frame never looks past
 # the capture), so focus the information itself, not the row or panel around
 # it. The rest of the frame dims round the target; `spot: false` keeps it all
-# lit, for a target that only aims the camera. A clip that ends zoomed eases
-# out before it loops.
+# lit, for a target that only aims the camera. A step with no focus whose
+# target is outside the frame (a click below the form) pans there at the same
+# zoom as the pointer moves: the camera follows the pointer. A clip that ends
+# zoomed eases out before it loops.
 #
 # A focus opens a beat, which runs until the next focus. Its `expect` names the
 # text its bullet rests on; the recorder reads the text on screen inside the
@@ -218,11 +220,9 @@ shots:
         hold: 500
       - select: { target: 'form:has(option[value=set-input]) select >> nth=1', value: hdmi1 }
         hold: 600
-      # The camera follows the pointer down to Issue, so the press is on screen.
+      # The camera follows the pointer down to Issue (the recorder's rule), so
+      # the press is on screen.
       - click: { role: button, name: Issue }
-        focus: here
-        expect: ["Issue"]
-        zoom: 2.2
         hold: 500
       # Beat 6: the display acknowledges, and the command settles.
       - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 30000 }

@@ -529,7 +529,10 @@ project in `web/e2e/marketing/compose/` (installed once, with the repo's pinned 
 image) then renders the pans and zooms over it, offline, with its telemetry off, before the budget encode. While the camera is on a box, the rest of the capture dims to
 half, so the eye lands on what changed, and the box (with a 12-pixel margin) stays lit; a focus with
 `spot: false` keeps the whole frame lit, for a target that only aims the camera (an outage's alarm bar, with
-the health lanes above it, which the beat is about); a click shows a
+the health lanes above it, which the beat is about). The camera follows the pointer: a step with no `focus` of
+its own whose target lies outside the frame the camera holds (a click on a button below the form in view) pans
+there at the same zoom as the pointer glides, all of the frame lit, so no click happens off screen; the beat it
+is in runs on through the pan; a click shows a
 teal ripple at the pointer. `frameFor`, `cameraTrack`, `spotFor` and `concatList` in `marketinglib.mjs`
 are the framing, the move list, the lit box and the frame timing, unit tested.
 

@@ -687,7 +687,7 @@ export function referencedResources(items, start) {
 }
 
 /** @typedef {{ x: number, y: number, width: number, height: number }} Box */
-/** @typedef {{ t: number, box: Box | null, zoom?: number, spot?: false }} FocusEvent */
+/** @typedef {{ t: number, box: Box | null, zoom?: number, spot?: false, follow?: true }} FocusEvent */
 /** @typedef {{ at: number, dur: number, scale: number, x: number, y: number, spot: Box | null }} CameraMove */
 
 /**
@@ -727,6 +727,25 @@ export function frameFor(box, vp, zoom) {
   };
 }
 
+/**
+ * Where the camera goes so the pointer's target is on screen as the pointer
+ * reaches it: the camera follows the pointer. Null while the frame it holds
+ * shows the target with a margin to spare, or shows the whole capture; else
+ * the same zoom recentred on the target (held on the capture, as frameFor is).
+ * @param {Box} box the target, in viewport pixels
+ * @param {{ scale: number, x: number, y: number }} current the frame the camera holds
+ * @param {{ width: number, height: number }} vp
+ * @returns {{ scale: number, x: number, y: number } | null}
+ */
+export function followFrame(box, current, vp) {
+  if (current.scale <= 1) return null;
+  const { rect } = frameRect(current, vp);
+  const m = Math.min(rect.width, rect.height) * CAMERA.margin;
+  const inside =
+    box.x >= rect.x + m && box.y >= rect.y + m && box.x + box.width <= rect.x + rect.width - m && box.y + box.height <= rect.y + rect.height - m;
+  return inside ? null : frameFor(box, vp, current.scale);
+}
+
 /** @typedef {{ from: number, at: number, to: number }} BeatTimes */
 
 /**
@@ -741,7 +760,9 @@ export function frameFor(box, vp, zoom) {
  */
 export function beatEnds(beats, events) {
   return beats.map((b) => {
-    const next = events.find((e) => e.t > b.from);
+    // A camera following the pointer (followFrame) pans within a beat; it does
+    // not end it.
+    const next = events.find((e) => e.t > b.from && !e.follow);
     return next ? { ...b, to: next.t } : b;
   });
 }
