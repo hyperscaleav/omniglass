@@ -12,7 +12,8 @@ import (
 // touches an input to a capture (#860): the dev seed fleet the captured console
 // renders, the boot seed, the migrations behind it, and what builds the lab
 // image. Without these a seed-only change merged to main would never be
-// recaptured until a later docs/** or web/** push.
+// recaptured until a later docs/** or web/** push. The pull_request filter carries
+// the same inputs, so a seed-only PR runs the verify job.
 func TestDocsShotsRecaptureTriggersOnCaptureInputs(t *testing.T) {
 	b, err := os.ReadFile("../.github/workflows/docs-shots.yml")
 	if err != nil {
@@ -40,8 +41,11 @@ func TestDocsShotsRecaptureTriggersOnCaptureInputs(t *testing.T) {
 			t.Errorf("docs-shots.yml push.paths lacks %q (has %v): a change there would not be recaptured on main", want, wf.On.Push.Paths)
 		}
 	}
-	// A PR compares no pixels (#2561), so its filter is not widened.
-	if slices.Contains(wf.On.PullRequest.Paths, "internal/devseed/**") {
-		t.Errorf("pull_request.paths names internal/devseed/**: a PR's verify job cannot see a seed change")
+	// A PR runs the structural verify job (#2561): cheap, and it starts on a seed-only
+	// change too, so the filter carries every input the push filter does (#860).
+	for _, want := range wf.On.Push.Paths {
+		if !slices.Contains(wf.On.PullRequest.Paths, want) {
+			t.Errorf("docs-shots.yml pull_request.paths lacks %q (has %v): a PR touching only that input would not run docs-shots", want, wf.On.PullRequest.Paths)
+		}
 	}
 }
