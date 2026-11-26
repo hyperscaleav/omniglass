@@ -601,10 +601,9 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     expect(line.textContent).toContain("3h");
   });
 
-  // The current report keeps the 5 s poll on every tab, so the panels that
-  // share its key (the slots on Configure, a location's system summaries)
-  // move with it.
-  it("polls the unranged current report on Configure", async () => {
+  // The current report follows the system's topic on every tab (#2731), never
+  // a timer: no read repeats on its own.
+  it("does not poll the unranged current report on Configure", async () => {
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     vi.setSystemTime(new Date(NOW));
     const reads = stubHealth();
@@ -614,7 +613,7 @@ describe("the Activity tab follows the page's range (#2741)", () => {
     await vi.advanceTimersByTimeAsync(0);
     const atMount = bare();
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(bare()).toBeGreaterThan(atMount);
+    expect(bare()).toBe(atMount);
   });
 
   // A pick's own read is in flight: Activity draws nothing from the range it
