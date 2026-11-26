@@ -124,6 +124,15 @@ func TestAPollOnASessionStillEstablishingRecordsNoCollectionFailed(t *testing.T)
 	if _, failed := got[probekeys.PollFailureCount]; failed {
 		t.Fatalf("a poll on an establishing session counted as a failure: %v", got)
 	}
+	// Held, it runs the moment its session is up, not an interval later: the
+	// dispatcher's release sweep (releaseLocked) re-runs it once the session
+	// reads up, as it does a refused poll whose credential was fixed.
+	if ids := r.sched.refusedIDs(); len(ids) != 1 || ids[0] != r.poll.ID {
+		t.Fatalf("held poll is not in the release sweep: %v, want [%s]", ids, r.poll.ID)
+	}
+	if !r.sched.releaseRefused(r.poll.ID, true) {
+		t.Fatal("a held poll is not released once its session is up")
+	}
 }
 
 // A run now on a session still establishing answers pending, as one beside a

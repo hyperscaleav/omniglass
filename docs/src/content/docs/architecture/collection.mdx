@@ -284,7 +284,8 @@ naming the state, so a down device never stalls the outpost's tick, and it never
 its own. A session's first connection is not a failure: a poll that arrives while the session is still
 `establishing` waits for the first dial up to its timeout, and if the session is still not `up` the poll
 is **held**, as a gate holds one (counted in `poll-held-count`, no `collection-failed`, no backoff), and
-runs again at its next slot. A run now in that window answers that the session is still making its first
+runs the moment the session is up, released by the same sweep that releases a refused poll once its
+session is up again. A run now in that window answers that the session is still making its first
 connection.
 
 ### Listeners over a held session

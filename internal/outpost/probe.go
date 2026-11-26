@@ -121,9 +121,11 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 		if establishingRun(dps, faults) {
 			// The endpoint's held session is still making its first
 			// connection (#2755): nothing was sent and nothing failed, so
-			// the poll is held, as a gate holds one, and runs again at its
-			// next slot: no collection-failed, no backoff, no failure.
+			// the poll is held, as a gate holds one: no collection-failed,
+			// no backoff, no failure, and it runs the moment the session is
+			// up (the dispatcher's release sweep), not an interval later.
 			c.report.heldPoll(task.EndpointID)
+			c.sched.heldForSession(task.ID)
 			slog.Debug("poll held: its session is still making its first connection", "facility", "collection", "task", task.ID)
 			return nil
 		}
