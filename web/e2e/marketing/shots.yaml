@@ -119,7 +119,7 @@ shots:
   - id: omniglass-teaser
     kind: loop
     max_seconds: 30
-    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display's timeline with the alarm and the command, the room healthy again, and three minutes later, sped up, its last hour on the timeline: healthy, down for the outage, healthy."
+    alt: "Omniglass from the fleet to a fix: the count of rooms that need attention, a headquarters boardroom's Why naming its display on the wrong input, the room's health record down, the display's own Video Input reading hdmi2, Send command on its alarm, Set input hdmi1 sent and settled, the display's timeline with the alarm and the command, the room healthy again, and three minutes later, sped up, the timeline closing in on the outage in its last hour: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -249,9 +249,9 @@ shots:
         focus: out
         hold: 200
       - wait: { selector: '[data-testid=timeline-health-row]' }
-        focus: '[data-testid=timeline-overlay]'
-        expect: ["Health", "This system"]
-        zoom: 1.25
+        focus: '[data-testid=timeline-alarm-span]'
+        expect: ["outage"]
+        zoom: 2.0
         hold: 3000
 
   # Systems. The page's bullets, in order:
