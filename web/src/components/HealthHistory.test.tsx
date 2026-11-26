@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@solidjs/testing-library";
+import { cleanup, render, screen } from "@solidjs/testing-library";
 import HealthHistory from "./HealthHistory";
 import type { HealthTransition } from "../lib/health";
 import { fmtTime } from "../lib/format";
+import { durationText } from "../lib/timeline";
 
 // The history strip is the surface that answers "when did this change", so the
 // one thing it must never do is render a state it knows as a state it does not.
@@ -120,6 +121,18 @@ describe("HealthHistory over a range", () => {
     const segs = [...container.querySelectorAll<HTMLElement>("[data-segment]")];
     expect(segs.map((el) => el.getAttribute("data-segment")!.split(":")[0])).toEqual(["healthy", "outage"]);
     expect(parseFloat(segs[0].style.flexGrow) / parseFloat(segs[1].style.flexGrow)).toBeCloseTo(1, 1);
+  });
+
+  it("names its window beside the label: the caller's words, else the span it covers, never a fixed 30 days", () => {
+    const named = render(() => <HealthHistory now={t0} from={t0 - 3600_000} windowLabel="Last 1 hour" health="healthy" transitions={[]} />);
+    expect(named.container.textContent).toContain("Last 1 hour");
+    expect(named.container.textContent).not.toContain("30 days");
+    cleanup();
+    const spanned = render(() => <HealthHistory now={t0} from={t0 - 6 * 3600_000} health="healthy" transitions={[]} />);
+    expect(spanned.container.querySelector("[data-testid='history-window']")!.textContent).toBe(durationText(6 * 3600_000));
+    cleanup();
+    const plain = render(() => <HealthHistory now={t0} health="healthy" transitions={[]} />);
+    expect(plain.container.querySelector("[data-testid='history-window']")!.textContent).toBe("30 days");
   });
 
   it("with nothing carried in, starts at the first edge, as before", () => {

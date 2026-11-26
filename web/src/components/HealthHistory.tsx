@@ -61,6 +61,9 @@ export default function HealthHistory(props: {
   // What the bar's right end is called: "now" unless the window ended before
   // it (a custom range), when it names that end.
   endLabel?: string;
+  // The window's short name beside the label ("Last 1 hour"). Without it the
+  // strip names the span it covers from `from`, else the read's default.
+  windowLabel?: string;
 }) {
   // Pinned at setup unless the caller drives it, like the availability strip: a
   // strip whose "now" moved under it would re-weight every segment on an
@@ -85,6 +88,7 @@ export default function HealthHistory(props: {
   );
   const startLabel = () => (list().length && list()[0].to > list()[0].from ? fmtTime(new Date(list()[0].from).toISOString()) : undefined);
   const healthy = createMemo(() => share(list(), (v) => v === "healthy"));
+  const windowName = () => props.windowLabel ?? (props.from === undefined ? "30 days" : durationText(now() - props.from));
 
   return (
     <div class="flex flex-col gap-2">
@@ -94,7 +98,7 @@ export default function HealthHistory(props: {
       <Eyebrow
         label="History"
         hint={`One entry per change, never a sample: ${props.window ?? "the recorded edges over the last 30 days"}. This is what answers "when exactly did it go unhealthy", read back weeks later.`}
-        right={<Show when={!props.compact}><span class="shrink-0 text-[10.5px] text-base-content/40">30 days</span></Show>}
+        right={<Show when={!props.compact}><span data-testid="history-window" class="shrink-0 text-[10.5px] text-base-content/40">{windowName()}</span></Show>}
       />
 
       {/* In compact form the surface beside this strip owns the number (the
