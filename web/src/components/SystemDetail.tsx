@@ -209,7 +209,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     }),
   );
   const uptime = () => uptimeWindow().pct;
-  const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow()));
+  const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow(), health.data?.health));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
