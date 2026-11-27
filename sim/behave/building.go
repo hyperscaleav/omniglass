@@ -97,6 +97,8 @@ func BuildingDay(prev SignState, hours HoursReading, p SignParams) SignState {
 		}
 		next.Open = hours.Open
 	}
-	next.Content = p.Playlist[min(max(next.Index, 0), len(p.Playlist)-1)]
+	if len(p.Playlist) > 0 {
+		next.Content = p.Playlist[min(max(next.Index, 0), len(p.Playlist)-1)]
+	}
 	return next
 }

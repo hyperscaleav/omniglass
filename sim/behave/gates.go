@@ -48,7 +48,7 @@ func Gates(prev GateState, room calendar.RoomState, p GateParams, rng Source) Ga
 	}
 	next := GateState{Strips: make([]Strip, len(prev.Strips))}
 	for i, s := range prev.Strips {
-		on := room.Attendees > p.Opens[i]
+		on := i < len(p.Opens) && room.Attendees > p.Opens[i]
 		open := on && !s.Muted
 		next.Strips[i] = Strip{Muted: s.Muted, Gate: open}
 		if open {

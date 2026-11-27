@@ -61,7 +61,7 @@ func ContentSharing(prev ShareState, room calendar.RoomState, call CallSignals, 
 // sharing starts. It draws once, only then.
 func ContentSource(prev string, sharing bool, sources []string, rng Source) string {
 	switch {
-	case !sharing:
+	case !sharing || len(sources) == 0:
 		return ""
 	case prev != "":
 		return prev

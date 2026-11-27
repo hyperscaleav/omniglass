@@ -212,3 +212,19 @@ func TestOutletCurrentIsTheLevelOfTheGearForTheRoom(t *testing.T) {
 		t.Errorf("no calendar, off: %d", got)
 	}
 }
+
+// A family that hands a primitive fewer parameters than it has strips, items or
+// sources gets a shut strip and an empty reading, not a panic.
+func TestPrimitivesTolerateShortParameterLists(t *testing.T) {
+	prev := behave.GateState{Strips: []behave.Strip{{}, {}, {}, {}, {}}}
+	got := behave.Gates(prev, roomAt("10:20:00"), behave.DefaultGates, &stub{frac: 0.5})
+	if got.Strips[4].Gate || got.Active != 3 {
+		t.Errorf("a strip with no threshold: %+v", got)
+	}
+	if s := behave.BuildingDay(behave.SignState{}, behave.HoursReading{Known: true, Open: true}, behave.SignParams{Playing: "playing"}); s.Content != "" {
+		t.Errorf("an empty playlist read %q", s.Content)
+	}
+	if got := behave.ContentSource("", true, nil, never{t}); got != "" {
+		t.Errorf("no sources read %q", got)
+	}
+}
