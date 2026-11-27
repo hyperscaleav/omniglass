@@ -1,0 +1,73 @@
+name: release-please
+
+# The one release path (ADR-2652). On every push to main, release-please keeps
+# one release PR open, "chore(main): release 0.<n>.<p>", with the next version
+# and the notes, read from the squash-merged PR titles since the last release:
+# a feat or a breaking change bumps the minor before 1.0, a fix or perf the
+# patch (release-please-config.json). The release PR changes only version.txt
+# and .release-please-manifest.json; no CHANGELOG is committed.
+#
+# Merging the release PR is the release. On that push, release-please tags the
+# merge commit v0.<n>.<p> and creates the GitHub Release with the PR's notes,
+# and the release job below runs release.yml on the tag, which builds and
+# pushes the release image and attaches the binaries. A minor and a patch are
+# the same step. There are no release branches and no backports.
+#
+# It runs with the release App's token, never GITHUB_TOKEN: the "v* tags:
+# created by admins only" ruleset lets only admins and the App create tags,
+# and a PR opened with GITHUB_TOKEN starts no workflow, so the release PR's
+# required checks would never run (#1940). The App needs contents,
+# pull-requests and issues write (issues for the release PR's labels).
+#
+# Nothing runs until the repository variable RELEASES_ENABLED is `true`.
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    if: vars.RELEASES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - name: Mint the release App token
+        id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Open or update the release PR, or tag a merged one
+        id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  release:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write       # attach the binaries to the Release
+      packages: write       # push the release image to GHCR
+      issues: write         # the "Released in" comments on issues
+      pull-requests: write  # and on the PRs it ships
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit

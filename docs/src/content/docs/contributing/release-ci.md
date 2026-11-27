@@ -1,13 +1,13 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR, the release cut from a release branch, and the planned release-please cut from main."
+description: "The CI gates on every PR and the release cut from main by merging release-please's release PR."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
-validate locally, do not lean on CI). CI is the backstop, and the release workflow cuts each
-release from a release branch.
-Fourteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
-`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `regression-test`, `demo-prune`, `release`, and `goreleaser`.
+validate locally, do not lean on CI). CI is the backstop, and release-please cuts each
+release from `main`.
+Fifteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
+`docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `regression-test`, `demo-prune`, `release-please`, `release`, and `goreleaser`.
 The three agent workflows (`agent-build`, `agent-review`, `agent-fix`) run Claude Code agents
 on GitHub-hosted runners and have a page of their own, [Agents in CI](/contributing/agents-in-ci/).
 
@@ -31,12 +31,13 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
   (`make test-e2e`): the console driven as an operator would against the real binary, on a
   throwaway lab, covering the CRUD round-trips plus one smoke per console route from the
   route manifest, so a PR cannot merge with a route that errors in a real browser. All of these
-  jobs also run on `main` after merge and on every push to a release branch.
+  jobs also run on `main` after merge (and on a push to a `release/**` branch, a trigger left
+  from the release branches ADR-2652 retired).
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and a release's
   notes group it by its type. A malformed title would muddy the history and land in the
-  notes' Other changes, so it is blocked at the PR. The titles also pick the release line: `make release` reads their types to choose the next
-  release branch, and that branch then numbers the tags (see [cutting a release](#cutting-a-release-manual)).
+  notes' Other changes, so it is blocked at the PR. The titles also pick the version: release-please reads their types
+  to choose the next release's number (see [cutting a release](#cutting-a-release-manual)).
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
@@ -149,121 +150,64 @@ first commit.
 
 ## Cutting a release (manual)
 
-Releases are **not** cut on merge to `main`, and `main` never freezes for one. A release is cut
-from a **release branch**, `release/<major>.<minor>`, made from `main` on the day of the cut by
-`make release` (below), and there is exactly one way to cut one: dispatch the **release** workflow
-(`release.yml`) on that branch from its "Run workflow" button (#2139). A dispatch on any other ref fails at its
-first step.
+Releases are **not** cut on merge to `main`, and `main` never freezes for one. Every release, a
+minor or a patch, is cut from `main` by [release-please](https://github.com/googleapis/release-please)
+(ADR-2652), and there is exactly one way to cut one: merge the release PR.
 
-- **A candidate.** A dispatch tags the branch tip as the next candidate, `v0.1.0-rc.1`, and
-  publishes it as a GitHub prerelease with its image and binaries (below). From `1.0` on, that
-  candidate is what [the soak gate](#the-soak-gate) runs; a `0.x` candidate needs only the CI
-  its branch push already ran (ADR-2652).
-- **A fix.** A fix lands on `main` first, by its own PR, and reaches the branch by a cherry-pick
-  PR into `release/<major>.<minor>`. The next dispatch tags `rc.2`, and from `1.0` on its soak
-  starts over.
-- **The release.** Once a candidate is ready (its branch push's CI green; from `1.0` on, its
-  soak passed too), a dispatch with **final** ticked tags that same commit `v0.1.0`, a full
-  release. It is refused unless the commit is the newest candidate, so what ships is exactly what
-  was tested.
-- **A patch.** The branch lives on: after `v0.1.0`, the next candidate is `v0.1.1-rc.1`.
+- **The release PR.** On every push to `main`, `release-please.yml` keeps one PR open,
+  `chore(main): release 0.<n>.<p>`, holding the next version and that release's notes, and
+  updates it as more PRs merge. It changes only `version.txt` and
+  `.release-please-manifest.json`; no CHANGELOG is ever committed.
+- **The release.** Merging the release PR, through the queue like any other, is the release:
+  on that push, release-please tags the merge commit `v0.<n>.<p>` and creates the GitHub Release
+  with the PR's notes, and `release.yml` then builds the image and attaches the binaries
+  ([below](#binaries-on-the-release)). Cut one whenever the work calls for one, roughly weekly;
+  the open PR is the reminder.
+- **No release branches, no backports.** Releases go forward only. A fix lands on `main` by its
+  own PR and ships in the next release; an older line takes no patches.
+- **No candidates before 1.0.** A `0.x` release is the merge commit `main` already ran its full
+  CI and the merge queue on. How a `1.0` candidate is cut for [the soak](#the-soak-gate) is
+  decided before `1.0`.
 
-**Which branch to cut is not a judgment call.** `make release` reads the PR titles squash-merged
-on `main` since the newest release line branched and picks the branch for you (`cmd/release`,
-#2711):
+**The version is not a judgment call.** release-please reads the PR titles squash-merged on
+`main` since the last release (`release-please-config.json`):
 
 - **A breaking change** (a `!` after the type, or a `BREAKING CHANGE:` footer) bumps the
-  **minor** while the major is 0, and the major from 1.0 on. Before 1.0 nothing ever numbers a
-  release `1.0.0`.
-- **A `feat`** bumps the minor: the next line, `release/0.2` after `release/0.1`.
-- **A `fix` or `perf`** bumps the patch. A patch opens no branch, because it is a cherry-pick onto
-  the line's existing branch; `make release` lists the fixes on `main` that branch does not carry
-  yet, oldest first.
-- **Anything else alone** (`docs`, `ci`, `chore`, `refactor`, `test`) releases nothing.
+  **minor** while the version is below `1.0.0` (`bump-minor-pre-major`).
+- **A `feat`** bumps the minor, and **a `fix` or `perf`** the patch.
+- **Anything else alone** (`docs`, `ci`, `chore`, `refactor`, `test`) releases nothing, and opens
+  no release PR.
+- **`1.0` is set on purpose**, by a `release-as` in the config in the PR that cuts it, never by a
+  commit.
 
-It prints the version, the commits that drove the bump, the tag the first dispatch on the branch
-cuts, and the full release notes, then asks before it creates `release/<major>.<minor>` at
-`main`'s tip on `origin`. It never dispatches the workflow and never touches `RELEASES_ENABLED`.
-
-```bash
-make release DRY_RUN=1   # preview only
-make release             # preview, then ask before creating the branch
-make release YES=1       # create it without asking
-```
-
-From there the tag a dispatch cuts comes from the branch name and the tags already cut
-(`cmd/releaseversion`), never from commit subjects: the commits pick the line, and the line
-numbers its candidates and its patches.
-
-**The notes** cover every commit since the previous final release, so a candidate's notes are
-cumulative, and group each PR title by its type (`cmd/releasenotes`, #2142): Breaking changes
-(a `!` after the type, or a `BREAKING CHANGE:` footer), Features (`feat`), Fixes (`fix`),
-Performance (`perf`), then Other changes, with a compare link to the previous final release. A
-`dry_run` dispatch shows them in the run's summary. To preview them locally:
+**The notes** group each PR title by its type: Breaking changes, Features (`feat`), Fixes
+(`fix`), Performance (`perf`), and Reverts; the other types are left out. They are the release
+PR's body until it merges, and the Release's body after. To preview them locally for any range:
 
 ```bash
-go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0-rc.1 -previous v0.0.0
+go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0 -previous v0.0.0
 ```
 
-**A final release comments** "Released in" with a link to the Release on each PR it ships and
-each issue that PR closed, once per release. Candidates comment nothing. A release that ships
-more than 100 PRs, as the first does, skips the comments and says so in the run's summary.
-
-Every push to a release branch runs the same CI as `main` (`test`, `image`, `gen-drift`,
-`migrations`, `docs-build`, `docs-shots`), and `image` publishes the commit's sha image, so a
-candidate has had the full CI before it is tagged. A pull request into the branch runs the
-per-PR gates as one into `main` does.
+**A release comments** "Released in" with a link to the Release on each PR it ships and each
+issue that PR closed, once per release. A release that ships more than 100 PRs, as the first
+does, skips the comments and says so in the run's summary.
 
 **Releasing is switched off** until the repository variable `RELEASES_ENABLED` is `true`
-(Settings, Secrets and variables, Actions, Variables). While it is unset, a dispatch can only
-plan: the `dry_run` toggle works, and a dispatch without it fails at its first step, before any
-tag. Every publishing step checks the flag too, so nothing reaches the tag, the Release, or
-GHCR until it is flipped (#1940).
+(Settings, Secrets and variables, Actions, Variables). While it is unset, `release-please.yml`
+does nothing on a push to `main`, and `release.yml` refuses to run, so nothing reaches a tag, a
+Release, or GHCR until it is flipped (#1940).
 
-**The tag is pushed by the release App.** The `v* tags: created by admins only` ruleset refuses
-the workflow's own `GITHUB_TOKEN`, so the workflow mints a token from a dedicated release GitHub
-App, the one bypass on that ruleset, when the variable `RELEASE_APP_CLIENT_ID` and the secret
-`RELEASE_APP_PRIVATE_KEY` are set. Without them it pushes with `GITHUB_TOKEN`, and the push is
-refused (#1940). A `dry_run` dispatch mints the App's token too and reports it in the run's
-summary, so a wrong client id, key or permission fails a dry run, not the first candidate
-(#2147). Only a real tag push exercises the App's bypass on the ruleset. To try a dry run before
-the real cut, an admin can create a throwaway release branch such as `release/0.0`, dispatch on
-it with `dry_run`, and delete it. Release branches themselves are protected like `main` by a `release/*`
-ruleset: pull requests only, the same required checks, no force-push or deletion.
+**It runs with the release App's token.** `release-please.yml` mints a token from the release
+GitHub App (the variable `RELEASE_APP_CLIENT_ID` and the secret `RELEASE_APP_PRIVATE_KEY`), with
+contents, pull-request and issue write, and release-please opens the PR and creates the tag and the
+Release with it. `GITHUB_TOKEN` would not do: the `v* tags: created by admins only` ruleset lets
+only admins and the App create tags, and a PR opened with `GITHUB_TOKEN` starts no workflow, so the
+release PR's required checks would never run. release-please marks its PR with two labels of its
+own, `autorelease: pending` and `autorelease: tagged`, which it reads to find the PR to tag.
 
-To preview the next tag locally, from the release branch:
-
-```bash
-make release-plan            # the tag the next dispatch cuts
-make release-plan FINAL=1    # the final release of the newest candidate
-```
-
-No changelog is ever committed back, so a release never writes to `main` or the branch. The
-notes live on the GitHub Release.
-
-## Cutting a release with release-please
-
-The branch-per-minor cut above is what the release workflow does today. It is to be replaced by
-release-please on `main`, one process for a minor and a patch (ADR-2652):
-
-:::design[Target design: release-please on main, tracked in #2652]
-- **A standing release PR.** On every push to `main`, the release-please workflow keeps one PR
-  open, `chore(main): release 0.<n>.<p>`, with the next version and the notes, read from the
-  squash-merged PR titles since the last release. It changes only `version.txt` and
-  `.release-please-manifest.json`; no CHANGELOG is committed.
-- **Merging it is the release.** release-please tags the merge commit and creates the GitHub
-  Release with the PR's notes, and the same run builds the image, attaches the binaries and
-  comments "Released in" on the PRs it ships. A minor and a patch are the same step.
-- **The commits pick the version.** A `feat` or a breaking change bumps the minor before `1.0`
-  (`bump-minor-pre-major`), a `fix` or `perf` the patch. `1.0` is a `release-as` set on purpose,
-  with [the soak](#the-soak-gate).
-- **Forward only.** No release branches and no backports: a fix ships in the next release.
-- **The release App's token.** The workflow runs with it, so the tag ruleset holds, the release
-  PR's checks run, and the created release starts the build. It does nothing while
-  `RELEASES_ENABLED` is off (#1940).
-- **Retired.** The release branches, the cut-by-dispatch, `make release`, `make release-plan`,
-  `cmd/release` and `cmd/releaseversion`.
-:::
+**A failed build is rerun by hand.** The tag and the Release exist before `release.yml` starts, so
+a release whose image or binaries failed is built again by dispatching **release** with its tag
+(`v0.1.0`); it refuses a tag with no Release.
 
 Until `1.0`, Omniglass is pre-production software: breaking changes can land in any release,
 without notice, and it is not for production use. The README and the docs home page say so, and
@@ -272,15 +216,16 @@ every release's notes will too; the notice comes off in the PR that cuts `1.0`.
 ## The soak gate
 
 From `1.0` on, no final release ships unless the build has run a week under the 3,000-system
-corporate soak without failing silently (#1988). A `0.x` final needs no soak record (ADR-2652):
-the soak can still be run on a `0.x` candidate by choice, and its record is committed the same
-way. The soak is run by hand on a test host, never a CI job: a
-week-long run on a dedicated machine does not belong on a runner, and its scheduling is not
-automated. The steps, between a candidate and its final release:
+corporate soak without failing silently (#1988). A `0.x` release needs no soak record (ADR-2652):
+a `0.x` build can still be soaked by choice, and its record is committed the same way. The soak
+is run by hand on a test host, never a CI job: a week-long run on a dedicated machine does not
+belong on a runner, and its scheduling is not automated. The steps, between a candidate and its
+final release:
 
-1. Cut the candidate ([above](#cutting-a-release-manual)), which publishes its image and binary
-   from one commit, and start the soak on the test host with that `v<version>-rc.<n>` build, as
-   the [soak run](/developer/lab/#a-soak-run) describes. Note the time it starts.
+1. Start the soak on the test host with the build under test, as the
+   [soak run](/developer/lab/#a-soak-run) describes, and note the time it starts. Before `1.0`,
+   that is any released `0.x` build; how a `1.0` candidate is cut from `main` is decided before
+   `1.0` (ADR-2652).
 2. Leave it for 7 days.
 3. Judge it, from any machine that reaches the soak's server, with a token that reads outposts,
    systems and components over everything:
@@ -331,22 +276,20 @@ machine id, never the id), which on a soak host is the machine the soak ran on.
 
 ## Binaries on the release
 
-The release workflow cuts the tag and the Release; the same job then builds and pushes the
+release-please cuts the tag and the Release; `release.yml` then builds and pushes the
 multi-platform release image to GHCR, and [GoReleaser](https://goreleaser.com/) fills the
 Release with the cross-platform binaries, each stamped with that image's digest so a release
 binary's `omniglass lab run` pulls exactly the image it was released with
 ([ADR-1257](/architecture/decisions/#adr-1257-a-release-binary-pulls-its-lab-image-by-the-digest-stamped-at-release)).
-The workflow owns the version and the notes, GoReleaser only builds artifacts and attaches
-them (its `release.mode: keep-existing` leaves the notes untouched, and `prerelease: auto` keeps
-a candidate a prerelease). The matrix is `linux/amd64`,
+release-please owns the version and the notes, GoReleaser only builds artifacts and attaches
+them (its `release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus a `checksums.txt`
 and an SBOM per archive. Because the binary is pure Go with CGO disabled, all of it
 cross-compiles from one runner; the SPA is built once by a `before` hook (`make web`) and
 embedded in every target via `-tags web`.
 
-No workflow runs on a tag push, so the image and the binaries are built inline in
-`release.yml` rather than by a tag-triggered workflow; a `v*` tag pushed any other way builds
-nothing. Validate a config change locally
+No workflow runs on a tag push: `release-please.yml` calls `release.yml` on the tag it just
+created, so a `v*` tag pushed any other way builds nothing. Validate a config change locally
 with `make release-snapshot` (builds the whole matrix, no tag, no publish), and
 `goreleaser.yml` runs the same snapshot on any pull request that touches the release config,
 uploading the archives as downloadable workflow artifacts. A green PR snapshot is real

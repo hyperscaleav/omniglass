@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "skip-changelog": true,
+  "include-component-in-tag": false,
+  "bootstrap-sha": "11e95be269122deb854bb0c439d6bb4fb705be7a",
+  "pull-request-header": "Merging this PR is the release: it tags the merge commit and publishes the Release, its image and its binaries (ADR-2652).",
+  "pull-request-footer": "demo: none (a release PR changes only the version files)",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "revert", "section": "Reverts" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "chore", "section": "Chores", "hidden": true },
+    { "type": "refactor", "section": "Refactors", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true }
+  ],
+  "packages": {
+    ".": {}
+  }
+}

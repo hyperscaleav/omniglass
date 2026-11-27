@@ -98,8 +98,8 @@ cd .claude/worktrees/<type>+<short-name>
 - Squash-merge, through the merge queue: the architect queues a green PR and the queue reruns
   the required checks on top of `main` before it merges
   ([release CI](docs/src/content/docs/contributing/release-ci.md#merging-through-the-queue)).
-  Releases are cut from a `release/<major>.<minor>` branch, whose name sets the version; a fix
-  reaches a release branch by cherry-pick from `main`.
+  Releases are cut from `main` by merging release-please's release PR; the PR titles' types set
+  the version. No release branches and no backports: a fix ships in the next release.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 
