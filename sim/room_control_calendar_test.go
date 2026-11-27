@@ -210,7 +210,7 @@ func TestSwitcherRoutesTheMeetingAndAgreesWithTheBar(t *testing.T) {
 	at := day
 	room := roomEngine(t, seed, k, &at, "meridian-mx-84", "kestrel-vroom")
 	sw, bar := room["meridian-mx-84"], room["kestrel-vroom"]
-	var conf, laptop, idle, noShow int
+	var conf, laptop, idle, noShow, sharedMinutes int
 	for at = day; at.Before(day.Add(24 * time.Hour)); at = at.Add(time.Minute) {
 		sw.TickBehavior("room_meeting")
 		sw.TickBehavior("signal_follow")
@@ -243,10 +243,16 @@ func TestSwitcherRoutesTheMeetingAndAgreesWithTheBar(t *testing.T) {
 		if sig := fmt.Sprint(sw.ReadPath("status.switcher.signal")); sig != wantSignal {
 			t.Fatalf("%s: signal %q on %q, want %q", at.Format("15:04"), sig, got, wantSignal)
 		}
-		// Content the bar shares comes from a call the switcher is routing.
-		if bar.ReadPath("status.presentation.local_active") == true && got == routeIdle {
-			t.Fatalf("%s: the bar shares content with the switcher idle", at.Format("15:04"))
+		// The bar shares content exactly while the switcher routes the laptop.
+		if shared := bar.ReadPath("status.presentation.local_active") == true; shared != (got == routeLaptop) {
+			t.Fatalf("%s: the bar shares content %v and the switcher routes %q", at.Format("15:04"), shared, got)
 		}
+		if got == routeLaptop {
+			sharedMinutes++
+		}
+	}
+	if sharedMinutes == 0 || sharedMinutes != laptop {
+		t.Fatalf("the bar and switcher agreed on %d sharing minutes of %d", sharedMinutes, laptop)
 	}
 	if conf == 0 || laptop == 0 || idle == 0 || noShow == 0 {
 		t.Fatalf("the day sampled %d conferencing, %d laptop, %d idle, %d no-show minutes; want all", conf, laptop, idle, noShow)

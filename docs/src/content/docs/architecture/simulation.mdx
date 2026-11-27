@@ -473,8 +473,9 @@ Devices that read the calendar:
   room is in a call; an operator's route inside a meeting holds until the meeting asks for another. The
   extender carries a signal exactly while a meeting is held, its link staying the cable's. `roomInUse` and
   `meetingSharing` are the two readings the room's devices share. A device whose room has no calendar keeps
-  its previous state. The bar's own content sharing is still its own random draw, not yet the sharing
-  stretch the panel and switcher read.
+  its previous state. The bar's and the codec's content sharing is the same stretch (`meetingSharing`), so
+  the switcher is on the laptop input exactly while the bar shares; a bar in a room with no calendar, or
+  in a call someone dialed, keeps its own random draw.
 
 ### A simulated service posts from the start
 

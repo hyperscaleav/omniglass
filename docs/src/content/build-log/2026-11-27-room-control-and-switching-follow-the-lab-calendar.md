@@ -10,5 +10,6 @@ the last macro it ran (start-meeting as the room goes on, end-meeting as it goes
 wakes and changes page (idle, in-call, sharing), the switcher routes the conferencing input or the laptop while
 content is shared and parks on the empty input between meetings, and the extender carries a signal while a meeting
 is held. Two new template functions, `roomInUse` and `meetingSharing`, are the readings these share. A device in a
-room with no calendar keeps its previous state. The bar's content sharing remains its own draw; moving it onto
-`meetingSharing` is a follow-up.
+room with no calendar keeps its previous state. The video bar's and the codec's content sharing now read `meetingSharing` in a room with a
+calendar (a dialed call and a room with none keep the random draw), so the switcher's laptop input and the bar's
+sharing agree.
