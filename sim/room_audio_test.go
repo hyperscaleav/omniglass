@@ -33,6 +33,7 @@ func audioKnobs() calendar.Knobs {
 // audioRig is an engine of one room's calendar holding one device of the
 // profile, its clock the rig's own.
 type audioRig struct {
+	eng *Engine
 	cal *calendar.Calendar
 	dev *Device
 	at  time.Time
@@ -53,7 +54,7 @@ func newAudioRig(t *testing.T, profileName string, seed int64, k calendar.Knobs)
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}
-	r := &audioRig{cal: cal, dev: e.Devices()[0]}
+	r := &audioRig{eng: e, cal: cal, dev: e.Devices()[0]}
 	r.dev.SetClock(func() time.Time { return r.at })
 	return r
 }
@@ -174,7 +175,7 @@ func TestTheWirelessMicTransmitsInMeetingsAndItsBatteryFollowsTheCalendar(t *tes
 	r := newAudioRig(t, "lyra-hx-1", seed, k)
 	for m := 0; m < 24*60; m++ {
 		at := day.Add(time.Duration(m) * time.Minute)
-		r.tick(t, at, "call_state", "level_drift", "battery_charge")
+		r.tick(t, at, "call_state", "level_drift", "battery_drain")
 		if _, use := occupied(r.cal, at); r.is("status.mic.transmitting") != use {
 			t.Fatalf("%s: transmitting = %v, in use = %v", at.Format("15:04"), !use, use)
 		}
@@ -189,7 +190,7 @@ func TestTheWirelessMicTransmitsInMeetingsAndItsBatteryFollowsTheCalendar(t *tes
 		// nothing accumulated in the first.
 		if m%120 == 0 {
 			r2 := newAudioRig(t, "lyra-hx-1", seed, k)
-			r2.tick(t, at, "battery_charge")
+			r2.tick(t, at, "battery_drain")
 			if a, b := r.f(t, "status.mic.battery_percent"), r2.f(t, "status.mic.battery_percent"); a != b {
 				t.Fatalf("%s: a fresh pack reads %v, the running one %v", at.Format("15:04"), b, a)
 			}
@@ -236,7 +237,7 @@ func TestTheWirelessBatteryFallsInUseAndRecoversBetweenMeetingsOverAWeek(t *test
 	lowest := 100.0
 	for m := 0; m < 7*24*60; m++ {
 		at := day.Add(time.Duration(m) * time.Minute)
-		r.tick(t, at, "battery_charge")
+		r.tick(t, at, "battery_drain")
 		b := r.f(t, "status.mic.battery_percent")
 		_, use := occupied(r.cal, at)
 		if m > 0 {
@@ -273,7 +274,7 @@ func TestANoShowRoomsAudioStaysIdle(t *testing.T) {
 	}
 	for m := 0; m < 24*60; m += 5 {
 		at := day.Add(time.Duration(m) * time.Minute)
-		hx.tick(t, at, "call_state", "battery_charge")
+		hx.tick(t, at, "call_state", "battery_drain")
 		arc.tick(t, at, "call_state", "level_drift")
 		dsp.tick(t, at, "room_signal")
 		amp.tick(t, at, "output_drift", "temperature_drift")
@@ -446,5 +447,64 @@ func TestMeetingsBetweenReadsTheRoomsWindowOffTheCalendar(t *testing.T) {
 	e.SetCalendar(nil)
 	if got := stampBehavior(t, d, expr); fmt.Sprint(got) != "0" {
 		t.Fatalf("with no calendar meetingsBetween holds %v", got)
+	}
+}
+
+// A device whose room holds no calendar, the dev fleet's with no world file,
+// or one whose scenario declares no meetings for it, keeps the drift it had
+// before it read one: the mics walk their level inside -70 to -20 and the
+// pack loses a tenth of a percent a minute, the DSP's strips stay as
+// declared, the amplifier drifts its outputs through -40 to -6 and carries
+// no signal flag. Nothing is idle-forced, nothing is derived.
+func TestAudioWithNoCalendarKeepsItsEarlierBehavior(t *testing.T) {
+	at := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	for _, mode := range []string{"no calendar", "no knobs for the room"} {
+		rig := func(name string) *audioRig {
+			r := newAudioRig(t, name, 3, audioKnobs())
+			if mode == "no calendar" {
+				r.eng.SetCalendar(nil)
+			} else {
+				r.eng.SetCalendar(calendar.New(3, func(calendar.Room) (calendar.Knobs, bool) { return calendar.Knobs{}, false }))
+			}
+			return r
+		}
+		hx := rig("lyra-hx-1")
+		start := hx.f(t, "status.mic.battery_percent")
+		for i := 0; i < 10; i++ {
+			hx.tick(t, at, "level_drift", "call_state", "battery_drain")
+			if l := hx.f(t, "status.mic.level_db"); l < -70 || l > -20 {
+				t.Fatalf("%s: level %v outside -70 to -20", mode, l)
+			}
+		}
+		if b := hx.f(t, "status.mic.battery_percent"); math.Abs(start-b-1.0) > 1e-9 || hx.is("status.mic.transmitting") {
+			t.Errorf("%s: battery %v from %v (want 1.0 less), transmitting %v", mode, b, start, hx.is("status.mic.transmitting"))
+		}
+		arc := rig("lyra-arc-a2")
+		arc.tick(t, at, "level_drift", "call_state")
+		if arc.is("status.mic.active") || arc.is("status.mic.mute") {
+			t.Errorf("%s: the array moved its flags with no calendar", mode)
+		}
+		dsp := rig("polaris-dsp-16")
+		dsp.tick(t, at, "room_signal")
+		if n := dsp.f(t, "status.dsp.active_channels"); n != 8 {
+			t.Errorf("%s: active_channels %v, declared 8", mode, n)
+		}
+		for i, want := range []float64{-42, -38, -45, -50} {
+			if p := dsp.f(t, fmt.Sprintf("status.channels.%d.peak_db", i)); p != want || dsp.is(fmt.Sprintf("status.channels.%d.gate", i)) {
+				t.Errorf("%s: strip %d peak %v gate %v, declared %v shut", mode, i, p, dsp.is(fmt.Sprintf("status.channels.%d.gate", i)), want)
+			}
+		}
+		amp := rig("polaris-amp-4100")
+		for i := 0; i < 20; i++ {
+			amp.tick(t, at, "output_drift", "temperature_drift")
+		}
+		if amp.is("status.amp.signal_present") {
+			t.Errorf("%s: the amplifier flags signal with no calendar", mode)
+		}
+		for i := 0; i < 4; i++ {
+			if o := amp.f(t, fmt.Sprintf("status.channels.%d.output_db", i)); o < -40 || o > -6 {
+				t.Errorf("%s: channel %d at %v, outside the earlier -40 to -6 drift", mode, i, o)
+			}
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"testing"
 	"time"
@@ -142,10 +143,9 @@ func TestLyraMicsServeMuteAndLevel(t *testing.T) {
 	}
 }
 
-// TestLyraMicBehaviors: with no meeting in the room (this device has no
-// calendar) the input level sits within its noise floor on each tick and
-// the wireless system's pack, never in use, stays full. What the mics do
-// inside a meeting is room_audio_test.go's.
+// TestLyraMicBehaviors: the input level moves within a talker's band on
+// each tick; the wireless system's battery drains a tenth of a percent a
+// tick, exactly.
 func TestLyraMicBehaviors(t *testing.T) {
 	d := startLyra(t, "lyra-hx-1")
 	tick := func(name string) {
@@ -172,12 +172,15 @@ func TestLyraMicBehaviors(t *testing.T) {
 	}
 	for i := 0; i < 20; i++ {
 		tick("level_drift")
-		if l := read("status.mic.level_db"); l < -72 || l > -66 {
-			t.Fatalf("level after %d ticks = %v, outside the noise floor -72 to -66", i+1, l)
+		if l := read("status.mic.level_db"); l < -70 || l > -20 {
+			t.Fatalf("level after %d ticks = %v, outside -70 to -20", i+1, l)
 		}
 	}
-	tick("battery_charge")
-	if b := read("status.mic.battery_percent"); b != 100 {
-		t.Errorf("battery of a pack nobody used = %v, want 100", b)
+	start := read("status.mic.battery_percent")
+	for i := 0; i < 10; i++ {
+		tick("battery_drain")
+	}
+	if b := read("status.mic.battery_percent"); math.Abs(start-b-1.0) > 1e-9 {
+		t.Errorf("battery after ten minutes = %v from %v, want 1.0 less", b, start)
 	}
 }

@@ -33,6 +33,7 @@ func (d *Device) Room() calendar.Room { return d.room }
 //
 //	meetingNow            -> the meeting in the device's own room now, nil when none
 //	meetingNext           -> the room's next meeting after now, nil when none
+//	hasCalendar           -> whether the device's room holds a calendar at all
 //	meetingsBetween a b   -> the room's meetings overlapping [a, b) (unix seconds), in start order
 //	roomMeetingNow s b r  -> the same for the room site s, building b, room r
 //	roomMeetingNext s b r
@@ -98,6 +99,7 @@ func (d *Device) calendarFuncs() template.FuncMap {
 			return out
 		},
 		"meetingsBetween": d.meetingsBetween,
+		"hasCalendar":     d.hasCalendar,
 		"meetingNow":      func() map[string]any { return read(d.room, false) },
 		"meetingNext":     func() map[string]any { return read(d.room, true) },
 		"roomMeetingNow": func(site, building, room string) map[string]any {

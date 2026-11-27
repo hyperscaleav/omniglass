@@ -76,8 +76,8 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The mic follows the room's meeting off the lab calendar (#2774), read
-# through the device clock: it is active while someone is in the room (a
+# With a calendar for its room, the mic follows the room's meeting (#2774),
+# read through the device clock; with none it drifts as it always has. It is it is active while someone is in the room (a
 # no-show holds its slot with nobody in it, so the room is not in use), and
 # idle between meetings. Mute moves now and then inside a call, a draw of the
 # device's own, and is left as it is between meetings, so a mute an operator
@@ -89,9 +89,9 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.mic.active
-        value: '{{ with meetingNow }}{{ gt .actual 0 }}{{ else }}false{{ end }}'
+        value: '{{ if not hasCalendar }}{{ .State.status.mic.active }}{{ else }}{{ with meetingNow }}{{ gt .actual 0 }}{{ else }}false{{ end }}{{ end }}'
       - path: status.mic.mute
-        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}'
+        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ if not hasCalendar }}{{ $m }}{{ else }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ end }}'
 
   # The input level rides speech where it hears: it walks within a talker's
   # range while the room is in use and the mic open, and sits at its noise
@@ -101,7 +101,7 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.mic.level_db
-        value: '{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -70.0 -20.0 (randStep 4.0 .State.status.mic.level_db)) }}{{ else }}{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}{{ end }}'
 
 defaults:
   status:
@@ -109,7 +109,7 @@ defaults:
       boot_epoch: 0
     mic:
       mute: false
-      level_db: -69
+      level_db: -42
       active: false
     network:
       ipv4:

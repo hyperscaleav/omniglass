@@ -10,7 +10,7 @@
 # It reads its room's meeting off the lab calendar (#2774): the pack
 # transmits while the room is in use, and its battery is a pure function of
 # the calendar, draining in use and recharging between meetings, so the
-# charge reads the same at any instant on any run (battery_charge). Noise:
+# charge reads the same at any instant on any run (battery_drain). Noise:
 # the level's walk and which moment a mute toggles.
 
 name: lyra-hx-1
@@ -78,8 +78,8 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The mic follows the room's meeting off the lab calendar (#2774), read
-# through the device clock: it is transmitting while someone is in the room (a
+# With a calendar for its room, the mic follows the room's meeting (#2774),
+# read through the device clock; with none it drifts as it always has. It is it is transmitting while someone is in the room (a
 # no-show holds its slot with nobody in it, so the room is not in use), and
 # idle between meetings. Mute moves now and then inside a call, a draw of the
 # device's own, and is left as it is between meetings, so a mute an operator
@@ -91,9 +91,9 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.mic.transmitting
-        value: '{{ with meetingNow }}{{ gt .actual 0 }}{{ else }}false{{ end }}'
+        value: '{{ if not hasCalendar }}{{ .State.status.mic.transmitting }}{{ else }}{{ with meetingNow }}{{ gt .actual 0 }}{{ else }}false{{ end }}{{ end }}'
       - path: status.mic.mute
-        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}'
+        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ if not hasCalendar }}{{ $m }}{{ else }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ end }}'
 
   # The input level rides speech where it hears: it walks within a talker's
   # range while the room is in use and the mic open, and sits at its noise
@@ -103,22 +103,24 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.mic.level_db
-        value: '{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -70.0 -20.0 (randStep 4.0 .State.status.mic.level_db)) }}{{ else }}{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}{{ end }}'
 
-  # The transmitter's battery is the calendar's, not a walk: it drains in
-  # use (0.4 percent a minute, about four hours from full) and recharges on
-  # its dock between meetings (0.8 percent a minute, about two hours from
-  # empty). Each tick it is computed over the 48 hours before now, full at
-  # the start of that window, from the room's meetings alone, so the charge
-  # at an instant is the same on every run and for every device of the
-  # room, with nothing accumulated in the device. A no-show drains nothing.
-  # A scenario pins this path to make a pack die (#2769).
-  - name: battery_charge
+  # The transmitter's battery. Without a calendar it drains a tenth of a
+  # percent a minute, as it always has. With one it is the calendar's, not a
+  # walk: it drains in use (0.4 percent a minute, about four hours from full)
+  # and recharges on its dock between meetings (0.8 percent a minute, about
+  # two hours from empty). Each tick it is computed over the 48 hours before
+  # now, full at the start of that window, from the room's meetings alone, so
+  # the charge at an instant is the same on every run and for every device of
+  # the room, with nothing accumulated in the device. A no-show drains
+  # nothing. A scenario pins this path to make a pack die (#2769).
+  - name: battery_drain
     schedule:
       interval: 60s
     mutations:
       - path: status.mic.battery_percent
         value: >-
+          {{- if not hasCalendar -}}{{- round 1 (clamp 0.0 100.0 (sub .State.status.mic.battery_percent 0.1)) -}}{{- else -}}
           {{- $t1 := now -}}{{- $t0 := sub $t1 172800 -}}{{- $cur := $t0 -}}{{- $lvl := 100.0 -}}
           {{- $drain := div 0.4 60.0 -}}{{- $charge := div 0.8 60.0 -}}
           {{- range meetingsBetween $t0 $t1 -}}
@@ -130,7 +132,7 @@ behaviors:
           {{- $lvl = clamp 0.0 100.0 (sub $lvl (mul $drain (sub $e $s))) -}}
           {{- $cur = $e -}}
           {{- end -}}{{- end -}}{{- end -}}
-          {{- round 1 (clamp 0.0 100.0 (add $lvl (mul $charge (sub $t1 $cur)))) -}}
+          {{- round 1 (clamp 0.0 100.0 (add $lvl (mul $charge (sub $t1 $cur)))) -}}{{- end -}}
 
 defaults:
   status:
@@ -138,9 +140,9 @@ defaults:
       boot_epoch: 0
     mic:
       mute: false
-      level_db: -69
+      level_db: -42
       transmitting: false
-      battery_percent: 100.0
+      battery_percent: 78.0
     network:
       ipv4:
         address: ""

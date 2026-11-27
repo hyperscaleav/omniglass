@@ -26,3 +26,16 @@ func (d *Device) meetingsBetween(from, to int64) []map[string]any {
 	}
 	return out
 }
+
+// hasCalendar says whether the device's room holds a calendar: the engine has
+// one and the scenario declared meetings for the room. A device with none
+// (the dev fleet has no world file) keeps the drift it had before it read a
+// calendar; one with a calendar follows it, an empty room included.
+func (d *Device) hasCalendar() bool {
+	c := d.calendarSrc()
+	if c == nil {
+		return false
+	}
+	_, ok := c.Hours(d.room)
+	return ok
+}

@@ -135,7 +135,7 @@ behaviors:
       interval: 60s
     mutations:
       - path: status.amp.temperature
-        value: '{{ $t := round 3 .State.status.amp.temperature }}{{ $to := 36.0 }}{{ with meetingNow }}{{ if and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ $to = 46.0 }}{{ end }}{{ end }}{{ sigfig 3 (clamp 34.0 52.0 (add (randStep 0.3 $t) (mul 0.15 (sub $to $t)))) }}'
+        value: '{{ if not hasCalendar }}{{ sigfig 3 (clamp 34.0 52.0 (randStep 1.0 .State.status.amp.temperature)) }}{{ else }}{{ $t := round 3 .State.status.amp.temperature }}{{ $to := 36.0 }}{{ with meetingNow }}{{ if and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ $to = 46.0 }}{{ end }}{{ end }}{{ sigfig 3 (clamp 34.0 52.0 (add (randStep 0.3 $t) (mul 0.15 (sub $to $t)))) }}{{ end }}'
 
   - name: fan_drift
     schedule:
@@ -149,15 +149,15 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.amp.signal_present
-        value: '{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ $live }}'
+        value: '{{ if not hasCalendar }}{{ .State.status.amp.signal_present }}{{ else }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ $live }}{{ end }}'
       - path: status.channels.0.output_db
-        value: '{{ $v := round 3 (index .State.status.channels 0 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -24.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 0 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 0 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -24.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
       - path: status.channels.1.output_db
-        value: '{{ $v := round 3 (index .State.status.channels 1 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -24.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 1 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 1 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -24.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
       - path: status.channels.2.output_db
-        value: '{{ $v := round 3 (index .State.status.channels 2 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -27.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 2 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 2 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -27.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
       - path: status.channels.3.output_db
-        value: '{{ $v := round 3 (index .State.status.channels 3 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -27.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 3 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 3 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -27.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
 
 defaults:
   status:
@@ -173,10 +173,10 @@ defaults:
     # table, as an amplifier's front panel numbers them. Each drives a
     # ceiling-speaker zone; 8 ohms is a healthy zone's load.
     channels:
-      - { index: 0, name: "Zone 1", output_db: -90, clip: false, load_ohms: 8 }
-      - { index: 1, name: "Zone 2", output_db: -90, clip: false, load_ohms: 8 }
-      - { index: 2, name: "Zone 3", output_db: -90, clip: false, load_ohms: 8 }
-      - { index: 3, name: "Zone 4", output_db: -90, clip: false, load_ohms: 8 }
+      - { index: 0, name: "Zone 1", output_db: -18, clip: false, load_ohms: 8 }
+      - { index: 1, name: "Zone 2", output_db: -18, clip: false, load_ohms: 8 }
+      - { index: 2, name: "Zone 3", output_db: -21, clip: false, load_ohms: 8 }
+      - { index: 3, name: "Zone 4", output_db: -21, clip: false, load_ohms: 8 }
     network:
       ipv4:
         address: ""

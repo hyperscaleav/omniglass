@@ -449,7 +449,7 @@ behaviors:
         value: "{{ round 1 (clamp -40.0 -6.0 (randStep 3.0 .State.status.output.level_db)) }}"
 
   # The room's talkers, off the lab calendar (#2774) through the device
-  # clock: the four table and ceiling strips open a gate for every two
+  # clock, for a room that has one (without, the strips stay as declared): the four table and ceiling strips open a gate for every two
   # attendees actually in the room (a no-show opens none), each open gate's
   # peak rises with the head count, and a shut gate sits at the noise
   # floor; active_channels is the count of open gates. A strip an operator
@@ -459,23 +459,23 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.dsp.active_channels
-        value: '{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ end }}{{ $g0 := 0 }}{{ if and (gt $a 0) (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}{{ $g0 = 1 }}{{ end }}{{ $g1 := 0 }}{{ if and (gt $a 2) (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}{{ $g1 = 1 }}{{ end }}{{ $g2 := 0 }}{{ if and (gt $a 4) (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}{{ $g2 = 1 }}{{ end }}{{ $g3 := 0 }}{{ if and (gt $a 6) (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}{{ $g3 = 1 }}{{ end }}{{ add (add $g0 $g1) (add $g2 $g3) }}'
+        value: '{{ if not hasCalendar }}{{ .State.status.dsp.active_channels }}{{ else }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ end }}{{ $g0 := 0 }}{{ if and (gt $a 0) (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}{{ $g0 = 1 }}{{ end }}{{ $g1 := 0 }}{{ if and (gt $a 2) (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}{{ $g1 = 1 }}{{ end }}{{ $g2 := 0 }}{{ if and (gt $a 4) (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}{{ $g2 = 1 }}{{ end }}{{ $g3 := 0 }}{{ if and (gt $a 6) (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}{{ $g3 = 1 }}{{ end }}{{ add (add $g0 $g1) (add $g2 $g3) }}{{ end }}'
       - path: status.channels.0.gate
-        value: '{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 0 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 0 | get "gate" }}{{ else }}{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 0 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}{{ end }}'
       - path: status.channels.0.peak_db
-        value: '{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 0 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 0 | get "peak_db" }}{{ else }}{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 0 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}{{ end }}'
       - path: status.channels.1.gate
-        value: '{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 2 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 1 | get "gate" }}{{ else }}{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 2 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}{{ end }}'
       - path: status.channels.1.peak_db
-        value: '{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 2 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 1 | get "peak_db" }}{{ else }}{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 2 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}{{ end }}'
       - path: status.channels.2.gate
-        value: '{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 4 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 2 | get "gate" }}{{ else }}{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 4 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}{{ end }}'
       - path: status.channels.2.peak_db
-        value: '{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 4 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 2 | get "peak_db" }}{{ else }}{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 4 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}{{ end }}'
       - path: status.channels.3.gate
-        value: '{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 6 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 3 | get "gate" }}{{ else }}{{ $on := false }}{{ with meetingNow }}{{ $on = gt .actual 6 }}{{ end }}{{ and $on (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}{{ end }}'
       - path: status.channels.3.peak_db
-        value: '{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 6 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ index .State.status.channels 3 | get "peak_db" }}{{ else }}{{ $on := false }}{{ $a := 0 }}{{ with meetingNow }}{{ $a = .actual }}{{ $on = gt .actual 6 }}{{ end }}{{ if and $on (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}{{ round 1 (clamp -60.0 -12.0 (add (add -52.0 (mul 2.0 $a)) (randStep 1.5 0.0))) }}{{ else }}{{ round 1 (clamp -90.0 -82.0 (randStep 2.0 -86.0)) }}{{ end }}{{ end }}'
 
 defaults:
   status:
@@ -485,7 +485,7 @@ defaults:
       boot_epoch: 0
     dsp:
       cpu_load: 22
-      active_channels: 0
+      active_channels: 8
       temperature: 42
       fan_rpm: 3800
     # The program output: unmuted, at a level a room is run at.
@@ -497,10 +497,10 @@ defaults:
     # Mutes and gains are the real source of truth; peak_db is a static
     # placeholder until a signal-drift behavior is added.
     channels:
-      - { index: 0,  name: "Table Mic 1",    gain: -6,  mute: false, gate: false, peak_db: -84 }
-      - { index: 1,  name: "Table Mic 2",    gain: -6,  mute: false, gate: false, peak_db: -84 }
-      - { index: 2,  name: "Ceiling Mic 1",  gain: -3,  mute: false, gate: false, peak_db: -84 }
-      - { index: 3,  name: "Ceiling Mic 2",  gain: -3,  mute: false, gate: false, peak_db: -84 }
+      - { index: 0,  name: "Table Mic 1",    gain: -6,  mute: false, gate: false, peak_db: -42 }
+      - { index: 1,  name: "Table Mic 2",    gain: -6,  mute: false, gate: false, peak_db: -38 }
+      - { index: 2,  name: "Ceiling Mic 1",  gain: -3,  mute: false, gate: false, peak_db: -45 }
+      - { index: 3,  name: "Ceiling Mic 2",  gain: -3,  mute: false, gate: false, peak_db: -50 }
       - { index: 4,  name: "Wireless 1",     gain: 0,   mute: true,  peak_db: -90 }
       - { index: 5,  name: "Wireless 2",     gain: 0,   mute: true,  peak_db: -90 }
       - { index: 6,  name: "Program In L",   gain: -12, mute: false, peak_db: -20 }
