@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"text/template"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -32,6 +33,10 @@ func meetingTopic(m map[string]any) string {
 // them by, through the device's clock:
 //
 //	meetingTopic m          -> the topic of a calendar meeting (map), "" for none
+//	roomOffline system      -> whether the system's room reads offline: a codec or a
+//	                           bar in it is unplugged by a scripted problem on the
+//	                           calendar (#2769), a fact of the world, not of the
+//	                           unplugged device's own state
 //	devicePage held a n     -> one page of the account's devices: the devices of
 //	                           the rooms the account covers (the world's) and the
 //	                           ones it holds in state (held, a map by id) that no
@@ -44,8 +49,9 @@ func (d *Device) listingFuncs() template.FuncMap {
 	return template.FuncMap{
 		"meetingTopic": meetingTopic,
 		"devicePage": func(held any, after any, size any) map[string]any {
-			return devicePage(d.world().Listed(d.Hostname), held, after, size, d.clock().Unix())
+			return devicePage(d.world().Listed(d.Hostname), held, after, size, d.clock().Unix(), d.unpluggedSince)
 		},
+		"roomOffline": d.roomOffline,
 	}
 }
 
@@ -54,7 +60,7 @@ func (d *Device) listingFuncs() template.FuncMap {
 // world lists is online and last seen now; a held one reads as it is held.
 // Pure: the listing, the held map, the token, the size and the instant decide
 // it.
-func devicePage(listed []world.Listing, held any, after any, size any, now int64) map[string]any {
+func devicePage(listed []world.Listing, held any, after any, size any, now int64, unplugged func(world.Listing) (int64, bool)) map[string]any {
 	n := defaultPageSize
 	if v, err := strconv.Atoi(fmt.Sprint(size)); err == nil && v > 0 {
 		n = min(v, maxPageSize)
@@ -88,9 +94,13 @@ func devicePage(listed []world.Listing, held any, after any, size any, now int64
 		if j >= len(heldIDs) || (i < len(listed) && listed[i].ID < heldIDs[j]) {
 			l := listed[i]
 			i++
+			status, seen := "online", now
+			if since, down := unplugged(l); down {
+				status, seen = "offline", since
+			}
 			page = append(page, map[string]any{
 				"id": l.ID, "name": l.Name, "room_id": l.System, "type": l.Type,
-				"status": "online", "firmware": l.Firmware, "last_seen": now,
+				"status": status, "firmware": l.Firmware, "last_seen": seen,
 			})
 			last = l.ID
 			continue
@@ -135,4 +145,39 @@ func heldSeen(v any, now int64) int64 {
 		}
 	}
 	return now
+}
+
+// unpluggedSince says whether a scripted problem on the lab calendar has the
+// listed device unplugged now, and if so since when (unix seconds): the
+// problem's own start, read off the calendar, so the platform learns what the
+// world did and not what the dark device would say.
+func (d *Device) unpluggedSince(l world.Listing) (int64, bool) {
+	c := d.calendarSrc()
+	if c == nil {
+		return 0, false
+	}
+	room := calendar.Room{Site: l.Site, Building: l.Building, Room: l.Room}
+	for _, e := range c.ProblemsNow(room, d.clock()) {
+		if e.Problem.Impairment.Unplugged && e.Problem.Role == l.Slot {
+			return e.Start.Unix(), true
+		}
+	}
+	return 0, false
+}
+
+// roomOffline says whether the room of a system reads offline on the platform:
+// a codec or a bar in it that a scripted problem has unplugged.
+func (d *Device) roomOffline(system string) bool {
+	if !d.calendarSrc().HasProblems() {
+		return false // the scan is per room every tick: skip it where no problem is scripted
+	}
+	for _, l := range d.world().Listed(d.Hostname) {
+		if l.System != system || (l.Type != "codec" && l.Type != "bar") {
+			continue
+		}
+		if _, down := d.unpluggedSince(l); down {
+			return true
+		}
+	}
+	return false
 }

@@ -441,7 +441,7 @@ compress-bench:
 # once rather than after the tests finish. The two module/build cache volumes
 # are shared across runs on purpose.
 NETADMIN_IMG ?= golang:1.26
-NETADMIN_PKGS ?= ./sim/impair/ ./internal/e2e/
+NETADMIN_PKGS ?= ./sim/impair/ ./sim/simoutpost/ ./internal/e2e/
 NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:
 	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; go=$$net-go; \

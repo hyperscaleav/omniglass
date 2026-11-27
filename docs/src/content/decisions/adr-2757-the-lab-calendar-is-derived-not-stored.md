@@ -69,3 +69,14 @@ refs: [2757, 2764, 2769, 2773]
   simulator's own functions, so it needs no new setting and cannot disagree with a device. It is a read
   for display beside what Omniglass detected; nothing it reads enters collection or detection. A lab with
   no plan has no file and an empty calendar.
+
+- **Amended (#2769): scripted problems.** The second kind is built. A scenario's `calendar.problems` scripts
+  recurring problems (a cadence, a UTC time and duration, a scope resolved from the plan and the world, and
+  the role of the room it lands on, never a product), derived like the meetings from the world and the seed:
+  only an optional `spread` is drawn, a seeded whole-minute offset inside the cadence. `Entries`, `Now`, `Next`
+  and `Prev` stay the meetings alone so no reader of a meeting meets another kind; `Problems`,
+  `ProblemsNow` and `All` read the rest. One executor in the simulator applies a problem's impairment as its
+  window opens and clears it as it closes: a pin through the behavior-override seam (put back as it was), and
+  unplugged or packet loss through the netns impairer, merged with the server's own impairment and refused
+  with a log line without NET_ADMIN. Omniglass is told nothing; the meeting platform's devices list reads a
+  device offline from the calendar while a problem has it unplugged, not from the dark device.

@@ -122,3 +122,90 @@ func TestTheCalendarFollowsEachRoomsStandard(t *testing.T) {
 		t.Fatal("a world with no knobs has a calendar")
 	}
 }
+
+func problemWorld() *World {
+	w := testWorld()
+	w.Sites[0].Archetype = "hq"
+	w.Sites[0].Rooms[0].Devices[0].Slot = "main-display"
+	w.Problems = []calendar.ProblemSpec{
+		{Name: "dark", Cadence: "daily", At: "09:00", For: time.Hour,
+			Scope:      calendar.Scope{Standard: "huddle", Role: "main-display"},
+			Impairment: calendar.Impairment{Pin: &calendar.Pin{Path: "status.device.power", Value: "off"}}},
+		{Name: "net", Cadence: "weekly", Weekday: "monday", At: "02:00", For: time.Hour,
+			Scope:      calendar.Scope{Site: "hq", Rooms: []string{"s2"}, Role: "display"},
+			Impairment: calendar.Impairment{LossPct: 30}},
+	}
+	return w
+}
+
+// #2769: a scripted problem lands in the rooms its scope names, resolved from
+// the world, and in no other.
+func TestAProblemLandsInTheRoomsItsScopeNames(t *testing.T) {
+	w := problemWorld()
+	cal := w.Calendar()
+	if cal == nil {
+		t.Fatal("a world with problems has no calendar")
+	}
+	r1 := calendar.Room{Site: "hq", Building: "tower", Room: "r1"}
+	r2 := calendar.Room{Site: "hq", Building: "tower", Room: "r2"}
+	mon := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	names := func(room calendar.Room) []string {
+		var out []string
+		for _, e := range cal.Problems(room, mon, mon.AddDate(0, 0, 1)) {
+			out = append(out, e.Problem.Name+"/"+e.Problem.Role)
+		}
+		return out
+	}
+	if got := names(r1); len(got) != 1 || got[0] != "dark/main-display" {
+		t.Errorf("room r1 (a huddle) holds %v", got)
+	}
+	if got := names(r2); len(got) != 1 || got[0] != "net/display" {
+		t.Errorf("room r2 (named, by its system s2, on a Monday) holds %v", got)
+	}
+	if w.SlotOf("r1-display-1") != "main-display" || w.SlotOf("nope") != "" {
+		t.Error("SlotOf does not read the device's slot")
+	}
+	w.Sites[0].Archetype = "regional"
+	if got := w.Calendar().Problems(r2, mon, mon.AddDate(0, 0, 1)); len(got) != 1 {
+		t.Errorf("a problem scoped to site hq lost room r2 when only the archetype changed: %v", got)
+	}
+	// A world with no meeting knobs and no problems has no calendar.
+	w.Problems, w.Meetings = nil, nil
+	if w.Calendar() != nil {
+		t.Error("an empty world has a calendar")
+	}
+}
+
+func TestAWorldWithProblemsRoundTripsAndRefusesBadOnes(t *testing.T) {
+	w := problemWorld()
+	b, err := w.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := Parse(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b2, _ := got.Marshal()
+	if string(b) != string(b2) {
+		t.Fatal("a world with problems changed in a round trip")
+	}
+	w.Problems[0].Cadence = "hourly"
+	if _, err := Parse(mustMarshal(t, w)); err == nil || !strings.Contains(err.Error(), "cadence") {
+		t.Fatalf("a bad problem was read: %v", err)
+	}
+	w = problemWorld()
+	w.Problems[1].Name = "dark"
+	if _, err := Parse(mustMarshal(t, w)); err == nil || !strings.Contains(err.Error(), "twice") {
+		t.Fatalf("a problem scripted twice was read: %v", err)
+	}
+}
+
+func mustMarshal(t *testing.T, w *World) []byte {
+	t.Helper()
+	b, err := w.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

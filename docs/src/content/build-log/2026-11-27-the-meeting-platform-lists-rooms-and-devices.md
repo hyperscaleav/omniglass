@@ -28,6 +28,4 @@ nobody bound lands in the conduit's unbound inbox. The scheduling platform's dri
 rule too, which retires its single-page walk. Two new property types carry it: `ucc-device-id` (the match
 key) and `platform-state` (online, offline).
 
-Not yet: a device reads offline while its room's scripted problem has it unplugged (#2769), which is not on the
-calendar yet; today the world's devices read online, and the offline path is proven on the devices the
-platform holds itself.
+A device reads offline while a scripted problem has it unplugged (#2769), derived from the calendar.

@@ -116,6 +116,10 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 			w.Meetings[sm.Standard.Name] = sm.Knobs
 		}
 	}
+	if err := checkProblemRooms(m, plan); err != nil {
+		return nil, err
+	}
+	w.Problems = m.ScriptedProblems()
 	names := map[string]bool{}
 	claim := func(name string) error {
 		switch {
@@ -145,7 +149,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 		rooms = append(rooms, r)
 		cover[sys.Name] = world.Cover{System: sys.Name, Site: site, Building: sys.Building, Room: sys.Room}
 	}
-	w.Sites = []world.Site{{Name: site, Rooms: rooms}}
+	w.Sites = []world.Site{{Name: site, Archetype: sp.Archetype, Rooms: rooms}}
 	// A service covers rooms beyond its own site (#2765): the other sites'
 	// rooms come in as rooms with no devices, so the world places their systems
 	// and the calendar holds their meetings.
@@ -176,7 +180,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 				rs = append(rs, r)
 				cover[sys.Name] = world.Cover{System: sys.Name, Site: other.Name, Building: sys.Building, Room: sys.Room}
 			}
-			w.Sites = append(w.Sites, world.Site{Name: other.Name, Rooms: rs})
+			w.Sites = append(w.Sites, world.Site{Name: other.Name, Archetype: other.Archetype, Rooms: rs})
 		}
 		break
 	}
@@ -201,11 +205,30 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 	return w, nil
 }
 
+// checkProblemRooms refuses a scripted problem that names a room the plan does
+// not have: a typo would otherwise script nothing and say nothing.
+func checkProblemRooms(m *Manifest, plan *Plan) error {
+	systems := map[string]bool{}
+	for _, sp := range plan.Sites {
+		for _, sys := range sp.Systems {
+			systems[sys.Name] = true
+		}
+	}
+	for _, p := range m.ScriptedProblems() {
+		for _, r := range p.Scope.Rooms {
+			if !systems[r] {
+				return fmt.Errorf("scenario %s: calendar.problems.%s names the room %q, which is no system of the plan", plan.Scenario, p.Name, r)
+			}
+		}
+	}
+	return nil
+}
+
 // worldDevice is the world's device for the n-th component of a slot's fill:
 // its name and id, the product and the simulator profile that serves it, the
 // kind a meeting platform lists it as and the firmware it reports.
 func worldDevice(cat Catalog, name string, fill SlotFill) world.Device {
-	d := world.Device{Name: name, ID: DeviceID(name), Product: fill.Product, Platform: fill.Platform}
+	d := world.Device{Name: name, Slot: fill.Slot, ID: DeviceID(name), Product: fill.Product, Platform: fill.Platform}
 	if cat.SimProfile != nil {
 		d.Profile, _ = cat.SimProfile(fill.Product)
 	}

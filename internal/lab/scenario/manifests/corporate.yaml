@@ -244,3 +244,42 @@ calendar:
       walk_in_rate: 0.02
       hours: { start: 8, end: 18 }
       recording_rate: 0.5
+
+  # What goes wrong on a schedule (#2769): recurring problems, scripted and not
+  # drawn. Each says when (a cadence, a UTC time and a duration; spread starts
+  # each room's occurrence a seeded few minutes later, so a fleet does not break
+  # at one instant), where (a scope: standards, a site or its kind, or named
+  # rooms, and the role the problem lands on, a slot and never a product) and
+  # what it does. The simulator applies each when its window opens and clears it
+  # when it closes; Omniglass is told nothing and learns of it by collecting.
+  problems:
+    # The boardrooms' displays go dark on Tuesday afternoons: pinned off, so the
+    # panel stops answering as a switched-off display does.
+    - name: tuesday-display-dark
+      cadence: weekly
+      weekday: tuesday
+      at: "14:00"
+      for: 2h
+      spread: 30m
+      scope: { standard: mr86, role: main-display }
+      impairment:
+        pin: { path: status.device.power, value: "off" }
+    # The conference rooms' wireless microphone packs read dead every Thursday
+    # afternoon, a battery pinned to empty.
+    - name: weekly-dead-mic-battery
+      cadence: weekly
+      weekday: thursday
+      at: "15:00"
+      for: 3h
+      scope: { standard: divisible-conference, role: wireless-mic }
+      impairment:
+        pin: { path: status.mic.battery_percent, value: "0" }
+    # The conference rooms' codecs take a firmware window every night: unplugged,
+    # dark on every protocol, and offline on the meeting platform's devices list.
+    - name: nightly-codec-firmware
+      cadence: daily
+      at: "03:00"
+      for: 20m
+      spread: 30m
+      scope: { standard: divisible-conference, role: codec }
+      impairment: { unplugged: true }

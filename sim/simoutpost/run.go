@@ -59,6 +59,10 @@ type Config struct {
 	World *world.World
 }
 
+// problemBeat is how often the problem executor looks at the calendar between
+// pulls: a window opens and closes within it of its time.
+const problemBeat = 2 * time.Second
+
 const (
 	// DefaultPoll is how often the simulator re-pulls its component list
 	// when it is not told otherwise.
@@ -175,6 +179,29 @@ func Run(ctx context.Context, cfg Config) error {
 		defer pushers.StopAll()
 		log.Info("pushers started", "pushers", len(cfg.Pushers))
 	}
+	// The scripted problems on the lab calendar (#2769) are applied by one
+	// executor, settled on every pull and on its own beat, so a window opens
+	// and closes on the clock and not on the next pull.
+	problems := newProblemExecutor(cfg.World, engine.Calendar(), nil, log)
+	var lastWants map[string]collection.SimImpairment
+	settle := func() {
+		served := map[string]netip.Addr{}
+		devs := engine.Devices()
+		for _, d := range devs {
+			if a, ok := netip.AddrFromSlice(d.LoopbackIP.To4()); ok {
+				served[d.DeviceID] = a
+			}
+		}
+		wants := lastWants
+		if problems != nil {
+			wants = mergeNet(wants, problems.reconcile(devs, impairs.netAdmin))
+		}
+		impairs.reconcile(served, wants)
+		impairedCount.Store(int64(len(impairs.status().Impaired)))
+	}
+	if problems != nil {
+		defer func() { problems.release(engine.Devices()) }()
+	}
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)
 		if err != nil {
@@ -188,20 +215,14 @@ func Run(ctx context.Context, cfg Config) error {
 		if err := engine.Sync(snaps); err != nil {
 			log.Warn("some devices did not start", "error", err)
 		}
-		served := map[string]netip.Addr{}
-		for _, d := range engine.Devices() {
-			if a, ok := netip.AddrFromSlice(d.LoopbackIP.To4()); ok {
-				served[d.DeviceID] = a
-			}
-		}
 		wants := map[string]collection.SimImpairment{}
 		for _, d := range devices {
 			if d.Impairment != nil {
 				wants[d.ComponentID] = *d.Impairment
 			}
 		}
-		impairs.reconcile(served, wants)
-		impairedCount.Store(int64(len(impairs.status().Impaired)))
+		lastWants = wants
+		settle()
 		if st := impairs.status(); st.Error != "" {
 			log.Warn("impairments did not apply", "error", st.Error)
 		}
@@ -214,6 +235,8 @@ func Run(ctx context.Context, cfg Config) error {
 	defer pollT.Stop()
 	flushT := time.NewTicker(cfg.FlushEvery)
 	defer flushT.Stop()
+	problemT := time.NewTicker(problemBeat)
+	defer problemT.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -221,6 +244,10 @@ func Run(ctx context.Context, cfg Config) error {
 			return nil
 		case <-pollT.C:
 			pull()
+		case <-problemT.C:
+			if problems != nil {
+				settle()
+			}
 		case <-flushT.C:
 			flush(nc, cfg.Name, engine, hits, impairs)
 		}

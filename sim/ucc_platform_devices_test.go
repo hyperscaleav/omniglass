@@ -16,7 +16,7 @@ import (
 // uccDeviceWorld is a meeting platform account over a world of three rooms and
 // the devices in them: a bar, a codec, a controller and a display each, the
 // display the one a meeting platform does not list. The ids are the world's.
-func uccDeviceWorld(t *testing.T, at *time.Time) (*Device, []world.Listing) {
+func uccDeviceWorld(t *testing.T, at *time.Time, problems ...calendar.ProblemSpec) (*Device, []world.Listing) {
 	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
@@ -24,7 +24,16 @@ func uccDeviceWorld(t *testing.T, at *time.Time) (*Device, []world.Listing) {
 	}
 	k := calTestKnobs()
 	e := NewEngine(store, profiles.Templates())
-	e.SetCalendar(calendar.New(7, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
+	cal := calendar.New(7, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
+	if len(problems) > 0 {
+		cal = cal.WithProblems(func(r calendar.Room) []calendar.ProblemSpec {
+			if r.Room == "r2" {
+				return problems
+			}
+			return nil
+		})
+	}
+	e.SetCalendar(cal)
 	w := &world.World{Version: world.Version}
 	site := world.Site{Name: "hq"}
 	svc := world.Service{Name: "ucc-hq", Profile: "ucc-platform", Webhook: true}
@@ -35,7 +44,7 @@ func uccDeviceWorld(t *testing.T, at *time.Time) (*Device, []world.Listing) {
 			{"video-bar", "bar", "2.7.3"}, {"codec", "codec", "2.7.3"}, {"touch-control", "controller", "4.1.2"}, {"main-display", "", "9.9"},
 		} {
 			name := sys + "-" + dv.slot + "-1"
-			r.Devices = append(r.Devices, world.Device{Name: name, ID: "dev-" + name, Product: dv.slot, Platform: dv.platform, Firmware: dv.fw})
+			r.Devices = append(r.Devices, world.Device{Name: name, Slot: dv.slot, ID: "dev-" + name, Product: dv.slot, Platform: dv.platform, Firmware: dv.fw})
 		}
 		site.Rooms = append(site.Rooms, r)
 		svc.Covers = append(svc.Covers, world.Cover{System: sys, Site: "hq", Building: "tower", Room: n})
@@ -176,5 +185,74 @@ func TestTheUCCPlatformPostsADeviceStatusChange(t *testing.T) {
 	}
 	if rooms := readRoomDocs(t, d); rooms["zr-huddle-north"].Participants != 2 {
 		t.Errorf("the room reads %d participants, want 2", rooms["zr-huddle-north"].Participants)
+	}
+}
+
+// #2769: a device a scripted problem has unplugged reads offline on the
+// platform's devices list for as long as the problem is on the calendar, last
+// seen when it began, and its room reads offline when the dark device is its
+// codec or its bar; a pinned or lossy problem, a problem on another role and a
+// problem's own end change nothing of the sort. The reading is the calendar's,
+// not the unplugged device's own state: the listed device is never served.
+func TestAnUnpluggedDeviceReadsOfflineOnThePlatform(t *testing.T) {
+	open := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	problem := func(name, role string, imp calendar.Impairment) calendar.ProblemSpec {
+		return calendar.ProblemSpec{Name: name, Cadence: "daily", At: "10:00", For: time.Hour,
+			Scope: calendar.Scope{Rooms: []string{"hq-r2"}, Role: role}, Impairment: imp}
+	}
+	statuses := func(d *Device) (map[string]uccListed, map[string]string) {
+		devs, _ := walkDevices(t, d, 50)
+		byName := map[string]uccListed{}
+		for _, g := range devs {
+			byName[g.Name] = g
+		}
+		var rooms struct {
+			Rooms []struct{ ID, Status string }
+		}
+		if err := json.Unmarshal(uccCall(t, d, http.MethodGet, "/api/rooms?page_size=50", ""), &rooms); err != nil {
+			t.Fatal(err)
+		}
+		st := map[string]string{}
+		for _, r := range rooms.Rooms {
+			st[r.ID] = r.Status
+		}
+		return byName, st
+	}
+	at := open.Add(-time.Minute)
+	d, _ := uccDeviceWorld(t, &at,
+		problem("codec-dark", "codec", calendar.Impairment{Unplugged: true}),
+		problem("touch-slow", "touch-control", calendar.Impairment{LossPct: 40}))
+	tick := func() { d.TickBehavior("rooms_calendar") }
+	tick()
+	devs, rooms := statuses(d)
+	for _, n := range []string{"hq-r2-codec-1", "hq-r2-video-bar-1", "hq-r2-touch-control-1"} {
+		if devs[n].Status != "online" {
+			t.Errorf("before the window, %s reads %q", n, devs[n].Status)
+		}
+	}
+	if rooms["hq-r2"] == "offline" {
+		t.Error("the room reads offline before the window")
+	}
+
+	at = open.Add(5 * time.Minute)
+	tick()
+	devs, rooms = statuses(d)
+	if g := devs["hq-r2-codec-1"]; g.Status != "offline" || g.LastSeen != open.Unix() {
+		t.Errorf("the unplugged codec reads %q last seen %d, want offline since %d", g.Status, g.LastSeen, open.Unix())
+	}
+	for _, n := range []string{"hq-r2-video-bar-1", "hq-r2-touch-control-1", "hq-r1-codec-1", "hq-r3-codec-1"} {
+		if devs[n].Status != "online" {
+			t.Errorf("during the window, %s reads %q: a lossy problem, another role or another room took it offline", n, devs[n].Status)
+		}
+	}
+	if rooms["hq-r2"] != "offline" || rooms["hq-r1"] == "offline" || rooms["hq-r3"] == "offline" {
+		t.Errorf("rooms read %v, want only hq-r2 offline", rooms)
+	}
+
+	at = open.Add(time.Hour)
+	tick()
+	devs, rooms = statuses(d)
+	if devs["hq-r2-codec-1"].Status != "online" || rooms["hq-r2"] == "offline" {
+		t.Errorf("after the window the codec reads %q and the room %q", devs["hq-r2-codec-1"].Status, rooms["hq-r2"])
 	}
 }

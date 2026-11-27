@@ -375,7 +375,7 @@ and not shipped: it is a pure function of the scenario's knobs, a seed and a win
 simulator and the server compute the same calendar without asking each other
 ([ADR-2757](/architecture/decisions/#adr-2757-the-lab-calendar-is-derived-not-stored-and-a-scripted-source-feeds-it-problems)).
 
-A calendar **entry** is a kind (`meeting` today; a scripted problem joins it, #2769), a window on the
+A calendar **entry** is a kind (`meeting`, or a scripted `problem`, below), a window on the
 simulator's clock, the room it is scoped to (the engine's room key: site, building, room), and a
 payload of its kind. A meeting's payload says whether it was **booked** or a **walk-in**, who
 organized it, how many were expected and how many came, how it went (**held**, **no-show**,
@@ -449,7 +449,7 @@ Devices that read the calendar:
   then, while someone is in the room (a no-show holds its slot with nobody in it, so it is idle). The
   wireless pack transmits in the same hours, and its battery is a pure function of the calendar over
   the 48 hours before now (`meetingsBetween`): it drains in use and recharges on its dock between
-  meetings, so the charge reads the same at any instant on any run, and a scheduled problem can pin it.
+  meetings, so the charge reads the same at any instant on any run, and a scripted problem can pin it (a dead battery, below).
   The DSP opens a gate for every two attendees actually in the room, up to its four table and ceiling
   strips, and raises their peak with the head count; the amplifier carries signal and warms while the
   room is in use. Each sits at its noise floor otherwise. A device whose room holds no calendar
@@ -492,7 +492,7 @@ Devices that read the calendar:
   fewer people) and returns to its home preset when it ends, holding still while the room is empty. The
   recording service carries a recording in progress for each recorded meeting in the rooms it covers
   (else its own room) and queues it for ten minutes after it ends. A room with no calendar keeps the
-  old drift. The recording failure feed stays route-driven; scheduled failures are #2769.
+  old drift. The recording failure feed stays route-driven.
 - **Room control and switching** (#2776): the room is started and ended for its meetings. The Newtron
   control processor holds the room's system power (`status.control.room_power`, read as `GET ROOMPOWER`) on
   from two minutes before a booked meeting someone attends (at the start of a walk-in) to five minutes after
@@ -531,6 +531,44 @@ The server does not ask a simulator and does not learn the calendar from collect
 it with the functions the simulator uses, from the world file the lab's seed wrote into the data
 volume the server shares ([the world it holds](#the-world-it-holds)), so a route and a device in
 the same room cannot disagree. A lab with no world (no plan, the dev fleet) has an empty calendar.
+
+### Scripted problems
+
+Not everything on the calendar is a meeting. A scenario scripts **recurring problems** in
+`calendar.problems`: a display dark on Tuesday afternoons, a wireless pack that reads dead every Thursday, a
+codec that takes a firmware window every night. Each is scripted, not drawn: a **cadence** (daily; weekly on
+a weekday; monthly on a date or on the nth weekday), a UTC time of day and a duration, a **scope** (a
+standard, a site or its kind, or named rooms, resolved from the plan and the world) with the **role** of the
+room it lands on (a slot such as `main-display` or `wireless-mic`, never a product), and one
+**impairment**. Only one thing is drawn: with a `spread`, each room's occurrence starts a seeded whole number
+of minutes after the time, inside the cadence, so a fleet does not break at one instant. The calendar derives
+problems exactly as it derives meetings, from the world and the seed, so a month asked whole, day by day or
+from another process is the same month.
+
+A problem is a `problem` entry beside the meetings: its window, its room and a payload of `name`, `role` and
+the impairment (`unplugged`, `loss_pct` or a `pin` of a state path and a value). `Entries`, `Now`, `Next` and
+`Prev` stay the meetings alone, which every reader of a meeting depends on; `Problems`, `ProblemsNow` and `All`
+read the rest, and `problemsNow` reads the device's own room in a template.
+
+**One executor applies them.** The simulator's problem executor reads the calendar through the clock and, for
+each device a problem is active on (the room it sits in and the slot it fills), applies the impairment as the
+window opens and removes it as it closes; a device does not re-implement a problem, and a device with no
+calendar is untouched.
+
+- A **pin** holds a state path at a value through the behavior-override seam, so the device's own behavior
+  stops writing that path while the window is open, and the path is put back to what it was as the window
+  closes.
+- **Unplugged** and **loss** are the network's: the executor hands the impairer the impairment an operator's
+  would be, merged with what the server asks for, so the same netns firewall and shaping that break a device
+  on request break it on schedule. They need `--impairments` and `NET_ADMIN`; without them the simulator logs
+  that the problem needs the network and is not applied, once per window, and the pins still apply.
+
+The sim is; Omniglass learns. Nothing is told to Omniglass: a collector learns of a problem by collecting from
+the broken device (an unreachable endpoint, a pinned reading, a lossy link), and an operator can lay the two
+side by side with the calendar. The meeting platform reads the same fact from the calendar and not from the
+dark device: while a problem has a listed device unplugged, its entry on the platform's devices list reads `offline`,
+last seen when the problem began, and its room reads `offline` on the rooms list when the device is the
+room's codec or bar.
 
 ### A simulated service posts from the start
 
