@@ -1161,8 +1161,8 @@ keep up. It runs on a host of its own, so nothing else competes for the machine 
 **Pin the build.** A soak measures one build. Build its image once and give it a tag of its own,
 named for the commit (`omniglass:soak-<shortsha>`), and run the binary built from the same commit:
 `--image` runs a server the binary does not check against itself, and a shared tag rebuilt mid-soak
-would measure two builds in one series. A release candidate is already pinned: run its published
-binary, which pulls the `v<version>-rc.<n>` image by the digest stamped into it at release, and leave
+would measure two builds in one series. A release is already pinned: run its published
+binary, which pulls the `v<version>` image by the digest stamped into it at release, and leave
 `--image` off ([cutting a release](/contributing/release-ci/#cutting-a-release-manual)).
 
 **The lab unit.** The service manager starts the lab, restarts it if it fails, and stops it with
@@ -1280,9 +1280,10 @@ which the lab's token has), or an alarm history cut at the API's 500-alarm cap. 
 reaches back 30 days, so `--since` may be no older than that. The thresholds are named in
 `internal/lab/soak.go` (`SoakMinWindow`, `SoakAlarmTolerance`, `SoakLossCeiling`).
 
-`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A release needs a
-passing record for its build: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the
-record format and the rule.
+`--record-dir` writes the release's record, `<build>.md`, whichever way it went. A final release
+from 1.0 on needs a passing record for its build; a 0.x release does not, though a 0.x candidate may
+be soaked by choice: [the soak gate](/contributing/release-ci/#the-soak-gate) holds the record format
+and the rule.
 
 ### The manifest format
 

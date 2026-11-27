@@ -1,7 +1,8 @@
 # Cross-platform release binaries for the single Omniglass binary (operator
-# console embedded). Division of labour: release.yml owns the version, the git
-# tag, the GitHub Release, and its notes (#2139); GoReleaser only builds the
-# per-OS/arch binaries and attaches them to that existing release. The binary is
+# console embedded). Division of labour: release-please owns the version, the
+# git tag, the GitHub Release, and its notes (ADR-2652); GoReleaser, run by
+# release.yml, only builds the per-OS/arch binaries and attaches them to that
+# existing release. The binary is
 # pure Go with CGO disabled, so every target cross-compiles from one host with
 # no C toolchain and no emulation.
 version: 2
@@ -55,14 +56,20 @@ checksum:
 sboms:
   - artifacts: archive
 
-# The GitHub Release carries the workflow's grouped notes (cmd/releasenotes);
-# GoReleaser must not also emit a changelog into the release body.
+# The GitHub Release carries release-please's notes (ADR-2652); GoReleaser
+# must not also emit a changelog into the release body.
 changelog:
   disable: true
 
 release:
-  # The tagged GitHub Release already exists (release.yml created it with its
-  # notes). Keep it and its body; only add the binary archives + checksums.
+  # The tagged GitHub Release already exists (release-please created it with
+  # its notes, then called release.yml). Keep it and its body; only add the
+  # binary archives + checksums.
   mode: keep-existing
-  # A candidate (v0.1.0-rc.1) stays a prerelease; a final release does not.
+  # A rebuild of a release whose upload failed partway (a dispatch of
+  # release.yml with its tag) replaces the archives already attached instead
+  # of failing on them.
+  replace_existing_artifacts: true
+  # A tag with a prerelease suffix (v1.0.0-rc.1) stays a prerelease. None is
+  # cut before 1.0: candidates are deferred to it (ADR-2652).
   prerelease: auto

@@ -1,12 +1,13 @@
 ---
 title: "The commits pick the release branch; the branch numbers the release"
 date: 2026-11-25
-status: Accepted
+status: "Superseded by [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10)"
 summary: "make release reads the conventional commits squash-merged on main since the newest release line branched and picks the next release branch: a feat, or a breaking change before 1.0, opens release/<major>.<minor+1>; a breaking change from 1.0 on opens the next major; a fix or perf is a patch, a cherry-pick onto the existing branch. It previews the notes and asks before creating the branch. The tag a dispatch cuts still comes from the branch name and the tags."
 refs: [2711, 2139, 2142]
 ---
 
-- **Date:** 2026-11-25 | **Status:** Accepted | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual)
+- **Date:** 2026-11-25 | **Status:** Superseded by [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10) | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual)
+- **Superseded by** [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10): release-please reads the same conventional commits and cuts every release from `main`, with no release branch, so `make release` and the cherry-pick list are retired.
 - **Decision:** (#2711, asked for by the architect: cutting a release should take no thought.) Refines item 4 of
   [ADR-2139](/architecture/decisions/#adr-2139-releases-are-cut-from-a-release-branch):
   1. **The commits pick the line.** `cmd/release` (`make release`) reads the remote's release branches and tags (a tag
