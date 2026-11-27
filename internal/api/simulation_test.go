@@ -13,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/impair"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simhub"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 func TestSimulationBodyConnectedWindow(t *testing.T) {
@@ -54,9 +55,9 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range store.Devices {
+	for _, p := range store.Definitions() {
 		var texts []string
-		texts = append(texts, p.Doc.Summary)
+		texts = append(texts, p.Identity().Summary)
 		for _, s := range simSurface(p, 0) {
 			texts = append(texts, s.Summary)
 			for _, r := range s.Routes {
@@ -70,11 +71,11 @@ func TestSimSurfaceSpeaksTheVocabulary(t *testing.T) {
 			// Stricter than the docs lint, whose patterns miss a bare
 			// "interface": a profile has no other meaning for the word.
 			if bareInterface.MatchString(strings.ReplaceAll(strings.ToLower(text), "user interface", "")) {
-				t.Errorf("%s: %q names an interface; say surface, API or the protocol (ADR-0134)", p.Name, text)
+				t.Errorf("%s: %q names an interface; say surface, API or the protocol (ADR-0134)", p.ID(), text)
 			}
 			for _, b := range docslint.Banned {
 				if b.Matches(text) {
-					t.Errorf("%s: %q: %s (%s)", p.Name, text, b.Replacement, b.Origin)
+					t.Errorf("%s: %q: %s (%s)", p.ID(), text, b.Replacement, b.Origin)
 				}
 			}
 		}
@@ -152,7 +153,7 @@ func TestSimSurfaceCarriesTheRoutesQuickSets(t *testing.T) {
 		}}}},
 	}
 	var power *simRouteBody
-	for _, s := range simSurface(p, 0) {
+	for _, s := range simSurface(spec.FromProfile(p), 0) {
 		for i, r := range s.Routes {
 			if r.Method == "POST" && r.Path == "/api/display/power" {
 				power = &s.Routes[i]
@@ -177,14 +178,14 @@ func TestSimBehaviorsListWhatTheProfileDeclares(t *testing.T) {
 		{Name: "temperature_drift", Schedule: profile.Schedule{Interval: "5s"}, Mutations: []profile.Mutation{{Path: "status.display.temperature"}, {Path: "status.display.temperature"}, {Path: "status.fan"}}},
 		{Name: "heartbeat", Schedule: profile.Schedule{Interval: "30s"}, Emit: &profile.Emit{URL: "x"}},
 	}}
-	got := simBehaviors(p)
+	got := simBehaviors(spec.FromProfile(p))
 	if len(got) != 2 || got[0].Name != "temperature_drift" || got[0].Interval != "5s" || !reflect.DeepEqual(got[0].Writes, []string{"status.display.temperature", "status.fan"}) || got[0].Emits {
 		t.Fatalf("behaviors = %+v", got)
 	}
 	if !got[1].Emits || len(got[1].Writes) != 0 {
 		t.Fatalf("heartbeat = %+v", got[1])
 	}
-	if simBehaviors(&profile.DeviceProfile{}) != nil {
+	if simBehaviors(spec.FromProfile(&profile.DeviceProfile{})) != nil {
 		t.Fatal("a profile with no behaviors lists some")
 	}
 }

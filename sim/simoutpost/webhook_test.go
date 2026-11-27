@@ -51,7 +51,7 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key"}}}
 
 	calls := 0
-	s := newSubscriber("http://server:8080", store)
+	s := newSubscriber("http://server:8080", catalogOf(t, store))
 	op := s.operate
 	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
 	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {
@@ -136,7 +136,7 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key",
 			Identities: []string{"hq-conf-1", "zr-huddle-north"}}}}
 	calls := 0
-	s := newSubscriber("http://server:8080", store)
+	s := newSubscriber("http://server:8080", catalogOf(t, store))
 	op := s.operate
 	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
 	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {

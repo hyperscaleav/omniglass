@@ -10,8 +10,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 type simSlotFillBody struct {
@@ -113,7 +113,7 @@ func simEndpointSpecs(eps []simfleet.Endpoint) []storage.EndpointSpec {
 }
 
 // planSimSystem staffs a standard's slots with simulated products.
-func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, store *profile.Store, products []storage.Product) (simfleet.SystemPlan, error) {
+func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, store *spec.Catalog, products []storage.Product) (simfleet.SystemPlan, error) {
 	if _, err := gw.GetStandard(ctx, standard); err != nil {
 		return simfleet.SystemPlan{}, mapStandardErr(err)
 	}
@@ -140,7 +140,7 @@ func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, sto
 		ps = append(ps, simfleet.Product{Name: p.Name, ComponentType: p.ComponentType})
 	}
 	return simfleet.PlanSystem(in, ps, simfleet.SystemCatalog{
-		Simulated: func(p string) bool { _, _, ok := store.ForProduct(p); return ok },
+		Simulated: func(p string) bool { _, ok := store.ForProduct(p); return ok },
 		Within: func(t, accepted string) bool {
 			a, ok1 := typeIDs[t]
 			b, ok2 := typeIDs[accepted]
@@ -285,10 +285,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				}
 			}
 			addrs, err := simfleet.Plan(comps, used, simfleet.Catalog{
-				ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
-					name, _, ok := store.ForProduct(p)
-					return store.Devices[name], ok
-				},
+				ProfileFor: store.ProfileFor,
 				DriverOf:   func(p string) string { return drivers[p] },
 				Attachable: attachable,
 				PortOffset: st.portOffset,

@@ -14,12 +14,13 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Engine manages all simulated devices for a site.
 type Engine struct {
-	store      *profile.Store
+	cat        *spec.Catalog
 	templates  fs.FS
 	portMap    func(int) int // nil serves each profile port as declared
 	syncMu     sync.Mutex    // serializes Sync
@@ -54,8 +55,19 @@ type Engine struct {
 // tree (profiles.Templates() for the embedded catalog). A nil templates tree
 // is valid for profiles that render no templates.
 func NewEngine(store *profile.Store, templates fs.FS) *Engine {
+	cat, err := spec.NewCatalog(store)
+	if err != nil {
+		panic(err) // no families, so nothing to refuse
+	}
+	return NewEngineOver(cat, templates)
+}
+
+// NewEngineOver creates a simulator engine over a catalog of YAML profiles
+// and Go families (#2829): a snapshot's profile resolves to a family when one
+// claims its product, else to its YAML profile.
+func NewEngineOver(cat *spec.Catalog, templates fs.FS) *Engine {
 	e := &Engine{
-		store:     store,
+		cat:       cat,
 		templates: templates,
 		obs:       newEndpointObservation(),
 	}
@@ -138,7 +150,7 @@ func (e *Engine) LoadDevices(snapshots []DeviceSnapshot) error {
 // observer seams installed. It starts nothing. A snapshot naming a profile
 // the catalog lacks yields (nil, nil).
 func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[string]string) (*Device, error) {
-	prof, ok := e.store.Devices[snap.ProfileName]
+	def, ok := e.cat.Lookup(snap.ProfileName)
 	if !ok {
 		slog.Warn("unknown profile, skipping device",
 			"device", snap.DeviceID,
@@ -156,13 +168,15 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// serial and MAC from its id, address), so a reset to defaults keeps
 	// the identity the device started with.
 	peers := peersByRoom[roomKey{snap.SiteCode, snap.Building, snap.Room}]
-	defaults := profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers)
+	defaults := profile.ExpandIdentityTokens(def.InitialState(), snap.SiteCode, snap.Building, snap.Room, peers)
 	if defaults == nil {
 		defaults = map[string]any{}
 	}
+	var model spec.Model
 	if snap.Product != "" && snap.Product != snap.ProfileName {
-		if _, overlay, ok := e.store.ForProduct(snap.Product); ok {
-			mergeInto(defaults, deepCopy(overlay))
+		if r, ok := e.cat.ForProduct(snap.Product); ok {
+			mergeInto(defaults, deepCopy(r.Overlay))
+			model = r.Model
 		}
 	}
 	fleet.Enrich(defaults, snap.Hostname, snap.DeviceID, ip)
@@ -191,11 +205,14 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// Register routes, commands, and OID bindings from every interface
 	// the profile declares. Listeners are started later in StartAll; this
 	// step is pure state population.
-	for _, iface := range prof.Interfaces {
+	for _, iface := range def.Surfaces() {
 		switch iface.Protocol {
 		case "http":
 			for i := range iface.Routes {
 				route := &iface.Routes[i]
+				if route.Native {
+					continue // a Go family's, answered by its handler
+				}
 				tmplContent, err := e.loadTemplate(route.Template)
 				if err != nil {
 					slog.Warn("skipping route, template not found",
@@ -211,6 +228,9 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		case "ssh", "telnet", "tcp", "udp":
 			for i := range iface.Commands {
 				cmd := &iface.Commands[i]
+				if cmd.Native {
+					continue // a Go family's, answered by its handler
+				}
 				var tmplContent string
 				switch {
 				case cmd.Response != "":
@@ -274,8 +294,9 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// phase 1 of omniglass-lab#52, behavior compile failures stop the
 	// load: a malformed schedule or template should fail loudly
 	// at startup rather than silently not animating the device.
-	for i := range prof.Behaviors {
-		if err := dev.AddBehaviorFromProfile(&prof.Behaviors[i]); err != nil {
+	behaviors := def.BehaviorList()
+	for i := range behaviors {
+		if err := dev.AddBehaviorFromProfile(&behaviors[i]); err != nil {
 			return nil, fmt.Errorf("registering behavior on %q: %w", snap.Hostname, err)
 		}
 	}
@@ -284,17 +305,25 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// Installing seeds each elapsed anchor to "now" so uptime starts
 	// at ~0 and counts up on read. No StartBehaviors equivalent,
 	// there is nothing to run.
-	for i := range prof.Computed {
-		if err := dev.AddComputedFromProfile(&prof.Computed[i]); err != nil {
+	computed := def.ComputedList()
+	for i := range computed {
+		if err := dev.AddComputedFromProfile(&computed[i]); err != nil {
 			return nil, fmt.Errorf("registering computed field on %q: %w", snap.Hostname, err)
 		}
 	}
 
-	push, err := compilePush(prof.Name, prof.Push, dev.calendarFuncs())
+	push, err := compilePush(def.ID(), def.PushFace(), dev.calendarFuncs())
 	if err != nil {
 		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
 	}
 	dev.push = push
+
+	// A Go family answers in Go beside whatever its interfaces declare.
+	if g, ok := def.(spec.Served); ok {
+		if err := dev.addHandlers(g.Handlers(), model); err != nil {
+			return nil, fmt.Errorf("registering handlers on %q: %w", snap.Hostname, err)
+		}
+	}
 
 	e.installSeams(dev)
 	return dev, nil
@@ -345,12 +374,12 @@ func (e *Engine) StartAll() error {
 }
 
 func (e *Engine) startDevice(dev *Device) error {
-	prof, ok := e.store.Devices[dev.ProfileName]
+	def, ok := e.cat.Lookup(dev.ProfileName)
 	if !ok {
 		return nil
 	}
 	var errs []error
-	for _, iface := range prof.Interfaces {
+	for _, iface := range def.Surfaces() {
 		if err := e.startInterface(dev, iface); err != nil {
 			errs = append(errs, fmt.Errorf("device %s: starting %s: %w", dev.DeviceID, iface.Protocol, err))
 		}

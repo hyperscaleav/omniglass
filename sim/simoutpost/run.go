@@ -18,9 +18,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -91,7 +92,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	log := slog.Default().With("sim", cfg.Name)
 
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		return fmt.Errorf("sim: load catalog: %w", err)
 	}
@@ -136,7 +137,7 @@ func Run(ctx context.Context, cfg Config) error {
 	log.Info("simulator connected", "url", creds.NatsURL, "low_ports", caps.LowPorts,
 		"net_admin", caps.NetAdmin, "port_offset", caps.PortOffset)
 
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := sim.NewEngineOver(cat, profiles.Templates())
 	installWorld(engine, cfg.World)
 	engine.SetClock(sim.Clock{Offset: cfg.ClockOffset})
 	if cfg.PortOffset != 0 {
@@ -178,10 +179,10 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer func() { _ = obs.Unsubscribe() }()
 
-	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
-	subs := newSubscriber(cfg.ServerURL, store)
+	profileFor := profileIDFor(cat)
+	subs := newSubscriber(cfg.ServerURL, cat)
 	if len(cfg.Pushers) > 0 {
-		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers, cfg.World, sim.Clock{Offset: cfg.ClockOffset})
+		pushers, err := startPushers(cat, cfg.ServerURL, cfg.Pushers, cfg.World, sim.Clock{Offset: cfg.ClockOffset})
 		if err != nil {
 			return err
 		}
@@ -388,4 +389,16 @@ func detectCapabilities(portOffset int) collection.SimCapabilities {
 		}
 	}
 	return capabilitiesFrom(capEff, unpriv, portOffset)
+}
+
+// profileIDFor is the id of the definition that simulates a product, YAML
+// profile or Go family: the profile name a snapshot of it carries.
+func profileIDFor(cat *spec.Catalog) func(product string) (string, bool) {
+	return func(p string) (string, bool) {
+		r, ok := cat.ForProduct(p)
+		if !ok {
+			return "", false
+		}
+		return r.Definition.ID(), true
+	}
 }

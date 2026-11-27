@@ -11,8 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/device"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // A plan's webhook sender (#1747) is an outside actor that speaks for systems
@@ -54,15 +54,15 @@ type plannedSender struct {
 
 // senderPlans plans every sender of a plan from its profile's named driver.
 // Pure: profileFor and specOf are the catalogs it reads.
-func senderPlans(rows planRows, profileFor func(product string) (*profile.DeviceProfile, bool), specOf func(id string) (*driver.Spec, error)) ([]plannedSender, error) {
+func senderPlans(rows planRows, profileFor func(product string) (spec.Definition, bool), specOf func(id string) (*driver.Spec, error)) ([]plannedSender, error) {
 	out := make([]plannedSender, 0, len(rows.Senders))
 	for _, sr := range rows.Senders {
 		c := rows.Components[sr.Comp]
 		prof, ok := profileFor(c.Product)
-		if !ok || prof.Webhook == nil || prof.Webhook.Driver == "" {
+		if !ok || prof.WebhookFace() == nil || prof.WebhookFace().Driver == "" {
 			return nil, fmt.Errorf("devseed: sender %s: profile %s names no webhook driver", c.Key, c.Product)
 		}
-		drv := prof.Webhook.Driver
+		drv := prof.WebhookFace().Driver
 		sp, err := specOf(drv)
 		if err != nil {
 			return nil, fmt.Errorf("devseed: sender %s: %w", c.Key, err)
@@ -117,17 +117,11 @@ func shippedSenders(rows planRows) ([]plannedSender, error) {
 	if len(rows.Senders) == 0 {
 		return nil, nil
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		return nil, fmt.Errorf("devseed: load simulator catalog: %w", err)
 	}
-	return senderPlans(rows, func(p string) (*profile.DeviceProfile, bool) {
-		name, _, ok := store.ForProduct(p)
-		if !ok {
-			return nil, false
-		}
-		return store.Devices[name], true
-	}, seed.ShippedDriverSpec)
+	return senderPlans(rows, cat.ProfileFor, seed.ShippedDriverSpec)
 }
 
 // mintSecretValue is a fresh random value for one field of a signing secret.

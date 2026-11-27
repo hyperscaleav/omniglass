@@ -29,6 +29,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -304,6 +305,9 @@ type Device struct {
 
 	routes   []routeEntry
 	commands []commandEntry
+	// fam is what the device's Go family answers in Go (#2829), nil for a
+	// device of a YAML profile.
+	fam *goHandlers
 
 	// behaviorMu guards the behaviors slice, the overrides slice, and
 	// every entry's stop/done channels. Separate from mu (which guards
@@ -655,9 +659,12 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // routeEntry pairs a parsed route match with a compiled template and
 // pre-compiled mutations.
 type routeEntry struct {
-	Method    string
-	Path      string
-	Template  *template.Template
+	Method   string
+	Path     string
+	Template *template.Template
+	// Go answers the route in place of Template when a Go family registered
+	// it (#2829).
+	Go        spec.HTTPHandler
 	Mutations []mutation
 	// Events are the named events the route reports after its mutations
 	// (#1145), each data template compiled once.
@@ -703,7 +710,10 @@ func compileNamedEvents(owner string, events []profile.RouteEvent, funcs templat
 // the resolved subject by device identity even without per-call
 // argument capture (which is a planned follow-up).
 type commandEntry struct {
-	Match      string
+	Match string
+	// Go answers the command in place of Template when a Go family
+	// registered it (#2829).
+	Go         spec.LineHandler
 	Template   *template.Template
 	Mutations  []mutation
 	Action     string
@@ -1335,6 +1345,10 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 		if r.Method != route.Method || r.URL.Path != route.Path {
 			continue
 		}
+		if route.Go != nil {
+			d.serveGoRoute(rec, r, route.Go, reqCtx)
+			return
+		}
 
 		// Mutations and render both touch state. Hold the write lock
 		// across both so a concurrent reader never observes a state
@@ -1870,6 +1884,9 @@ func (d *Device) RunCommand(cmd string) (result CommandResult, ok bool, err erro
 	for _, ce := range d.commands {
 		if ce.Match != cmd {
 			continue
+		}
+		if ce.Go != nil {
+			return d.runGoCommand(ce), true, nil
 		}
 		d.mu.Lock()
 		data := templateData{

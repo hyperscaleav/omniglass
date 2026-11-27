@@ -133,12 +133,14 @@ func (d *Device) StartBehaviors() {
 	for _, b := range first {
 		d.tickBehavior(b)
 	}
+	d.startAnimator()
 }
 
 // StopBehaviors cancels every running behavior and waits for the
 // goroutines to exit. Idempotent: calling on a device with no started
 // behaviors returns immediately.
 func (d *Device) StopBehaviors() {
+	d.stopAnimator()
 	d.behaviorMu.Lock()
 	stops := make([]*behaviorEntry, 0, len(d.behaviors))
 	for i := range d.behaviors {

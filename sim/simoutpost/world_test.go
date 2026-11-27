@@ -138,7 +138,7 @@ func TestClockOffsetEnvReachesThePushersEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := startPushers(store, "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
+	e, err := startPushers(catalogOf(t, store), "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
 	if err != nil {
 		t.Fatal(err)
 	}

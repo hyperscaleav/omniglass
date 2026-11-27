@@ -392,6 +392,11 @@ type Route struct {
 	Mutations []Mutation     `yaml:"mutations"`
 	Example   string         `yaml:"example"`
 
+	// Native marks a route a Go family answers in Go (#2829): it is listed
+	// where a profile's routes are (the console's surface), and the engine
+	// does not render a template for it. Never set from YAML.
+	Native bool `yaml:"-"`
+
 	// Visibility marks a route as part of the device's advertised
 	// public API surface or as a private route the device's own web
 	// UI calls internally but that is not advertised as a public API.
@@ -452,6 +457,10 @@ type Command struct {
 	Mutate    map[string]any `yaml:"mutate"`
 	Mutations []Mutation     `yaml:"mutations"`
 	Example   string         `yaml:"example"`
+
+	// Native marks a command a Go family answers in Go (#2829); see
+	// Route.Native. Never set from YAML.
+	Native bool `yaml:"-"`
 
 	// MatchHex is an alternative to Match for protocols whose
 	// commands include literal control bytes that don't survive

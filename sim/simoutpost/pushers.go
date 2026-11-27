@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -68,19 +68,19 @@ func ParsePushers(s string) ([]Pusher, error) {
 // system its grant names, on its profile's cadence. A pusher whose profile
 // the catalog lacks or has no push face is refused, since it would never
 // push. The caller stops the engine.
-func startPushers(store *profile.Store, server string, ps []Pusher, w *world.World, clock sim.Clock) (*sim.Engine, error) {
+func startPushers(cat *spec.Catalog, server string, ps []Pusher, w *world.World, clock sim.Clock) (*sim.Engine, error) {
 	snaps := make([]sim.DeviceSnapshot, len(ps))
 	for i, p := range ps {
-		prof, ok := store.Devices[p.Profile]
+		def, ok := cat.Lookup(p.Profile)
 		if !ok {
 			return nil, fmt.Errorf("sim: pusher %s names profile %s, which the catalog lacks", p.Name, p.Profile)
 		}
-		if prof.Push == nil {
+		if def.PushFace() == nil {
 			return nil, fmt.Errorf("sim: pusher %s names profile %s, which has no push face", p.Name, p.Profile)
 		}
 		snaps[i] = sim.DeviceSnapshot{DeviceID: p.Name, Hostname: p.Name, LoopbackIP: "127.0.0.1", ProfileName: p.Profile, Version: 1}
 	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := sim.NewEngineOver(cat, profiles.Templates())
 	installWorld(e, w)
 	e.SetClock(clock)
 	if err := e.LoadDevices(snaps); err != nil {
