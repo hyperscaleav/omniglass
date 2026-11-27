@@ -160,6 +160,7 @@ func TestIntegrationCensusOccupancyFollowsItsRoomsCalendar(t *testing.T) {
 
 	deadline := time.Now().Add(8 * time.Minute)
 	var reads, occupied int
+	var settled bool
 	for reads < 6 {
 		lo := time.Now()
 		out, err := censusFireCommand(ctx, client, base, census, "control", "COUNT?")
@@ -176,6 +177,13 @@ func TestIntegrationCensusOccupancyFollowsItsRoomsCalendar(t *testing.T) {
 			t.Fatalf("COUNT? answered %q", out)
 		}
 		if want := allowed(lo, hi); !want[got] {
+			if !settled && got == 0 {
+				// A counter that has not ticked yet still holds its default
+				// zero; give it one tick before holding it to the calendar.
+				settled = true
+				time.Sleep(25 * time.Second)
+				continue
+			}
 			t.Fatalf("the counter reports %d people at %s; the room %s's calendar allows %v", got, hi.Format(time.RFC3339), room.Key(), want)
 		}
 		if got > 0 {
