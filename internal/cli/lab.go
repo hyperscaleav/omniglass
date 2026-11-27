@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sort"
@@ -573,6 +574,14 @@ func newLabSeedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The simulators read the world their plan resolves to (#2773): one
+			// file per site outpost, beside the omnibot recording in the data
+			// volume the outposts mount read-only.
+			if systems > 0 {
+				if err := writeLabWorlds(scenario, systems, filepath.Join(cfg().DataDir, filepath.Base(lab.WorldDir))); err != nil {
+					return err
+				}
+			}
 			// The server reads the lab's omnibot recording as it starts (#2121),
 			// a seeded lab's or a scale lab's (#2298), and plays it whenever no
 			// live model is configured.
@@ -593,6 +602,30 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&replay, "omnibot-replay", lab.DefaultOmnibotReplay, "the omnibot recording to write for the server to play")
 	cmd.Flags().BoolVar(&ssoDemo, "sso", false, "configure single sign-on against the lab's Dex and link its demo person (#2362)")
 	return cmd
+}
+
+// writeLabWorlds resolves a scale lab's scenario at its size to each site's
+// world and writes them under dir (#2773): the sim is, and a world file is how
+// the simulator beside each outpost learns it, not from the server.
+func writeLabWorlds(scenario string, systems int, dir string) error {
+	m, err := labscenario.Shipped(scenario)
+	if err != nil {
+		return err
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		return err
+	}
+	plan, err := labscenario.Resolve(m, cat, systems)
+	if err != nil {
+		return err
+	}
+	worlds, err := labscenario.SiteWorlds(m, cat, plan)
+	if err != nil {
+		return err
+	}
+	_, err = lab.WriteWorlds(dir, worlds)
+	return err
 }
 
 // runLabSeed is the lab's seed one-off, in the trusted direct-DB lane like

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Skip is a listed device the simulator does not serve, and why.
@@ -26,7 +27,13 @@ type Skip struct {
 // the addresses a simulator sharing the outpost's network can own. Snapshots
 // carry no state: each device starts from its profile's defaults, with its
 // product's overlay and an identity derived from its component id.
-func plan(devices []collection.SimDevice, profileFor func(string) (string, bool)) ([]sim.DeviceSnapshot, []Skip) {
+//
+// The server's list says which devices to serve and nothing of where they sit;
+// the simulator holds the world it simulates, and places each device in it by
+// the component's name and address (a name is minted per room, so it alone
+// repeats; the address is unique on the outpost). A device the world does not
+// name keeps empty room fields. A nil world places nothing.
+func plan(devices []collection.SimDevice, profileFor func(string) (string, bool), w *world.World) ([]sim.DeviceSnapshot, []Skip) {
 	var snaps []sim.DeviceSnapshot
 	var skips []Skip
 	for _, d := range devices {
@@ -47,10 +54,14 @@ func plan(devices []collection.SimDevice, profileFor func(string) (string, bool)
 			skips = append(skips, Skip{Name: d.Name, Reason: reason})
 			continue
 		}
-		snaps = append(snaps, sim.DeviceSnapshot{
+		snap := sim.DeviceSnapshot{
 			DeviceID: d.ComponentID, Hostname: d.Name, LoopbackIP: ip.String(),
 			ProfileName: profileName, Product: d.Product, Version: 1,
-		})
+		}
+		if at, ok := w.PlaceDevice(d.Name, d.Address); ok {
+			snap.SiteCode, snap.Building, snap.Room = at.Site, at.Building, at.Room
+		}
+		snaps = append(snaps, snap)
 	}
 	return snaps, skips
 }

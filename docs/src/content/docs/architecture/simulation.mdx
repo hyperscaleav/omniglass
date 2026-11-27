@@ -169,6 +169,26 @@ health's values. A simulator silent for a hundred seconds is forgotten, and dele
 forgets it at once. Because hits live in one server process, a second replica sees no simulator; that
 is accepted while the server runs as one ([scaling](/architecture/scaling/)).
 
+### The world it holds
+
+The server's list says which devices to serve and nothing of where they sit: no site, building or
+room. The simulator does not ask. **The sim is; Omniglass learns.** The simulator holds the world it
+simulates (`sim/world`): the sites, the rooms with their standard and capacity, each room's planned
+devices, the services that speak for rooms, the meeting knobs per standard and the calendar seed. It
+reads that world from a file the lab wrote from the scenario, at the path in `OMNIGLASS_SIM_WORLD`,
+and never from the server or its database; Omniglass learns the world only by collecting from it.
+With the file, `sim run` (and `outpost run --simulate`) builds the [lab calendar](#the-lab-calendar)
+from the world's seed and knobs and installs it on the engine, so `meetingNow` reads a real room. With
+none there is no calendar and no room, as before.
+
+Each pull is joined to the world by the component's **name and loopback address**: the platform mints
+a name per room, so `display-1` is in every room that has a display, and the address (unique across an
+outpost) tells them apart. A device the world names takes its site, building and room from it, which
+fills the profile tokens `{site}`, `{building}`, `{room}` and `{room-device:...}` and the room the
+device's own `meetingNow` reads; a device it does not name keeps empty room fields. A service
+resolves a push's `.Owner` system to a room through the world (`ownerRoom`, `ownerMeetingNow`,
+`ownerMeetingNext`) and lists the rooms it speaks for (`coveredRooms`).
+
 ### What an endpoint observed
 
 A hit says a device was touched, not whether every request arrived or how each ended. For that, every
@@ -377,7 +397,8 @@ the seam a test pins. A behavior's template reads its own room with `meetingNow`
 (each a map of the meeting, or nothing), and any template, a push body included, reads another room
 by its key with `roomMeetingNow` and `roomMeetingNext`. A service that speaks for many rooms reads by
 **room key**, not by system: the calendar is keyed by room, and a push's `.Owner` is a system, so a
-service resolves its owner to the room key before it reads.
+service resolves its owner to the room key before it reads, through
+[the world the simulator holds](#the-world-it-holds).
 
 ### A simulated service posts from the start
 

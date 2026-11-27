@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -365,5 +366,53 @@ func TestNoVRoomBehaviorTicksFasterThan15s(t *testing.T) {
 		if b.Interval < 15*time.Second {
 			t.Errorf("behavior %s ticks every %s, want 15 s or slower", b.Name, b.Interval)
 		}
+	}
+}
+
+// The bar reads its room's meeting off the lab calendar (#2773): placed in a
+// room of the world it reports the room's key and the start of the next
+// meeting the calendar holds, and with no calendar it reads empty.
+func TestVRoomReadsItsRoomsMeetingFromTheLabCalendar(t *testing.T) {
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := calTestKnobs()
+	room := calendar.Room{Site: "hq", Building: "tower", Room: "r101"}
+	at := time.Date(2026, 11, 3, 6, 0, 0, 0, time.UTC)
+	want, ok := calendar.New(5, func(calendar.Room) (calendar.Knobs, bool) { return k, true }).Next(room, at)
+	if !ok {
+		t.Fatal("the calendar holds no next meeting")
+	}
+	read := func(snap DeviceSnapshot, cal bool) map[string]any {
+		e := NewEngine(store, profiles.Templates())
+		if cal {
+			e.SetCalendar(calendar.New(5, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
+		}
+		if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
+			t.Fatal(err)
+		}
+		d := e.Devices()[0]
+		d.SetClock(func() time.Time { return at })
+		tickByName(t, d, "room_calendar")
+		res := d.Operate(Operation{Kind: "http", Method: "GET", Path: "/api/room"})
+		if res.Status != 200 {
+			t.Fatalf("GET /api/room answered %d %s %s", res.Status, res.Body, res.Error)
+		}
+		var out map[string]any
+		if err := json.Unmarshal([]byte(res.Body), &out); err != nil {
+			t.Fatalf("%v in %s", err, res.Body)
+		}
+		return out
+	}
+	snap := DeviceSnapshot{DeviceID: "bar", Hostname: "bar", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1,
+		SiteCode: "hq", Building: "tower", Room: "r101"}
+	got := read(snap, true)
+	if got["key"] != room.Key() || int64(got["next_start"].(float64)) != want.Start.Unix() {
+		t.Fatalf("the bar reads %v, want key %s and next start %d", got, room.Key(), want.Start.Unix())
+	}
+	snap.SiteCode, snap.Building, snap.Room = "", "", ""
+	if got := read(snap, false); got["key"] != "" || got["next_start"] != float64(0) {
+		t.Fatalf("a bar with no calendar reads %v", got)
 	}
 }

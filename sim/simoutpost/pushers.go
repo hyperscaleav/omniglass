@@ -8,6 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Pusher is one outside actor the emulator runs beside its outpost (#1743): a
@@ -67,7 +68,7 @@ func ParsePushers(s string) ([]Pusher, error) {
 // system its grant names, on its profile's cadence. A pusher whose profile
 // the catalog lacks or has no push face is refused, since it would never
 // push. The caller stops the engine.
-func startPushers(store *profile.Store, server string, ps []Pusher) (*sim.Engine, error) {
+func startPushers(store *profile.Store, server string, ps []Pusher, w *world.World) (*sim.Engine, error) {
 	snaps := make([]sim.DeviceSnapshot, len(ps))
 	for i, p := range ps {
 		prof, ok := store.Devices[p.Profile]
@@ -80,6 +81,7 @@ func startPushers(store *profile.Store, server string, ps []Pusher) (*sim.Engine
 		snaps[i] = sim.DeviceSnapshot{DeviceID: p.Name, Hostname: p.Name, LoopbackIP: "127.0.0.1", ProfileName: p.Profile, Version: 1}
 	}
 	e := sim.NewEngine(store, profiles.Templates())
+	installWorld(e, w)
 	if err := e.LoadDevices(snaps); err != nil {
 		return nil, err
 	}

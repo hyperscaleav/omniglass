@@ -3,7 +3,7 @@ title: "The lab calendar is derived, not stored, and a scripted source feeds it 
 date: 2026-11-26
 status: Accepted
 summary: "A lab's meetings are one calendar every simulated room acts out, a pure function of the scenario's calendar block, a seed and a window, so every simulator and the server compute the same one with nothing stored or shipped; services that span rooms read it by room key; a scripted problem source joins it on the same clock as a second entry kind."
-refs: [2757, 2764, 2769]
+refs: [2757, 2764, 2769, 2773]
 ---
 
 - **Date:** 2026-11-26 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/)
@@ -23,6 +23,26 @@ refs: [2757, 2764, 2769]
   Storing a calendar would need a table, a sync and a place for it to be wrong; a pure derivation has
   none, and a seed plus the manifest is all a simulator already has. The seed is the room key and not
   #1749's stable device key, which has not landed: meetings belong to a room, and every device in it
-  must see the same ones. Whether the knobs and each device's room reach a running simulator beside
-  an outpost is a separate seam (the server's device list names neither today); this decision does
-  not add it.
+  must see the same ones.
+- **Amended (#2773): the world is the simulator's own.** The sim is; Omniglass learns. The simulator
+  holds the world it simulates (`sim/world`: sites, rooms with standard and capacity, each room's
+  planned devices, the services and the rooms they cover, the meeting knobs per standard, the calendar
+  seed, versioned) and never reads it from the server or its database, so the server's device list
+  carries no location. The lab resolves the plan to one world file per simulator outpost (a pure
+  `plan -> world`, sized to the outpost's site) and the simulator loads it.
+  - **Transport.** The seed one-off writes `world/<outpost>.json` into the data volume it already
+    mounts; each simulator outpost mounts that volume read-only and finds its file at the path in
+    `OMNIGLASS_SIM_WORLD`, as the lab already hands it its pushers. No new volume, host path or
+    server route. A lab with no plan writes no file and its simulator has no calendar and no rooms.
+  - **The join.** The pull still says which devices to serve (ADR-0142, unchanged). The simulator
+    places each pulled device in the world by component name **and** loopback address: the platform
+    mints a name per room (`display-1` is in every room with a display), so the name alone is
+    ambiguous, and the address is the one thing unique across an outpost that the pull carries. The
+    world predicts both (the name by the platform's mint, the address by the fleet planner's block), and
+    a test seeds a plan through the real generator and planner and holds the world to it. A pulled
+    device the world does not name keeps empty room fields.
+  - **Services.** A service resolves a push's `.Owner` system to a room through the world
+    (`ownerRoom`, `ownerMeetingNow`, `ownerMeetingNext`) and reads the rooms it covers
+    (`coveredRooms`); Omniglass is not asked.
+  - **Deferred.** The inversion of ADR-0142, where the simulator decides which devices exist and
+    Omniglass discovers them, is a separate definition; the world file is the seam it would grow from.

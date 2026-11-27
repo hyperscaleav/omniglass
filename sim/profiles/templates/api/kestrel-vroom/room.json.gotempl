@@ -1,0 +1,5 @@
+{
+  "meeting_organizer": "{{ .State | get "status" | get "room" | get "meeting_organizer" }}",
+  "next_start": {{ .State | get "status" | get "room" | get "next_start" }},
+  "key": "{{ .State | get "status" | get "room" | get "key" }}"
+}

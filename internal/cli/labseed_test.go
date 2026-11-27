@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -22,6 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // The lab's seed with no outpost (#1267), against a real database: the dev
@@ -695,5 +697,43 @@ func TestLabScaleSeedRefusesAStorylineItsPlanCannotHold(t *testing.T) {
 	err := runLabScaleSeed(context.Background(), &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, "", nil, false, false, true)
 	if err == nil || !strings.Contains(err.Error(), "hq-mr86-1") {
 		t.Fatalf("a 3-system lab with --health-history: %v, want a refusal naming the storyline's missing rooms", err)
+	}
+}
+
+// A scale lab's seed leaves each site outpost's world file for its simulator
+// (#2773): resolved from the scenario at the lab's size, one per site, each
+// the world the pure plan-to-world function gives, loadable by the simulator.
+func TestLabScaleSeedWritesEachSiteOutpostsWorldFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "world")
+	if err := writeLabWorlds("corporate", 20, dir); err != nil {
+		t.Fatal(err)
+	}
+	plan := corporateScalePlan(t, 20)
+	m, err := labscenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := labscenario.SiteWorlds(m, cat, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, site := range plan.Sites {
+		outpost := labscenario.SiteOutpost(site.Name)
+		got, err := world.Load(filepath.Join(dir, outpost+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, _ := got.Marshal()
+		b, _ := want[outpost].Marshal()
+		if string(a) != string(b) {
+			t.Errorf("%s's world file is not the plan's world", outpost)
+		}
+	}
+	if err := writeLabWorlds("no-such-scenario", 20, dir); err == nil {
+		t.Error("an unknown scenario wrote worlds")
 	}
 }

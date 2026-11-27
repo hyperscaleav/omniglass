@@ -22,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/impair"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Config is the simulator run mode's configuration. It authenticates as the
@@ -51,6 +52,11 @@ type Config struct {
 	// systems its grant names through POST /telemetry:push. None pushes
 	// nothing.
 	Pushers []Pusher
+	// World is the world this simulator simulates (#2773): the rooms and
+	// devices the scenario planned, loaded from the world file the lab wrote.
+	// With one, the engine holds the lab calendar and the pulled devices are
+	// placed in rooms; with none there is no calendar and no room, as before.
+	World *world.World
 }
 
 const (
@@ -119,6 +125,7 @@ func Run(ctx context.Context, cfg Config) error {
 		"net_admin", caps.NetAdmin, "port_offset", caps.PortOffset)
 
 	engine := sim.NewEngine(store, profiles.Templates())
+	installWorld(engine, cfg.World)
 	if cfg.PortOffset != 0 {
 		engine.SetPortMap(sim.PrivilegedPortShift(cfg.PortOffset))
 	}
@@ -161,7 +168,7 @@ func Run(ctx context.Context, cfg Config) error {
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	subs := newSubscriber(cfg.ServerURL, store)
 	if len(cfg.Pushers) > 0 {
-		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers)
+		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers, cfg.World)
 		if err != nil {
 			return err
 		}
@@ -174,7 +181,7 @@ func Run(ctx context.Context, cfg Config) error {
 			log.Warn("device list pull failed", "error", err)
 			return
 		}
-		snaps, skips := plan(devices, profileFor)
+		snaps, skips := plan(devices, profileFor, cfg.World)
 		for _, s := range skips {
 			log.Debug("not simulating", "component", s.Name, "reason", s.Reason)
 		}

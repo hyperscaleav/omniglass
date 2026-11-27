@@ -29,6 +29,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // requestBodyLimit caps how much of an inbound request body we will
@@ -274,6 +275,9 @@ type Device struct {
 	// calendar (#2757); both stay zero on a device standing alone.
 	room   calendar.Room
 	calSrc func() *calendar.Calendar
+	// worldSrc reaches the engine's world (#2773), nil on a device standing
+	// alone.
+	worldSrc func() *world.World
 
 	mu    sync.RWMutex
 	state map[string]any

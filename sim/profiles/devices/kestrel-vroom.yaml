@@ -110,6 +110,13 @@ interfaces:
         visibility: private
         doc: { summary: "Recent device logs (private; undocumented direct-call route)", tags: [api, logs, private] }
 
+      # The room's own meeting, read off the lab calendar (#2757, #2773): the
+      # organizer of the meeting running in the room now, the start of the
+      # next and the room's key. A bar placed in no room reads empty.
+      - match: "GET /api/room"
+        template: api/kestrel-vroom/room.json.gotempl
+        doc: { summary: "The room's current and next meeting, from the room's calendar", tags: [api, calendar] }
+
       - match: "GET /api/call"
         template: api/kestrel-vroom/call.json.gotempl
         doc: { summary: "Current call state", tags: [api, call] }
@@ -351,6 +358,20 @@ behaviors:
       - name: log
         data: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ $id := .State.status.call.id }}{{ if eq $e "start" }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if eq $e "join" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "leave" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "end" }}{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ $id }}, peers={{ .State.status.sim.participants_prev }}, reason=remote-hangup)"}{{ end }}'
 
+  # The room's calendar, read through the device's room (#2773): the lab
+  # calendar is the one every device of the room speaks of, so the bar reads
+  # it and does not keep a second schedule of its own. Empty with no world.
+  - name: room_calendar
+    schedule:
+      interval: 15s
+    mutations:
+      - path: status.room.meeting_organizer
+        value: '{{ with meetingNow }}{{ .organizer }}{{ end }}'
+      - path: status.room.next_start
+        value: '{{ with meetingNext }}{{ .start }}{{ else }}0{{ end }}'
+      - path: status.room.key
+        value: '{{ with meetingNext }}{{ .site }}/{{ .building }}/{{ .room }}{{ end }}'
+
   # A status line every 15 minutes, call or none, so the log stream is not
   # only a call's.
   - name: status_log
@@ -432,6 +453,13 @@ defaults:
     presentation:
       # Local (HDMI/USB-C) presentation active vs idle.
       local_active: false
+    # The room's meetings off the lab calendar (room_calendar): who has the
+    # room now, when the next starts (unix seconds, 0 for none) and the
+    # room's key (site/building/room).
+    room:
+      meeting_organizer: ""
+      next_start: 0
+      key: ""
     logs:
       # Recent device log lines, surfaced over the PRIVATE /api/logs
       # route. The web admin "Recent logs" card fetches this from client

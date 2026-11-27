@@ -1239,7 +1239,8 @@ A slot under `control` must be one the standard fills. The `calendar` block is o
 `meetings` names a standard of the scenario, with its knobs checked at load (a rate between 0 and 1, a
 slot mix of 15, 30 and 60 minutes, an attendance range from at least one, hours inside the day); a
 refusal names the field, as `calendar.meetings.mr65.booking_rate`. What the knobs produce is the
-[lab calendar](/architecture/simulation/#the-lab-calendar). The validator collects every problem at once and names
+[lab calendar](/architecture/simulation/#the-lab-calendar). A scale lab hands each outpost's simulator
+the world its plan resolves to (below). The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text
@@ -1247,6 +1248,27 @@ corporate.yaml:21: sites max 3 is below min 5
 corporate.yaml:57: product "polaris-sky-c6" has no simulator profile, so the lab cannot simulate it
 corporate.yaml:65: unknown product "boreal-cast-m9": the catalog has no product of that name
 ```
+
+### The world file
+
+A scale lab's simulators hold the world they simulate: the lab resolves the plan to a **world file** per
+site outpost and the simulator loads it, so the rooms and the [lab calendar](/architecture/simulation/#the-lab-calendar)
+reach a running simulator without the server saying anything about them
+([the world it holds](/architecture/simulation/#the-world-it-holds)). One pure function turns the plan
+into each site's world (`scenario.SiteWorlds`): the site's rooms with their standard, system and capacity
+(the largest attendance their standard's meeting knobs declare), each room's planned devices by the
+name the platform will mint and the loopback address the fleet plans for them, the services (a pusher
+or a webhook sender) with the systems each speaks for, the `calendar.meetings` knobs per standard, and a
+calendar seed taken from the scenario's name, so a room's meetings do not move when the lab is resized.
+The file is versioned (`version: 1`) and sized to the site, not the fleet.
+
+The seed one-off writes the files into the lab's data volume (`world/<outpost>.json`), and each outpost
+mounts that volume read-only and finds its own file at the path in `OMNIGLASS_SIM_WORLD`, a variable the
+lab sets as it sets each outpost's pushers. The volume is the one place the seed and the outposts
+already share, so nothing new carries it. A lab without a plan (the default lab) writes none and its
+simulator holds no calendar and no rooms. The names and addresses are predictions of what the seed
+will mint, and a test seeds a plan through the real name generator and address planner and holds the
+two to each other.
 
 ### How many sites
 

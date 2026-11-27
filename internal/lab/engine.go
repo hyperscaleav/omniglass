@@ -240,7 +240,7 @@ func createOptions(svc Service, net string) (client.ContainerCreateOptions, erro
 		host.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyMode(svc.Restart)}
 	}
 	for _, m := range svc.Mounts {
-		host.Mounts = append(host.Mounts, mount.Mount{Type: mount.TypeVolume, Source: m.Volume, Target: m.Target})
+		host.Mounts = append(host.Mounts, mount.Mount{Type: mount.TypeVolume, Source: m.Volume, Target: m.Target, ReadOnly: m.ReadOnly})
 	}
 	if p := svc.Publish; p != nil {
 		port, err := network.ParsePort(strconv.Itoa(p.ContainerPort) + "/tcp")

@@ -1165,3 +1165,33 @@ func TestPlanEnvSecretsGoToTheServerAlone(t *testing.T) {
 		}
 	}
 }
+
+// A scale lab's outposts each load the world file its seed wrote for them
+// (#2773), through a read-only mount of the data volume; the lab with no plan
+// has no world, so its outpost is told of none and mounts nothing.
+func TestPlanScaleLabGivesEachSiteOutpostItsWorldFile(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range s.Outposts {
+		if want := simoutpost.WorldEnv + "=" + WorldFile(n.Name); !slices.Contains(n.Env, want) {
+			t.Errorf("outpost %s env %v lacks %s", n.Name, n.Env, want)
+		}
+		if want := (Mount{Volume: "omniglass-scale_data", Target: dataDir, ReadOnly: true}); !slices.Equal(n.Mounts, []Mount{want}) {
+			t.Errorf("outpost %s mounts %v, want only %v", n.Name, n.Mounts, want)
+		}
+	}
+	dev, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range dev.Outpost.Env {
+		if strings.HasPrefix(e, simoutpost.WorldEnv+"=") {
+			t.Errorf("the lab with no plan names a world: %s", e)
+		}
+	}
+	if len(dev.Outpost.Mounts) != 0 {
+		t.Errorf("the lab with no plan mounts %v into its outpost", dev.Outpost.Mounts)
+	}
+}

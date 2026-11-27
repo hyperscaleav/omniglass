@@ -61,7 +61,7 @@ func TestTheEmulatorsBookingServiceLandsItsBookings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := startPushers(store, apiSrv.URL, []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Token: tok}})
+	e, err := startPushers(store, apiSrv.URL, []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Token: tok}}, nil)
 	if err != nil {
 		t.Fatalf("startPushers: %v", err)
 	}

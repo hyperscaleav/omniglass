@@ -14,6 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Engine manages all simulated devices for a site.
@@ -37,6 +38,9 @@ type Engine struct {
 	obs *endpointObservation
 	// cal is the lab calendar (#2757) devices read through their clock.
 	cal atomic.Pointer[calendar.Calendar]
+	// world is the world the simulator holds (#2773), which a service reads
+	// to resolve a system to a room.
+	world atomic.Pointer[world.World]
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
@@ -615,6 +619,7 @@ func (e *Engine) SetHitReporter(f func(Hit)) {
 // it without writing fields its listeners are reading.
 func (e *Engine) installSeams(dev *Device) {
 	dev.calSrc = e.Calendar
+	dev.worldSrc = e.World
 	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()

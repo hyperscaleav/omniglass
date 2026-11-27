@@ -9,6 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 func calTestKnobs() calendar.Knobs {
@@ -115,5 +116,47 @@ func TestMeetingFuncsAreEmptyWithoutACalendar(t *testing.T) {
 	e.SetCalendar(nil)
 	if got := stampBehavior(t, d, `{{ with meetingNow }}busy{{ else }}none{{ end }}`); got != "none" {
 		t.Fatalf("a device with no calendar reads %v", got)
+	}
+}
+
+// A service resolves a system to a room through the world it holds, never
+// through Omniglass (#2773): ownerRoom and ownerMeetingNow read the world, a
+// system the world does not name resolves to nothing, and coveredRooms lists
+// the rooms the service's own world entry speaks for.
+func TestServiceFuncsResolveASystemThroughTheWorld(t *testing.T) {
+	room := calendar.Room{Site: "hq", Building: "tower", Room: "r102"}
+	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	ref := calendar.New(11, func(calendar.Room) (calendar.Knobs, bool) { return calTestKnobs(), true })
+	var e calendar.Entry
+	for _, c := range ref.Entries(room, day, day.Add(24*time.Hour)) {
+		if c.Meeting.Origin == calendar.OriginBooked {
+			e = c
+			break
+		}
+	}
+	if e.Meeting == nil {
+		t.Fatal("no booked meeting in the day")
+	}
+	at := e.Start.Add(e.End.Sub(e.Start) / 2)
+	eng, d := calEngine(t, 11, calendar.Room{Site: "hq", Building: "tower", Room: "r101"}, &at)
+	const resolve = `{{ with ownerRoom "sys-102" }}{{ .site }}/{{ .building }}/{{ .room }}{{ else }}none{{ end }}`
+	if got := stampBehavior(t, d, resolve); got != "none" {
+		t.Fatalf("with no world a system resolves to %v", got)
+	}
+	eng.SetWorld(&world.World{Version: world.Version, Sites: []world.Site{{Name: "hq", Rooms: []world.Room{
+		{Name: "r101", Building: "tower", System: "sys-101"}, {Name: "r102", Building: "tower", System: "sys-102"}}}},
+		Services: []world.Service{{Name: "d-r101", Profile: "x", Covers: []world.Cover{
+			{System: "sys-101", Site: "hq", Building: "tower", Room: "r101"}, {System: "sys-102", Site: "hq", Building: "tower", Room: "r102"}}}}})
+	if got := stampBehavior(t, d, resolve); got != "hq/tower/r102" {
+		t.Fatalf("ownerRoom reads %v", got)
+	}
+	if got := stampBehavior(t, d, `{{ with ownerRoom "sys-999" }}some{{ else }}none{{ end }}`); got != "none" {
+		t.Fatalf("a system the world lacks resolves to %v", got)
+	}
+	if got := stampBehavior(t, d, `{{ with ownerMeetingNow "sys-102" }}{{ .organizer }}{{ else }}none{{ end }}`); got != e.Meeting.Organizer {
+		t.Fatalf("ownerMeetingNow reads %v, want %q", got, e.Meeting.Organizer)
+	}
+	if got := stampBehavior(t, d, `{{ range coveredRooms }}{{ .room }},{{ end }}`); got != "r101,r102," {
+		t.Fatalf("coveredRooms reads %v", got)
 	}
 }

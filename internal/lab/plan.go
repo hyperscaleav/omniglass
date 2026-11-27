@@ -406,8 +406,9 @@ func (o Options) Scale() bool { return len(o.SiteOutposts) > 0 }
 
 // Mount is a named volume mounted into a container.
 type Mount struct {
-	Volume string
-	Target string
+	Volume   string
+	Target   string
+	ReadOnly bool
 }
 
 // Publish is the one port the lab publishes on the host.
@@ -749,18 +750,30 @@ func Plan(o Options) (Spec, error) {
 	}
 	outpostCmd := []string{"outpost", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
 		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
+	// A scale lab's simulator holds the world its plan resolves to (#2773):
+	// the seed writes one world file per site outpost into the data volume,
+	// and each outpost reads its own through a read-only mount of it. The
+	// lab without a plan has no world: its simulator holds no calendar and
+	// no rooms.
 	outpostService := func(service, name, token string, components int, role string) Service {
+		var worldEnv []string
+		var worldMounts []Mount
+		if o.Scale() {
+			worldEnv = []string{simoutpost.WorldEnv + "=" + WorldFile(name)}
+			worldMounts = []Mount{{Volume: volData, Target: dataDir, ReadOnly: true}}
+		}
 		memory := OutpostMemoryLimit(components)
 		return Service{
 			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,
 			Cmd: outpostCmd,
-			Env: []string{
+			Env: append([]string{
 				"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
 				"OMNIGLASS_OUTPOST_NAME=" + name,
 				"OMNIGLASS_OUTPOST_TOKEN=" + token,
 				simoutpost.PushersEnv + "=" + simoutpost.FormatPushers(outpostPushers(o.Pushers, name)),
 				GoMemLimitEnv(memory),
-			},
+			}, worldEnv...),
+			Mounts: worldMounts,
 			// Distroless grants an added capability to root only, so the outpost
 			// runs as root inside its own container, to hold NET_ADMIN for the
 			// impairments; it reaches that container's namespace, never the

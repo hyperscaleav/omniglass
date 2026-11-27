@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
@@ -550,5 +551,97 @@ func TestSeedPlanInducesNothingByDefault(t *testing.T) {
 	}
 	if n := inducedTasks(t, ctx, conn); n != 0 {
 		t.Errorf("%d tasks carry the induced key by default", n)
+	}
+}
+
+// The simulator joins what a server lists to its world by the component's name
+// and address (#2773), so the names and addresses the world predicts must be
+// the ones the platform mints and the fleet plans. Seed a plan through the real
+// name generator and the real address planner, then read each outpost's sim
+// device list back, the list a simulator pulls: every device it names is a
+// device of its site's world, in the room the world puts it in, and the world
+// names no device the server does not list.
+func TestSeedPlanMintsTheNamesAndAddressesTheWorldPredicts(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := scenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := corporatePlan(t, 20)
+	outpostOf := func(site string) string { return "edge-" + site }
+	var names []string
+	for _, s := range p.Sites {
+		names = append(names, outpostOf(s.Name))
+	}
+	planOutposts(t, ctx, gw, names...)
+	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, OutpostFor: outpostOf}); err != nil {
+		t.Fatal(err)
+	}
+	worlds, err := scenario.SiteWorlds(m, cat, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Where the platform put each component: its room, by id.
+	rows, err := conn.Query(ctx, `select c.id::text, l.name from component c join location l on l.id = c.location_id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomOf := map[string]string{}
+	for rows.Next() {
+		var id, loc string
+		if err := rows.Scan(&id, &loc); err != nil {
+			t.Fatal(err)
+		}
+		roomOf[id] = loc
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	listed := 0
+	for _, s := range p.Sites {
+		w := worlds[outpostOf(s.Name)]
+		devices, err := gw.OutpostSimDevices(ctx, outpostOf(s.Name), scope.Set{All: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range devices {
+			listed++
+			place, ok := w.PlaceDevice(d.Name, d.Address)
+			if !ok {
+				// A webhook sender sits at its site, in no room: it is a service.
+				if roomOf[d.ComponentID] == s.Name && w.Covered(d.Name) != nil {
+					continue
+				}
+				t.Fatalf("%s lists %s at %s (%s in %s), which its world does not place", outpostOf(s.Name), d.Name, d.Address, d.Product, roomOf[d.ComponentID])
+			}
+			if place.Room != roomOf[d.ComponentID] || place.Site != s.Name {
+				t.Fatalf("%s: the platform put %s at %s in %s, the world in %s/%s", outpostOf(s.Name), d.Name, d.Address, roomOf[d.ComponentID], place.Site, place.Room)
+			}
+		}
+		simulated := 0
+		for _, r := range w.Sites[0].Rooms {
+			for _, d := range r.Devices {
+				if d.Profile != "" {
+					simulated++
+				}
+			}
+		}
+		for _, svc := range w.Services {
+			if svc.Webhook && svc.Address != "" {
+				simulated++
+			}
+		}
+		if simulated != len(devices) {
+			t.Fatalf("%s: the world plans %d simulated devices, the server lists %d", outpostOf(s.Name), simulated, len(devices))
+		}
+	}
+	if listed == 0 {
+		t.Fatal("no outpost listed a device")
 	}
 }
