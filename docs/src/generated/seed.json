@@ -2796,6 +2796,13 @@
       "accepted_types": [
        "scheduling-panel"
       ]
+     },
+     {
+      "name": "people-counter",
+      "label": "People Counter",
+      "accepted_types": [
+       "occupancy-sensor"
+      ]
      }
     ],
     "metrics": [

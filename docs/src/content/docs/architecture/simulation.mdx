@@ -401,6 +401,13 @@ by its key with `roomMeetingNow` and `roomMeetingNext`. A service that speaks fo
 service resolves its owner to the room key before it reads, through
 [the world the simulator holds](#the-world-it-holds).
 
+Readers of the calendar:
+
+- **The people counter** (`tessellate-census-c1`) reports who the calendar says is in its room: a held
+  meeting's or walk-in's actual attendees (over the room's capacity when the payload says so), zero in a
+  no-show and in an empty room, and now and then one fewer in a meeting of two or more, as someone steps
+  out. The lab's conference rooms carry one, so its count rises at a meeting's start and falls at its end.
+
 ### A simulated service posts from the start
 
 A webhook's URL carries a token the server mints when the endpoint is created, so no profile can name

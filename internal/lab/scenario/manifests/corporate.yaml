@@ -62,6 +62,7 @@ standards:
       amplifier: polaris-amp-4100
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
+      people-counter: tessellate-census-c1
     # The conference rooms' video bars talk over two protocols (#2754): the
     # https API and the websocket control socket the touch panel drives,
     # each its own endpoint on the bar.

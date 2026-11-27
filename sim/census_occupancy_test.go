@@ -1,82 +1,125 @@
 package sim
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
-// TestCensusOccupancyBehaviorRenders exercises the tessellate-census-c1
-// occupancy_drift behavior exactly as authored in the profile, over many
-// ticks and several device seeds. It guards two things that a template
-// author can easily get wrong:
-//
-//   - render failures: tickBehavior only logs render errors (slog.Warn)
-//     and leaves state untouched, so a broken template would silently
-//     freeze the field. We assert last_event is always a valid enum
-//     ("increased"/"decreased"/"steady"), an empty/garbage value means
-//     the value template failed to render (e.g. a gt/lt int64-vs-float64
-//     kind mismatch).
-//   - invariant drift: people_count must stay whole-numbered within
-//     [0, 14], and vacant must agree with count==0.
-func TestCensusOccupancyBehaviorRenders(t *testing.T) {
-	muts := []profile.Mutation{
-		{Path: "status.occupancy.people_count_prev", Value: "{{ .State.status.occupancy.people_count }}"},
-		{Path: "status.occupancy.people_count", Value: "{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}"},
-		{Path: "status.occupancy.last_event", Value: "{{ $delta := sub .State.status.occupancy.people_count .State.status.occupancy.people_count_prev }}{{ if gt $delta 0 }}increased{{ else if lt $delta 0 }}decreased{{ else }}steady{{ end }}"},
-		{Path: "status.occupancy.vacant", Value: "{{ if eq .State.status.occupancy.people_count 0 }}true{{ else }}false{{ end }}"},
+// censusDevice is the shipped tessellate-census-c1 in a room, its clock pinned
+// and the lab calendar of the seed on its engine (#2766): the profile's own
+// occupancy behavior, exactly as authored.
+func censusDevice(t *testing.T, seed int64, room calendar.Room, at *time.Time) (*Device, *calendar.Calendar, *Engine) {
+	t.Helper()
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
 	}
+	e := NewEngine(store, profiles.Templates())
+	k := calTestKnobs()
+	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
+	e.SetCalendar(cal)
+	snap := DeviceSnapshot{DeviceID: "census-" + room.Room, Hostname: "census-" + room.Room, LoopbackIP: "127.0.0.1",
+		ProfileName: "tessellate-census-c1", Version: 1, SiteCode: room.Site, Building: room.Building, Room: room.Room}
+	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
+		t.Fatal(err)
+	}
+	d := e.Devices()[0]
+	d.SetClock(pinned(at))
+	return d, cal, e
+}
 
-	validEvent := map[string]bool{"increased": true, "decreased": true, "steady": true}
+// The people counter reads who is in its room from the lab calendar, never from
+// a walk of its own: over simulated days its count is zero outside meetings and
+// in a no-show, and inside a held meeting or a walk-in it is the meeting's
+// actual attendees less at most the one who stepped out. Its derived signal
+// and vacant flag stay consistent with the count it reports.
+func TestCensusOccupancyFollowsTheLabCalendar(t *testing.T) {
+	room := calendar.Room{Site: "hq", Building: "tower", Room: "r101"}
+	at := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+	d, cal, _ := censusDevice(t, 7, room, &at)
+	const name = "occupancy_drift"
 
-	for _, id := range []string{"census-001", "census-002", "census-003"} {
-		state := map[string]any{
-			"status": map[string]any{
-				"occupancy": map[string]any{
-					"people_count":      0,
-					"people_count_prev": 0,
-					"last_event":        "steady",
-					"vacant":            true,
-				},
-			},
+	var outside, noShow, held, walkIn, steppedOut, full int
+	prev := int64(0)
+	end := at.Add(4 * 24 * time.Hour)
+	for ; at.Before(end); at = at.Add(20 * time.Second) {
+		if !d.TickBehavior(name) {
+			t.Fatalf("%s did not tick", name)
 		}
-		d := newTestDevice(t, id, state)
-		if err := d.AddBehaviorFromProfile(&profile.Behavior{
-			Name:      "occupancy_drift",
-			Schedule:  profile.Schedule{Interval: "20s"},
-			Mutations: muts,
-		}); err != nil {
-			t.Fatalf("AddBehaviorFromProfile: %v", err)
+		count, _, err := toFloat(d.ReadPath("status.occupancy.people_count"))
+		if err != nil {
+			t.Fatalf("at %s people_count = %v: %v", at, d.ReadPath("status.occupancy.people_count"), err)
+		}
+		got := int64(count)
+		e, in := cal.Now(room, at)
+		switch {
+		case !in:
+			outside++
+			if got != 0 {
+				t.Fatalf("at %s outside any meeting people_count = %d", at, got)
+			}
+		case e.Meeting.Outcome == calendar.OutcomeNoShow:
+			noShow++
+			if got != 0 {
+				t.Fatalf("at %s in a no-show people_count = %d", at, got)
+			}
+		default:
+			actual := int64(e.Meeting.Actual)
+			if got != actual && !(actual > 1 && got == actual-1) {
+				t.Fatalf("at %s in a %s %s people_count = %d, the meeting had %d", at, e.Meeting.Origin, e.Meeting.Outcome, got, actual)
+			}
+			if got == actual {
+				full++
+			} else {
+				steppedOut++
+			}
+			if e.Meeting.Origin == calendar.OriginWalkIn {
+				walkIn++
+			} else {
+				held++
+			}
 		}
 
-		for tick := 1; tick <= 50; tick++ {
-			d.tickBehavior(&d.behaviors[0])
-			occ := d.State()["status"].(map[string]any)["occupancy"].(map[string]any)
-
-			ev, _ := occ["last_event"].(string)
-			if !validEvent[ev] {
-				t.Fatalf("%s tick %d: last_event = %q (%T), want a valid enum, likely a render failure",
-					id, tick, occ["last_event"], occ["last_event"])
-			}
-
-			cnt, _, err := toFloat(occ["people_count"])
-			if err != nil {
-				t.Fatalf("%s tick %d: people_count = %v (%T) not numeric", id, tick, occ["people_count"], occ["people_count"])
-			}
-			if cnt < 0 || cnt > 14 {
-				t.Fatalf("%s tick %d: people_count = %v out of [0,14]", id, tick, cnt)
-			}
-			if cnt != float64(int64(cnt)) {
-				t.Fatalf("%s tick %d: people_count = %v not whole-numbered", id, tick, cnt)
-			}
-
-			vac, ok := occ["vacant"].(bool)
-			if !ok {
-				t.Fatalf("%s tick %d: vacant = %v (%T), want bool, likely a render failure", id, tick, occ["vacant"], occ["vacant"])
-			}
-			if want := cnt < 0.5; vac != want {
-				t.Fatalf("%s tick %d: vacant = %v but people_count = %v", id, tick, vac, cnt)
-			}
+		if want := map[bool]string{true: "true", false: "false"}[got == 0]; fmt.Sprint(d.ReadPath("status.occupancy.vacant")) != want {
+			t.Fatalf("at %s vacant = %v with people_count %d", at, d.ReadPath("status.occupancy.vacant"), got)
 		}
+		wantEv := "steady"
+		if got > prev {
+			wantEv = "increased"
+		} else if got < prev {
+			wantEv = "decreased"
+		}
+		if ev := d.ReadPath("status.occupancy.last_event"); ev != wantEv {
+			t.Fatalf("at %s last_event = %v after %d -> %d, want %s", at, ev, prev, got, wantEv)
+		}
+		prev = got
+	}
+	// The days must have exercised every branch, or the test proves nothing.
+	if outside == 0 || noShow == 0 || held == 0 || walkIn == 0 || steppedOut == 0 || full == 0 {
+		t.Fatalf("the simulated days left a branch unread: outside=%d noShow=%d held=%d walkIn=%d steppedOut=%d full=%d",
+			outside, noShow, held, walkIn, steppedOut, full)
+	}
+}
+
+// With no calendar the room is empty: the counter reports zero and vacant
+// rather than inventing a crowd of its own.
+func TestCensusOccupancyIsEmptyWithoutACalendar(t *testing.T) {
+	at := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	d, _, e := censusDevice(t, 7, calendar.Room{Site: "hq", Building: "tower", Room: "r101"}, &at)
+	e.SetCalendar(nil)
+	for i := 0; i < 20; i++ {
+		d.TickBehavior("occupancy_drift")
+		at = at.Add(20 * time.Second)
+	}
+	if got := fmt.Sprint(d.ReadPath("status.occupancy.people_count")); got != "0" {
+		t.Fatalf("with no calendar people_count = %s", got)
+	}
+	if got := fmt.Sprint(d.ReadPath("status.occupancy.vacant")); got != "true" {
+		t.Fatalf("with no calendar vacant = %s", got)
 	}
 }
