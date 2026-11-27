@@ -62,7 +62,7 @@ func TestEveryDeviceInARoomReadsTheSameRoomPhase(t *testing.T) {
 	at := phaseAt(8, 40, 0)
 	_, ds := phaseRoomEngine(t, phaseDayKnobs(), &at, "newtron-core-3", "newtron-panel-7", "meridian-mx-84", "meridian-xl-1", "boreal-edge-86")
 	for _, tc := range []struct {
-		at                            time.Time
+		at                           time.Time
 		phase, page, input, extender string
 	}{
 		{phaseAt(8, 26, 0), "idle", "idle", "dp1", "absent"},

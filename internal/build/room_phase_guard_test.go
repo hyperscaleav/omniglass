@@ -68,7 +68,7 @@ func TestRoomTimingGuardRecognizesTheOldShapes(t *testing.T) {
 			t.Errorf("the guard misses %s", a)
 		}
 	}
-	if (meetingTime.MatchString(`{{ printf "m%v" .start }}`) && arith.MatchString(`{{ printf "m%v" .start }}`)) {
+	if meetingTime.MatchString(`{{ printf "m%v" .start }}`) && arith.MatchString(`{{ printf "m%v" .start }}`) {
 		t.Error("the guard flags a meeting key")
 	}
 }
