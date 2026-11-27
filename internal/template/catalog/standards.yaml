@@ -233,6 +233,12 @@ templates:
         - name: scheduling-panel
           label: Scheduling Panel
           accepted_types: [scheduling-panel]
+        - name: people-counter
+          label: People Counter
+          accepted_types: [occupancy-sensor]
+        - name: projection
+          label: Projection
+          accepted_types: [projector]
       metrics:
         - { name: room-temperature }
         - { name: occupancy-count }

@@ -477,7 +477,7 @@ func TestSeedPlanSeedsTheMeetingPlatformItsWebhookRoomsAndDevices(t *testing.T) 
 			t.Fatal(err)
 		}
 		switch {
-		case key == "ucc-room-id" && kind == "system":
+		case (key == "ucc-room-id" || key == "sched-room-id") && kind == "system":
 			rooms[value] = owner
 		case key == "ucc-device-id" && kind == "component":
 			devices[value] = owner

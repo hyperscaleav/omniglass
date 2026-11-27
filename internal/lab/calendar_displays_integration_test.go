@@ -124,9 +124,9 @@ func buildingOpenAt(w *world.World, room calendar.Room, t time.Time) bool {
 // exactly when the room's meetings say so, and a lobby sign's player is
 // playing exactly when its building is open. Both are read over the console's
 // fire API, off the simulator, and compared with the calendar the plan's
-// world implies; nothing is read from the server's own state. The projector
-// is in no shipped scenario, so its twin behavior is proven in the sim's own
-// tests, not here.
+// world implies; nothing is read from the server's own state. The conference
+// room's projector (the Beam, in the divisible-conference standard's
+// projection slot) is read the same way as its display.
 func TestIntegrationCorporateDisplaysFollowTheCalendar(t *testing.T) {
 	ctx := context.Background()
 	const systems = 20
@@ -155,7 +155,7 @@ func TestIntegrationCorporateDisplaysFollowTheCalendar(t *testing.T) {
 
 	// The device in a slot of a room of the standard, by the world's own
 	// naming (<system>-<slot>-<n>): the conference room's main display and a
-	// lobby sign's player.
+	// lobby sign's player, and the conference room's projector.
 	find := func(standard, slot string) (system, name string, room calendar.Room) {
 		for _, s := range w.Sites {
 			for _, r := range s.Rooms {
@@ -170,6 +170,7 @@ func TestIntegrationCorporateDisplaysFollowTheCalendar(t *testing.T) {
 		return
 	}
 	panelSys, panel, panelRoom := find("divisible-conference", "main-display")
+	projSys, projector, projRoom := find("divisible-conference", "projection")
 	signSys, player, signRoom := find("ds55", "player")
 
 	// The devices tick every 30 and 60 seconds, so a reading may be from a
@@ -202,6 +203,15 @@ func TestIntegrationCorporateDisplaysFollowTheCalendar(t *testing.T) {
 		return fireOn(ctx, client, base, panelSys, panel, map[string]string{"surface": "snmp", "oid": "1.3.6.1.4.1.55520.1.1.1.0"})
 	}, func(at time.Time) string {
 		if awakeAt(cal, panelRoom, at) {
+			return "on"
+		}
+		return "standby"
+	})
+
+	agrees(func() (string, error) {
+		return fireOn(ctx, client, base, projSys, projector, map[string]string{"surface": "snmp", "oid": "1.3.6.1.4.1.55520.1.1.1.0"})
+	}, func(at time.Time) string {
+		if awakeAt(cal, projRoom, at) {
 			return "on"
 		}
 		return "standby"

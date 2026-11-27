@@ -122,11 +122,6 @@
   ],
   "gaps": [
     {
-      "method": "kestrel-relay-api",
-      "issue": "#1446",
-      "why": "no Relay C1 is placed in the dev fleet yet"
-    },
-    {
       "method": "push-listener",
       "issue": "#1148",
       "unbuilt": true,

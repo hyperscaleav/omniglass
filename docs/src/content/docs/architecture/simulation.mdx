@@ -414,6 +414,14 @@ Devices that read the calendar:
   building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
   the world's knobs give them), and the
   player plays inside them and stops outside.
+- **The people counter** (`tessellate-census-c1`) reports who the calendar says is in its room: a held
+  meeting's or walk-in's actual attendees (over the room's capacity when the payload says so), zero in a
+  no-show and in an empty room, and now and then one fewer in a meeting of two or more, as someone steps
+  out. The lab's conference rooms carry one, so its count rises at a meeting's start and falls at its end.
+  A counter with no calendar (the dev fleet, which holds no world) keeps its own random walk, as a room
+  with no calendar is left as it was.
+
+
 - **The scheduling surfaces** (#2765): the booking service, the scheduling service and the Slate 5
   panel say what the calendar says of a room, through `bookings`, `roomBookings` and `ownerBookings`
   (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked

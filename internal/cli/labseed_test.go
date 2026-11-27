@@ -326,19 +326,23 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteOutpostTokenHashes(outposts), pushers, false, false, false); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
+	// The meeting platform is one account-wide component (#2790), so the plan
+	// declares it once, not once per site.
 	senders := map[string]int{} // site -> its platforms
+	total := 0
 	for _, site := range plan.Sites {
 		for _, p := range site.Pushers {
 			if p.Webhook {
 				senders[site.Name]++
+				total++
 			}
 		}
 	}
-	if len(senders) != len(plan.Sites) {
-		t.Fatalf("corporate at 3 declares platforms at %d of %d sites, want every one", len(senders), len(plan.Sites))
+	if total != 1 {
+		t.Fatalf("corporate at 3 declares %d platforms, want the one account-wide platform", total)
 	}
 	if res := lab.ParseSeedResult(out.String()); !res.Outpost || !strings.Contains(res.Summary, "3 systems") ||
-		!strings.Contains(res.Summary, fmt.Sprintf("%d webhook senders", len(plan.Sites))) {
+		!strings.Contains(res.Summary, fmt.Sprintf("%d webhook senders", total)) {
 		t.Fatalf("seed result %+v, want the outposts present, the size and the webhook senders named", res)
 	}
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
@@ -370,6 +374,12 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 		t.Errorf("%d outposts for %d sites", len(listed), len(plan.Sites))
 	}
 	addresses := map[string]string{}
+	var fleet []string
+	for _, site := range plan.Sites {
+		for _, s := range site.Systems {
+			fleet = append(fleet, s.Name)
+		}
+	}
 	for _, site := range plan.Sites {
 		name := labscenario.SiteOutpost(site.Name)
 		outpost, err := gw.GetOutpost(ctx, name, all)
@@ -399,9 +409,20 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 			t.Errorf("outpost %s holds %d webhooks to post, want its site's %d platforms", name, len(hooks), senders[site.Name])
 		}
 		for comp, h := range hooks {
-			if h.Path == "" || h.Secret == "" || !reflect.DeepEqual(h.Identities, rooms) {
-				t.Errorf("platform %s posts to %q (secret set %v) naming %v, want a path, a secret and its site's systems %v",
-					comp, h.Path, h.Secret != "", h.Identities, rooms)
+			// The account-wide platform speaks for every system of the fleet
+			// and for the devices it lists (#2790), so it names the whole
+			// fleet's rooms, not just its site's.
+			named := map[string]bool{}
+			for _, id := range h.Identities {
+				named[id] = true
+			}
+			for _, s := range fleet {
+				if !named[s] {
+					t.Errorf("platform %s names %v, want it to name system %s", comp, h.Identities, s)
+				}
+			}
+			if h.Path == "" || h.Secret == "" {
+				t.Errorf("platform %s posts to %q (secret set %v), want a path and a secret", comp, h.Path, h.Secret != "")
 			}
 		}
 		for _, d := range devices {
