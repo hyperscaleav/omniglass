@@ -88,11 +88,14 @@ func TestAGoneDeviceHoldsItsPollsUntilItReturns(t *testing.T) {
 	}
 	backAt := time.Now().UTC()
 	s.waitFor("sensor-1", ep.Name, "endpoint-rejection", ungated, "the gate open again")
+	// An event wait, not a window: the polls run every second, so a backoff
+	// booked against a held poll (at most the poll's own interval) is not what
+	// a few seconds could tell apart; the failure counts above are the proof.
 	deadline := backAt.Add(patience(5 * time.Second))
 	for !s.latestAt("sensor-1", ep.Name, probekeys.PollDuration).After(backAt) {
 		if time.Now().After(deadline) {
-			t.Fatalf("no poll time landed within 5s of the device's return (latest %v); a held poll must not back off",
-				s.latestAt("sensor-1", ep.Name, probekeys.PollDuration))
+			t.Fatalf("no poll time landed in %v after the device's return (latest %v); a held poll must not back off",
+				patience(5*time.Second), s.latestAt("sensor-1", ep.Name, probekeys.PollDuration))
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
