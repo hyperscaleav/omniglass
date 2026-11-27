@@ -21,6 +21,14 @@
 # dev fleet has no world file) has no calendar and keeps its previous
 # behavior exactly: today's count stays the fixed 8.
 #
+# GET /api/rooms lists every room it serves as a record (ADR-1282, the same
+# fan-out shape as the meeting platform's): its id is the system the room
+# belongs to, with that room's booking state, booked meetings today and left,
+# the organizer holding it now and the next start. A driver polls it once and
+# each record's values land on the system its room id is bound to; the
+# unassigned-room record is bound to nothing and lands in the conduit's
+# unbound inbox.
+#
 # Auth: header token. public_paths exempts the dashboard root.
 
 name: scheduling-service
@@ -62,6 +70,10 @@ interfaces:
         template: api/scheduling-service/status.json.gotempl
         doc: { summary: "Service status (today's bookings, sync health)", tags: [api, status] }
 
+      - match: "GET /api/rooms"
+        template: api/scheduling-service/rooms.json.gotempl
+        doc: { summary: "Every room the platform serves with its bookings, one record each", tags: [api, rooms, fan-out] }
+
       - match: "GET /api/bookings"
         template: api/scheduling-service/bookings.json.gotempl
         doc: { summary: "Today's bookings + config sync flag", tags: [api, bookings] }
@@ -84,6 +96,13 @@ behaviors:
         value: '{{ $n := 0 }}{{ range servedRooms }}{{ $n = add $n (roomBookings .site .building .room).remaining }}{{ end }}{{ $n }}'
       - path: status.bookings.in_progress
         value: '{{ $n := 0 }}{{ range servedRooms }}{{ if (roomBookings .site .building .room).booked }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ $n }}'
+      # The rooms it serves, one record each, named by the system the room
+      # belongs to (the room id the lab's installer binds, ADR-1282), with the
+      # booked meetings the calendar holds for it. unassigned-room is a room the
+      # platform knows and nobody bound: its values land in the conduit's
+      # unbound inbox. With no rooms to serve the records stay as they were.
+      - path: status.rooms
+        value: '{{ if servedRooms }}{ {{- $sep := "" }}{{ range servedRooms }}{{ $b := roomBookings .site .building .room }}{{ $sep }}{{ marshal (or .system .room) }}: {"state": {{ marshal $b.state }}, "today": {{ $b.today }}, "remaining": {{ $b.remaining }}, "current": {{ with $b.now }}{{ marshal .organizer }}{{ else }}""{{ end }}, "next_start": {{ with $b.next }}{{ .slot_start }}{{ else }}0{{ end }}}{{ $sep = "," }}{{ end }},"unassigned-room": {"state": "free", "today": 0, "remaining": 0, "current": "", "next_start": 0} }{{ else }}{{ marshal .State.status.rooms }}{{ end }}'
       - path: configuration.rooms_served
         value: '{{ len servedRooms }}'
 
@@ -95,6 +114,7 @@ defaults:
       today: 8
       remaining: 0
       in_progress: 0
+    rooms: {}
   configuration:
     rooms_served: 0
     sync_ok: true

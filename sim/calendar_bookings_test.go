@@ -394,3 +394,43 @@ func TestSchedulingServiceInARoomServesIt(t *testing.T) {
 		t.Fatalf("in_progress = %s, want 1 mid held meeting", got)
 	}
 }
+
+// The scheduling service lists each room it covers as a record named by its
+// system, with the room's bookings off the calendar, and one room nobody
+// bound; a service covering no room lists none.
+func TestSchedulingServiceListsItsRoomsAsRecords(t *testing.T) {
+	cal, _, _, held, noShow, walkIn := bookingDay(t)
+	at := held.Start.Add(time.Minute)
+	d := bookingEngine(t, cal, "scheduling-service", true, &at)
+	rooms := func(when time.Time) map[string]any {
+		at = when
+		d.TickBehavior("bookings_sync")
+		m, _ := d.ReadPath("status.rooms").(map[string]any)
+		return m
+	}
+	for _, c := range []struct {
+		when time.Time
+		want string
+	}{{held.Start.Add(time.Minute), "booked"}, {noShow.Start.Add(time.Minute), "booked"}, {walkIn.Start.Add(time.Minute), "free"}} {
+		got := rooms(c.when)
+		r, ok := got["sys-101"].(map[string]any)
+		if !ok || r["state"] != c.want {
+			t.Fatalf("at %s sys-101 reads %v, want %s", c.when.Format("15:04"), got["sys-101"], c.want)
+		}
+		if b := RoomBookingsAt(cal, bookingRoom, c.when); fmt.Sprint(r["remaining"]) != fmt.Sprint(b["remaining"]) {
+			t.Fatalf("remaining %v, the calendar says %v", r["remaining"], b["remaining"])
+		}
+		if _, ok := got["sys-102"]; !ok {
+			t.Fatal("the second covered room is not listed")
+		}
+		if u, ok := got["unassigned-room"].(map[string]any); !ok || u["state"] != "free" {
+			t.Fatalf("the unbound room reads %v", got["unassigned-room"])
+		}
+	}
+	at = held.Start
+	e := bookingEngineIn(t, cal, "scheduling-service", false, false, &at)
+	e.TickBehavior("bookings_sync")
+	if m, _ := e.ReadPath("status.rooms").(map[string]any); len(m) != 0 {
+		t.Fatalf("a service covering no room lists %v", m)
+	}
+}

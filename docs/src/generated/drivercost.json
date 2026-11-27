@@ -99,6 +99,7 @@
         "kestrel-gaze-api",
         "kestrel-relay-api",
         "recording-service-api",
+        "scheduling-service-api",
         "ucc-rooms"
       ],
       "drivers": [
@@ -722,6 +723,16 @@
       "thread_cpu_per_run_ms": 0.4779903481249993,
       "thread_share": 0.08715933666116962,
       "reason": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
+    },
+    {
+      "driver": "scheduling-service-api",
+      "kind": "https",
+      "product": "scheduling-service",
+      "polls": [
+        "30s"
+      ],
+      "measured": false,
+      "reason": "not yet measured"
     },
     {
       "driver": "snmp-generic",

@@ -73,22 +73,21 @@ func RoomBookingsAt(c *calendar.Calendar, room calendar.Room, at time.Time) map[
 //
 //	bookings            -> the device's own room, as RoomBookingsAt reads it
 //	roomBookings s b r  -> the room site s, building b, room r
-//	servedRooms         -> the rooms a service speaks for (coveredRooms), else
-//	                       the device's own room when it has one, else none
+//	servedRooms         -> the rooms a service speaks for (coveredRooms, each with
+//	                       its system's name as "system"), else the device's own
+//	                       room when it has one, else none
 //	ownerBookings o     -> the room of the system o in the world (a push's
 //	                       .Owner); a system the world does not name reads as a
 //	                       room with no booking
 func (d *Device) bookingFuncs() template.FuncMap {
 	// A behavior's mutations each read the room in the same tick, and a read
-	// generates three days of the calendar, so the last reading is kept for
-	// its room, calendar and second: the rest of the tick reuses it.
+	// generates three days of the calendar, so the readings of one second are
+	// kept for their rooms (and dropped with the second or the calendar): a
+	// service reading thousands of rooms reads each once a tick.
 	var mu sync.Mutex
-	var last struct {
-		room calendar.Room
-		cal  *calendar.Calendar
-		sec  int64
-		out  map[string]any
-	}
+	var cacheSec int64
+	var cacheCal *calendar.Calendar
+	cache := map[calendar.Room]map[string]any{}
 	read := func(room calendar.Room) map[string]any {
 		c, at := d.calendarSrc(), d.clock()
 		if room == (calendar.Room{}) {
@@ -96,17 +95,29 @@ func (d *Device) bookingFuncs() template.FuncMap {
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		if last.out != nil && last.room == room && last.cal == c && last.sec == at.Unix() {
-			return last.out
+		if cacheSec != at.Unix() || cacheCal != c {
+			clear(cache)
+			cacheSec, cacheCal = at.Unix(), c
 		}
-		last.room, last.cal, last.sec, last.out = room, c, at.Unix(), RoomBookingsAt(c, room, at)
-		return last.out
+		if out, ok := cache[room]; ok {
+			return out
+		}
+		out := RoomBookingsAt(c, room, at)
+		cache[room] = out
+		return out
 	}
 	return template.FuncMap{
 		"servedRooms": func() []map[string]any {
 			var out []map[string]any
-			for _, p := range d.world().Covered(d.Hostname) {
-				out = append(out, map[string]any{"site": p.Site, "building": p.Building, "room": p.Room})
+			if w := d.world(); w != nil {
+				for _, s := range w.Services {
+					if s.Name != d.Hostname {
+						continue
+					}
+					for _, c := range s.Covers {
+						out = append(out, map[string]any{"system": c.System, "site": c.Site, "building": c.Building, "room": c.Room})
+					}
+				}
 			}
 			if len(out) == 0 && d.room != (calendar.Room{}) {
 				out = append(out, map[string]any{"site": d.room.Site, "building": d.room.Building, "room": d.room.Room})

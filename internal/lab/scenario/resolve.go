@@ -67,7 +67,14 @@ type PusherPlan struct {
 	Profile string
 	Systems []string
 	Webhook bool
+	// Service is a polled cloud service (#2765): a component seeded once a
+	// site, with no token and no webhook, covering Systems.
+	Service bool
 }
+
+// IsComponent says whether the actor is a component the site's simulator
+// serves (a webhook sender or a polled service) rather than a token user.
+func (p PusherPlan) IsComponent() bool { return p.Webhook || p.Service }
 
 // Simulated is how many components the site's simulator serves: the site's
 // own and each webhook sender's (#1747), a component with an address on the
@@ -75,7 +82,7 @@ type PusherPlan struct {
 func (s SitePlan) Simulated() int {
 	n := s.Totals.Components
 	for _, p := range s.Pushers {
-		if p.Webhook {
+		if p.IsComponent() {
 			n++
 		}
 	}
@@ -205,6 +212,19 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	plan.Totals = count(m, plan.allSystems())
 	for _, d := range m.Pushers {
 		plan.Pushers = addCount(plan.Pushers, d.Profile.Name, d.PerSite*len(plan.Sites))
+	}
+	// A polled service is one account for the whole fleet (#2765): placed once,
+	// at the headquarters, covering every system of every site.
+	if len(plan.Sites) > 0 {
+		var all []string
+		for _, s := range plan.allSystems() {
+			all = append(all, s.Name)
+		}
+		hq := &plan.Sites[0]
+		for _, d := range m.Services {
+			hq.Pushers = append(hq.Pushers, PusherPlan{Name: fmt.Sprintf("%s-%s-1", hq.Name, d.Name.Name), Profile: d.Profile.Name, Systems: all, Service: true})
+			plan.Pushers = addCount(plan.Pushers, d.Profile.Name, 1)
+		}
 	}
 	return plan, nil
 }

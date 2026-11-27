@@ -216,12 +216,13 @@ products:
     kind: service
     component_type: generic-service
   # The room-booking platform's scheduling service (the simulator's
-  # scheduling-service, #2765): an https API with a token, watched for
-  # reachability. It reports the booked meetings of the rooms it serves off
-  # the lab calendar.
+  # scheduling-service, #2765): one component that speaks for every room it
+  # serves, polled by scheduling-service-api (the room list read as records,
+  # one per room), each value landing on the system its room id is bound to.
   - id: scheduling-service
     label: Shinra Scheduling Platform
     vendor_id: shinra-cloud
+    driver_id: scheduling-service-api
     kind: service
     component_type: generic-service
   # The platform's own parts (#1094). Every outpost's platform component is one

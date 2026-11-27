@@ -40,7 +40,15 @@ func TestSiteWorldsCoverTheWholePlan(t *testing.T) {
 			if err := w.Validate(); err != nil {
 				t.Fatalf("size %d: %v", size, err)
 			}
-			if len(w.Sites) != 1 || w.Sites[0].Name != sp.Name || len(w.Sites[0].Rooms) != len(sp.Systems) {
+			// The site that runs the fleet's polled service also holds every other
+			// site's rooms, with no devices, which the service covers (#2765).
+			wantSites := 1
+			for _, p := range sp.Pushers {
+				if p.Service {
+					wantSites = len(plan.Sites)
+				}
+			}
+			if len(w.Sites) != wantSites || w.Sites[0].Name != sp.Name || len(w.Sites[0].Rooms) != len(sp.Systems) {
 				t.Fatalf("size %d: site %s world holds %d rooms, plan has %d systems", size, sp.Name, len(w.Sites[0].Rooms), len(sp.Systems))
 			}
 			devices := 0

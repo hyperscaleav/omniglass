@@ -4,7 +4,6 @@ package lab
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
-	"github.com/hyperscaleav/omniglass/internal/labcheck"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -136,55 +134,83 @@ func TestIntegrationCorporateSchedulingReadsTheCalendar(t *testing.T) {
 	// The oldest sample may be the panel's default, collected before its first
 	// tick (a behavior's first tick follows its phase offset): a later one is
 	// the calendar's. A history of one is judged as it stands.
-	judged := ps.Samples
-	if len(judged) > 1 {
-		judged = judged[:len(judged)-1] // newest first
+	panelJudged := ps.Samples
+	if len(panelJudged) > 1 {
+		panelJudged = panelJudged[:len(panelJudged)-1] // newest first
 	}
-	for _, s := range judged {
+	for _, s := range panelJudged {
 		if v := fmt.Sprint(s.Value); !agrees(pat.CalRoom(), s.TS, 3*time.Minute, "state", v) {
 			t.Fatalf("panel %s reads %s at %s; the calendar's booked entries never say so in the minutes before", panel, v, s.TS)
 		}
 	}
-	// The scheduling service placed in a room serves it: its own API says the
-	// room's booked meetings of the day, as the calendar holds them.
-	var svcProduct, svcSystem string
-	var svcRoom calendar.Room
-	for _, st := range w.Sites {
-		for _, r := range st.Rooms {
-			for _, d := range r.Devices {
-				if strings.HasPrefix(d.Profile, "scheduling-serv") && svcProduct == "" {
-					svcProduct, svcSystem = d.Product, r.System
-				}
+	// The fleet's one scheduling service is a conduit at the headquarters
+	// (ADR-1282): one poll reads every room it books as a record naming its
+	// room by the system's name, and each record's values land on the system
+	// the lab's installer bound that room id to, the calendar's own booked
+	// meetings for it. A room id nobody bound lands in its unbound inbox.
+	var conduit string
+	var covers []world.Cover
+	for _, svc := range w.Services {
+		if strings.HasPrefix(svc.Profile, "scheduling-serv") {
+			conduit, covers = svc.Name, svc.Covers
+		}
+	}
+	if conduit == "" || len(covers) != systems {
+		t.Fatalf("the headquarters' world holds the scheduling service %q covering %d rooms, want it covering all %d", conduit, len(covers), systems)
+	}
+	pushed := map[string]bool{}
+	for _, svc := range w.Services {
+		if svc.Profile == "booking-service" {
+			for _, c := range svc.Covers {
+				pushed[c.System] = true
 			}
 		}
 	}
-	if svcProduct == "" {
-		t.Fatal("the world places no scheduling service")
+	// Judge the rooms the booking service does not also push for, so a value
+	// on a system can only be the conduit's.
+	judged := 0
+	for _, c := range covers {
+		if pushed[c.System] || judged >= 3 {
+			continue
+		}
+		judged++
+		room := calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}
+		fan := read("/systems/" + url.PathEscape(c.System) + "/properties/booking-state/samples?hours=1")
+		for _, sm := range fan.Samples {
+			if v := fmt.Sprint(sm.Value); !agrees(room, sm.TS, 2*time.Minute, "state", v) {
+				t.Fatalf("the conduit fanned booking-state %s to %s at %s; the calendar's booked entries never say so in the two minutes before", v, c.System, sm.TS)
+			}
+		}
+		cnt := read("/systems/" + url.PathEscape(c.System) + "/metrics/booking-count/samples?hours=1")
+		for _, sm := range cnt.Samples {
+			if v := fmt.Sprint(sm.Value); !agrees(room, sm.TS, 2*time.Minute, "remaining", v) {
+				t.Fatalf("the conduit fanned booking-count %s to %s at %s; the calendar never says so in the two minutes before", v, c.System, sm.TS)
+			}
+		}
 	}
-	sat, _ := w.PlaceSystem(svcSystem)
-	svcRoom = sat.CalRoom()
-	var bk struct {
-		Today       int `json:"today"`
-		RoomsServed int `json:"rooms_served"`
+	if judged == 0 {
+		t.Fatal("every covered room is also pushed for; no room tells the conduit's values apart")
+	}
+	var unbound struct {
+		Identities []struct {
+			Key, Value string
+		} `json:"identities"`
 	}
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
-		body, err := labcheck.FireOnShowcaseBody(ctx, client, base, svcSystem, svcProduct, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/bookings"})
-		if err == nil {
-			if jerr := json.Unmarshal([]byte(body), &bk); jerr != nil {
-				t.Fatalf("GET /api/bookings answered %q: %v", body, jerr)
+		if err := get("/components/"+url.PathEscape(conduit)+"/unbound-identities", &unbound); err == nil {
+			found := false
+			for _, u := range unbound.Identities {
+				found = found || (u.Key == "sched-room-id" && u.Value == "unassigned-room")
 			}
-			if bk.RoomsServed == 1 {
+			if found {
 				break
 			}
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("after five minutes the scheduling service in %s serves %d rooms (%v)", svcSystem, bk.RoomsServed, err)
+			t.Fatalf("after five minutes the conduit %s holds %v unbound, want the room nobody bound", conduit, unbound.Identities)
 		}
 		time.Sleep(10 * time.Second)
 	}
-	if want := sim.RoomBookingsAt(cal, svcRoom, time.Now())["today"]; bk.Today != want {
-		t.Fatalf("the scheduling service in %s counts %d bookings today; the room's calendar holds %v", svcSystem, bk.Today, want)
-	}
-	t.Logf("%s: %d count and %d state samples agree with the calendar; panel %s: %d samples agree", covered.System, len(count.Samples), len(state.Samples), panel, len(judged))
+	t.Logf("%s: %d count and %d state samples agree with the calendar; panel %s: %d samples agree; %d rooms fan out from %s", covered.System, len(count.Samples), len(state.Samples), panel, len(panelJudged), judged, conduit)
 }

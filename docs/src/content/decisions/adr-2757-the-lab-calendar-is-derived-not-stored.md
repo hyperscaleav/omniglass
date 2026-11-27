@@ -49,5 +49,11 @@ refs: [2757, 2764, 2769, 2773]
     simulator does not hold, so a pusher the world covers pushes for the system names the world gives it
     (`worldSystems`, #2765) and the server resolves each inside the pusher's grant; with no world it
     pushes for its grant, as before.
+  - **Polled services.** A scenario's `services:` block places a polled cloud service once for the
+    whole scenario (#2765), at the headquarters: a component the lab seeds with the product's own
+    driver, covering every system of every site, so its world holds the other sites' rooms (with no
+    devices) too. The service is a conduit (ADR-1282): the lab's seed binds each covered system's name
+    as a room id, as an installer would, and the simulator names its rooms by the same ids from its
+    world.
   - **Deferred.** The inversion of ADR-0142, where the simulator decides which devices exist and
     Omniglass discovers them, is a separate definition; the world file is the seam it would grow from.

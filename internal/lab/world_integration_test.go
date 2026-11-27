@@ -3,10 +3,12 @@
 package lab
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 )
 
 // startCorporateLab runs `lab run --scenario corporate --systems N` on a real
@@ -97,20 +100,25 @@ func startCorporateLab(t *testing.T, name string, systems int) (string, *http.Cl
 	return vars["LAB_HOST_URL"], &http.Client{Timeout: 30 * time.Second, Transport: bearer{token: vars["LAB_TOKEN"], next: http.DefaultTransport}}
 }
 
-// The simulator holds the world it simulates (#2773): on a corporate lab the
-// hq conference room's video bar, a real device on a real daemon, reads its
-// room's meeting off the lab calendar (the next meeting it reports is one the
-// calendar the world implies holds for that room), and the {room} token in its
-// profile expands to the room the plan put its system in. Neither comes from
-// the server, whose device list names no room.
+// The simulator holds the world it simulates (#2773) and acts out the lab
+// calendar's meetings (#2767): on a corporate lab, the video bars of the hq
+// rooms, real devices on a real daemon, are in a call exactly when their
+// room's calendar says somebody is in it (their call surface, GET /api/call),
+// and the meeting platform's room list says the same of each room by the
+// system it is bound to (GET /api/rooms), none of it from the server, whose
+// device list names no room. The calendar the check holds them to is the
+// plan's own: the same scenario resolved at the same size, the world of the
+// site, and the calendar it implies. Devices tick on a minute (the bar) and
+// fifteen seconds (the platform), so a reading is held to the calendar as it
+// stood over the window before it. The {room} token in a bar's profile
+// expands to the room the plan put its system in.
+//
+// The conference rooms' Relay C1 codecs are read the same way as the bars.
 func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	ctx := context.Background()
 	const systems = 20
-	const system = "hq-divisible-conference-1"
 	base, client := startCorporateLab(t, "world", systems)
 
-	// The expectation is the plan's own: the same scenario resolved at the
-	// same size, the world of the system's site, and the calendar it implies.
 	m, err := scenario.Shipped("corporate")
 	if err != nil {
 		t.Fatal(err)
@@ -127,68 +135,206 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	at, ok := w.PlaceSystem(system)
-	if !ok {
-		t.Fatalf("the plan's world has no system %s", system)
-	}
 	cal := w.Calendar()
 	if cal == nil {
 		t.Fatal("the corporate world holds no calendar")
 	}
+	type bar struct {
+		system, product string
+		room            calendar.Room
+	}
+	var bars []bar
+	for _, s := range w.Sites {
+		for _, r := range s.Rooms {
+			for _, d := range r.Devices {
+				if d.Profile == "kestrel-vroom" || d.Profile == "kestrel-relay-c1" {
+					bars = append(bars, bar{r.System, d.Profile, calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}})
+				}
+			}
+		}
+	}
+	if len(bars) == 0 {
+		t.Fatal("the hq world places no video bar")
+	}
+	var ucc string
+	for _, svc := range w.Services {
+		if svc.Webhook && svc.Profile == "ucc-platform" {
+			ucc = svc.Name
+		}
+	}
+	if ucc == "" {
+		t.Fatal("the hq world has no meeting platform")
+	}
 
-	type roomDoc struct {
-		Organizer string `json:"meeting_organizer"`
-		NextStart int64  `json:"next_start"`
-		Key       string `json:"key"`
+	// held is what the calendar says of a room over [from, to], sampled every
+	// few seconds: whether somebody could have been in it, whether the room
+	// could have been empty, and the most who could have come.
+	held := func(room calendar.Room, from, to time.Time) (could, couldNot bool, most int) {
+		for at := from; !at.After(to); at = at.Add(5 * time.Second) {
+			if e, ok := cal.Now(room, at); ok && e.Meeting.Outcome != calendar.OutcomeNoShow {
+				could = true
+				if e.Meeting.Actual > most {
+					most = e.Meeting.Actual
+				}
+			} else {
+				couldNot = true
+			}
+		}
+		return
 	}
-	var got roomDoc
-	var lo, hi time.Time
+
+	// Read every bar's call and every room the platform lists, for a while
+	// after the first answer, and hold each reading to the calendar.
+	var uccID string
 	deadline := time.Now().Add(5 * time.Minute)
-	for {
-		lo = time.Now().Add(-time.Minute) // the bar reads on its own tick
-		body, err := labcheck.FireOnShowcaseBody(ctx, client, base, system, "kestrel-vroom", labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/room"})
-		hi = time.Now()
+	for uccID == "" {
+		var comp struct {
+			ID string `json:"id"`
+		}
+		resp, err := client.Get(base + "/api/v1/components/" + ucc)
 		if err == nil {
-			if jerr := json.Unmarshal([]byte(body), &got); jerr != nil {
-				t.Fatalf("GET /api/room answered %q: %v", body, jerr)
+			if resp.StatusCode == http.StatusOK {
+				_ = json.NewDecoder(resp.Body).Decode(&comp)
 			}
-			if got.Key != "" {
-				break
+			resp.Body.Close()
+		}
+		uccID = comp.ID
+		if uccID == "" {
+			if time.Now().After(deadline) {
+				t.Fatalf("no meeting platform component %q (%v)", ucc, err)
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}
+	var barReads, barCalls, uccReads, uccCalls int
+	first := time.Time{}
+	end := time.Now().Add(8 * time.Minute)
+	for time.Now().Before(end) && (first.IsZero() || time.Since(first) < 3*time.Minute) {
+		for _, b := range bars {
+			lo := time.Now().Add(-75 * time.Second) // the bar reads on a minute tick
+			body, err := labcheck.FireOnShowcaseBody(ctx, client, base, b.system, b.product, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/call"})
+			hi := time.Now()
+			if err != nil {
+				continue // the simulator may not serve it yet
+			}
+			var call struct {
+				Active       bool `json:"active"`
+				Participants int  `json:"participants"`
+			}
+			if jerr := json.Unmarshal([]byte(body), &call); jerr != nil {
+				t.Fatalf("GET /api/call on %s answered %q: %v", b.system, body, jerr)
+			}
+			if first.IsZero() {
+				first = hi
+			}
+			could, couldNot, most := held(b.room, lo, hi)
+			barReads++
+			switch {
+			case call.Active && !could:
+				t.Fatalf("%s's bar is in a call (%d) with nobody in the room on the calendar between %s and %s", b.system, call.Participants, lo.Format("15:04:05"), hi.Format("15:04:05"))
+			case !call.Active && !couldNot:
+				t.Fatalf("%s's bar is idle while the calendar has the room in a meeting from %s to %s", b.system, lo.Format("15:04:05"), hi.Format("15:04:05"))
+			case call.Active:
+				barCalls++
+				if call.Participants < 1 || call.Participants > most {
+					t.Fatalf("%s's bar holds %d participants, the meeting had at most %d come", b.system, call.Participants, most)
+				}
+			case call.Participants != 0:
+				t.Fatalf("%s's bar is idle with %d participants", b.system, call.Participants)
 			}
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("after five minutes %s's video bar reads no room (%v): %+v", system, err, got)
+		lo := time.Now().Add(-40 * time.Second) // the platform ticks every fifteen seconds
+		body, err := fireOnComponent(ctx, client, base, uccID, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/rooms"})
+		hi := time.Now()
+		if err == nil {
+			var doc struct {
+				Rooms []struct {
+					ID           string `json:"id"`
+					State        string `json:"state"`
+					Participants int    `json:"participants"`
+				} `json:"rooms"`
+			}
+			if jerr := json.Unmarshal([]byte(body), &doc); jerr != nil {
+				t.Fatalf("GET /api/rooms answered %q: %v", body, jerr)
+			}
+			for _, r := range doc.Rooms {
+				at, ok := w.PlaceSystem(r.ID)
+				if !ok {
+					continue // a room of another site, or one the platform knows alone
+				}
+				could, couldNot, most := held(at.CalRoom(), lo, hi)
+				uccReads++
+				switch {
+				case r.State == "in-call" && !could:
+					t.Fatalf("the platform has %s in a call with nobody in it on the calendar between %s and %s", r.ID, lo.Format("15:04:05"), hi.Format("15:04:05"))
+				case r.State == "idle" && !couldNot:
+					t.Fatalf("the platform has %s idle while the calendar has it in a meeting from %s to %s", r.ID, lo.Format("15:04:05"), hi.Format("15:04:05"))
+				case r.State == "in-call":
+					uccCalls++
+					if r.Participants < 1 || r.Participants > most {
+						t.Fatalf("the platform has %d in %s's meeting, at most %d came", r.Participants, r.ID, most)
+					}
+				}
+			}
 		}
-		time.Sleep(10 * time.Second)
+		time.Sleep(20 * time.Second)
 	}
-	if want := at.CalRoom().Key(); got.Key != want {
-		t.Fatalf("the bar reads room %q, the plan put %s in %q", got.Key, system, want)
+	if barReads == 0 || uccReads == 0 {
+		t.Fatalf("read %d bar calls and %d platform rooms; the simulator never served them", barReads, uccReads)
 	}
-	first, ok1 := cal.Next(at.CalRoom(), lo)
-	last, ok2 := cal.Next(at.CalRoom(), hi)
-	if !ok1 || !ok2 {
-		t.Fatalf("the calendar holds no meeting after %s", lo)
-	}
-	if got.NextStart < first.Start.Unix() || got.NextStart > last.Start.Unix() {
-		t.Fatalf("the bar's next meeting starts at %d; the room's calendar has it between %d and %d", got.NextStart, first.Start.Unix(), last.Start.Unix())
-	}
-	if now, ok := cal.Now(at.CalRoom(), hi); ok && got.Organizer != "" && got.Organizer != now.Meeting.Organizer {
-		// A meeting may have started or ended since the bar's tick: only a
-		// different, current organizer is a fault.
-		prev, pok := cal.Now(at.CalRoom(), lo)
-		if !pok || prev.Meeting.Organizer != got.Organizer {
-			t.Fatalf("the bar says %q has the room, the calendar says %q", got.Organizer, now.Meeting.Organizer)
-		}
-	}
+	t.Logf("%d bar readings (%d in a call) and %d platform room readings (%d in-call) agreed with the calendar; room %s of %d bars", barReads, barCalls, uccReads, uccCalls, bars[0].room.Key(), len(bars))
 
 	// The profile's {room} token expands to the real room, never empty.
-	app, err := labcheck.FireOnShowcaseBody(ctx, client, base, system, "kestrel-vroom", labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/app"})
+	var vb bar
+	for _, b := range bars {
+		if b.product == "kestrel-vroom" {
+			vb = b
+			break
+		}
+	}
+	app, err := labcheck.FireOnShowcaseBody(ctx, client, base, vb.system, vb.product, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/app"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	at, _ := w.PlaceSystem(vb.system)
 	want := fmt.Sprintf("room-%s-%s-%s@", at.Site, at.Building, at.Room)
 	if !strings.Contains(app, want) {
 		t.Fatalf("the bar's sign-in is not for its room (want %q in): %s", want, app)
 	}
-	t.Logf("%s: room %s, next meeting at %d, sign-in %s", system, got.Key, got.NextStart, want)
+}
+
+// fireOnComponent fires op at the component through its simulation:fire API
+// and returns what the device answered: the labcheck helper reaches a system's
+// member, and the meeting platform is no system's.
+func fireOnComponent(ctx context.Context, c *http.Client, base, id string, op labcheck.Fire) (string, error) {
+	body, err := json.Marshal(op)
+	if err != nil {
+		return "", err
+	}
+	path := "/components/" + url.PathEscape(id) + "/simulation:fire"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1"+path, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("POST %s: %s", path, resp.Status)
+	}
+	var res struct {
+		Status int    `json:"status"`
+		Body   string `json:"body"`
+		Error  string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+	if res.Error != "" || res.Status/100 != 2 {
+		return "", fmt.Errorf("%s %s answered %d %s%s", op.Method, op.Path, res.Status, res.Body, res.Error)
+	}
+	return res.Body, nil
 }

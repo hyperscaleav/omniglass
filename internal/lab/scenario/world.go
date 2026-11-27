@@ -113,10 +113,34 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 		cover[sys.Name] = world.Cover{System: sys.Name, Site: site, Building: sys.Building, Room: sys.Room}
 	}
 	w.Sites = []world.Site{{Name: site, Rooms: rooms}}
+	// A service covers rooms beyond its own site (#2765): the other sites'
+	// rooms come in as rooms with no devices, so the world places their systems
+	// and the calendar holds their meetings.
+	for _, p := range sp.Pushers {
+		if !p.Service {
+			continue
+		}
+		for _, other := range plan.Sites {
+			if other.Name == site {
+				continue
+			}
+			var rs []world.Room
+			for _, sys := range other.Systems {
+				r := world.Room{Name: sys.Room, Building: sys.Building, Standard: sys.Standard, System: sys.Name}
+				if k, ok := m.MeetingKnobs(sys.Standard); ok {
+					r.Capacity = k.Attendance.Max
+				}
+				rs = append(rs, r)
+				cover[sys.Name] = world.Cover{System: sys.Name, Site: other.Name, Building: sys.Building, Room: sys.Room}
+			}
+			w.Sites = append(w.Sites, world.Site{Name: other.Name, Rooms: rs})
+		}
+		break
+	}
 	for _, p := range sp.Pushers {
 		// A sender is a component named for its pusher; a token pusher is a
 		// device of its own name apart from the fleet.
-		if p.Webhook {
+		if p.IsComponent() {
 			if err := claim(p.Name); err != nil {
 				return nil, err
 			}

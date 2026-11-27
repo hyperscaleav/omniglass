@@ -366,3 +366,10 @@ property_types:
       reports on. A driver on the service's component reads it off each
       record, and an identity binding on that component ties each id to the
       system or component it names.
+  - name: sched-room-id
+    data_type: string
+    label: Scheduling room id
+    description: >-
+      The id a room-booking platform gives one of the rooms it serves. A driver on the service's component reads it off each
+      record, and an identity binding on that component ties each id to the
+      system or component it names.

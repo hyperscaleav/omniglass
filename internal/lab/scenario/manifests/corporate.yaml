@@ -56,14 +56,13 @@ standards:
     system_type: conference
     products:
       video-bar: kestrel-vroom
+      codec: kestrel-relay-c1
       main-display: boreal-edge-86
       room-mic: lyra-arc-a2
       dsp: polaris-dsp-16
       amplifier: polaris-amp-4100
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
-      # The room-booking platform's service for the room (#2765).
-      scheduling-service: scheduling-service
     # The conference rooms' video bars talk over two protocols (#2754): the
     # https API and the websocket control socket the touch panel drives,
     # each its own endpoint on the bar.
@@ -132,6 +131,14 @@ pushers:
   - name: ucc
     profile: ucc-platform
     per_site: 1
+
+# Polled cloud services (#2765): one account for the whole fleet, placed once
+# at the headquarters and covering every room it books, not a box in each. The
+# simulator reads the rooms it covers off its world and reports their booked
+# meetings off the lab calendar, one paged room list.
+services:
+  - name: scheduling
+    profile: scheduling-service
 
 # The past a lab seeded with --health-history carries (#2728, ADR-2726): every
 # system healthy for the 30 days before the lab started, except the showcase

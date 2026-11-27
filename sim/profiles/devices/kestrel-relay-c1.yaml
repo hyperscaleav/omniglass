@@ -10,6 +10,13 @@
 # One face: the same HTTP JSON API over https behind basic auth the VRoom
 # speaks (admin / kestrel), with the routes a codec has. No SNMP, no
 # command line.
+#
+# The codec's call, far-end participants and shared content follow the lab
+# calendar (#2757, #2767): it is in a call exactly when its room's meeting
+# (meetingNow) has somebody in it, as the video bar beside it is, and keeps
+# no schedule of its own. A call placed over the API holds against the
+# calendar until it is disconnected, and a disconnect on a meeting is not
+# rejoined. With no calendar, or in no room, it never calls by itself.
 
 name: kestrel-relay-c1
 manufacturer: Kestrel
@@ -59,17 +66,26 @@ interfaces:
         doc: { summary: "Place a call", tags: [api, control] }
         example: |
           {"participants": 3}
+        # A dialed call holds against the lab calendar until it is
+        # disconnected; a meeting running under it is not joined.
         mutations:
           - { path: status.call.active, value: true }
           - { path: status.call.participants, value: "{{ or .Request.Body.participants 2 }}" }
+          - { path: status.sim.dialed, value: true }
+          - { path: status.sim.call, value: "" }
 
       - match: "POST /api/call/disconnect"
         template: api/kestrel-relay/ack.json.gotempl
-        doc: { summary: "Disconnect the active call", tags: [api, control] }
+        doc: { summary: "Disconnect the active call (and stop sharing)", tags: [api, control] }
         example: "{}"
+        # The next tick marks the meeting it ended as skipped.
         mutate:
           status.call.active: false
           status.call.participants: 0
+          status.content.sharing: false
+          status.content.source: ""
+          status.sim.dialed: false
+          status.sim.hungup: true
 
       - match: "POST /api/content/share"
         template: api/kestrel-relay/ack.json.gotempl
@@ -98,6 +114,7 @@ interfaces:
           - { path: status.call.participants, value: 0 }
           - { path: status.content.sharing, value: false }
           - { path: status.content.source, value: "" }
+          - { path: status.sim.dialed, value: false }
 
   - name: icmp
     protocol: icmp
@@ -105,6 +122,41 @@ interfaces:
 
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# The codec's call follows the room's meetings (meetingNow), a tick a minute.
+# One tick reads the calendar once into status.sim.want (the call the room
+# should be in, "c<start>", empty for none: a no-show has no call) and want_n
+# (who came); the rest of the tick reads those. A meeting starting as the last
+# ends moves the call on in one tick. Far-end participants open at half to all
+# of who came and move inside it from the device's own draws, and content is
+# shared now and then in a call, from one of the codec's sources. The
+# bookkeeping (status.sim) is the simulator's: no template serves it.
+behaviors:
+  - name: call_cycle
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.sim.skip
+        value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with meetingNow }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
+      - path: status.sim.hungup
+        value: 'false'
+      - path: status.sim.want
+        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}c{{ .start }}{{ end }}{{ end }}'
+      - path: status.sim.want_n
+        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
+      - path: status.sim.event
+        value: '{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $a := $s.want_n }}{{ if $s.dialed }}{{ $a = 8 }}{{ end }}{{ $move := "" }}{{ if chance 0.08 }}{{ if and (lt $n $a) (gt $n 1) }}{{ if chance 0.5 }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ else if lt $n $a }}{{ $move = "join" }}{{ else if gt $n 1 }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ $move }}{{ else if eq $s.want "" }}end{{ else if ne $s.want $s.call }}turn{{ else }}{{ $move }}{{ end }}{{ else if and (ne $s.want "") (not $s.dialed) }}start{{ end }}'
+      - path: status.sim.call
+        value: '{{ $s := .State.status.sim }}{{ if or (eq $s.event "start") (eq $s.event "turn") }}{{ $s.want }}{{ else if eq $s.event "end" }}{{ else }}{{ $s.call }}{{ end }}'
+      - path: status.call.active
+        value: '{{ $e := .State.status.sim.event }}{{ if or (eq $e "start") (eq $e "turn") }}true{{ else if eq $e "end" }}false{{ else }}{{ .State.status.call.active }}{{ end }}'
+      - path: status.call.participants
+        value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "start") (eq $e "turn") }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
+      # The room shares now and then in a call, and stops when it ends.
+      - path: status.content.sharing
+        value: '{{ if .State.status.call.active }}{{ if chance 0.05 }}{{ not .State.status.content.sharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.content.sharing }}{{ end }}'
+      - path: status.content.source
+        value: '{{ if .State.status.content.sharing }}{{ if .State.status.content.source }}{{ .State.status.content.source }}{{ else }}{{ $r := randInt 1 4 }}{{ if eq $r 1 }}hdmi1{{ else if eq $r 2 }}hdmi2{{ else if eq $r 3 }}usbc{{ else }}wireless{{ end }}{{ end }}{{ end }}'
 
 defaults:
   status:
@@ -119,6 +171,20 @@ defaults:
     peripherals:
       # The room's camera, microphone and touch panel.
       connected: 3
+    # The call cycle's bookkeeping: what this tick did, the call the room's
+    # meeting says it should be in and how many came (read off the lab
+    # calendar, empty and 0 for none), the call it is in, the start of a
+    # meeting a dial overtook or a hang-up ended (skipped), a hang-up waiting
+    # for the next tick and whether the call was dialed. The simulator's, not
+    # the codec's: no template serves it.
+    sim:
+      event: ""
+      want: ""
+      want_n: 0
+      call: ""
+      skip: 0
+      hungup: false
+      dialed: false
     network:
       ipv4:
         address: ""

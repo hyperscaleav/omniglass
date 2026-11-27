@@ -785,7 +785,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 	for _, s := range p.Sites {
 		var booking []PusherPlan
 		for _, ps := range s.Pushers {
-			if !ps.Webhook {
+			if !ps.IsComponent() {
 				booking = append(booking, ps)
 			}
 		}
@@ -811,7 +811,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 			seen[sys] = true
 		}
 	}
-	if want := []Count{{"booking-service", len(p.Sites)}, {declaredProfile(t, m, "ucc"), len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
+	if want := []Count{{"booking-service", len(p.Sites)}, {declaredProfile(t, m, "ucc"), len(p.Sites)}, {m.Services[0].Profile.Name, 1}}; !reflect.DeepEqual(p.Pushers, want) {
 		t.Errorf("plan pushers = %v, want %v", p.Pushers, want)
 	}
 	var b bytes.Buffer
@@ -885,9 +885,13 @@ func TestASiteSimulatesItsWebhookSendersBesideItsComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 	total := 0
-	for _, s := range p.Sites {
-		if got, want := s.Simulated(), s.Totals.Components+1; got != want {
-			t.Errorf("site %s simulates %d components, want its %d and its one meeting platform", s.Name, got, s.Totals.Components)
+	for i, s := range p.Sites {
+		want := s.Totals.Components + 1
+		if i == 0 {
+			want++ // the headquarters also runs the fleet's one scheduling service (#2765)
+		}
+		if got := s.Simulated(); got != want {
+			t.Errorf("site %s simulates %d components, want %d: its %d, its meeting platform and any service", s.Name, got, want, s.Totals.Components)
 		}
 		total += s.Simulated()
 	}
@@ -1120,5 +1124,59 @@ func TestShippedCorporateHealthHistoryNamesItsRooms(t *testing.T) {
 	}
 	if missing := plan.MissingStorylineSystems(m.HealthHistory); len(missing) > 0 {
 		t.Errorf("the storyline names systems a 1000-system plan lacks: %v", missing)
+	}
+}
+
+// A scenario's polled service is one account for the whole fleet (#2765): one
+// component at the headquarters, however many sites, covering every system of
+// every site, and no other site carries one.
+func TestCorporatePlacesOneSchedulingServiceForTheWholeFleet(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Sites) < 3 {
+		t.Fatalf("a 300-system plan has %d sites", len(p.Sites))
+	}
+	var found []PusherPlan
+	for i, s := range p.Sites {
+		for _, ps := range s.Pushers {
+			if !ps.Service {
+				continue
+			}
+			if i != 0 {
+				t.Errorf("site %s carries the polled service %s, want the headquarters only", s.Name, ps.Name)
+			}
+			found = append(found, ps)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("the plan places %d polled services, want one", len(found))
+	}
+	if got, want := len(found[0].Systems), p.Totals.Systems; got != want {
+		t.Errorf("the service covers %d systems, want all %d", got, want)
+	}
+	w, err := SiteWorld(m, cat, p, p.Sites[0].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var covers int
+	for _, svc := range w.Services {
+		if svc.Name == found[0].Name {
+			covers = len(svc.Covers)
+		}
+	}
+	if covers != p.Totals.Systems {
+		t.Errorf("the headquarters' world covers %d rooms for the service, want %d", covers, p.Totals.Systems)
+	}
+	other, err := SiteWorld(m, cat, p, p.Sites[1].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, svc := range other.Services {
+		if svc.Name == found[0].Name {
+			t.Errorf("site %s's world holds the account's service", p.Sites[1].Name)
+		}
 	}
 }
