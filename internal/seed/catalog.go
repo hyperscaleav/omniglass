@@ -47,6 +47,21 @@ func ShippedComponentTypeParents() map[string]string {
 	return out
 }
 
+// ShippedComponentTypeLabels returns each official component type's label, the
+// words a component of the type reads as before any ordinal: the name its
+// platform label is made from.
+func ShippedComponentTypeLabels() map[string]string {
+	var doc componentTypesDoc
+	if err := yaml.Unmarshal(componentTypesYAML, &doc); err != nil {
+		panic("seed: parse component_types.yaml: " + err.Error())
+	}
+	out := make(map[string]string, len(doc.ComponentTypes))
+	for _, ct := range doc.ComponentTypes {
+		out[ct.ID] = ct.Label
+	}
+	return out
+}
+
 // ShippedSystemTypes returns the official system type names, in
 // system_types.yaml order.
 func ShippedSystemTypes() []string {

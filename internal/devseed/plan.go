@@ -7,6 +7,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
@@ -84,6 +85,36 @@ type componentRow struct {
 	// Label is the label the component is created with ("" lets the platform
 	// make it): a polled service's, from its manifest entry (#2757).
 	Label string
+	// Ordinal is the component's place among a slot of several (1-based), 0
+	// for a slot of one. A name the world gave carries no number the platform
+	// owns, so the seed puts the ordinal in the label itself (#2757).
+	Ordinal int
+}
+
+// label is the label the seed creates the component with, "" to let the
+// platform make it: the manifest's for a service, else the component type's
+// label and the slot ordinal when the slot holds several, as the platform's own
+// rule reads for a name it minted (#2757). typeLabels is the label of each
+// product's component type.
+func (c componentRow) label(typeLabels map[string]string) string {
+	if c.Label != "" {
+		return c.Label
+	}
+	if base := typeLabels[c.Product]; c.Ordinal > 0 && base != "" {
+		return fmt.Sprintf("%s %d", base, c.Ordinal)
+	}
+	return ""
+}
+
+// componentTypeLabelsByProduct is the label of the component type each shipped
+// product is classified under.
+func componentTypeLabelsByProduct() map[string]string {
+	types := seed.ShippedComponentTypeLabels()
+	out := map[string]string{}
+	for _, p := range seed.ShippedProducts() {
+		out[p.Name] = types[p.ComponentType]
+	}
+	return out
 }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
@@ -138,7 +169,11 @@ func rowsOf(p *scenario.Plan) planRows {
 			})
 			for _, fill := range s.Slots {
 				for n := 1; n <= fill.Count; n++ {
-					r.Components = append(r.Components, componentRow{
+					ordinal := 0
+					if fill.Count > 1 {
+						ordinal = n
+					}
+					r.Components = append(r.Components, componentRow{Ordinal: ordinal,
 						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Name: scenario.ComponentName(s.Name, fill.Slot, n), Product: fill.Product,
 						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control, Platform: fill.Platform,
 					})
@@ -278,9 +313,10 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 	}
 	run.done("systems")
 	compIDs := make([]string, 0, len(rows.Components))
+	typeLabels := componentTypeLabelsByProduct()
 	for _, c := range rows.Components {
 		prod, loc := c.Product, locIDs[c.Room]
-		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{Name: c.Name, Label: c.Label, ProductName: &prod, LocationName: &loc}, all, all, all, all)
+		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{Name: c.Name, Label: c.label(typeLabels), ProductName: &prod, LocationName: &loc}, all, all, all, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}

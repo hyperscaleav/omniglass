@@ -751,29 +751,77 @@ func TestSeedPlanOnboardsEveryComponentUnderTheWorldsName(t *testing.T) {
 	}
 }
 
-// An account-wide service reads as the manifest labels it, not as its
-// component type's "Generic Service" (#2757).
-func TestSeedPlanLabelsServicesByManifest(t *testing.T) {
+// A component's label tells its siblings apart (#2757): the world names a
+// component `<system>-<slot>-<n>`, a name the operator typed as far as the
+// platform is concerned, so the platform's label rule finds no number of its
+// own and two displays of one room would both read "Display". The seed gives a
+// slot's components their ordinal in the label, as a dev fleet's read
+// "Display 1" and "Display 2", and leaves the name as the world gave it. A
+// slot holding one component reads bare. An account-wide service reads as the
+// manifest labels it, not as its component type's "Generic Service".
+func TestSeedPlanLabelsComponentsWithTheirOrdinalAndServicesByManifest(t *testing.T) {
 	t.Parallel()
 	ctx, gw, conn := openSeededGateway(t)
 	m, err := scenario.Shipped("corporate")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := corporatePlan(t, 3)
+	p := corporatePlan(t, 20)
 	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{}); err != nil {
 		t.Fatal(err)
+	}
+	rows, err := conn.Query(ctx, `select c.name, coalesce(c.label, '') from component c`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := map[string]string{}
+	for rows.Next() {
+		var name, label string
+		if err := rows.Scan(&name, &label); err != nil {
+			t.Fatal(err)
+		}
+		labels[name] = label
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	multi := 0
+	for _, site := range p.Sites {
+		for _, s := range site.Systems {
+			seen := map[string]string{}
+			for _, fill := range s.Slots {
+				for n := 1; n <= fill.Count; n++ {
+					name := scenario.ComponentName(s.Name, fill.Slot, n)
+					label, ok := labels[name]
+					if !ok {
+						t.Fatalf("component %s was not seeded under the world's name", name)
+					}
+					if other, dup := seen[label]; dup && fill.Count > 1 {
+						t.Errorf("%s and %s of %s both read %q, want the ordinal to tell them apart", other, name, s.Name, label)
+					}
+					seen[label] = name
+					if fill.Count > 1 {
+						multi++
+						if want := fmt.Sprintf(" %d", n); !strings.HasSuffix(label, want) {
+							t.Errorf("%s reads %q, want its slot's ordinal %q at the end", name, label, want)
+						}
+					} else if strings.HasSuffix(label, " 1") {
+						t.Errorf("%s is the only one of its slot and reads %q, want it bare", name, label)
+					}
+				}
+			}
+		}
+	}
+	if multi == 0 {
+		t.Fatal("the corporate plan has no slot of several components to judge the ordinal on")
 	}
 	for _, svc := range m.Services {
 		if svc.Label == "" {
 			t.Errorf("service %s declares no label", svc.Name.Name)
 		}
 		name := fmt.Sprintf("%s-%s-1", p.Sites[0].Name, svc.Name.Name)
-		var got string
-		if err := conn.QueryRow(ctx, `select coalesce(label, '') from component where name = $1`, name).Scan(&got); err != nil {
-			t.Fatal(err)
-		}
-		if got != svc.Label {
+		if got := labels[name]; got != svc.Label {
 			t.Errorf("service %s reads %q, want the manifest's %q", name, got, svc.Label)
 		}
 	}
