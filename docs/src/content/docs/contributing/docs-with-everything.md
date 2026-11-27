@@ -265,13 +265,36 @@ Measured on an AVX2 host and a host with no AVX at all, the same tree captured w
 ([the comparison on #1860](https://github.com/hyperscaleav/omniglass/issues/1860#issuecomment-7169963900)):
 the users page's shot (`users`) is byte-identical across the two CPUs either way, one other baseline (`notification-target-new`, 8 pixels)
 differs across the CPUs without the flag and is byte-identical with it, and 36 of the 37 baselines match across the
-two CPUs with it. The one that does not, `fleet-history`, differs by where the history strip's alarm marker sits,
-which follows when the lab raised the alarm, not the rasterizer, so the flag does not and cannot pin it.
+two CPUs with it. The one that did not, `fleet-history`, drifted for a reason the rasterizer has no part in, and the
+flag could not pin it: the shot follows the lab's timing (#2707, #2802), pinned below.
 Each capture logs the host's CPU model and whether AVX2 and AVX-512 are present (`capture: cpu ...` from
 `docs/screenshots/capture.sh`), so a baseline's hosts are in the run log. The baselines committed before the pin came
 from the unpinned path, so the first recapture after it lands (the `claude/docs-shots-recapture` PR) rewrites a few
 gradient pixels; adopt it. If a local `make docs-shots-check` still differs on a host only by such a residue, adopt
 the CI recapture rather than loosening the comparison or masking the element.
+
+### A shot that follows the lab's timing is pinned in its capture
+
+`fleet-history` (the auditorium's Activity tab) read the lab's timing in two places, which no mask on a value could
+hold, and two captures of the same tree differed by 14.98% of their pixels:
+
+- **The row count of the health history.** The lab opens with the room commissioning for about a second before it
+  reads healthy (the first two recorded edges), and `stretchesOf` keeps a stretch only if it lasted half a second. A
+  fast host drops it and lists one row (the ongoing stretch); a slow host keeps it and lists two, and the events and
+  logs below move down by a row. A mask paints over a box and cannot stop what follows it from moving.
+- **The alarm marker's x.** The marker sits at the raise's share of a window that runs from the lab's first record to
+  now, so it moves with the lab's age at capture: the same alarm sits further left the older the lab is.
+
+The capture setup pins both, in the shot's frontmatter and not in the console. A `hide` step takes every row but the
+ongoing stretch out of both renders (`[data-testid=stretch-list] > li:not([data-testid=stretch-0])`), so the list
+holds one row at any lab age; an `expect-count` step after it fails the capture by name if the list shows other than
+one, so a page whose row count still varies is refused instead of written. The marker row
+(`[aria-label='Alarm raises on this timeline']`) is masked whole: it is full width and a fixed height, and only the
+markers inside it move. Both steps are `web/e2e/shotsteps.mjs`'s, shared by the capture and by
+`web/e2e/shotsteps.spec.ts`, which runs the page's declared steps and masks against markup shaped like the tab, with
+and without the commissioning row and with the marker at different x, and requires the same baseline bytes (and that
+the baseline moves without the step or the mask, so the test would fail if either were dropped). A shot whose
+region renders a variable number of rows takes the same two steps.
 
 ### A mask covers a box that holds still, and says that it is there
 

@@ -9,11 +9,14 @@ import { withFragments } from './plugins/fragments-loader.mjs';
 // image from the same entry, so the capture list and the embed can never drift
 // apart. The PNGs themselves are a generated resource (see `make docs-shots`).
 const screenshotStep = z.object({
-  action: z.enum(['wait', 'click', 'hover', 'fill', 'press']),
+  action: z.enum(['wait', 'click', 'hover', 'fill', 'press', 'hide', 'expect-count']),
   selector: z.string().optional(),
   value: z.string().optional(),
   // wait only: how long to hold for the selector, in ms (default two minutes).
   timeout: z.number().int().positive().optional(),
+  // expect-count only: how many visible matches the selector must have (the capture
+  // fails by name otherwise). hide takes every match out of both renders (web/e2e/shotsteps.mjs).
+  count: z.number().int().nonnegative().optional(),
   // click only: keys held through the click (Alt, Shift, Control, Meta).
   modifiers: z.array(z.enum(['Alt', 'Shift', 'Control', 'Meta'])).optional(),
 });

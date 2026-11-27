@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
 import { describeMask, planMasks, planStandingMasks, shootBaseline, withCaptureRetry } from './shotmasklib.mjs';
 import { gotoSettled, settleLayout } from './settle.mjs';
+import { runStep } from './shotsteps.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -120,21 +121,7 @@ for (const spec of specs) {
   // lab's banner alone, whenever it renders.
   await page.addStyleTag({ content: '[data-testid="lab-banner"] { display: none !important; }' });
   for (const step of spec.steps ?? []) {
-    // wait holds the shot until the selector shows (a figure the lab writes a
-    // while after it comes up), for up to its timeout in ms, else two minutes.
-    if (step.action === 'wait') {
-      try {
-        await page.locator(step.selector).first().waitFor({ state: 'visible', timeout: step.timeout ?? 120_000 });
-      } catch (e) {
-        // A wait may name what never showed, so the failure reads as its cause.
-        if (step.message) throw new Error(`${spec.id}: ${step.message} (waited for ${step.selector})`);
-        throw e;
-      }
-    }
-    else if (step.action === 'click') await page.click(step.selector, { modifiers: step.modifiers });
-    else if (step.action === 'hover') await page.hover(step.selector);
-    else if (step.action === 'press') await page.keyboard.press(step.value);
-    else if (step.action === 'fill') await page.fill(step.selector, step.value ?? '');
+    await runStep(page, spec.id, step);
     await page.waitForTimeout(400);
   }
   await page.waitForTimeout(800);
