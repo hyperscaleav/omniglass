@@ -1,5 +1,0 @@
-{
-  "state": "{{ .State | get "status" | get "playback" | get "state" }}",
-  "index": {{ .State | get "status" | get "playback" | get "index" }},
-  "content": "{{ .State | get "status" | get "playback" | get "content" }}"
-}

@@ -1,13 +1,12 @@
 package labfootprint
 
 import (
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
@@ -111,7 +110,7 @@ func TestASweepPlanTakesEveryDriverOnceWithAReason(t *testing.T) {
 // every shipped driver exactly once, and each swept product is one the
 // simulator serves on that driver.
 func TestTheShippedSweepPlanCoversEverySeededDriver(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +123,7 @@ func TestTheShippedSweepPlanCoversEverySeededDriver(t *testing.T) {
 			t.Errorf("%s swept twice", tg.Driver)
 		}
 		seen[tg.Driver] = true
-		if _, _, ok := store.ForProduct(tg.Product); !ok {
+		if _, ok := cat.ForProduct(tg.Product); !ok {
 			t.Errorf("%s swept on %s, which no profile simulates", tg.Driver, tg.Product)
 		}
 		if _, ok := simfleet.Attach[tg.Driver]; !ok {

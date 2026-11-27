@@ -30,7 +30,7 @@ import (
 // places (#914), resolved by the scale lab's own resolver: the components each
 // takes, every one a shipped catalog product the simulator serves, on its own
 // loopback address.
-func standardsFleet(t *testing.T, store *profile.Store) []DeviceSnapshot {
+func standardsFleet(t *testing.T, e *Engine) []DeviceSnapshot {
 	t.Helper()
 	m, err := scenario.Shipped("corporate")
 	if err != nil {
@@ -53,10 +53,11 @@ func standardsFleet(t *testing.T, store *profile.Store) []DeviceSnapshot {
 			}
 			placed[sys.Standard] = true
 			for _, c := range sys.Components {
-				prof, _, ok := store.ForProduct(c.Name)
+				r, ok := e.cat.ForProduct(c.Name)
 				if !ok {
 					t.Fatalf("system %s: no profile simulates the product %s", sys.Name, c.Name)
 				}
+				prof := r.Definition.ID()
 				for i := 0; i < c.Count; i++ {
 					id := fmt.Sprintf("%s-%s-%d", sys.Name, c.Name, i+1)
 					snap := DeviceSnapshot{
@@ -83,9 +84,9 @@ func startFleet(t *testing.T) (*Engine, *profile.Store) {
 	if err != nil {
 		t.Fatalf("loading catalog: %v", err)
 	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
-	if err := e.LoadDevices(standardsFleet(t, store)); err != nil {
+	if err := e.LoadDevices(standardsFleet(t, e)); err != nil {
 		t.Fatalf("loading devices: %v", err)
 	}
 	if err := e.StartAll(); err != nil {
@@ -232,7 +233,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 
 	// SNMP reads live state too: a display powered off over HTTP reads off
 	// over SNMP.
-	display := deviceByProfile(t, e, "boreal-edge-86")
+	display := deviceByProfile(t, e, "boreal-edge")
 	dip := display.LoopbackIP.String()
 	// The display's web admin answers digest (#1114): the challenge, then
 	// the answer to it.

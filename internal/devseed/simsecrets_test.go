@@ -2,11 +2,11 @@ package devseed
 
 import (
 	"encoding/json"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
@@ -31,7 +31,7 @@ func TestSimSecretsHoldWhatTheFacesDemand(t *testing.T) {
 	if err := json.Unmarshal(raw, &facts); err != nil {
 		t.Fatal(err)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +51,13 @@ func TestSimSecretsHoldWhatTheFacesDemand(t *testing.T) {
 			if p.DriverID != driver {
 				continue
 			}
-			name, _, served := store.ForProduct(p.ID)
+			r, served := cat.ForProduct(p.ID)
 			if !served {
 				continue
 			}
 			checked++
-			if !faceDemands(store.Devices[name], types[secret], fields) {
-				t.Errorf("%s (driver %s, profile %s): no face demands what %s holds (%v)", p.ID, driver, name, secret, fields)
+			if !faceDemands(r.Definition, types[secret], fields) {
+				t.Errorf("%s (driver %s, profile %s): no face demands what %s holds (%v)", p.ID, driver, r.Definition.ID(), secret, fields)
 			}
 		}
 	}
@@ -68,8 +68,8 @@ func TestSimSecretsHoldWhatTheFacesDemand(t *testing.T) {
 
 // faceDemands reports whether one of the profile's faces asks for exactly
 // the credential the secret holds.
-func faceDemands(p *profile.DeviceProfile, secretType string, fields map[string]string) bool {
-	for _, iface := range p.Interfaces {
+func faceDemands(p spec.Definition, secretType string, fields map[string]string) bool {
+	for _, iface := range p.Surfaces() {
 		a := iface.Auth
 		switch secretType {
 		case "snmp-community":

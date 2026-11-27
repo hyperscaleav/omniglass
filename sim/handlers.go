@@ -42,6 +42,7 @@ func (d *Device) addHandlers(h spec.Handlers, model spec.Model) error {
 			return err
 		}
 		d.routes = append(d.routes, routeEntry{Method: method, Path: path, Go: r.Handle})
+		d.registerSets(r.Sets)
 	}
 	for _, c := range h.Commands {
 		d.commands = append(d.commands, commandEntry{Match: c.Match, Go: c.Handle})
@@ -104,7 +105,9 @@ func (d *Device) runTick(t spec.Tick, stop <-chan struct{}, done *sync.WaitGroup
 // applyTick runs a tick and writes what it returns: only the paths whose value
 // changed, never one an operator override holds.
 func (d *Device) applyTick(t spec.Tick) {
-	c := spec.TickContext{Room: d.roomState(d.room), Now: d.clock(), Rand: d.fam.src}
+	now := d.clock()
+	span, known := behave.BuildingSpan(d.world(), d.calendarSrc(), d.room)
+	c := spec.TickContext{Room: d.roomState(d.room), Now: now, Rand: d.fam.src, Hours: behave.ReadBuildingHours(span, known, now)}
 	changes := t.Run(goDevice{d}, c)
 	if len(changes) == 0 {
 		return
@@ -167,16 +170,42 @@ func (g goDevice) Model() spec.Model {
 	}
 	return g.d.fam.model
 }
-func (g goDevice) Read(path string) any  { return g.d.ReadPath(path) }
+func (g goDevice) Read(path string) any { return g.d.ReadPath(path) }
+func (g goDevice) Default(path string) any {
+	g.d.mu.RLock()
+	defer g.d.mu.RUnlock()
+	return lookupStatePath(g.d.defaults, path)
+}
 func (g goDevice) State() map[string]any { return g.d.State() }
+func (g goDevice) Now() time.Time        { return g.d.clock() }
 func (g goDevice) Write(path string, v any) error {
+	return g.WriteMany(surface.Change{Path: path, Value: v})
+}
+
+// WriteMany applies the changes as one: all of them or, when one path cannot
+// be set, none.
+func (g goDevice) WriteMany(changes ...surface.Change) error {
 	d := g.d
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if err := SetPath(d.state, path, v); err != nil {
-		return fmt.Errorf("setting %q: %w", path, err)
+	snapshot := deepCopy(d.state)
+	diffs := make(map[string]any, len(changes))
+	for _, ch := range changes {
+		if err := SetPath(d.state, ch.Path, ch.Value); err != nil {
+			// Restored in place: the state map's identity is held by reference.
+			for k := range d.state {
+				delete(d.state, k)
+			}
+			for k, v := range snapshot {
+				d.state[k] = v
+			}
+			return fmt.Errorf("setting %q: %w", ch.Path, err)
+		}
+		diffs[ch.Path] = ch.Value
 	}
-	diffs := map[string]any{path: v}
+	if len(diffs) == 0 {
+		return nil
+	}
 	d.Version++
 	// Published under the lock, as a route's mutations are, so diffs reach the
 	// publisher in version order.

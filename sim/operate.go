@@ -145,6 +145,10 @@ func (d *Device) operateCommand(op Operation) OperationResult {
 func (d *Device) operateSNMP(op Operation) OperationResult {
 	oid := strings.TrimPrefix(strings.TrimSpace(op.OID), ".")
 	path, ok := d.OIDMap[oid]
+	if g, found := d.goOID(oid); !ok && found {
+		d.publishOperation("snmp", "GET", oid, 200)
+		return OperationResult{Body: fmt.Sprint(g.Get())}
+	}
 	if !ok {
 		d.publishOperation("snmp", "GET", oid, 404)
 		return OperationResult{Error: fmt.Sprintf("noSuchObject: the device has no OID %s", oid)}

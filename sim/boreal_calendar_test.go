@@ -8,8 +8,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -36,16 +34,12 @@ func dayKnobs() calendar.Knobs {
 }
 
 // borealEngine is an engine over the shipped catalog with one device of the
-// profile in roomHQ on a pinned clock and a calendar of the knobs.
-func borealEngine(t *testing.T, profileName string, seed int64, k calendar.Knobs, at *time.Time) *Device {
+// product in roomHQ on a pinned clock and a calendar of the knobs.
+func borealEngine(t *testing.T, product string, seed int64, k calendar.Knobs, at *time.Time) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
-	snap := DeviceSnapshot{DeviceID: "d-1", Hostname: "d-1", LoopbackIP: "127.0.0.1", ProfileName: profileName, Version: 1,
+	snap := DeviceSnapshot{DeviceID: "d-1", Hostname: "d-1", LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, product), Product: product, Version: 1,
 		SiteCode: roomHQ.Site, Building: roomHQ.Building, Room: roomHQ.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)

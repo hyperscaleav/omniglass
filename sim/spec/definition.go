@@ -118,9 +118,11 @@ func (f *Family) Surfaces() []profile.Interface {
 		iface.Routes = append([]profile.Route(nil), iface.Routes...)
 		iface.Commands = append([]profile.Command(nil), iface.Commands...)
 		switch iface.Protocol {
+		case "snmp":
+			iface.NativeOIDs = f.nativeOIDs()
 		case "http":
 			for _, r := range f.s.HTTP {
-				iface.Routes = append(iface.Routes, profile.Route{Match: r.Match, Doc: profile.Doc{Summary: r.Summary}, Example: r.Example, Native: true})
+				iface.Routes = append(iface.Routes, profile.Route{Match: r.Match, Doc: profile.Doc{Summary: r.Summary}, Example: r.Example, Native: true, NativeSets: r.Sets})
 			}
 		case "ssh", "telnet", "tcp", "udp":
 			for _, c := range f.s.Commands {
@@ -128,6 +130,23 @@ func (f *Family) Surfaces() []profile.Interface {
 			}
 		}
 		out[i] = iface
+	}
+	return out
+}
+
+// nativeOIDs is the OIDs the family's surface serves, as the console lists
+// them: each state path it reads with its OID. The surface is built against a
+// device that holds nothing, so a SurfaceFunc reads state only when an OID is
+// read, never as it is built; an OID that reads no one path is not listed.
+func (f *Family) nativeOIDs() map[string]string {
+	if f.s.Surface == nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, o := range f.s.Surface(listingDevice{}).OIDs {
+		if o.Path != "" {
+			out[o.Path] = o.OID
+		}
 	}
 	return out
 }
@@ -198,6 +217,9 @@ func NewCatalog(store *profile.Store, families ...Spec) (*Catalog, error) {
 			}
 			if m.DeviceType != "" {
 				id.DeviceType = m.DeviceType
+			}
+			if m.Summary != "" {
+				id.Summary = m.Summary
 			}
 			if err := claim(m.Product, Resolved{Definition: f, Product: m.Product, Identity: id, Overlay: m.State, Model: m}); err != nil {
 				return nil, err

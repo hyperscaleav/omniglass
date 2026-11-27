@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"github.com/hyperscaleav/omniglass/internal/secret"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,8 +16,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -1777,7 +1776,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1786,7 +1785,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 		if err := rows.Scan(&id, &product); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, ok := store.ForProduct(product); ok {
+		if _, ok := cat.ForProduct(product); ok {
 			unwired = append(unwired, product+" "+id)
 		}
 	}
@@ -2116,16 +2115,16 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 
 	// The secret holds the community the panel's agent refuses, by the
 	// simulator's own profile, so the refusal is the agent's and not a guess.
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
-	name, _, ok := store.ForProduct("newtron-panel-7")
+	panel, ok := cat.ForProduct("newtron-panel-7")
 	if !ok {
 		t.Fatal("the simulator serves no newtron-panel-7")
 	}
 	refused := ""
-	for _, iface := range store.Devices[name].Interfaces {
+	for _, iface := range panel.Definition.Surfaces() {
 		if iface.Protocol == "snmp" {
 			refused = iface.Auth.RefusedCommunity
 		}

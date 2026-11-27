@@ -2,6 +2,7 @@ package devseed_test
 
 import (
 	"fmt"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"sort"
 	"strings"
 	"testing"
@@ -10,8 +11,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // TestEveryCollectionMethodRunsOnAHealthyLabComponent holds the lab to "every
@@ -30,7 +29,7 @@ func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
 	}
 	ctx, _, gw := seededFleet(t)
 	all := scope.Set{All: true}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +54,7 @@ func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
 		if c.ProductHandle == nil {
 			continue
 		}
-		if _, _, ok := store.ForProduct(*c.ProductHandle); ok {
+		if _, ok := cat.ForProduct(*c.ProductHandle); ok {
 			simulated[c.ID] = true
 		}
 	}

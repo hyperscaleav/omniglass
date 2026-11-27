@@ -6,10 +6,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -22,17 +21,13 @@ const castKey = "boreal-cast-key"
 func startCast(t *testing.T) *Device {
 	t.Helper()
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: "player-1", Hostname: "player-1", LoopbackIP: ip, ProfileName: "boreal-cast-m1", Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "player-1", Hostname: "player-1", LoopbackIP: ip, ProfileName: "boreal-cast", Product: "boreal-cast-m1", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	return deviceByProfile(t, e, "boreal-cast-m1")
+	return deviceByProfile(t, e, "boreal-cast")
 }
 
 func castDo(t *testing.T, d *Device, method, path, body, key string) (int, map[string]any) {
@@ -85,15 +80,7 @@ func TestBorealCastServesStatusAndPlayback(t *testing.T) {
 func TestBorealCastPlaylistMovesAlongWhilePlaying(t *testing.T) {
 	d := startCast(t)
 	d.StopBehaviors()
-	var advance *behaviorEntry
-	d.behaviorMu.Lock()
-	for i := range d.behaviors {
-		if d.behaviors[i].Name == "playlist_advance" {
-			advance = &d.behaviors[i]
-		}
-	}
-	d.behaviorMu.Unlock()
-	if advance == nil {
+	if !slices.Contains(d.Behaviors(), "playlist_advance") {
 		t.Fatalf("no playlist_advance behavior; have %v", d.Behaviors())
 	}
 	content := func() string {
@@ -102,7 +89,7 @@ func TestBorealCastPlaylistMovesAlongWhilePlaying(t *testing.T) {
 	}
 	var seen []string
 	for i := 0; i < 5; i++ {
-		d.tickBehavior(advance)
+		d.TickBehavior("playlist_advance")
 		seen = append(seen, content())
 	}
 	want := []string{"Wayfinding", "Today's events", "Safety notice", "Welcome loop", "Wayfinding"}
@@ -115,7 +102,7 @@ func TestBorealCastPlaylistMovesAlongWhilePlaying(t *testing.T) {
 	if code, p := castDo(t, d, http.MethodPost, "/api/playback", `{"state": "paused"}`, castKey); code != http.StatusOK || p["state"] != "paused" {
 		t.Fatalf("pause = %d %v", code, p)
 	}
-	d.tickBehavior(advance)
+	d.TickBehavior("playlist_advance")
 	if got := content(); got != "Wayfinding" {
 		t.Errorf("paused, a tick moved the item to %q", got)
 	}

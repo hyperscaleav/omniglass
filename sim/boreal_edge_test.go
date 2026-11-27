@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -23,17 +21,13 @@ const (
 func startEdge(t *testing.T) *Device {
 	t.Helper()
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: "display-1", Hostname: "display-1", LoopbackIP: ip, ProfileName: "boreal-edge-86", Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "display-1", Hostname: "display-1", LoopbackIP: ip, ProfileName: "boreal-edge", Product: "boreal-edge-86", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	return deviceByProfile(t, e, "boreal-edge-86")
+	return deviceByProfile(t, e, "boreal-edge")
 }
 
 func edgeOperate(t *testing.T, d *Device, path, body string, want int) {

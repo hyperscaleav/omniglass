@@ -105,8 +105,14 @@ const (
 type OID struct {
 	OID  string
 	Kind Kind
+	// Path is the state path the OID reads, for the console's listing of what
+	// a device serves; empty when it reads none.
+	Path string
 	Get  func() any
 }
+
+// At names the state path the OID reads.
+func (o OID) At(path string) OID { o.Path = path; return o }
 
 // Text is an OctetString OID.
 func Text(oid string, get func() string) OID {

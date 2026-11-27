@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -364,5 +365,155 @@ func TestGoFamilyTicksWriteOnlyWhatChanged(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if runs.Load() != n {
 		t.Fatal("a stopped device kept ticking")
+	}
+}
+
+// A handler's WriteMany is one change: one version, one diff carrying every
+// path, and all of it or none of it, so a refused write leaves state and the
+// diff stream as they were (#2832).
+func TestGoFamilyWriteManyIsOneChangeAndAllOrNothing(t *testing.T) {
+	var handle atomic.Value
+	fam := spectest.Spec()
+	fam.Animate = func(d spec.Device) func() { handle.Store(d); return func() {} }
+	e := familyEngine(t, fam)
+	if err := e.Sync([]DeviceSnapshot{familySnap("tf-1", "127.88.31.1", "tf-display-55")}); err != nil {
+		t.Fatal(err)
+	}
+	d := deviceNamed(t, e, "tf-1")
+	var diffs []StateChange
+	d.DiffPublisher = func(c StateChange) { diffs = append(diffs, c) }
+	sd := handle.Load().(spec.Device)
+
+	if err := sd.WriteMany(surface.Change{Path: "status.device.power", Value: "off"}, surface.Change{Path: "status.video.input", Value: "dp1"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(diffs) != 1 || len(diffs[0].Diffs) != 2 || diffs[0].Version != 2 {
+		t.Fatalf("diffs = %+v, want one change of two paths at version 2", diffs)
+	}
+	// A path under a value that is not a map cannot be set: nothing is written.
+	err := sd.WriteMany(surface.Change{Path: "status.video.input", Value: "hdmi2"}, surface.Change{Path: "status.device.power.x", Value: 1})
+	if err == nil {
+		t.Fatal("a write under a string was accepted")
+	}
+	if d.ReadPath("status.video.input") != "dp1" || len(diffs) != 1 || d.Version != 2 {
+		t.Fatalf("a refused change left input %v, %d diffs, version %d; want dp1, 1, 2", d.ReadPath("status.video.input"), len(diffs), d.Version)
+	}
+	if got := sd.Now(); !got.Equal(d.clock()) && got.Sub(d.clock()) > time.Second {
+		t.Fatalf("the handle's clock is %v, the device's %v", got, d.clock())
+	}
+	if sd.Default("status.device.power") != "on" || sd.Default("status.video.input") != "hdmi1" {
+		t.Fatalf("defaults = %v, %v; a reset restores on and hdmi1", sd.Default("status.device.power"), sd.Default("status.video.input"))
+	}
+}
+
+// A family's ticks are fired by name, listed beside YAML behaviors, and read
+// the building's hours the way a template's buildingHours did.
+func TestGoFamilyTicksRunByNameAndReadTheBuildingsHours(t *testing.T) {
+	var got atomic.Value
+	fam := spectest.Spec()
+	fam.Ticks = []spec.Tick{{Name: "hours_probe", Interval: time.Hour, Run: func(d spec.Device, c spec.TickContext) []surface.Change {
+		got.Store(c.Hours)
+		return nil
+	}}}
+	e := familyEngine(t, fam)
+	k := calendar.Knobs{Hours: calendar.Hours{Start: 8, End: 18}}
+	e.SetCalendar(calendar.New(1, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
+	snap := familySnap("tf-1", "127.88.32.1", "tf-display-55")
+	snap.SiteCode, snap.Building, snap.Room = "hq", "tower", "r101"
+	if err := e.Sync([]DeviceSnapshot{snap}); err != nil {
+		t.Fatal(err)
+	}
+	d := deviceNamed(t, e, "tf-1")
+	d.StopBehaviors()
+	if !slices.Contains(d.Behaviors(), "hours_probe") {
+		t.Fatalf("behaviors = %v, want the family's tick listed", d.Behaviors())
+	}
+	for _, c := range []struct {
+		h    int
+		open bool
+	}{{7, false}, {9, true}, {18, false}} {
+		at := time.Date(2026, 11, 3, c.h, 30, 0, 0, time.UTC)
+		d.SetClock(func() time.Time { return at })
+		if !d.TickBehavior("hours_probe") {
+			t.Fatal("the tick was not found by name")
+		}
+		if h := got.Load().(behave.HoursReading); !h.Known || h.Open != c.open {
+			t.Errorf("%02d:30: hours = %+v, want known and open=%v", c.h, h, c.open)
+		}
+	}
+	if d.TickBehavior("nope") {
+		t.Error("an unknown behavior was fired")
+	}
+}
+
+// The quick sets a family's routes declare reach the simulator as a profile's
+// mutations do: a path driven off its default is a fault the console shows.
+func TestGoFamilyRouteSetsReportFaultsAndListOnTheSurface(t *testing.T) {
+	fam := spectest.Spec()
+	fam.HTTP = append([]spec.HTTPRoute(nil), fam.HTTP...)
+	for i := range fam.HTTP {
+		if fam.HTTP[i].Match == "POST /api/power" {
+			fam.HTTP[i].Sets = []profile.Set{{Path: "status.device.power", Field: "power", Values: []string{"on", "off"}}}
+		}
+	}
+	e := familyEngine(t, fam)
+	if err := e.Sync([]DeviceSnapshot{familySnap("tf-1", "127.88.33.1", "tf-display-55")}); err != nil {
+		t.Fatal(err)
+	}
+	d := deviceNamed(t, e, "tf-1")
+	if f := d.Faults(); len(f) != 0 {
+		t.Fatalf("a healthy device has faults %+v", f)
+	}
+	if code, _ := dspDo(t, "POST", "http://"+faceAddr(t, d, "api")+"/api/power", `{"power":"off"}`); code != 200 {
+		t.Fatalf("POST power = %d", code)
+	}
+	if f := d.Faults(); len(f) != 1 || f[0].Path != "status.device.power" || f[0].Value != "off" || f[0].Default != "on" {
+		t.Fatalf("faults = %+v, want the power held off its default", f)
+	}
+	def, _ := e.cat.Lookup(spectest.Name)
+	var listed []profile.Set
+	for _, s := range def.Surfaces() {
+		for _, r := range s.Routes {
+			listed = append(listed, r.Sets()...)
+		}
+	}
+	if len(listed) != 1 || listed[0].Field != "power" {
+		t.Fatalf("the surface lists sets %+v", listed)
+	}
+}
+
+// A family's SNMP scalars answer an operator's fire from the console, and the
+// surface lists each with the state path it reads, as a profile's OID map is.
+func TestGoFamilyOIDsAnswerTheConsoleAndAreListed(t *testing.T) {
+	fam := spectest.Spec()
+	fam.Interfaces = append(append([]profile.Interface(nil), fam.Interfaces...), profile.Interface{Name: "snmp", Protocol: "snmp", Port: 161})
+	fam.Surface = func(d spec.Device) spec.Surface {
+		return spec.Surface{OIDs: []surface.OID{
+			surface.Text("1.3.6.1.4.1.9.1.0", func() string { return spec.String(d, "status.device.power") }).At("status.device.power"),
+			surface.Integer("1.3.6.1.4.1.9.2.0", func() int { return spec.Int(d, "configuration.device.diagonal") }).At("configuration.device.diagonal"),
+		}}
+	}
+	e := familyEngine(t, fam)
+	if err := e.Sync([]DeviceSnapshot{familySnap("tf-1", "127.88.34.1", "tf-display-65")}); err != nil {
+		t.Fatal(err)
+	}
+	d := deviceNamed(t, e, "tf-1")
+	for oid, want := range map[string]string{"1.3.6.1.4.1.9.1.0": "on", ".1.3.6.1.4.1.9.2.0": "65"} {
+		if res := d.Operate(Operation{Kind: "snmp", OID: oid}); res.Error != "" || res.Body != want {
+			t.Errorf("fire %s = %+v, want %q", oid, res, want)
+		}
+	}
+	if res := d.Operate(Operation{Kind: "snmp", OID: "1.3.6.1.4.1.9.9.0"}); res.Error == "" {
+		t.Error("an OID nothing serves answered")
+	}
+	def, _ := e.cat.Lookup(spectest.Name)
+	var listed map[string]string
+	for _, s := range def.Surfaces() {
+		if s.Protocol == "snmp" {
+			listed = s.NativeOIDs
+		}
+	}
+	if listed["status.device.power"] != "1.3.6.1.4.1.9.1.0" || len(listed) != 2 {
+		t.Fatalf("the surface lists OIDs %v", listed)
 	}
 }

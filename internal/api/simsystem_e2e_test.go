@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,8 +17,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simhub"
 )
 
@@ -154,7 +153,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	viewer := setupAllViewer(t, ctx, dsn, "simsystem-viewer")
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +176,7 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		sum += r.Count
 		if r.Count > 0 {
 			staffed++
-			if _, _, ok := store.ForProduct(r.Product); !ok {
+			if _, ok := cat.ForProduct(r.Product); !ok {
 				t.Errorf("slot %s staffed with %s, which nothing simulates", r.Slot, r.Product)
 			}
 		} else if r.Reason == "" || r.Missing == 0 {

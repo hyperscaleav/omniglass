@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // The simulator serves a component by its product's name, so every device
-// profile must name a product the boot seed ships, or no seeded component
-// could ever be simulated by it. Cloud services are simulated fleet-wide
+// definition (a YAML profile or a Go family) must name products the boot seed
+// ships, or no seeded component could ever be simulated by it. Cloud services are simulated fleet-wide
 // rather than as a product, and are exempt.
 func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 	raw, err := seed.FactsJSON()
@@ -35,32 +36,37 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		typeOf[p.ID] = p.ComponentType
 		driverOf[p.ID] = p.DriverID
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
 	checked := 0
-	for name, p := range store.Devices {
-		if p.DeviceType == "cloud-service" {
+	for _, def := range cat.Definitions() {
+		if def.Identity().DeviceType == "cloud-service" {
 			continue
 		}
 		checked++
-		if !seeded[name] {
-			t.Errorf("device profile %q names no seeded product; rename it to the product it simulates", name)
+		// A YAML profile is named for the product it leads with; a Go family is
+		// named for its wire API, and leads with its first model.
+		products := def.Products()
+		lead := products[0]
+		if def.Kind() == spec.KindGo {
+			products = products[1:]
+			lead = products[0]
 		}
-		for _, v := range p.Products {
-			if !seeded[v.Name] {
-				t.Errorf("device profile %q lists %q, which the seed does not ship", name, v.Name)
+		for _, name := range products {
+			if !seeded[name] {
+				t.Errorf("%s %q lists %q, which the seed does not ship; name the product it simulates", def.Kind(), def.ID(), name)
 			}
-			// A shared profile is one device in variants (a display line in
+			// A shared definition is one device in variants (a display line in
 			// sizes), never a different device: a touch panel's surface is a
 			// subset of a control processor's, so one cannot stand in for
 			// the other.
-			if driverOf[v.Name] != driverOf[name] {
-				t.Errorf("device profile %q (driver %s) lists %q (driver %s); a variant is collected the same way", name, driverOf[name], v.Name, driverOf[v.Name])
+			if driverOf[name] != driverOf[lead] {
+				t.Errorf("%s %q (driver %s) lists %q (driver %s); a variant is collected the same way", def.Kind(), def.ID(), driverOf[lead], name, driverOf[name])
 			}
-			if typeOf[v.Name] != typeOf[name] {
-				t.Errorf("device profile %q (component type %s) lists %q (component type %s); a profile serves variants of one kind of device", name, typeOf[name], v.Name, typeOf[v.Name])
+			if typeOf[name] != typeOf[lead] {
+				t.Errorf("%s %q (component type %s) lists %q (component type %s); a definition serves variants of one kind of device", def.Kind(), def.ID(), typeOf[lead], name, typeOf[name])
 			}
 		}
 	}
@@ -78,7 +84,7 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		if p.DriverID == "" {
 			continue
 		}
-		_, _, simulated := store.ForProduct(p.ID)
+		_, simulated := cat.ForProduct(p.ID)
 		_, pending := cov.Unsimulated[p.ID]
 		switch {
 		case simulated && pending:
@@ -92,7 +98,7 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 			t.Errorf("coverage.yaml lists %q, which the seed does not ship", id)
 		}
 		// Whatever its driver: a service on the network can have none.
-		if _, _, simulated := store.ForProduct(id); simulated {
+		if _, simulated := cat.ForProduct(id); simulated {
 			t.Errorf("%s is simulated now; drop it from coverage.yaml", id)
 		}
 	}
@@ -102,7 +108,7 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		drivers[p.ID] = p.DriverID
 	}
 	for id := range cov.Passive {
-		_, _, simulated := store.ForProduct(id)
+		_, simulated := cat.ForProduct(id)
 		switch {
 		case !seeded[id]:
 			t.Errorf("coverage.yaml lists %q as passive, which the seed does not ship", id)

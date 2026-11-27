@@ -16,16 +16,12 @@ import (
 // device's clock is not pinned, the engine's is offset.
 func offsetEngine(t *testing.T, seed int64, room calendar.Room, offset time.Duration) (*Engine, *Device) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetClock(Clock{Offset: offset})
 	k := calTestKnobs()
 	e.SetCalendar(calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
 	snap := DeviceSnapshot{DeviceID: "d-" + room.Room, Hostname: "d-" + room.Room, LoopbackIP: "127.0.0.1",
-		ProfileName: "boreal-edge-86", Version: 1, SiteCode: room.Site, Building: room.Building, Room: room.Room}
+		ProfileName: "boreal-edge", Product: "boreal-edge-86", Version: 1, SiteCode: room.Site, Building: room.Building, Room: room.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}

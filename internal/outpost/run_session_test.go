@@ -371,8 +371,8 @@ func nvpProfile(t *testing.T, store *profile.Store) string {
 		if p.DriverID != "newtron-panel-nvp" {
 			continue
 		}
-		if name, _, ok := store.ForProduct(p.ID); ok {
-			names = append(names, name)
+		if r, ok := catalogOf(t, store).ForProduct(p.ID); ok {
+			names = append(names, r.Definition.ID())
 		}
 	}
 	if len(names) == 0 {

@@ -10,8 +10,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
@@ -34,12 +34,16 @@ var rigOpen = time.Date(2026, 11, 24, 13, 0, 0, 0, time.UTC) // a Tuesday
 
 func newProblemRig(t *testing.T) *problemRig {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
 	mk := func(sys, slot, product string) world.Device {
-		return world.Device{Name: sys + "-" + slot + "-1", Slot: slot, Product: product, Profile: product}
+		r, ok := cat.ForProduct(product)
+		if !ok {
+			t.Fatalf("the catalog simulates no %s", product)
+		}
+		return world.Device{Name: sys + "-" + slot + "-1", Slot: slot, Product: product, Profile: r.Definition.ID()}
 	}
 	w := &world.World{
 		Version: world.Version, Scenario: "t", Outpost: "edge-hq", CalendarSeed: 5,
@@ -64,7 +68,7 @@ func newProblemRig(t *testing.T) *problemRig {
 				mk("hq-mr65-1", "main-display", "boreal-edge-86")}},
 		}}},
 	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := sim.NewEngineOver(cat, profiles.Templates())
 	installWorld(e, w)
 	var snaps []sim.DeviceSnapshot
 	ip := 1

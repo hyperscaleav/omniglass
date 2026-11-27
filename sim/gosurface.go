@@ -85,6 +85,17 @@ func (d *Device) serveGoRoute(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
+// goOID is the attached Go OID with this address, the leading dot optional.
+func (d *Device) goOID(oid string) (surface.OID, bool) {
+	oid = strings.TrimPrefix(oid, ".")
+	for _, o := range d.goOIDs {
+		if strings.TrimPrefix(o.OID, ".") == oid {
+			return o, true
+		}
+	}
+	return surface.OID{}, false
+}
+
 // goOIDEntries turns the attached Go OIDs into agent entries.
 func (d *Device) goOIDEntries(port int, community, listenerAddr string) []*GoSNMPServer.PDUValueControlItem {
 	items := make([]*GoSNMPServer.PDUValueControlItem, 0, len(d.goOIDs))

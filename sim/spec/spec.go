@@ -44,6 +44,9 @@ type Model struct {
 	Manufacturer string
 	Model        string
 	DeviceType   string
+	// Summary describes this product where the console lists it; the family's
+	// own summary stands when empty.
+	Summary string
 	// State is deep-merged over the family's State for this product, the
 	// per-model difference (its model name, serial prefix, size), the way a
 	// YAML profile's products: overrides are.
@@ -84,12 +87,22 @@ type Device interface {
 	Model() Model
 	// Read is the value at a dotted state path, nil when none.
 	Read(path string) any
+	// Default is the value a state path holds in the device's defaults: what a
+	// reset restores, with the device's own identity in it.
+	Default(path string) any
 	// State is a deep copy of the device's state.
 	State() map[string]any
 	// Write sets a state path as a request would: the device's version
 	// advances and the change reaches everything that watches state (the diff
 	// stream, a subscribed session, an event stream).
 	Write(path string, value any) error
+	// WriteMany sets several state paths as one change, as a YAML route's
+	// mutations are applied: one version, one diff, and either every path is
+	// written or none.
+	WriteMany(changes ...surface.Change) error
+	// Now is the time the device reads: the simulated world's clock, which a
+	// handler stamps a reboot's anchor with.
+	Now() time.Time
 }
 
 // HTTPRequest is one request as a handler sees it.
@@ -136,7 +149,12 @@ type HTTPRoute struct {
 	// device's surface; Example is a request body for the operations panel.
 	Summary string
 	Example string
-	Handle  HTTPHandler
+	// Sets are the state paths the route sets from a field of its body, each
+	// to a fixed list of values: what the console offers as quick sets and
+	// the simulator reads to tell a path driven away from its default. A route
+	// built by httpapi.Control carries its own.
+	Sets   []profile.Set
+	Handle HTTPHandler
 }
 
 // LineHandler answers one command of a line protocol (SSH, Telnet, TCP, UDP)
@@ -166,6 +184,10 @@ type TickContext struct {
 	Room calendar.RoomState
 	Now  time.Time
 	Rand behave.Source
+	// Hours is the building's day the device stands in at Now: whether the lab
+	// holds hours for it and whether it is inside them (behave.ReadBuildingHours
+	// over behave.BuildingSpan).
+	Hours behave.HoursReading
 }
 
 // Tick is a typed behavior of a Go family: a function that runs on an
@@ -177,6 +199,9 @@ type TickContext struct {
 type Tick struct {
 	Name     string
 	Interval time.Duration
+	// Writes are the state paths the tick may write, listed where the console
+	// lists what a device changes by itself; a test holds a tick to them.
+	Writes []string
 	// OnStart runs the tick once as the device starts, before it serves, so
 	// what it derives from the room is right from the first request.
 	OnStart bool
@@ -310,3 +335,19 @@ func hasProtocol(ifaces []profile.Interface, protocols ...string) bool {
 	}
 	return false
 }
+
+// listingDevice is the Device a family's SurfaceFunc is built against to list
+// what it serves (the console's surface): it holds no state, so a surface that
+// reads only as it is read lists without a device behind it.
+type listingDevice struct{}
+
+func (listingDevice) DeviceID() string                  { return "" }
+func (listingDevice) Hostname() string                  { return "" }
+func (listingDevice) IP() string                        { return "" }
+func (listingDevice) Model() Model                      { return Model{} }
+func (listingDevice) Read(string) any                   { return nil }
+func (listingDevice) Default(string) any                { return nil }
+func (listingDevice) State() map[string]any             { return map[string]any{} }
+func (listingDevice) Write(string, any) error           { return nil }
+func (listingDevice) WriteMany(...surface.Change) error { return nil }
+func (listingDevice) Now() time.Time                    { return time.Time{} }

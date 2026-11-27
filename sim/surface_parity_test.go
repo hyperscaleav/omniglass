@@ -501,7 +501,9 @@ func TestParitySNMPSystemAndIdentity(t *testing.T) {
 			}
 		})
 	}
-	if identities < 9 {
+	// Nine profiles repeated the identity arc before the Boreal displays and
+	// projector became Go families (#2832); seven remain in YAML.
+	if identities < 7 {
 		t.Fatalf("only %d profiles map the identity arc; the helper's reason to exist is gone", identities)
 	}
 }

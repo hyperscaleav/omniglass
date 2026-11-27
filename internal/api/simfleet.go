@@ -143,7 +143,22 @@ func simBehaviors(p spec.Definition) []simBehaviorBody {
 		}
 		out = append(out, bb)
 	}
+	// A Go family's typed ticks are listed beside its YAML-style behaviors.
+	if g, ok := p.(spec.Served); ok {
+		for _, t := range g.Handlers().Ticks {
+			out = append(out, simBehaviorBody{Name: t.Name, Interval: tickInterval(t.Interval), Writes: slices.Clone(t.Writes)})
+		}
+	}
 	return out
+}
+
+// tickInterval writes a tick's interval as a profile writes a schedule's: whole
+// seconds as 30s, 300s.
+func tickInterval(d time.Duration) string {
+	if d%time.Second == 0 {
+		return fmt.Sprintf("%ds", int64(d/time.Second))
+	}
+	return d.String()
 }
 
 type componentSimOutput struct {
@@ -327,6 +342,9 @@ func simSurface(p spec.Definition, portOffset int) []simSurfaceBody {
 		for path, oid := range iface.OIDMap {
 			b.OIDs = append(b.OIDs, simOIDBody{OID: oid, Path: path})
 		}
+		for path, oid := range iface.NativeOIDs {
+			b.OIDs = append(b.OIDs, simOIDBody{OID: oid, Path: path})
+		}
 		sort.Slice(b.OIDs, func(i, j int) bool { return oidBefore(b.OIDs[i].OID, b.OIDs[j].OID) })
 		out = append(out, b)
 	}
@@ -439,6 +457,9 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		servedBy string
 		device   storage.SimDevice
 		prof     spec.Definition
+		// identity is the product's own: its model row's for a family, the
+		// profile's otherwise.
+		identity spec.Identity
 	}
 	resolve := func(ctx context.Context, name string, action scope.Set) (*simulated, error) {
 		id, err := gw.ResolveActionTarget(ctx, "component", name, a.scopeFor(ctx, "component", "read"), action)
@@ -480,7 +501,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, huma.Error500InternalServerError("load simulator catalog")
 		}
 		if r, ok := store.ForProduct(s.device.Product); ok {
-			s.prof = r.Definition
+			s.prof, s.identity = r.Definition, r.Identity
 		}
 		return s, nil
 	}
@@ -508,7 +529,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			b.ServedByID = s.id
 		}
 		b.Activity = &view.Devices[0]
-		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.ID(), s.device.Address, s.prof.Identity().Summary
+		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.ID(), s.device.Address, s.identity.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments
 		b.Surface = simSurface(s.prof, view.Capabilities.PortOffset)
 		b.Behaviors = simBehaviors(s.prof)

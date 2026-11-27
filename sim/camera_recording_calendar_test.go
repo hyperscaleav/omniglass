@@ -13,8 +13,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -39,18 +37,15 @@ func gazeCal(seed int64, k calendar.Knobs) *calendar.Calendar {
 	return calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 }
 
-// calDevice is one device of the profile in room on a pinned clock, over the
-// shipped catalog, with the calendar and the world installed on its engine.
-func calDevice(t *testing.T, profileName, hostname string, room calendar.Room, cal *calendar.Calendar, w *world.World, at *time.Time) *Device {
+// calDevice is one device of the product in room on a pinned clock, over the
+// shipped catalog (YAML profiles and Go families), with the calendar and the
+// world installed on its engine.
+func calDevice(t *testing.T, product, hostname string, room calendar.Room, cal *calendar.Calendar, w *world.World, at *time.Time) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(cal)
 	e.SetWorld(w)
-	snap := DeviceSnapshot{DeviceID: hostname, Hostname: hostname, LoopbackIP: "127.0.0.1", ProfileName: profileName, Version: 1,
+	snap := DeviceSnapshot{DeviceID: hostname, Hostname: hostname, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, product), Product: product, Version: 1,
 		SiteCode: room.Site, Building: room.Building, Room: room.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)

@@ -65,7 +65,53 @@ shows a profile's. A family's behavior is typed `Tick`s: each runs on an interva
 source, and returns the state paths to write, which the engine applies as a profile behavior's mutations
 are. The `sim/behave` primitives plug in there; an `Animator` is the escape hatch for anything else, and
 a family may still run YAML-style behaviors. A `Surface` func builds the shared protocol surfaces
-(`sim/surface`) for each device. No shipped profile is a family yet.
+(`sim/surface`) for each device. The Boreal Edge displays, the Beam projector and the Cast player are families
+([a worked example](#a-go-family-worked-the-boreal-displays)); the rest are profiles until their families land.
+
+### A Go family, worked: the Boreal displays
+
+Three families replaced three profiles (#2832) and are the pattern the others follow. Each is one package
+under `sim/device/` and one wire API, implemented once:
+
+| Package | Serves | Models (rows of its typed table) |
+| --- | --- | --- |
+| `borealedge` | the commercial display: a web admin behind HTTP Digest (an HTML dashboard and a JSON API) and SNMP on the Boreal arc | five sizes, `boreal-edge-55` to `boreal-edge-98`, each a `Row` with its diagonal and resolution |
+| `borealbeam` | the laser projector: the same two faces, a shutter and a light source that ages by the hour | `boreal-beam-340`, a `Row` with its firmware and the hours on its source |
+| `borealcast` | the signage player: a JSON API behind an api key | `boreal-cast-m1`, a `Row` with its firmware and storage |
+
+A package is its model table, its `Spec`, and what answers on each surface, and nothing else:
+
+- **Models** are `spec.Table` over the family's own typed `Row`. A model reports itself: its row names its
+  model and its summary, its overlay puts that name in the device's state (so SNMP's sysDescr, the status
+  document and the dashboard all say "Edge 98" for a 98-inch), and the catalog resolves its identity for the
+  consoles that list a product.
+- **JSON** is a typed struct encoded by `httpapi.Document`, or `httpapi.Status` for the identity block ten
+  profiles repeat. **Control routes** are `httpapi.Control`: the state paths a body field sets, its choices or a
+  number or a flag, checked before anything is written, answering an acknowledgment built from the state it
+  left. The same declaration lists the route's quick sets to the console and registers the paths for the
+  console's fault chip, so the listing and the handler cannot differ. A reboot is `httpapi.Action`, one
+  change of several paths with the device's clock and its defaults.
+- **SNMP** is `sim/surface/snmp` (the system group and the identity arc) and typed scalars (`surface.Text`,
+  `surface.Integer`) each naming the state path it reads, so the console lists it and an operator can fire a
+  get at it.
+- **The dashboard** is `html/template` over a typed view struct, both embedded in the package. The markup
+  names no state path; the script is a static asset spliced in as written, because the template engine would
+  otherwise drop its comments.
+- **Behavior** is `spec.Tick`s from `sim/device/internal/bind`, which joins a `sim/behave` primitive to the
+  state paths a family keeps it in: the panel follows its room (`PowerFollowsRoom`), a reading wanders in a
+  band (`Drift`), a lamp ages only while lit (`Wear`), a sign follows the building's day (`BuildingDay`) and
+  steps its playlist (`PlaylistAdvance`). A tick declares the paths it writes, listed beside a profile's
+  behaviors on the console. A room with no calendar is the primitive's fallback, never the family's.
+
+`spectest.Conform` holds any family to what the engine and console rely on, over every row of its table, and the
+family's own tests cover what is its own. **Parity with the profile is proven, not argued.** Before each
+profile was deleted a recorder played one script against it (every route valid and refused, SNMP gets and
+walks, the drift its seeded source draws, a pinned room day with and without a calendar) and its transcript
+was committed beside the tests (`sim/testdata/wire`). The family's parity test replays the script and holds
+the status, headers, bytes and state of every answer, the SNMP types and values, and every behavior's
+sequence to the recording, and the console's listing of each surface to the listing the profile gave
+([ADR-2832](/architecture/decisions/#adr-2832-a-go-family-keeps-its-profiles-wire-byte-for-byte-and-corrects-only-the-profiles-accidents)
+lists the two corrections). Recording the next family's profile is the first step of its slice.
 
 The catalog holds devices and nothing above them: no room archetype and no fleet layout, since a
 simulated system is built to the platform's own standards ([fleets](#fleets),
@@ -608,8 +654,8 @@ Devices that read the calendar:
 #### Behavior primitives
 
 The readings above are written once, in Go, as the shared primitives of `sim/behave` (#2830, the first wave of
-[the Go device families](https://github.com/hyperscaleav/omniglass/issues/2826)); the profiles still
-carry their own copies until a family composes the primitive and the profile drops its YAML. Each primitive is a pure
+[the Go device families](https://github.com/hyperscaleav/omniglass/issues/2826)); a family composes
+them through `sim/device/internal/bind`, and a profile keeps its own copy until its family lands. Each primitive is a pure
 function of the room's state (`calendar.StateAt`, or the engine's memo of it), the device's previous typed state, typed
 parameters and the instant, and returns the device's next typed state. It takes and returns plain values, never a family's
 spec, so any family composes it.
@@ -633,7 +679,8 @@ calendar is read only by the few readers that say so.
 | `Climate` | the room's temperature moves toward the setpoint plus a load per attendee while in use | the control processor's `room_climate` |
 | `Battery`, `SpansBetween` | a pack's charge over the 48 hours before now, from the room's meetings alone | the transmitter's `battery_drain` |
 | `Recordings`, `PerRoom` | recordings in progress and the queue, over the rooms a service covers or its own | the recording service's `room_recordings` |
-| `BuildingDay`, `BuildingSpan` | a signage player plays inside the building's hours and stops outside | the signage player's `building_day` |
+| `BuildingDay`, `BuildingSpan`, `PlaylistAdvance` | a signage player plays inside the building's hours and stops outside, and steps its playlist while it plays | the signage player's `building_day` and `playlist_advance` |
+| `Drift`, `Wear` | a reading wanders inside a band from the device's own source; a worn part ages only while the device is lit | the displays', the projector's and the player's drifts and the lamp's `light_source_aging` |
 | `BookingsAt`, `RoomBooking`, `SumBookings`, `FixedDay` | a room's booked count, state, now and next, and the day a service with no calendar keeps | the panel's, the scheduling service's and the booking service's readings |
 | `MicActivity`, `MicLevel`, `Gates`, `AmpSignalPresent`, `AmpTemperature`, `AmpOutputLevel`, `OutletCurrent` | microphones, mixer gates, amplifier signal and levels and a PDU outlet's load follow the people in the room | the Lyra, Polaris and Ferrite room behaviors |
 

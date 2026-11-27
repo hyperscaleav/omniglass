@@ -6,11 +6,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -80,13 +78,13 @@ type wireChange struct {
 
 // wireTranscript is everything recorded for one product.
 type wireTranscript struct {
-	Product  string                `json:"product"`
-	Source   string                `json:"source"`
-	State    json.RawMessage       `json:"state"`
-	HTTP     []wireResult          `json:"http"`
-	SNMP     map[string][]wireOID  `json:"snmp,omitempty"`
-	Walks    map[string][]wireOID  `json:"walks,omitempty"`
-	Ticks    map[string][]any      `json:"ticks,omitempty"`
+	Product  string                  `json:"product"`
+	Source   string                  `json:"source"`
+	State    json.RawMessage         `json:"state"`
+	HTTP     []wireResult            `json:"http"`
+	SNMP     map[string][]wireOID    `json:"snmp,omitempty"`
+	Walks    map[string][]wireOID    `json:"walks,omitempty"`
+	Ticks    map[string][]any        `json:"ticks,omitempty"`
 	RoomDays map[string][]wireChange `json:"room_days,omitempty"`
 }
 
@@ -308,14 +306,3 @@ func roomDayEngine(t *testing.T, e *Engine, product string, noCalendar bool) (*D
 	}
 	return d, &at
 }
-
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-var _ = http.MethodGet

@@ -2,11 +2,10 @@ package devseed
 
 import (
 	"context"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
@@ -24,7 +23,7 @@ func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +46,7 @@ func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
 		if p.DriverName == nil || !specd[*p.DriverName] {
 			continue
 		}
-		if _, _, ok := store.ForProduct(p.Name); !ok {
+		if _, ok := cat.ForProduct(p.Name); !ok {
 			continue
 		}
 		checked++

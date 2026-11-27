@@ -8,14 +8,13 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -36,17 +35,13 @@ var beamNC int
 func startBeam(t *testing.T) *Device {
 	t.Helper()
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: "projector-1", Hostname: "projector-1", LoopbackIP: ip, ProfileName: "boreal-beam-340", Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "projector-1", Hostname: "projector-1", LoopbackIP: ip, ProfileName: "boreal-beam", Product: "boreal-beam-340", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	return deviceByProfile(t, e, "boreal-beam-340")
+	return deviceByProfile(t, e, "boreal-beam")
 }
 
 // beamDo sends one request to the web admin, answering its digest
@@ -192,15 +187,7 @@ func TestBorealBeamControlOverHTTP(t *testing.T) {
 func TestBorealBeamLightSourceAgesWhileLit(t *testing.T) {
 	d := startBeam(t)
 	d.StopBehaviors()
-	var aging *behaviorEntry
-	d.behaviorMu.Lock()
-	for i := range d.behaviors {
-		if d.behaviors[i].Name == "light_source_aging" {
-			aging = &d.behaviors[i]
-		}
-	}
-	d.behaviorMu.Unlock()
-	if aging == nil {
+	if !slices.Contains(d.Behaviors(), "light_source_aging") {
 		t.Fatalf("no light_source_aging behavior; have %v", d.Behaviors())
 	}
 	hours := func() float64 {
@@ -212,7 +199,7 @@ func TestBorealBeamLightSourceAgesWhileLit(t *testing.T) {
 	}
 	start := hours()
 	for i := 0; i < 3; i++ {
-		d.tickBehavior(aging)
+		d.TickBehavior("light_source_aging")
 	}
 	// Three lit minutes are three sixtieths of an hour, kept to the
 	// ten-thousandth, so an hour of ticks adds an hour.
@@ -221,7 +208,7 @@ func TestBorealBeamLightSourceAgesWhileLit(t *testing.T) {
 	}
 	beamJSON(t, d, http.MethodPost, "/api/projector/power", `{"power": "standby"}`)
 	before := hours()
-	d.tickBehavior(aging)
+	d.TickBehavior("light_source_aging")
 	if after := hours(); after != before {
 		t.Errorf("hours in standby went %v to %v, want unchanged", before, after)
 	}
