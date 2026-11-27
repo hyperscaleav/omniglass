@@ -1,15 +1,19 @@
 # See what needs attention (#2438): Home says how many systems and components need
 # attention, and Explore's chip says the same words and lists exactly that many rows.
+# The waits name the card and the pressed chip by testid and state, not by their
+# words: the phrase agrees its verb with the count ("1 system needs attention",
+# "2 systems need attention"), and the count follows when the seeded alarms
+# fire (#2708). The script format rejects a wait on that copy.
 title: See what needs attention
 description: Read Home's Need attention card, open it, and find Explore's chip saying the same words, with exactly that many rows beneath it.
 steps:
   - goto: /
     caption: Home's Need attention card counts the systems and components that are in outage, degraded or incomplete.
-  - wait: { selector: '[data-testid="home-attention"]:has-text("need attention")' }
+  - wait: { selector: 'button[data-testid="home-attention"]' }
     caption: It names what it counts, in words.
   - click: '[data-testid="home-attention"]'
     caption: Open it.
-  - wait: { selector: '[data-testid="explore-counts"] button:has-text("need attention")' }
+  - wait: { selector: '[data-testid="explore-counts"] button[aria-pressed="true"]:has([data-testid="attention-dot"])' }
     caption: Explore opens with the same figures on its chip, and the chip already pressed.
   - wait: { role: list, name: Matches }
     caption: Pressed, the chip leaves one row for each thing it counted, each with the path above it.

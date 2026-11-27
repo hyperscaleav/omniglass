@@ -69,6 +69,11 @@
 //
 //   lab: [sso]
 //
+// A wait names its result by a data-testid, an attribute or a role, not by copy
+// that follows a count ("1 system needs attention" against "2 systems need
+// attention"): the lab's alarms fire on their own clock, so the wording at the
+// moment of the wait is not the script's to know (#2708). Such a wait is rejected.
+//
 // Every step also takes `hold` (extra milliseconds to linger after it, for a
 // result worth reading) and `poster: true` (its still is the poster frame, at
 // most one step; default the last). Unknown keys, unknown kinds, and a step with two kinds
@@ -209,6 +214,36 @@ function targetProblems(t, where, allowText) {
   return [`${where} needs ${allowText ? 'text, selector, or role' : 'a selector string or role'}`];
 }
 
+// Copy whose wording follows a count: the attention phrase agrees its verb with
+// how many things it counts ("1 system needs attention", "2 systems need
+// attention"), so a wait on either form passes or fails with how many things the
+// lab has flagged when the recording reaches it (#2708). A wait names the
+// result by a testid, an attribute or a role instead. The phrase itself is
+// web/src/lib/attention.ts; its test holds this pattern to every form it takes.
+const COUNT_COPY = /\bneeds? attention\b/i;
+
+/**
+ * @param {string} s
+ * @returns {boolean}
+ */
+export function countCopyIn(s) {
+  return COUNT_COPY.test(s);
+}
+
+// The problem with a wait's target when it names count-dependent copy, else none.
+/**
+ * @param {unknown} target
+ * @param {string} where
+ * @returns {string[]}
+ */
+function countCopyProblems(target, where) {
+  if (!isObj(target)) return [];
+  const named = [target.text, target.selector, target.name].find((v) => typeof v === 'string' && countCopyIn(v));
+  if (named === undefined) return [];
+  const hit = /** @type {string} */ (named).match(COUNT_COPY)?.[0] ?? named;
+  return [`${where} waits on copy that changes with a count ("${hit}"): wait on a data-testid, an attribute or a role, not on a number's wording`];
+}
+
 // Validates one step; returns [normalized step | null, problems].
 /**
  * @param {unknown} raw
@@ -281,7 +316,7 @@ function validateStep(raw, n) {
       if (timeout !== undefined && !(Number.isInteger(timeout) && timeout > 0 && timeout <= MAX_WAIT_MS)) {
         problems.push(`${where}: timeout must be whole milliseconds, 1 to ${MAX_WAIT_MS}`);
       }
-      problems.push(...targetProblems(target, where, true));
+      problems.push(...targetProblems(target, where, true), ...countCopyProblems(target, where));
       step.target = /** @type {Target} */ (target);
       step.timeout = timeout ?? DEFAULT_WAIT_MS;
       break;
@@ -369,7 +404,7 @@ function validateReady(raw) {
   if (timeout !== undefined && !(Number.isInteger(timeout) && timeout > 0 && timeout <= MAX_READY_MS)) {
     problems.push(`ready (wait): timeout must be whole milliseconds, 1 to ${MAX_READY_MS}`);
   }
-  problems.push(...targetProblems(target, 'ready (wait)', true));
+  problems.push(...targetProblems(target, 'ready (wait)', true), ...countCopyProblems(target, 'ready (wait)'));
   return [{ path: raw.goto, target: /** @type {Target} */ (target), timeout: timeout ?? DEFAULT_WAIT_MS }, problems];
 }
 
