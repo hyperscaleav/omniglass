@@ -171,7 +171,7 @@ func (w *World) Validate() error {
 		}
 		names[p.Name] = true
 	}
-		seen, ids := map[string]bool{}, map[string]string{}
+	seen, ids := map[string]bool{}, map[string]string{}
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
 			for _, d := range r.Devices {
