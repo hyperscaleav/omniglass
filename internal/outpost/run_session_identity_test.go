@@ -142,7 +142,7 @@ func (s *gateStack) latest(comp, instance, key string) string {
 
 func (s *gateStack) waitFor(comp, instance, key string, ok func(string) bool, what string) {
 	s.t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for time.Now().Before(deadline) {
 		if ok(s.latest(comp, instance, key)) {
 			return
@@ -156,7 +156,7 @@ func (s *gateStack) waitFor(comp, instance, key string, ok func(string) bool, wh
 // stays there.
 func (s *gateStack) settles(what string, count func() int64, want int64) {
 	s.t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(patience(15 * time.Second))
 	for count() < want && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}

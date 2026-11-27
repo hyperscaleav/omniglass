@@ -112,6 +112,13 @@ func TestOutpostRunOnce(t *testing.T) {
 	})
 }
 
+// patience and pushWindow are the waits' ceilings (patience_test.go): patience
+// for an event the test is not timing, pushWindow for a change that must have
+// been pushed, not polled.
+var patience = outpost.Patience
+
+const pushWindow = outpost.PushWindow
+
 // awaitLanded polls cond until a write that rides the telemetry lane and the
 // ingest consumer has landed. How long that takes is the machine's speed, so the
 // bound is the test's own deadline (two minutes when it has none), not a few

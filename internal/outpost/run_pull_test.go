@@ -138,7 +138,7 @@ func TestAOutpostWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 
 	// Two refused pulls, then one served: the backoff waits are under 1 s
 	// and under 2 s.
-	pollUntil(t, 10*time.Second, fmt.Sprintf("the outpost never got a worklist: %+v", srv.WorklistCounts()), func() bool {
+	pollUntil(t, patience(10*time.Second), fmt.Sprintf("the outpost never got a worklist: %+v", srv.WorklistCounts()), func() bool {
 		return srv.WorklistCounts().Served >= 1
 	})
 	if got := srv.WorklistCounts().ReadFailed; got != 2 {
@@ -151,7 +151,7 @@ func TestAOutpostWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	default:
 	}
 	// The outpost's own logs carry each retry and the server's reason.
-	pollUntil(t, 5*time.Second, "no first-pull retry in the outpost's logs", func() bool {
+	pollUntil(t, patience(5*time.Second), "no first-pull retry in the outpost's logs", func() bool {
 		return outpostLogged(t, ctx, gw, "edge-r", "first worklist pull failed, retrying", "worklist read failed")
 	})
 }
@@ -235,13 +235,13 @@ func TestATransientStorageErrorLeavesTheOutpostsSessionsUntouched(t *testing.T) 
 		}
 		return v.Value
 	}
-	pollUntil(t, 15*time.Second, "the session never came up", func() bool { return latest() == "up" })
+	pollUntil(t, patience(15*time.Second), "the session never came up", func() bool { return latest() == "up" })
 	// The held session is the panel's one long-lived connection. The
 	// endpoint's reachability probe dials the panel every 200 ms too, and each
 	// dial is a session for a moment, so the test follows the held one by its
 	// ID rather than reading a count a probe can catch at two (#1784).
 	var held string
-	pollUntil(t, 5*time.Second, "the panel never held exactly one session", func() bool {
+	pollUntil(t, patience(5*time.Second), "the panel never held exactly one session", func() bool {
 		ids := panel.TCPSession().SessionIDs()
 		if len(ids) != 1 {
 			return false
@@ -255,7 +255,7 @@ func TestATransientStorageErrorLeavesTheOutpostsSessionsUntouched(t *testing.T) 
 	// 1 s, 2 s and 4 s).
 	down.Store(true)
 	failedBefore := srv.WorklistCounts().ReadFailed
-	pollUntil(t, 15*time.Second, "the server never failed three pulls", func() bool {
+	pollUntil(t, patience(15*time.Second), "the server never failed three pulls", func() bool {
 		return srv.WorklistCounts().ReadFailed >= failedBefore+3
 	})
 	if !stillHeld() {
@@ -268,7 +268,7 @@ func TestATransientStorageErrorLeavesTheOutpostsSessionsUntouched(t *testing.T) 
 	// Storage returns: the pull is served again and the session never moved.
 	servedBefore := srv.WorklistCounts().Served
 	down.Store(false)
-	pollUntil(t, 15*time.Second, "the pull never recovered", func() bool {
+	pollUntil(t, patience(15*time.Second), "the pull never recovered", func() bool {
 		return srv.WorklistCounts().Served > servedBefore
 	})
 	if !stillHeld() {
@@ -289,7 +289,7 @@ func TestATransientStorageErrorLeavesTheOutpostsSessionsUntouched(t *testing.T) 
 	}
 	// The outpost read the refusal as an error naming the server's reason, not
 	// a timeout.
-	pollUntil(t, 5*time.Second, "no failed pull naming the read failure in the outpost's logs", func() bool {
+	pollUntil(t, patience(5*time.Second), "no failed pull naming the read failure in the outpost's logs", func() bool {
 		return outpostLogged(t, ctx, gw, outpostName, "worklist pull failed, the outpost keeps its last worklist", "worklist read failed")
 	})
 }
@@ -341,7 +341,7 @@ func TestAOutpostRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 	}()
 
 	var component string
-	pollUntil(t, 10*time.Second, "edge-w never got a platform component", func() bool {
+	pollUntil(t, patience(10*time.Second), "edge-w never got a platform component", func() bool {
 		n, err := gw.GetOutpost(ctx, "edge-w", scope.Set{All: true})
 		if err != nil || n.PlatformComponentID == nil {
 			return false
@@ -359,13 +359,13 @@ func TestAOutpostRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 		}
 		return m.Value
 	}
-	pollUntil(t, 10*time.Second, "an outpost served its worklist never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, patience(10*time.Second), "an outpost served its worklist never read 0", func() bool { return loss() == 0 })
 
 	down.Store(true)
-	pollUntil(t, 15*time.Second, "an outpost refused every pull never read 1", func() bool { return loss() == 1 })
+	pollUntil(t, patience(15*time.Second), "an outpost refused every pull never read 1", func() bool { return loss() == 1 })
 
 	down.Store(false)
-	pollUntil(t, 15*time.Second, "an outpost served again never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, patience(15*time.Second), "an outpost served again never read 0", func() bool { return loss() == 0 })
 }
 
 // An outpost the server refuses its first worklist is not silent while it
@@ -415,7 +415,7 @@ func TestAOutpostRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	}()
 
 	var component string
-	pollUntil(t, 10*time.Second, "edge-f never got a platform component", func() bool {
+	pollUntil(t, patience(10*time.Second), "edge-f never got a platform component", func() bool {
 		n, err := gw.GetOutpost(ctx, "edge-f", scope.Set{All: true})
 		if err != nil || n.PlatformComponentID == nil {
 			return false
@@ -423,7 +423,7 @@ func TestAOutpostRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 		component = *n.PlatformComponentID
 		return true
 	})
-	pollUntil(t, 10*time.Second, "an outpost refused its first worklist never heartbeat", func() bool {
+	pollUntil(t, patience(10*time.Second), "an outpost refused its first worklist never heartbeat", func() bool {
 		n, err := gw.GetOutpost(ctx, "edge-f", scope.Set{All: true})
 		return err == nil && n.LastHeartbeatAt != nil
 	})
@@ -437,7 +437,7 @@ func TestAOutpostRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 		}
 		return m.Value
 	}
-	pollUntil(t, 10*time.Second, "an outpost refused every first pull never read 1", func() bool { return loss() == 1 })
+	pollUntil(t, patience(10*time.Second), "an outpost refused every first pull never read 1", func() bool { return loss() == 1 })
 	if got := srv.WorklistCounts().Served; got != 0 {
 		t.Fatalf("%d worklists served while the read was down", got)
 	}
@@ -450,5 +450,5 @@ func TestAOutpostRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	// The first pull's backoff may have reached its 30 s cap by now, so the
 	// served pull can land up to a full step after the flip.
 	down.Store(false)
-	pollUntil(t, 45*time.Second, "an outpost served at last never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, patience(45*time.Second), "an outpost served at last never read 0", func() bool { return loss() == 0 })
 }

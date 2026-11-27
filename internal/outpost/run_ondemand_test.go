@@ -110,7 +110,7 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 		Results         []pollRun `json:"results"`
 	}
 	body := map[string]any{"outpost": "edge-run", "spec": spec, "inputs": inputs}
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	code := 0
 	for time.Now().Before(deadline) {
 		if code = s.api(owner, http.MethodPost, "/drivers:preview", body, &preview); code != http.StatusServiceUnavailable {

@@ -94,7 +94,7 @@ func (s *httpStack) waitVolume(comp, instance string, percent float64) time.Dura
 	s.t.Helper()
 	want := percent / 100
 	start := time.Now()
-	deadline := start.Add(20 * time.Second)
+	deadline := start.Add(patience(20 * time.Second))
 	for time.Now().Before(deadline) {
 		if v, ok := s.metric(comp, instance, "volume"); ok && v == want {
 			return time.Since(start)
@@ -127,10 +127,11 @@ func TestOutpostHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	s.waitFor("bar-1", ep.Name, "session-state", is("up"), "up: the stream held")
 	s.waitFor("bar-1", ep.Name, "endpoint-authenticated", is("yes"), "yes: the stream's credential accepted")
 
-	// A change on the bar lands within a second, with no poll to read it.
+	// A change on the bar lands with no poll to read it: the driver's polls
+	// are removed but the first, so the volume can only have been pushed.
 	setVolume(t, bar, 37)
-	if took := s.waitVolume("bar-1", ep.Name, 37); took > time.Second {
-		t.Fatalf("the change landed %v after it happened, want within a second", took)
+	if took := s.waitVolume("bar-1", ep.Name, 37); took > pushWindow {
+		t.Fatalf("the change landed %v after it happened, want it pushed within %v", took, pushWindow)
 	}
 
 	// The bar drops the stream and changes twice while the outpost waits the
@@ -225,8 +226,8 @@ func TestOutpostHTTPStreamBehindAFormLogin(t *testing.T) {
 	s.waitFor("bar-2", ep.Name, "session-state", is("up"), "up: logged in, then the stream held")
 	s.waitFor("bar-2", ep.Name, "endpoint-authenticated", is("yes"), "yes: the login accepted")
 	setVolume(t, bar, 22)
-	if took := s.waitVolume("bar-2", ep.Name, 22); took > time.Second {
-		t.Fatalf("the change landed %v after it happened", took)
+	if took := s.waitVolume("bar-2", ep.Name, 22); took > pushWindow {
+		t.Fatalf("the change landed %v after it happened, want it pushed within %v", took, pushWindow)
 	}
 	if bar.HTTPLogins() != 1 {
 		t.Fatalf("logins = %d, want the one the stream opened with", bar.HTTPLogins())

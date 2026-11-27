@@ -120,7 +120,7 @@ func TestAWorklistChangeReachesTheOutpostAtOnce(t *testing.T) {
 			t.Errorf("outpost run: %v", err)
 		}
 	}()
-	pollUntil(t, 10*time.Second, "the outpost never took its first worklist", func() bool {
+	pollUntil(t, patience(10*time.Second), "the outpost never took its first worklist", func() bool {
 		return srv.WorklistCounts().Served >= 1
 	})
 
@@ -134,13 +134,13 @@ func TestAWorklistChangeReachesTheOutpostAtOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pollUntil(t, time.Second, "a created endpoint did not run within 1s", func() bool { return line.asked(first) })
+	pollUntil(t, pushWindow, "a created endpoint did not run before the hourly pull", func() bool { return line.asked(first) })
 
 	// An address edit moves the polls within a second.
 	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"port": second}}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	pollUntil(t, time.Second, "an edited endpoint did not move within 1s", func() bool { return line.asked(second) })
+	pollUntil(t, pushWindow, "an edited endpoint did not move before the hourly pull", func() bool { return line.asked(second) })
 
 	// A burst of 100 changes: the outpost pulls at least once after it (the
 	// last change is not lost), and at most once per nudge gap while it runs.
@@ -152,7 +152,7 @@ func TestAWorklistChangeReachesTheOutpostAtOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	pollUntil(t, 2*time.Second, "the burst nudged no pull", func() bool {
+	pollUntil(t, pushWindow, "the burst nudged no pull", func() bool {
 		return srv.WorklistCounts().Served > before
 	})
 	time.Sleep(3 * outpost.NudgeGap) // let any last coalesced pull land

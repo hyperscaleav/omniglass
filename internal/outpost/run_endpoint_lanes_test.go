@@ -162,7 +162,7 @@ func TestFiftyComponentsBesideASlowDeviceRunInTheirOwnLanes(t *testing.T) {
 	}
 	for i := 1; i < fleet; i += 7 {
 		comp := fmt.Sprintf("display-%02d", i)
-		deadline := time.Now().Add(10 * time.Second)
+		deadline := time.Now().Add(patience(10 * time.Second))
 		for {
 			series, err := s.gw.ListMetricSeries(s.ctx, "component", comp, "uptime", 0, 1)
 			if err != nil {

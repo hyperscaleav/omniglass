@@ -17,6 +17,14 @@ import (
 // systems (#1577): half of max payload, the headroom the next size step needs.
 const fleetWireCap = 512 * 1024
 
+// fleetBudget is the time each outpost gives its pull, in the header the
+// responder reads and on the request. The test proves no pull is dropped
+// unread or abandoned, which holds at any budget the workers keep up with, so
+// the budget is generous: the wave of pulls took 3.3 s of a 5 s one on a core
+// shared four ways, and a slower runner must not read as a responder that lets
+// pulls queue past their budget (#1717).
+const fleetBudget = 30 * time.Second
+
 // Every outpost of the 1,000-system corporate lab pulls its worklist at once,
 // over the real bus and the bounded responder: each pull is answered, none
 // queues past its budget, and HQ's (over 800 components) is gzipped under half
@@ -66,9 +74,9 @@ func TestAFleetOfOutpostsPullingAtOnceIsServedByTheBoundedResponder(t *testing.T
 	for name, nc := range conns {
 		wg.Go(func() {
 			req := nats.NewMsg(collection.WorklistSubject(name))
-			req.Header.Set(collection.WorklistTimeoutHeader, "5s")
+			req.Header.Set(collection.WorklistTimeoutHeader, fleetBudget.String())
 			<-start
-			msg, err := nc.RequestMsg(req, 5*time.Second)
+			msg, err := nc.RequestMsg(req, fleetBudget)
 			p := pulled{err: err}
 			if err == nil {
 				p.wire = len(msg.Data)

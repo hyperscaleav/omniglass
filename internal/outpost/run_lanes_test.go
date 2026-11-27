@@ -172,14 +172,14 @@ func TestOutpostLandsAnNVPPushOnEveryLane(t *testing.T) {
 		return storage.LogLine{}, false
 	}
 
-	waitFor(t, "the session up", 15*time.Second, func() bool { return latest("session-state") == "up" })
+	waitFor(t, "the session up", patience(15*time.Second), func() bool { return latest("session-state") == "up" })
 
 	// One push, two lanes: the property and the event carrying the input.
 	if got, err := lx.Exchange(ctx, target, "SET INPUT hdmi2", 2*time.Second); err != nil || got != "INPUT hdmi2" {
 		t.Fatalf("SET INPUT hdmi2 = %q, %v", got, err)
 	}
-	waitFor(t, "video-input hdmi2", 5*time.Second, func() bool { return latest("video-input") == "hdmi2" })
-	waitFor(t, "an input-changed event", 5*time.Second, func() bool { return len(eventsOf(t, gw, comp, "input-changed")) == 1 })
+	waitFor(t, "video-input hdmi2", patience(5*time.Second), func() bool { return latest("video-input") == "hdmi2" })
+	waitFor(t, "an input-changed event", patience(5*time.Second), func() bool { return len(eventsOf(t, gw, comp, "input-changed")) == 1 })
 	ev := eventsOf(t, gw, comp, "input-changed")[0]
 	if ev.Message != "Video input changed" || payloadOf(t, ev)["input"] != "hdmi2" || ev.Origin != "caught" || ev.Instance != ep.Name {
 		t.Fatalf("input-changed = %+v %s, want the input in its payload, caught, on the endpoint", ev, ev.Attributes)
@@ -187,7 +187,7 @@ func TestOutpostLandsAnNVPPushOnEveryLane(t *testing.T) {
 
 	// A diagnostics line: a log line on the component with its severity.
 	operate("/api/diagnostics/log", `{"line":"WARN backlight driver reset"}`)
-	waitFor(t, "the diagnostics log line", 5*time.Second, func() bool { _, ok := lineWith("backlight driver reset"); return ok })
+	waitFor(t, "the diagnostics log line", patience(5*time.Second), func() bool { _, ok := lineWith("backlight driver reset"); return ok })
 	l, _ := lineWith("backlight driver reset")
 	if l.Severity != "warning" || l.Facility != "panel" || l.Instance != ep.Name || l.Source != "tcp" {
 		t.Fatalf("diagnostics line = %+v, want warning from the panel facility, collected by the endpoint", l)
@@ -195,7 +195,7 @@ func TestOutpostLandsAnNVPPushOnEveryLane(t *testing.T) {
 
 	// A push no listener claims lands whole, raw arrival.
 	operate("/api/room/scene", `{"scene":"presentation"}`)
-	waitFor(t, "the unclaimed scene line", 5*time.Second, func() bool { _, ok := lineWith("EVT SCENE presentation"); return ok })
+	waitFor(t, "the unclaimed scene line", patience(5*time.Second), func() bool { _, ok := lineWith("EVT SCENE presentation"); return ok })
 
 	// None of the component's lines is the outpost's own.
 	self, err := gw.ListOutpostLogs(ctx, outpostName, time.Hour, 500)
@@ -215,7 +215,7 @@ func TestOutpostLandsAnNVPPushOnEveryLane(t *testing.T) {
 	if got, err := lx.Exchange(ctx, target, "SET INPUT hdmi3", 2*time.Second); err != nil || got != "INPUT hdmi3" {
 		t.Fatalf("SET INPUT hdmi3 = %q, %v", got, err)
 	}
-	waitFor(t, "a second input-changed", 5*time.Second, func() bool { return len(eventsOf(t, gw, comp, "input-changed")) == 2 })
+	waitFor(t, "a second input-changed", patience(5*time.Second), func() bool { return len(eventsOf(t, gw, comp, "input-changed")) == 2 })
 }
 
 func TestOutpostLandsKestrelCallEvents(t *testing.T) {
@@ -236,14 +236,14 @@ func TestOutpostLandsKestrelCallEvents(t *testing.T) {
 	s.runOutpost("edge-calls")
 	gw := s.gw
 
-	waitFor(t, "the stream up", 20*time.Second, func() bool {
+	waitFor(t, "the stream up", patience(20*time.Second), func() bool {
 		v, err := gw.LatestProperty(s.ctx, "bar-calls", "session-state", "https")
 		return err == nil && v != nil && v.Value == "up"
 	})
 	if res := bar.Operate(sim.Operation{Kind: "http", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c9001","participants":3}`}); res.Status != 200 {
 		t.Fatalf("dial = %+v", res)
 	}
-	waitFor(t, "call-started", 5*time.Second, func() bool { return len(eventsOf(t, gw, "bar-calls", "call-started")) == 1 })
+	waitFor(t, "call-started", patience(5*time.Second), func() bool { return len(eventsOf(t, gw, "bar-calls", "call-started")) == 1 })
 	started := eventsOf(t, gw, "bar-calls", "call-started")[0]
 	if p := payloadOf(t, started); started.Message != "Call started" || p["call_id"] != "c9001" || p["participants"] != float64(3) {
 		t.Fatalf("call-started = %+v %s, want the call id and a numeric participant count", started, started.Attributes)
@@ -251,7 +251,7 @@ func TestOutpostLandsKestrelCallEvents(t *testing.T) {
 	if res := bar.Operate(sim.Operation{Kind: "http", Method: "POST", Path: "/api/call/disconnect", Body: `{}`}); res.Status != 200 {
 		t.Fatalf("disconnect = %+v", res)
 	}
-	waitFor(t, "call-ended", 5*time.Second, func() bool { return len(eventsOf(t, gw, "bar-calls", "call-ended")) == 1 })
+	waitFor(t, "call-ended", patience(5*time.Second), func() bool { return len(eventsOf(t, gw, "bar-calls", "call-ended")) == 1 })
 	if p := payloadOf(t, eventsOf(t, gw, "bar-calls", "call-ended")[0]); p["call_id"] != "c9001" {
 		t.Fatalf("call-ended payload = %v, want the id of the call that ended", p)
 	}

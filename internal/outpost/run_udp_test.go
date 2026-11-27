@@ -43,7 +43,7 @@ func (s *gateStack) commandExecuted(cmd *storage.Command) {
 	if err != nil {
 		s.t.Fatalf("read component %s: %v", cmd.OwnerID, err)
 	}
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for time.Now().Before(deadline) {
 		rec, err := s.gw.GetComponentCommand(s.ctx, comp.ID, cmd.ID)
 		if err != nil {
@@ -145,7 +145,7 @@ func TestOutpostUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	}
 	pushed := time.Now()
 	s.waitFor("panel-1", ep.Name, "video-input", is("dp1"), "dp1, pushed")
-	if took := time.Since(pushed); took > 10*time.Second {
+	if took := time.Since(pushed); took > pushWindow {
 		t.Fatalf("the change took %s, a poll's pace, not a push's", took)
 	}
 
@@ -205,7 +205,7 @@ func TestOutpostUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	ep2 := s.attachUDP("panel-2", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(closedUDPPort)})
 	s.waitFor("panel-2", ep2.Name, "endpoint-responsive", is("down"), "down: the port is refused")
 	s.waitFor("panel-2", ep2.Name, "endpoint-reachable", is("down"), "down")
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(patience(10 * time.Second))
 	for {
 		evs, err := s.gw.ListComponentEvents(s.ctx, "panel-2", 0, 20, storage.EventFilter{})
 		if err != nil {

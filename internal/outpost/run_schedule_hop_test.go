@@ -58,7 +58,7 @@ func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 	var rows []labfootprint.DeliveryRow
 	var counts []labfootprint.ScheduleCount
 	var unsettled []labfootprint.UnsettledBoot
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(patience(30 * time.Second))
 	for time.Now().Before(deadline) {
 		receipts, err := labfootprint.ParseReceipts(queryLines(t, conn, labfootprint.ReceiptsQuery(w.From, w.To)))
 		if err != nil {

@@ -440,6 +440,30 @@ Three rules make a benchmark here mean anything:
    it moves the total by very little. That is a real limit on what this instrument can see,
    and a path measured to sit past it should be counted rather than timed.
 
+## Waiting on the event, not on a window
+
+An end-to-end test that waits for something to land waits **on the event**, with a
+ceiling generous enough that only a real absence reaches it. A wait that is a window
+(a pushed change lands "within a second", a rejection clears "within five") is a claim
+about the speed of the machine, and the shared runner that carries three shards at once
+cannot keep it: one run saw a change land 4.8 s after it happened where a quiet machine
+needs 100 ms, and sixteen outpost tests failed together with no code cause (#1717). A red
+shard has to mean a regression.
+
+In `internal/outpost` the ceilings are two helpers (`patience_test.go`), not numbers
+typed at each wait:
+
+- **`patience(base)`** is the ceiling for an event the test is not timing: a property
+  landing, a session coming up, a command settling. It is a multiple of the base a quiet
+  machine needs, with a floor, and costs nothing when the event arrives.
+- **`pushWindow`** is for a change that must have been pushed rather than polled. The
+  cadence it has to beat is a minute or an hour (the test removes the polls where it
+  can), so the window bounds the push from the poll and is not a latency budget.
+
+Where latency is itself the behavior, a window cannot be asserted on a shared runner;
+bound the work instead (the count of pulls a burst of changes may cost), as the next
+section does for reads.
+
 ## Counting round trips, not timing them
 
 Read performance is asserted as a **count of SQL statements**, not as a duration.

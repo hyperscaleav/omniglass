@@ -124,7 +124,7 @@ func TestOutpostSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	}
 	waitFor := func(key string, ok func(string) bool, what string) {
 		t.Helper()
-		deadline := time.Now().Add(15 * time.Second)
+		deadline := time.Now().Add(patience(15 * time.Second))
 		for time.Now().Before(deadline) {
 			if ok(latest(key)) {
 				return
@@ -140,7 +140,7 @@ func TestOutpostSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	waitFor("ssh-host-key", is(first), "the panel's key, trusted on first use")
 	waitFor("video-input", is("hdmi1"), "hdmi1")
 	// The server delivers the trusted key back as the pin.
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience(5 * time.Second))
 	for {
 		wl, err := gw.OutpostWorklist(ctx, "edge-h")
 		if err != nil {

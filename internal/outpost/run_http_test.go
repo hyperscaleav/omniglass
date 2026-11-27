@@ -257,7 +257,7 @@ func TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	s.waitFor("bar-1", ep.Name, "call-state", func(v string) bool { return v == "active" || v == "idle" }, "the call state, mapped")
 	// The volume rides the audio poll, a batch of its own beside the call
 	// poll's, so it is waited on rather than read the instant call-state is.
-	for deadline := time.Now().Add(20 * time.Second); ; {
+	for deadline := time.Now().Add(patience(20 * time.Second)); ; {
 		v, ok := s.metric("bar-1", ep.Name, "volume")
 		// The bar holds a percent; the metric holds the ratio canon.
 		if ok && fmt.Sprint(math.Round(v*100)) == fmt.Sprint(bar.ReadPath("status.audio.volume")) {
@@ -288,7 +288,7 @@ func TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 		if _, err := s.gw.IssueCommand(s.ctx, owner, "component", "bar-1", c.typ, "", json.RawMessage(c.value), nil); err != nil {
 			t.Fatalf("issue %s: %v", c.typ, err)
 		}
-		deadline := time.Now().Add(20 * time.Second)
+		deadline := time.Now().Add(patience(20 * time.Second))
 		for fmt.Sprint(bar.ReadPath(c.path)) != c.want && time.Now().Before(deadline) {
 			time.Sleep(25 * time.Millisecond)
 		}
@@ -298,7 +298,7 @@ func TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	}
 	s.waitFor("bar-1", ep.Name, "power-state", is("standby"), "standby, settled from the bar's reply")
 	settled := func(typ string) bool { return s.commandStatus(typ) == "settled" }
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(patience(10 * time.Second))
 	for !(settled("set-volume") && settled("set-mute") && settled("set-power")) && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -336,7 +336,7 @@ func TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	}
 	s.waitFor("bar-1", ep.Name, "endpoint-rejection", is("none"), "none, the key trusted")
 	before := requests()
-	deadline = time.Now().Add(20 * time.Second)
+	deadline = time.Now().Add(patience(20 * time.Second))
 	for requests() == before && time.Now().Before(deadline) {
 		time.Sleep(25 * time.Millisecond)
 	}

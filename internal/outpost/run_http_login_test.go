@@ -117,7 +117,7 @@ func ungated(v string) bool { return v == "" || v == "none" }
 // grows waits for count to pass from by at least n.
 func (s *httpStack) grows(what string, count func() int64, from, n int64) {
 	s.t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for count() < from+n && time.Now().Before(deadline) {
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -293,7 +293,7 @@ func TestOutpostHTTPDigestAnswersItsChallenge(t *testing.T) {
 		if _, err := s.gw.IssueCommand(s.ctx, owner, "component", comp, "set-power", "", json.RawMessage(`"standby"`), nil); err != nil {
 			t.Fatalf("issue set-power: %v", err)
 		}
-		deadline := time.Now().Add(20 * time.Second)
+		deadline := time.Now().Add(patience(20 * time.Second))
 		for fmt.Sprint(dev.ReadPath("status.device.power")) != "standby" && time.Now().Before(deadline) {
 			time.Sleep(25 * time.Millisecond)
 		}
@@ -305,7 +305,7 @@ func TestOutpostHTTPDigestAnswersItsChallenge(t *testing.T) {
 		if _, err := s.gw.IssueCommand(s.ctx, owner, "component", comp, "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
 			t.Fatalf("issue set-input: %v", err)
 		}
-		deadline = time.Now().Add(20 * time.Second)
+		deadline = time.Now().Add(patience(20 * time.Second))
 		for s.commandStatus("set-input") != "settled" && time.Now().Before(deadline) {
 			time.Sleep(25 * time.Millisecond)
 		}
