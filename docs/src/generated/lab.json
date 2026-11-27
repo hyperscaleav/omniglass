@@ -103,13 +103,22 @@
       ]
     },
     {
-      "id": "delete-what-you-made",
-      "title": "Delete what you made",
-      "description": "Delete a component that still owns an endpoint, then the location that still holds a system, clearing each one's blockers from the same confirm dialog.",
+      "id": "delete-a-location-that-holds-a-system",
+      "title": "Delete a location that holds a system",
+      "description": "Delete a location that still holds a system, clearing the system from the same confirm dialog.",
       "lab": [],
       "setup": [
         "omniglass location create --label 'Pop-up site' --location-type campus --name pop-up-site",
-        "omniglass system create --label 'Pop-up kiosk' --location pop-up-site --name pop-up-kiosk",
+        "omniglass system create --label 'Pop-up kiosk' --location pop-up-site --name pop-up-kiosk"
+      ]
+    },
+    {
+      "id": "delete-what-you-made",
+      "title": "Delete what you made",
+      "description": "Delete a component that still owns an endpoint, clearing the endpoint from the same confirm dialog.",
+      "lab": [],
+      "setup": [
+        "omniglass location create --label 'Pop-up site' --location-type campus --name pop-up-site",
         "omniglass component create --label 'Pop-up display' --location pop-up-site --name pop-up-display --product generic-device",
         "omniglass endpoint create --component pop-up-display --transport icmp"
       ]
