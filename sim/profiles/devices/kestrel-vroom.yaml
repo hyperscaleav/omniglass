@@ -314,15 +314,15 @@ behaviors:
       # has no world) keeps #2754's own schedule below, as it always did. Once a
       # calendar has shown itself the bar keeps following it.
       - path: status.sim.cal
-        value: '{{ if or .State.status.sim.cal meetingNow meetingNext }}true{{ else }}false{{ end }}'
+        value: '{{ if or .State.status.sim.cal (roomPhase).scheduled }}true{{ else }}false{{ end }}'
       - path: status.sim.skip
-        value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with meetingNow }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
+        value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with (roomPhase).meeting }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
       - path: status.sim.hungup
         value: 'false'
       - path: status.sim.want
-        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}c{{ .start }}{{ end }}{{ end }}'
+        value: '{{ $skip := .State.status.sim.skip }}{{ with (roomPhase).meeting }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}c{{ .start }}{{ end }}{{ end }}'
       - path: status.sim.want_n
-        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
+        value: '{{ $skip := .State.status.sim.skip }}{{ with (roomPhase).meeting }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
       - path: status.sim.event
         value: '{{ if .State.status.sim.cal }}{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $a := $s.want_n }}{{ if $s.dialed }}{{ $a = 8 }}{{ end }}{{ $move := "" }}{{ if chance 0.08 }}{{ if and (lt $n $a) (gt $n 1) }}{{ if chance 0.5 }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ else if lt $n $a }}{{ $move = "join" }}{{ else if gt $n 1 }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if eq $s.want "" }}end{{ else if ne $s.want .State.status.call.id }}turn{{ else }}{{ $move }}{{ end }}{{ else if and (ne $s.want "") (not $s.dialed) }}start{{ end }}{{ else }}{{ $now := now }}{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $move := "" }}{{ if chance 0.08 }}{{ if or (le $n 2) (and (lt $n 8) (chance 0.5)) }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if ge $now $s.end_at }}end{{ else }}{{ $move }}{{ end }}{{ else if and (gt $s.start_at 0) (ge $now $s.start_at) (lt $now $s.end_at) }}start{{ end }}{{ end }}'
       - path: status.sim.dial_ticks
@@ -340,15 +340,15 @@ behaviors:
       - path: status.call.participants
         value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "turn") (and $s.cal (eq $e "start")) }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "start" }}{{ randInt 2 6 }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
       # The room shares a laptop in a call: through the stretch of the meeting the
-      # calendar says (meetingSharing, #2776) in a room with a calendar, now and
+      # calendar says (the room phase's sharing, #2797) in a room with a calendar, now and
       # then from the device's own draws otherwise or in a dialed call; an operator's
       # change holds until the calendar's sharing next changes.
       - path: status.presentation.local_active
-        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ if ne meetingSharing .State.status.sim.share_prev }}{{ meetingSharing }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
+        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ if ne (roomPhase).sharing .State.status.sim.share_prev }}{{ (roomPhase).sharing }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
       # The calendar's sharing is an edge: an operator's change holds until
-      # meetingSharing next changes (share_prev is what it last read).
+      # the room phase's sharing next changes (share_prev is what it last read).
       - path: status.sim.share_prev
-        value: '{{ if hasCalendar }}{{ meetingSharing }}{{ else }}{{ .State.status.sim.share_prev }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ (roomPhase).sharing }}{{ else }}{{ .State.status.sim.share_prev }}{{ end }}'
       # A meeting falling due under a dialed call is skipped.
       - path: status.sim.start_at
         value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (gt $s.start_at 0) (ge now $s.start_at) }}0{{ else }}{{ $s.start_at }}{{ end }}'

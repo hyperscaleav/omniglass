@@ -210,3 +210,38 @@ func mustMarshal(t *testing.T, w *World) []byte {
 	}
 	return b
 }
+
+// #2797: the room phase's timing knobs ride the world file to the simulator,
+// where the calendar reads them, and a bad one refuses the file.
+func TestAWorldCarriesTheRoomPhaseTimingKnobs(t *testing.T) {
+	w := testWorld()
+	lead, tail := 45, 0
+	k := testKnobs()
+	k.WakeLead, k.CooldownTail = &lead, &tail
+	k.Sharing = &calendar.Sharing{MinMinutes: 20, Parts: 4, FromPart: 1, ToPart: 3}
+	w.Meetings["huddle"] = k
+	b, err := w.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "w.json")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm := got.Meetings["huddle"].Timing()
+	if tm.WakeLead != 45*time.Second || tm.CooldownTail != 0 || tm.Sharing.Parts != 4 || tm.RecordingTail != calendar.DefaultRecordingTail {
+		t.Fatalf("timing after the file = %+v", tm)
+	}
+	bad := string(b)
+	bad = strings.Replace(bad, `"wake_lead_seconds": 45`, `"wake_lead_seconds": -3`, 1)
+	if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "wake_lead_seconds") {
+		t.Fatalf("a negative lead loads: %v", err)
+	}
+}

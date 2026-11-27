@@ -127,21 +127,21 @@ behaviors:
       - path: status.sim.known
         value: '{{ if hasCalendar }}true{{ else }}false{{ end }}'
       - path: status.camera.people
-        value: '{{ if hasCalendar }}{{ $n := 0 }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $n = .actual }}{{ end }}{{ end }}{{ $n }}{{ else }}{{ .State.status.camera.people }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ $p := roomPhase }}{{ if $p.call_active }}{{ $p.attendees }}{{ else }}0{{ end }}{{ else }}{{ .State.status.camera.people }}{{ end }}'
       - path: status.camera.presence
         value: '{{ ne (printf "%v" .State.status.camera.people) "0" }}'
       - path: status.camera.magnification
-        value: '{{ $k := "none" }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if or (not .State.status.sim.known) (eq $k (printf "%v" .State.status.sim.meeting)) }}{{ .State.status.camera.magnification }}{{ else if eq $k "none" }}{{ .Defaults.status.camera.magnification }}{{ else }}{{ round 1 (clamp 1.0 4.0 (sub 4.5 (mul 0.3 .State.status.camera.people))) }}{{ end }}'
+        value: '{{ $k := "none" }}{{ with (roomPhase).meeting }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if or (not .State.status.sim.known) (eq $k (printf "%v" .State.status.sim.meeting)) }}{{ .State.status.camera.magnification }}{{ else if eq $k "none" }}{{ .Defaults.status.camera.magnification }}{{ else }}{{ round 1 (clamp 1.0 4.0 (sub 4.5 (mul 0.3 .State.status.camera.people))) }}{{ end }}'
       - path: status.camera.pan
-        value: '{{ $k := "none" }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.pan }}{{ else }}{{ .State.status.camera.pan }}{{ end }}'
+        value: '{{ $k := "none" }}{{ with (roomPhase).meeting }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.pan }}{{ else }}{{ .State.status.camera.pan }}{{ end }}'
       - path: status.camera.tilt
-        value: '{{ $k := "none" }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.tilt }}{{ else }}{{ .State.status.camera.tilt }}{{ end }}'
+        value: '{{ $k := "none" }}{{ with (roomPhase).meeting }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.tilt }}{{ else }}{{ .State.status.camera.tilt }}{{ end }}'
       - path: status.camera.preset
-        value: '{{ $k := "none" }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.preset }}{{ else }}{{ .State.status.camera.preset }}{{ end }}'
+        value: '{{ $k := "none" }}{{ with (roomPhase).meeting }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.preset }}{{ else }}{{ .State.status.camera.preset }}{{ end }}'
       - path: status.camera.tracking
-        value: '{{ $k := "none" }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.tracking }}{{ else }}{{ .State.status.camera.tracking }}{{ end }}'
+        value: '{{ $k := "none" }}{{ with (roomPhase).meeting }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if and .State.status.sim.known (ne $k (printf "%v" .State.status.sim.meeting)) }}{{ .Defaults.status.camera.tracking }}{{ else }}{{ .State.status.camera.tracking }}{{ end }}'
       - path: status.sim.meeting
-        value: '{{ $k := "none" }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if .State.status.sim.known }}{{ $k }}{{ else }}{{ .State.status.sim.meeting }}{{ end }}'
+        value: '{{ $k := "none" }}{{ with (roomPhase).meeting }}{{ if ne .outcome "no-show" }}{{ $k = printf "m%v" .start }}{{ end }}{{ end }}{{ if .State.status.sim.known }}{{ $k }}{{ else }}{{ .State.status.sim.meeting }}{{ end }}'
 
   - name: tracking_drift
     schedule:

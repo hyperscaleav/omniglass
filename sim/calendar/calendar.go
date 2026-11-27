@@ -216,6 +216,14 @@ type Knobs struct {
 	// RecordingRate is the share of meetings that took place (held, ended
 	// early or late, walk-ins; never a no-show) that are recorded (#2775).
 	RecordingRate float64 `yaml:"recording_rate" json:"recording_rate"`
+	// WakeLead, CooldownTail and RecordingTail (seconds) and Sharing are how
+	// a room around its meetings behaves (the room phase, phase.go, #2797):
+	// declared once per standard here, never in a device profile. Unset reads
+	// the defaults (Timing).
+	WakeLead      *int     `yaml:"wake_lead_seconds,omitempty" json:"wake_lead_seconds,omitempty"`
+	CooldownTail  *int     `yaml:"cooldown_seconds,omitempty" json:"cooldown_seconds,omitempty"`
+	RecordingTail *int     `yaml:"recording_tail_seconds,omitempty" json:"recording_tail_seconds,omitempty"`
+	Sharing       *Sharing `yaml:"sharing,omitempty" json:"sharing,omitempty"`
 }
 
 // slotSizes are the slot lengths a mix may name, in minutes.
@@ -264,7 +272,7 @@ func (k Knobs) Validate() error {
 			return fmt.Errorf("hours %d to %d is not a span within 0 to 24", k.Hours.Start, k.Hours.End)
 		}
 	}
-	return nil
+	return k.validateTiming()
 }
 
 var organizers = []string{

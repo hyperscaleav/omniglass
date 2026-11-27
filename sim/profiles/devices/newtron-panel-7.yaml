@@ -306,9 +306,9 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.panel.awake
-        value: '{{ if hasCalendar }}{{ roomInUse 120 300 }}{{ else }}{{ .State.status.panel.awake }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ (roomPhase).in_use }}{{ else }}{{ .State.status.panel.awake }}{{ end }}'
       - path: status.panel.page
-        value: '{{ if hasCalendar }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ if meetingSharing }}sharing{{ else }}in-call{{ end }}{{ else }}idle{{ end }}{{ else }}idle{{ end }}{{ else }}{{ .State.status.panel.page }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ $p := roomPhase }}{{ if $p.call_active }}{{ if $p.sharing }}sharing{{ else }}in-call{{ end }}{{ else }}idle{{ end }}{{ else }}{{ .State.status.panel.page }}{{ end }}'
 
 # Read-derived fields, computed on every read rather than written by a
 # timer. uptime = now - boot_epoch (seconds). No goroutine, no event:

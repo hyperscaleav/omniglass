@@ -142,11 +142,11 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.sim.busy
-        value: '{{ $b := false }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $b = true }}{{ end }}{{ end }}{{ with meetingNext }}{{ if and (eq .origin "booked") (ne .outcome "no-show") (le (sub .start now) 120) }}{{ $b = true }}{{ end }}{{ end }}{{ $b }}'
+        value: '{{ $p := roomPhase }}{{ or $p.call_active (eq $p.occupancy "waking") }}'
       - path: status.sim.known
-        value: '{{ if or meetingNow meetingNext }}true{{ else }}false{{ end }}'
+        value: '{{ (roomPhase).scheduled }}'
       - path: status.sim.until
-        value: '{{ $u := .State.status.sim.until }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ add .end 300 }}{{ else }}{{ $u }}{{ end }}{{ else }}{{ $u }}{{ end }}'
+        value: '{{ $p := roomPhase }}{{ if $p.call_active }}{{ $p.use_until }}{{ else }}{{ .State.status.sim.until }}{{ end }}'
       - path: status.device.power
         value: '{{ $s := .State.status.sim }}{{ if $s.busy }}{{ if $s.awake }}{{ .State.status.device.power }}{{ else }}on{{ end }}{{ else if and $s.known (ge now $s.until) }}standby{{ else }}{{ .State.status.device.power }}{{ end }}'
       - path: status.projector.input

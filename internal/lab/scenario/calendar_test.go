@@ -194,3 +194,54 @@ func TestTheCorporateScenarioScriptsProblemsOnItsRoles(t *testing.T) {
 		t.Fatalf("a problem naming a room the plan lacks: %v", err)
 	}
 }
+
+// #2797: a standard declares its room's wake lead, cooldown tail, recording
+// tail and sharing stretch once, in the meeting knobs; unset reads today's
+// values, and a bad one is refused at load naming the field.
+func TestValidateChecksTheRoomPhaseTimingKnobs(t *testing.T) {
+	base := `name: t
+standards:
+  - name: sign-55
+    system_type: sign
+    products:
+      panel: t-panel-55
+      player: t-player
+` + oneArchetype
+	block := func(knobs string) string {
+		return base + "calendar:\n  meetings:\n    sign-55:\n      booking_rate: 0.4\n      slot_mix: {30: 1}\n      attendance: {min: 2, max: 6}\n" + knobs
+	}
+	m, err := Parse("t.yaml", []byte(block("      wake_lead_seconds: 30\n      cooldown_seconds: 0\n      recording_tail_seconds: 900\n      sharing: {min_minutes: 20, parts: 4, from_part: 1, to_part: 3}\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(m, fakeCatalog()); err != nil {
+		t.Fatalf("timing knobs are refused: %v", err)
+	}
+	k, _ := m.MeetingKnobs("sign-55")
+	tm := k.Timing()
+	if tm.WakeLead != 30*time.Second || tm.CooldownTail != 0 || tm.RecordingTail != 900*time.Second ||
+		tm.Sharing != (calendar.Sharing{MinMinutes: 20, Parts: 4, FromPart: 1, ToPart: 3}) {
+		t.Fatalf("timing = %+v", tm)
+	}
+	plain, _ := Parse("t.yaml", []byte(block("")))
+	pk, _ := plain.MeetingKnobs("sign-55")
+	if pk.Timing() != (calendar.Knobs{}).Timing() {
+		t.Fatalf("unset knobs read %+v, not today's values", pk.Timing())
+	}
+	for _, tc := range []struct{ name, knobs, want string }{
+		{"negative lead", "      wake_lead_seconds: -1\n", "calendar.meetings.sign-55.wake_lead_seconds"},
+		{"cooldown past a day", "      cooldown_seconds: 90000\n", "calendar.meetings.sign-55.cooldown_seconds"},
+		{"empty sharing span", "      sharing: {min_minutes: 30, parts: 3, from_part: 2, to_part: 2}\n", "calendar.meetings.sign-55.sharing"},
+		{"unknown sharing key", "      sharing: {min_minutes: 30, part: 3}\n", `unknown field "part"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := Parse("t.yaml", []byte(block(tc.knobs)))
+			if err == nil {
+				err = Validate(m, fakeCatalog())
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want an error containing %q", err, tc.want)
+			}
+		})
+	}
+}

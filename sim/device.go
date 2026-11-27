@@ -281,6 +281,11 @@ type Device struct {
 	// arbSrc reaches the engine's impairment arbiter (#2799), nil on a device
 	// standing alone.
 	arbSrc func() *Arbiter
+	// memo is the engine's memo of room readings (#2797), nil on a device
+	// standing alone, which keeps its own.
+	memo        *roomMemo
+	ownMemo     *roomMemo
+	ownMemoOnce sync.Once
 
 	mu    sync.RWMutex
 	state map[string]any

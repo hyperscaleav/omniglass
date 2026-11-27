@@ -37,10 +37,11 @@ func (d *Device) Room() calendar.Room { return d.room }
 //	meetingsBetween a b   -> the room's meetings overlapping [a, b) (unix seconds), in start order
 //	roomMeetingNow s b r  -> the same for the room site s, building b, room r
 //	roomMeetingNext s b r
-//	roomInUse lead tail   -> whether the device's room is in use: lead seconds before a booked
-//	                         meeting someone attends (at a walk-in's start) to tail seconds after
-//	                         its end, a no-show using nothing (calendar_use.go, #2776)
-//	meetingSharing        -> whether the meeting running in the device's room is sharing content now
+//	roomPhase, roomPhaseOf s b r, ownerPhase o
+//	                      -> a room's phase and the facts every device in it shares: in use (the
+//	                         wake lead, the cooldown tail), call active, attendees, sharing, impaired
+//	                         (room_phase.go, #2797); the timing is the standard's meeting knobs,
+//	                         never a number in a profile
 //	problemsNow           -> the scripted problems active in the device's own room now, each a map
 //	                         (kind, name, role, unplugged, loss_pct, pin_path, pin_value, start, end);
 //	                         a fact of the world the executor applies (problems.go), for a profile
@@ -137,14 +138,15 @@ func (d *Device) calendarFuncs() template.FuncMap {
 			}
 			return out
 		},
-		"roomInUse":      d.roomInUse,
-		"meetingSharing": d.meetingSharing,
-		"meetingPrev":    func() map[string]any { return prev(d.room) },
+		"meetingPrev": func() map[string]any { return prev(d.room) },
 		"roomMeetingPrev": func(site, building, room string) map[string]any {
 			return prev(calendar.Room{Site: site, Building: building, Room: room})
 		},
 	}
 	for name, fn := range d.bookingFuncs() {
+		funcs[name] = fn
+	}
+	for name, fn := range d.roomPhaseFuncs() {
 		funcs[name] = fn
 	}
 	return funcs

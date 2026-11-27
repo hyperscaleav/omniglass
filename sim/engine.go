@@ -46,6 +46,8 @@ type Engine struct {
 	// arb decides what each device suffers when several sources impair it
 	// (#2799); its readers (a platform's offline listing) ask it.
 	arb *Arbiter
+	// rooms is the memo of room readings every device reads through (#2797).
+	rooms roomMemo
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
@@ -637,6 +639,7 @@ func (e *Engine) installSeams(dev *Device) {
 	dev.calSrc = e.Calendar
 	dev.worldSrc = e.World
 	dev.arbSrc = func() *Arbiter { return e.arb }
+	dev.memo = &e.rooms
 	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()

@@ -126,7 +126,7 @@ behaviors:
       - path: status.sim.prev
         value: '{{ .State.status.sim.want }}'
       - path: status.sim.want
-        value: '{{ if hasCalendar }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ if meetingSharing }}hdmi1{{ else }}hdmi2{{ end }}{{ else }}dp1{{ end }}{{ else }}dp1{{ end }}{{ else }}{{ .State.status.sim.want }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ $p := roomPhase }}{{ if $p.call_active }}{{ if $p.sharing }}hdmi1{{ else }}hdmi2{{ end }}{{ else }}dp1{{ end }}{{ else }}{{ .State.status.sim.want }}{{ end }}'
       - path: status.switcher.input
         value: '{{ $s := .State.status.sim }}{{ if ne $s.want $s.prev }}{{ $s.want }}{{ else }}{{ .State.status.switcher.input }}{{ end }}'
       - path: status.switcher.signal
