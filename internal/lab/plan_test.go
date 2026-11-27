@@ -6,6 +6,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/sim/simoutpost"
+	"time"
 
 	"fmt"
 	"slices"
@@ -1193,5 +1194,34 @@ func TestPlanScaleLabGivesEachSiteOutpostItsWorldFile(t *testing.T) {
 	}
 	if len(dev.Outpost.Mounts) != 0 {
 		t.Errorf("the lab with no plan mounts %v into its outpost", dev.Outpost.Mounts)
+	}
+}
+
+// A lab told to offset the simulator's clock (#2800) hands each site outpost
+// the offset, and a lab not told hands it none, so the simulated world runs on
+// real time as it did.
+func TestPlanScaleLabGivesEachSiteOutpostTheClockOffset(t *testing.T) {
+	o := scaleOptions()
+	o.SimClockOffset = 36*time.Hour + 5*time.Minute
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := simoutpost.ClockOffsetEnv + "=36h5m0s"
+	for _, n := range s.Outposts {
+		if !slices.Contains(n.Env, want) {
+			t.Errorf("outpost %s env %v lacks %s", n.Name, n.Env, want)
+		}
+	}
+	plain, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range plain.Outposts {
+		for _, e := range n.Env {
+			if strings.HasPrefix(e, simoutpost.ClockOffsetEnv+"=") {
+				t.Errorf("outpost %s is told an offset it was not asked for: %s", n.Name, e)
+			}
+		}
 	}
 }

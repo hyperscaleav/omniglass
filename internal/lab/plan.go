@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -288,6 +289,12 @@ type Options struct {
 	// throwaway lab takes it, and never a scale lab, whose figures are the
 	// measurement.
 	PlatformHistory bool
+	// SimClockOffset runs the simulated world's clock this far ahead of real
+	// time (#2800): each outpost's simulator reads it, so a lab test can stand
+	// the lab calendar's "now" inside a chosen meeting. Zero is real time. It
+	// moves what the simulated world reads, never the node's collection
+	// cadence or a timestamp Omniglass stamps.
+	SimClockOffset time.Duration
 	// HealthHistory seeds the scale scenario's health storyline (#2728,
 	// ADR-2726): 30 days of health behind every system and the past alarms
 	// that explain the showcase rooms' stretches, so a capture reads a fleet
@@ -761,6 +768,9 @@ func Plan(o Options) (Spec, error) {
 		if o.Scale() {
 			worldEnv = []string{simoutpost.WorldEnv + "=" + WorldFile(name)}
 			worldMounts = []Mount{{Volume: volData, Target: dataDir, ReadOnly: true}}
+		}
+		if o.SimClockOffset != 0 {
+			worldEnv = append(worldEnv, simoutpost.ClockOffsetEnv+"="+o.SimClockOffset.String())
 		}
 		memory := OutpostMemoryLimit(components)
 		return Service{

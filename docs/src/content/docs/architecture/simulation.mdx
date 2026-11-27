@@ -398,7 +398,15 @@ runs and across engines:
   from the seed, the room and the slot, so it moves no other draw.
 
 The engine holds the calendar (`Engine.SetCalendar`) and reads time only through each device's clock,
-the seam a test pins. A behavior's template reads its own room with `meetingNow` and `meetingNext`
+the seam a test pins; that clock is the engine's own, real time plus an **offset** (`Engine.SetClock`,
+`sim.Clock`, [ADR-2800](/architecture/decisions/#adr-2800-the-simulated-worlds-clock-has-an-offset-and-a-route-reads-it-too)).
+A lab started with `--sim-clock-offset` (the `OMNIGLASS_SIM_CLOCK_OFFSET` variable of each simulator) runs
+the simulated world ahead of real time, so a test stands the calendar's "now" inside a chosen meeting
+and reads the room's devices live. The offset moves what the world reads and writes in its own time (the
+calendar funcs, `now`, a route's `now`, uptime and the anchor it counts from, a webhook body's `ts`) and
+nothing Omniglass owns: the outpost's collection cadence, a sample's collection time, a request hit and a
+webhook signature's timestamp stay on real time. It is the first, fixed-speed step of the accelerated
+clock of #1362, which adds a speed to the same `Clock`. A behavior's template reads its own room with `meetingNow` and `meetingNext`
 (each a map of the meeting, or nothing), `meetingsBetween` reads the room's meetings over a window of
 unix seconds (what a charge or a warm-up is built from), `hasCalendar` says whether the room has a
 calendar at all, and any template, a push body included, reads another room

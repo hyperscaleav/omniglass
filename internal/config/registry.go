@@ -147,6 +147,8 @@ var Registry = []Var{
 		Doc: "the outside actors omniglass outpost run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_SIM_WORLD", Scope: "cli",
 		Doc: "the path of the world file the simulator (omniglass sim run, or outpost run --simulate) loads: the sites, rooms, devices and services its scenario planned, and the lab calendar they imply, so the simulator holds the world it simulates and learns none of it from the server; set by omniglass lab run for a scale lab's outposts, unset means no calendar and no rooms"},
+	{Key: "OMNIGLASS_SIM_CLOCK_OFFSET", Scope: "cli",
+		Doc: "how far the simulated world's clock runs ahead of real time, as a Go duration (36h, -90m), read by the simulator (omniglass sim run, or outpost run --simulate); set by omniglass lab run --sim-clock-offset so a lab test stands the calendar's now inside a chosen meeting. It moves what the simulated world reads (the calendar, its time-of-day behaviors, uptime and the stamps a device writes) and never the cadence the node collects on or a timestamp Omniglass stamps; unset means real time"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",
 		Doc: "points the storage test harness at an existing admin database instead of a testcontainer"},
 }

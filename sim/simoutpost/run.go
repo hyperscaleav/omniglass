@@ -57,6 +57,11 @@ type Config struct {
 	// With one, the engine holds the lab calendar and the pulled devices are
 	// placed in rooms; with none there is no calendar and no room, as before.
 	World *world.World
+	// ClockOffset is how far the simulated world's clock runs ahead of real
+	// time (negative: behind), set by a lab test to stand "now" inside a
+	// chosen meeting (#2800). Zero is real time. It moves what the simulated
+	// world reads, never the cadence this node collects on.
+	ClockOffset time.Duration
 }
 
 // problemBeat is how often the problem executor looks at the calendar between
@@ -130,6 +135,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	engine := sim.NewEngine(store, profiles.Templates())
 	installWorld(engine, cfg.World)
+	engine.SetClock(sim.Clock{Offset: cfg.ClockOffset})
 	if cfg.PortOffset != 0 {
 		engine.SetPortMap(sim.PrivilegedPortShift(cfg.PortOffset))
 	}
@@ -172,7 +178,7 @@ func Run(ctx context.Context, cfg Config) error {
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	subs := newSubscriber(cfg.ServerURL, store)
 	if len(cfg.Pushers) > 0 {
-		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers, cfg.World)
+		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers, cfg.World, sim.Clock{Offset: cfg.ClockOffset})
 		if err != nil {
 			return err
 		}
@@ -182,7 +188,7 @@ func Run(ctx context.Context, cfg Config) error {
 	// The scripted problems on the lab calendar (#2769) are applied by one
 	// executor, settled on every pull and on its own beat, so a window opens
 	// and closes on the clock and not on the next pull.
-	problems := newProblemExecutor(cfg.World, engine.Calendar(), nil, log)
+	problems := newProblemExecutor(cfg.World, engine.Calendar(), engine.Now, log)
 	var lastWants map[string]collection.SimImpairment
 	settle := func() {
 		served := map[string]netip.Addr{}
