@@ -551,11 +551,23 @@ components:
   - key: proj-a
     product: boreal-beam-340
     location: boardroom-a
+  - key: codec-a
+    product: kestrel-relay-c1
+    location: boardroom-a
+  - key: wmic-a
+    product: lyra-hx-1
+    location: boardroom-a
   - key: census-b
     product: tessellate-census-c1
     location: boardroom-b
   - key: proj-b
     product: boreal-beam-340
+    location: boardroom-b
+  - key: codec-b
+    product: kestrel-relay-c1
+    location: boardroom-b
+  - key: wmic-b
+    product: lyra-hx-1
     location: boardroom-b
   # The divisible pair's ONE audio rack, physically in room A, serving both
   # sides through zones: the same two components satisfy both sides' dsp and
@@ -1475,6 +1487,12 @@ slot_assignments:
     slot: projection
     component: proj-a
   - system: boardroom-a
+    slot: codec
+    component: codec-a
+  - system: boardroom-a
+    slot: wireless-mic
+    component: wmic-a
+  - system: boardroom-a
     slot: dsp
     component: div-dsp
   - system: boardroom-a
@@ -1507,6 +1525,12 @@ slot_assignments:
   - system: boardroom-b
     slot: projection
     component: proj-b
+  - system: boardroom-b
+    slot: codec
+    component: codec-b
+  - system: boardroom-b
+    slot: wireless-mic
+    component: wmic-b
   - system: boardroom-b
     slot: dsp
     component: div-dsp

@@ -26,11 +26,10 @@ type MethodGap struct {
 // exercised nor listed here, and on a listed one the lab exercises now; the
 // lab's own check skips them.
 var MethodGaps = map[string]MethodGap{
-	"websocket":         {Issue: "#1414", Why: "no simulated device speaks a plain ws face, and no driver rides it"},
-	"kestrel-relay-api": {Issue: "#1446", Why: "no Relay C1 is placed in the dev fleet yet"},
-	"push-listener":     {Issue: "#1148", Unbuilt: true, Why: "the shared push listener is not built"},
-	"syslog":            {Issue: "#1149", Unbuilt: true, Why: "the syslog transport is not built"},
-	"snmp-trap":         {Issue: "#1150", Unbuilt: true, Why: "the SNMP trap transport is not built"},
+	"websocket":     {Issue: "#1414", Why: "no simulated device speaks a plain ws face, and no driver rides it"},
+	"push-listener": {Issue: "#1148", Unbuilt: true, Why: "the shared push listener is not built"},
+	"syslog":        {Issue: "#1149", Unbuilt: true, Why: "the syslog transport is not built"},
+	"snmp-trap":     {Issue: "#1150", Unbuilt: true, Why: "the SNMP trap transport is not built"},
 }
 
 // MethodFacts is what the docs render of the collection-method coverage
