@@ -55,5 +55,11 @@ refs: [2757, 2764, 2769, 2773]
     devices) too. The service is a conduit (ADR-1282): the lab's seed binds each covered system's name
     as a room id, as an installer would, and the simulator names its rooms by the same ids from its
     world.
+  - **The meeting platform** (#2790) is a polled service and a webhook sender at once, one account for
+    the whole scenario placed through `services:` like the scheduling service. The world owns the ids
+    of what it lists: a room is its system's name, a device has the stable id `scenario.DeviceID` gives
+    its name, with the kind a meeting platform lists it as and the firmware it reports. The lab's seed
+    binds each room id to its system and each device id to its component; the platform's device list is
+    a second poll of the same driver, since an endpoint is named for its transport and a component holds one.
   - **Deferred.** The inversion of ADR-0142, where the simulator decides which devices exist and
     Omniglass discovers them, is a separate definition; the world file is the seam it would grow from.

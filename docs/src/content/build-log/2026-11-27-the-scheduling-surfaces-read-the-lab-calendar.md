@@ -19,4 +19,4 @@ scenario manifest places it once, at the headquarters, covering every system, an
 the system) and fans each room's `booking-state` and `booking-count` out to the system the lab's seed
 bound that room id to (`sched-room-id`). A room nobody bound lands in the conduit's unbound inbox. A
 pusher pushes for the system names the world gives it, since a grant carries only the server's ids.
-The driver reads one page for now (TODO(#2789)).
+The driver declares its paging rule, so one poll walks every page (#2789, #2790).

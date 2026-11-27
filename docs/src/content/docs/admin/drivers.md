@@ -176,6 +176,11 @@ polls:
   naming the endpoint and the page, and **nothing lands**: there is no partial fan-out. A paged poll's
   `max_records` replaces the 2048 cap of an unpaged answer.
 
+One driver may carry several such polls on its one endpoint (an endpoint is named for its transport, so
+a component holds one `https` endpoint): the meeting platform's `ucc-rooms` polls its rooms and its
+devices, each identifying its own records by its own key (`ucc-room-id`, `ucc-device-id`), so one
+binding ties a room id to a system and another a device id to a component.
+
 A page-number API: `paginate: { style: page, page_param: page, first_page: 1, size_param: per_page, size: 100, pages_from: meta.total_pages }`.
 `paginate` rides a GET poll that declares `records`; a save refuses it anywhere else.
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -14,9 +15,9 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
-// A plan's webhook sender (#1747) is an outside actor that speaks for a site
+// A plan's webhook sender (#1747) is an outside actor that speaks for systems
 // as a component of its own: a meeting platform account whose rooms are the
-// site's systems. It seeds as that component, one webhook endpoint of the
+// systems it covers (the whole fleet's, #2790). It seeds as that component, one webhook endpoint of the
 // driver its simulator profile names (server hosted, so on no outpost), a
 // signing secret minted for this seed alone, and one identity binding per
 // system, named for the system, on the driver's room identity. The simulator
@@ -31,6 +32,10 @@ import (
 type senderRow struct {
 	Comp    int
 	Systems []string
+	// Service is a sender that is also a polled service (#2790): the
+	// service's seed binds its ids (rooms and devices), so the sender seeds
+	// only its endpoint and signing secret.
+	Service bool
 }
 
 // plannedSender is one sender's seed, decided before any row: the driver of
@@ -74,13 +79,15 @@ func senderPlans(rows planRows, profileFor func(product string) (*profile.Device
 		if secretType == "" {
 			return nil, fmt.Errorf("devseed: sender %s: driver %s credential %s is no typed secret input", c.Key, drv, sp.Session.Credential)
 		}
-		key, err := identityKeyOf(sp)
-		if err != nil {
+		key, systems := "", sr.Systems
+		if sr.Service {
+			systems = nil
+		} else if key, err = identityKeyOf(sp); err != nil {
 			return nil, fmt.Errorf("devseed: sender %s: driver %s: %w", c.Key, drv, err)
 		}
 		out = append(out, plannedSender{
 			Comp: sr.Comp, Component: c.Key, Driver: drv, Input: sp.Session.Credential,
-			Secret: c.Key + "-signing", SecretType: secretType, Key: key, Systems: sr.Systems,
+			Secret: c.Key + "-signing", SecretType: secretType, Key: key, Systems: systems,
 		})
 	}
 	return out, nil
@@ -186,13 +193,21 @@ type serviceRow struct {
 	Systems []string
 }
 
-// seedPlanServices binds each polled service's rooms as an installer would: one
-// identity binding per system it covers, the room id the system's name, on the
-// match key its driver's room poll names, tying each room's values to its
-// system (ADR-1282). Omniglass learns which room is which from this
-// configuration; the simulator names its rooms by the same ids from its world.
-// The service's own endpoint is the ordinary polled one. It returns how many
-// services it seeded.
+// componentKeys are the identity keys a service's poll reads that name a
+// component, not a system: the meeting platform's device id (#2790). Every
+// other key a service reads names a room, which is a system. An installer
+// knows which of a platform's ids are rooms and which are devices; this is
+// where the seed is told.
+var componentKeys = map[string]bool{"ucc-device-id": true}
+
+// seedPlanServices binds each polled service's ids as an installer would, on
+// the match key each of its drivers' polls names (ADR-1282): a room id (the
+// system's name, the id the simulator's world gives the room) to its system,
+// and a device id (the world's id for it, scenario.DeviceID) to the component
+// the plan seeded for it, for each system the service covers. Omniglass learns
+// which id is which from this configuration; the simulator names its rooms and
+// devices by the same ids from its world. The service's own endpoints are the
+// ordinary polled ones. It returns how many services it seeded.
 func seedPlanServices(ctx context.Context, gw storage.Gateway, actorID string, rows planRows, compIDs []string, sysIDs map[string]string) (int, error) {
 	if len(rows.Services) == 0 {
 		return 0, nil
@@ -205,26 +220,43 @@ func seedPlanServices(ctx context.Context, gw storage.Gateway, actorID string, r
 	}
 	for _, sr := range rows.Services {
 		c := rows.Components[sr.Comp]
+		covers := map[string]bool{}
+		for _, sys := range sr.Systems {
+			covers[sys] = true
+		}
 		sp, err := seed.ShippedDriverSpec(drivers[c.Product])
 		if err != nil {
 			return 0, fmt.Errorf("devseed: service %s: %w", c.Key, err)
 		}
-		key := ""
+		var keys []string
 		for _, p := range sp.Polls {
 			if p.Records != "" && p.Identity != nil {
-				key = p.Identity.Key
+				keys = append(keys, p.Identity.Key)
 			}
 		}
-		if key == "" {
+		if len(keys) == 0 {
 			return 0, fmt.Errorf("devseed: service %s: driver %s has no poll reading records by an identity", c.Key, drivers[c.Product])
 		}
-		for _, sys := range sr.Systems {
-			id, ok := sysIDs[sys]
-			if !ok {
-				return 0, fmt.Errorf("devseed: service %s covers system %q, which the plan does not seed", c.Key, sys)
+		for _, key := range keys {
+			if componentKeys[key] {
+				for i, row := range rows.Components {
+					if row.Platform == "" || !covers[row.System] {
+						continue
+					}
+					if _, err := gw.PutIdentityBinding(ctx, actorID, compIDs[sr.Comp], key, scenario.DeviceID(row.Name), storage.IdentityBindingOwner{Kind: "component", Name: compIDs[i]}, sc); err != nil {
+						return 0, fmt.Errorf("devseed: bind %s %s=%s to its component: %w", c.Key, key, row.Name, err)
+					}
+				}
+				continue
 			}
-			if _, err := gw.PutIdentityBinding(ctx, actorID, compIDs[sr.Comp], key, sys, storage.IdentityBindingOwner{Kind: "system", Name: id}, sc); err != nil {
-				return 0, fmt.Errorf("devseed: bind %s %s=%s to its system: %w", c.Key, key, sys, err)
+			for _, sys := range sr.Systems {
+				id, ok := sysIDs[sys]
+				if !ok {
+					return 0, fmt.Errorf("devseed: service %s covers system %q, which the plan does not seed", c.Key, sys)
+				}
+				if _, err := gw.PutIdentityBinding(ctx, actorID, compIDs[sr.Comp], key, sys, storage.IdentityBindingOwner{Kind: "system", Name: id}, sc); err != nil {
+					return 0, fmt.Errorf("devseed: bind %s %s=%s to its system: %w", c.Key, key, sys, err)
+				}
 			}
 		}
 	}

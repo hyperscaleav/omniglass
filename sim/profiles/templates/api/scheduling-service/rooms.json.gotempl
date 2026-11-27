@@ -5,7 +5,7 @@
   {{- $sep := "" }}
   {{- range $id := $p.keys }}{{ $r := index $rooms $id }}{{ $sep }}
     {{/* @field status.rooms.*.state string "booked while a booked meeting holds the room, else free" */}}
-    {"id": {{ marshal $id }}, "state": {{ marshal (or (index $r "state") "free") }}, "today": {{ or (index $r "today") 0 }}, "remaining": {{ or (index $r "remaining") 0 }}, "current": {{ marshal (or (index $r "current") "") }}, "next_start": {{ or (index $r "next_start") 0 }}}
+    {"id": {{ marshal $id }}, "state": {{ marshal (or (index $r "state") "free") }}, "today": {{ whole (index $r "today") }}, "remaining": {{ whole (index $r "remaining") }}, "current": {{ marshal (or (index $r "current") "") }}, "next_start": {{ whole (index $r "next_start") }}}
   {{- $sep = "," }}
   {{- end }}
   ],

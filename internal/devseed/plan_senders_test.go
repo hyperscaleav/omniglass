@@ -1,7 +1,6 @@
 package devseed_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
@@ -25,49 +24,37 @@ func senderSites(p *scenario.Plan) (senders map[string]string, systems map[strin
 	return senders, systems
 }
 
-// The scale plan provisions one webhook endpoint and one signing secret per
-// declared platform (#1747): the profile's named driver, the driver's session
-// credential as the input that takes the secret, a secret of that input's
-// type and of the platform's own name, and one binding per system of its
-// site on the driver's room identity.
-func TestThePlanProvisionsOneWebhookAndSecretPerPlatform(t *testing.T) {
+// The plan provisions one webhook endpoint and one signing secret for the
+// fleet's one meeting platform (#1747, #2790): the profile's named driver, the
+// driver's session credential as the input that takes the secret, a secret of
+// that input's type and of the platform's own name. The platform is also a
+// polled service, so its ids (rooms and devices) are bound by the service seed
+// and the sender binds none.
+func TestThePlanProvisionsOneWebhookAndSecretForTheMeetingPlatform(t *testing.T) {
 	t.Parallel()
 	p := corporatePlan(t, 20)
-	wantSite, systems := senderSites(p)
-	if len(wantSite) != len(p.Sites) {
-		t.Fatalf("the corporate plan declares %d platforms over %d sites, want one per site", len(wantSite), len(p.Sites))
+	wantSite, _ := senderSites(p)
+	if len(wantSite) != 1 {
+		t.Fatalf("the corporate plan declares %d webhook senders, want the fleet's one meeting platform", len(wantSite))
 	}
 	got, err := devseed.PlanSenders(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != len(wantSite) {
-		t.Fatalf("%d senders planned, want %d (one per platform)", len(got), len(wantSite))
+	if len(got) != 1 {
+		t.Fatalf("%d senders planned, want one", len(got))
 	}
-	secrets := map[string]bool{}
-	for _, s := range got {
-		site, ok := wantSite[s.Component]
-		if !ok {
-			t.Errorf("planned sender %s is no platform the plan declares", s.Component)
-			continue
-		}
-		delete(wantSite, s.Component)
-		if s.Driver != "ucc-webhook" || s.Input != "signing-key" || s.SecretType != "hmac-key" || s.Key != "ucc-room-id" {
-			t.Errorf("%s: driver %s input %s type %s key %s, want ucc-webhook signing-key hmac-key ucc-room-id",
-				s.Component, s.Driver, s.Input, s.SecretType, s.Key)
-		}
-		if want := s.Component + "-signing"; s.Secret != want {
-			t.Errorf("%s signs with secret %q, want %q", s.Component, s.Secret, want)
-		}
-		if secrets[s.Secret] {
-			t.Errorf("secret %s is shared by two platforms", s.Secret)
-		}
-		secrets[s.Secret] = true
-		if fmt.Sprint(s.Systems) != fmt.Sprint(systems[site]) {
-			t.Errorf("%s binds %v, want its site's systems %v", s.Component, s.Systems, systems[site])
-		}
+	s := got[0]
+	if site, ok := wantSite[s.Component]; !ok || site != p.Sites[0].Name {
+		t.Errorf("planned sender %s is not the headquarters' platform %v", s.Component, wantSite)
 	}
-	if len(wantSite) != 0 {
-		t.Errorf("platforms with no sender planned: %v", wantSite)
+	if s.Driver != "ucc-webhook" || s.Input != "signing-key" || s.SecretType != "hmac-key" {
+		t.Errorf("%s: driver %s input %s type %s, want ucc-webhook signing-key hmac-key", s.Component, s.Driver, s.Input, s.SecretType)
+	}
+	if want := s.Component + "-signing"; s.Secret != want {
+		t.Errorf("%s signs with secret %q, want %q", s.Component, s.Secret, want)
+	}
+	if s.Key != "" || len(s.Systems) != 0 {
+		t.Errorf("%s binds %d systems on %q itself, want none (the polled service seeds its ids)", s.Component, len(s.Systems), s.Key)
 	}
 }
