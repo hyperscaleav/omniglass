@@ -43,7 +43,7 @@ Wait
 Type "# A window past 31 days is refused, naming the bound"
 Enter
 Wait
-Type `omniglass lab calendar list --start "$start" --end "2099-01-01T00:00:00Z" 2>&1 | grep -o 'the window is at most.*'`
+Type `omniglass lab calendar list --start "$start" --end "2099-01-01T00:00:00Z" 2>&1 | grep -o 'the window is at most.*' || true`
 Enter
 Wait
 
