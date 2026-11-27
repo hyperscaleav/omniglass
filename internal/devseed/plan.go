@@ -346,29 +346,33 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 // its component, and a rule reads it from every member the system's slots hold
 // and writes one value as the room's own. Seeded with the plan, as the plan's
 // components are, and inert in a room with no such member.
-var roomRules = []storage.CalcRuleSpec{
-	{
-		Name: "room-occupancy", Label: "Room occupancy",
-		Description: "A room's occupancy-count is the most people any of its people counters reports.",
-		OwnerKind:   "system",
-		Inputs:      []rules.CalcInput{{Alias: "c", Key: "people-count"}},
-		Reduce:      rules.CalcReduce{Expr: "max(c)"},
-		OutputKey:   "occupancy-count",
-	},
-	{
-		Name: "room-temperature", Label: "Room temperature",
-		Description: "A room's room-temperature is the average of what its members read, the control processor's sensor being the lab's.",
-		OwnerKind:   "system",
-		Inputs:      []rules.CalcInput{{Alias: "c", Key: "room-sensor-temperature"}},
-		Reduce:      rules.CalcReduce{Expr: "avg(c)"},
-		OutputKey:   "room-temperature",
-	},
+// It is a function, not a shared value: creating a rule writes the resolved
+// key ids back into its inputs, which would carry one database's ids to the next.
+func roomRules() []storage.CalcRuleSpec {
+	return []storage.CalcRuleSpec{
+		{
+			Name: "room-occupancy", Label: "Room occupancy",
+			Description: "A room's occupancy-count is the most people any of its people counters reports.",
+			OwnerKind:   "system",
+			Inputs:      []rules.CalcInput{{Alias: "c", Key: "people-count"}},
+			Reduce:      rules.CalcReduce{Expr: "max(c)"},
+			OutputKey:   "occupancy-count",
+		},
+		{
+			Name: "room-temperature", Label: "Room temperature",
+			Description: "A room's room-temperature is the average of what its members read, the control processor's sensor being the lab's.",
+			OwnerKind:   "system",
+			Inputs:      []rules.CalcInput{{Alias: "c", Key: "room-sensor-temperature"}},
+			Reduce:      rules.CalcReduce{Expr: "avg(c)"},
+			OutputKey:   "room-temperature",
+		},
+	}
 }
 
 // seedRoomRules seeds each of roomRules once; a plan seeded again finds them
 // and leaves them as they are.
 func seedRoomRules(ctx context.Context, gw storage.Gateway, actorID string) error {
-	for _, spec := range roomRules {
+	for _, spec := range roomRules() {
 		if _, err := gw.GetCalcRule(ctx, spec.Name); err == nil {
 			continue
 		} else if !errors.Is(err, storage.ErrCalcRuleNotFound) {
