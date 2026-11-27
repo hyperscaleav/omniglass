@@ -107,3 +107,52 @@ func TestTheShippedUCCDriversReadThePlatform(t *testing.T) {
 	}
 	t.Fatal("ucc-webhook has no rooms-state listener")
 }
+
+// TestTheShippedRoomListDeclaresTokenPaging pins ucc-rooms to the platform's
+// paging (#2789): its rule names the platform's own cursor field and
+// parameter, and the platform answers a page_size and hands back the
+// next_page_token of the room that opens the next page, empty on the last.
+func TestTheShippedRoomListDeclaresTokenPaging(t *testing.T) {
+	pg := shippedSpec(t, "ucc-rooms").Polls[0].Request.Paginate
+	if pg == nil || pg.Style != driver.PageCursor || pg.CursorFrom != "next_page_token" || pg.CursorParam != "next_page_token" || pg.SizeParam != "page_size" {
+		t.Fatalf("ucc-rooms paginate = %+v", pg)
+	}
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := sim.NewEngine(store, profiles.Templates())
+	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "p", Hostname: "p", LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	token := ""
+	for pages := 0; pages < 10; pages++ {
+		target := "/api/rooms?page_size=2"
+		if token != "" {
+			target += "&next_page_token=" + token
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("X-UCC-Token", "ucc-lab-token")
+		e.Devices()[0].ServeHTTP(rec, req)
+		var page struct {
+			Rooms []struct {
+				ID string `json:"id"`
+			} `json:"rooms"`
+			Next string `json:"next_page_token"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+			t.Fatalf("%s: %v\n%s", target, err, rec.Body)
+		}
+		for _, r := range page.Rooms {
+			ids = append(ids, r.ID)
+		}
+		if token = page.Next; token == "" {
+			break
+		}
+	}
+	if len(ids) != 5 {
+		t.Errorf("paged rooms %v, want the five, each once", ids)
+	}
+}

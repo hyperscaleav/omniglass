@@ -178,9 +178,14 @@ func (fn *BakedFunction) Interpret(p Payload, ts time.Time) ([]Emitted, []error)
 		return nil, []error{fmt.Errorf("%s records %q: %w; nothing landed", prefix, fn.Records, err)}
 	}
 	var capped error
-	if len(records) > MaxRecords {
-		capped = fmt.Errorf("%s records %q hold %d records, past the cap of %d: the first %d were read and the last %d not read", prefix, fn.Records, len(records), MaxRecords, MaxRecords, len(records)-MaxRecords)
-		records = records[:MaxRecords]
+	limit := MaxRecords
+	if fn.Request != nil && fn.Request.Paginate != nil {
+		// A paged walk was bounded by its own rule (Pagination.Walk).
+		limit = max(limit, fn.Request.Paginate.RecordsCap())
+	}
+	if len(records) > limit {
+		capped = fmt.Errorf("%s records %q hold %d records, past the cap of %d: the first %d were read and the last %d not read", prefix, fn.Records, len(records), limit, limit, len(records)-limit)
+		records = records[:limit]
 	}
 	var out []Emitted
 	missed := faultTally{}
