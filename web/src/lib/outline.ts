@@ -1,6 +1,7 @@
 import { type FleetView } from "./fleet";
 import { healthOf, type HealthState } from "./health";
 import { entityLabel } from "./entities";
+import { systemAddress } from "./system_name";
 
 // The outline's model (#866): every location in the fleet as one tree, each
 // location wearing the system that sits there.
@@ -19,7 +20,10 @@ import { entityLabel } from "./entities";
 
 export type Lights = { healthy: number; incomplete: number; degraded: number; outage: number };
 
-export type SystemRef = { id: string; name: string; label: string; standard: string; health: HealthState | null };
+// address is the label of the location the system sits at when it says more
+// than the system's own label does (lib/system_name.ts, #2757); the location's
+// row reads it, so the system it wears brings its name beside it.
+export type SystemRef = { id: string; name: string; label: string; address?: string; standard: string; health: HealthState | null };
 
 export type ComponentRow = {
   id: string;
@@ -110,11 +114,12 @@ export function buildOutline(input: OutlineInput): Outline {
   const standardOf = new Map(input.systems.map((s) => [s.id, s.standard ?? ""] as const));
   const componentOf = new Map(input.components.map((c) => [c.id, c] as const));
   const locationIds = new Set(locations.map((l) => l.id));
+  const locationById = new Map(locations.map((l) => [l.id, l] as const));
   const iconFor = (product: string | undefined) => (product && input.componentIcon ? input.componentIcon(product) : "box");
 
   const systemRef = (s: (typeof fleetSystems)[number]): SystemRef => {
     const std = standardOf.get(s.id);
-    return { id: s.id, name: s.name, label: entityLabel(s), standard: std ? input.standardLabel(std) : "", health: healthOf(s.health) };
+    return { id: s.id, name: s.name, label: entityLabel(s), address: systemAddress(s, s.location ? locationById.get(s.location) : undefined), standard: std ? input.standardLabel(std) : "", health: healthOf(s.health) };
   };
 
   // Which systems each component serves, so a shared one can name the others.
@@ -289,6 +294,9 @@ export type OutlineEntry = {
   kind: "location" | "system" | "component";
   id: string;
   label: string;
+  // The name of the system a location wears, when its label is not the
+  // location's own (#2757): the location is the address, this the name.
+  name?: string;
   path: string[];
   type: string;
   standard: string;
@@ -313,6 +321,7 @@ export function entriesOf(outline: Outline, roots?: LocationNode[]): OutlineEntr
       kind: "location",
       id: n.id,
       label: own,
+      name: wears && n.systems[0].address ? n.systems[0].label : undefined,
       path,
       type: n.type,
       standard: wears ? n.systems[0].standard : "",

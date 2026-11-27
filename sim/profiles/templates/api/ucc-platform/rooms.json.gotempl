@@ -12,7 +12,7 @@
   {{- range $id := $p.keys }}{{ $r := index $rooms $id }}{{ $sep }}
     {{/* @field status.rooms.*.state string "idle or in-call" */}}
     {{- $st := or (index $r "state") "idle" }}
-    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "status": {{ if eq $st "in-call" }}"in-meeting"{{ else if eq $st "offline" }}"offline"{{ else }}"available"{{ end }},
+    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "address": {{ marshal (or (index $r "address") "") }}, "status": {{ if eq $st "in-call" }}"in-meeting"{{ else if eq $st "offline" }}"offline"{{ else }}"available"{{ end }},
      "meeting": {"id": {{ marshal (or (index $r "meeting") "") }}, "topic": {{ marshal (or (index $r "topic") "") }}, "start": {{ whole (index $r "start") }}, "participants": {{ whole (index $r "participants") }}},
      "booking": {{ with index $r "booking" }}{{ marshal . }}{{ else }}{"topic": "", "start": 0, "end": 0}{{ end }},
      "next": {{ with index $r "next" }}{{ marshal . }}{{ else }}{"topic": "", "start": 0}{{ end }}}

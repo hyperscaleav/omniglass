@@ -103,7 +103,7 @@ behaviors:
       # platform knows and nobody bound: its values land in the conduit's
       # unbound inbox. With no rooms to serve the records stay as they were.
       - path: status.rooms
-        value: '{{ if servedRooms }}{ {{- $sep := "" }}{{ range servedRooms }}{{ $b := roomBookings .site .building .room }}{{ $sep }}{{ marshal (or .system .room) }}: {"state": {{ marshal $b.state }}, "today": {{ $b.today }}, "remaining": {{ $b.remaining }}, "current": {{ with $b.now }}{{ marshal .organizer }}{{ else }}""{{ end }}, "next_start": {{ with $b.next }}{{ .slot_start }}{{ else }}0{{ end }}}{{ $sep = "," }}{{ end }},"unassigned-room": {"state": "free", "today": 0, "remaining": 0, "current": "", "next_start": 0} }{{ else }}{{ marshal .State.status.rooms }}{{ end }}'
+        value: '{{ if servedRooms }}{ {{- $sep := "" }}{{ range servedRooms }}{{ $b := roomBookings .site .building .room }}{{ $sep }}{{ marshal (or .system .room) }}: {"name": {{ marshal (or .label .room) }}, "address": {{ marshal .room }}, "state": {{ marshal $b.state }}, "today": {{ $b.today }}, "remaining": {{ $b.remaining }}, "current": {{ with $b.now }}{{ marshal .organizer }}{{ else }}""{{ end }}, "next_start": {{ with $b.next }}{{ .slot_start }}{{ else }}0{{ end }}}{{ $sep = "," }}{{ end }},"unassigned-room": {"name": "unassigned-room", "address": "", "state": "free", "today": 0, "remaining": 0, "current": "", "next_start": 0} }{{ else }}{{ marshal .State.status.rooms }}{{ end }}'
       - path: configuration.rooms_served
         value: '{{ len servedRooms }}'
 

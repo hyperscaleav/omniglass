@@ -159,10 +159,10 @@ func bookingEngineIn(t *testing.T, cal *calendar.Calendar, profileName string, s
 	t.Cleanup(e.StopAll)
 	e.SetCalendar(cal)
 	w := &world.World{Version: world.Version, Sites: []world.Site{{Name: "hq", Rooms: []world.Room{
-		{Name: "r101", Building: "tower", System: "sys-101"}, {Name: "r102", Building: "tower", System: "sys-102"}}}}}
+		{Name: "r101", Label: "Curie", Building: "tower", System: "sys-101"}, {Name: "r102", Label: "Hopper", Building: "tower", System: "sys-102"}}}}}
 	if service {
 		w.Services = []world.Service{{Name: "svc-1", Profile: profileName, Covers: []world.Cover{
-			{System: "sys-101", Site: "hq", Building: "tower", Room: "r101"}, {System: "sys-102", Site: "hq", Building: "tower", Room: "r102"}}}}
+			{System: "sys-101", Site: "hq", Building: "tower", Room: "r101", Label: "Curie"}, {System: "sys-102", Site: "hq", Building: "tower", Room: "r102", Label: "Hopper"}}}}
 	}
 	e.SetWorld(w)
 	snap := DeviceSnapshot{DeviceID: "svc-1", Hostname: "svc-1", LoopbackIP: "127.0.0.1", ProfileName: profileName, Version: 1}
@@ -433,5 +433,31 @@ func TestSchedulingServiceListsItsRoomsAsRecords(t *testing.T) {
 	e.TickBehavior("bookings_sync")
 	if m, _ := e.ReadPath("status.rooms").(map[string]any); len(m) != 0 {
 		t.Fatalf("a service covering no room lists %v", m)
+	}
+}
+
+// A scheduling platform lists each room by its name, as a calendar does, the
+// address beside it (#2757): the record is keyed by the system, its name the
+// label the world gave the room and its address the room's own.
+func TestSchedulingServiceListsEachRoomByNameWithItsAddress(t *testing.T) {
+	cal, _, _, held, _, _ := bookingDay(t)
+	at := held.Start.Add(time.Minute)
+	d := bookingEngine(t, cal, "scheduling-service", true, &at)
+	d.TickBehavior("bookings_sync")
+	var doc struct {
+		Rooms []struct{ ID, Name, Address string }
+	}
+	body := d.Operate(Operation{Kind: "http", Method: "GET", Path: "/api/rooms"})
+	if err := json.Unmarshal([]byte(body.Body), &doc); err != nil {
+		t.Fatalf("GET /api/rooms answered %q: %v", body.Body, err)
+	}
+	got := map[string][2]string{}
+	for _, r := range doc.Rooms {
+		got[r.ID] = [2]string{r.Name, r.Address}
+	}
+	for id, want := range map[string][2]string{"sys-101": {"Curie", "r101"}, "sys-102": {"Hopper", "r102"}} {
+		if got[id] != want {
+			t.Errorf("room %s lists as %v, want name %q and address %q", id, got[id], want[0], want[1])
+		}
 	}
 }

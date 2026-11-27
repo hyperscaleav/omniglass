@@ -6,7 +6,10 @@ import SystemDetail from "./SystemDetail";
 import LocationDetail from "./LocationDetail";
 import { Maximize } from "./icons";
 import { useBlades, type BladeDef } from "../lib/blades";
-import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
+import { FLEET_VIEW_KEY, fleetView, locationIndex } from "../lib/fleet";
+import { systemAddress } from "../lib/system_name";
+import SystemName from "./SystemName";
+import { Show } from "solid-js";
 import { entityLabel } from "../lib/entities";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
@@ -40,7 +43,9 @@ export const systemBlade: BladeDef = {
   Title: (p) => {
     const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
     const s = () => view.data?.systems?.find((x) => x.id === p.id);
-    return <>{s() ? entityLabel(s()!) : "System"}</>;
+    // A blade has no path, so the system's name carries its address (#2757).
+    const address = () => (s() ? systemAddress(s()!, s()!.location ? locationIndex(view.data!).get(s()!.location!) : undefined) : undefined);
+    return <Show when={s()} fallback="System"><SystemName label={entityLabel(s()!)} address={address()} /></Show>;
   },
   Body: (p) => <SystemDetail id={p.id} host="blade" />,
   headerExtra: (p) => <ExpandButton to={`/systems/${p.id}`} />,

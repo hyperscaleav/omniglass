@@ -188,6 +188,17 @@ describe("the component leaf", () => {
     expect(within(screen.getByTestId("leaf-memberships")).getByText("Boardroom System")).toBeTruthy();
   });
 
+  // A system is its name and its address (#2757): "Boardroom System" at the
+  // room "Boardroom A" reads as the two, the address beside the name.
+  it("lists each system it serves by name with its address beside it", () => {
+    mount();
+    const row = within(screen.getByTestId("leaf-memberships")).getByText("Boardroom System", { selector: "[data-system-label]" }).closest("[data-testid=system-name]") as HTMLElement;
+    expect(within(row).getByText("Boardroom A", { selector: "[data-system-address]" })).toBeTruthy();
+    // An unplaced system has no address to add.
+    const overflow = within(screen.getByTestId("leaf-memberships")).getByText("Overflow", { selector: "[data-system-label]" }).closest("[data-testid=system-name]") as HTMLElement;
+    expect(overflow.querySelector("[data-system-address]")).toBeNull();
+  });
+
   it("shows a location card, marked as its own, where it sits apart from the systems it serves", () => {
     mount(undefined, undefined, { ...bar, location: "hq", location_id: uuidFor("cf-hq") } as unknown as Component);
     const card = screen.getByTestId("location-card");

@@ -105,7 +105,7 @@ func (d *Device) bookingFuncs() template.FuncMap {
 						continue
 					}
 					for _, c := range s.Covers {
-						out = append(out, map[string]any{"system": c.System, "site": c.Site, "building": c.Building, "room": c.Room})
+						out = append(out, map[string]any{"system": c.System, "site": c.Site, "building": c.Building, "room": c.Room, "label": c.Label})
 					}
 				}
 			}

@@ -89,7 +89,11 @@ type Site struct {
 // in it. Capacity is the most a meeting there may invite (the largest
 // attendance its standard's meeting knobs declare, zero with none).
 type Room struct {
+	// Name is the room's address (the location it sits at); Label is the name a
+	// company gives it ("Curie", "Huddle 3"), which a calendar or a meeting
+	// platform lists the room by, the address beside it (#2757).
 	Name     string   `json:"name"`
+	Label    string   `json:"label,omitempty"`
 	Building string   `json:"building"`
 	Standard string   `json:"standard"`
 	System   string   `json:"system"`
@@ -139,6 +143,9 @@ type Cover struct {
 	Site     string `json:"site"`
 	Building string `json:"building"`
 	Room     string `json:"room"`
+	// Label is the name the room goes by (Room is its address), "" when the
+	// world gave it none.
+	Label string `json:"label,omitempty"`
 }
 
 // Placement is where a device sits: the three fields a device snapshot's

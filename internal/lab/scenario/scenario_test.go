@@ -316,9 +316,12 @@ func TestResolvePlacesEverySystemInAUniqueRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names, labels, rooms := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	// A name and an address are unique across the plan; a label (the room's name,
+	// as a company gives it) is unique within its site, as two buildings may
+	// each have a "Huddle 1" (#2757).
+	names, rooms := map[string]bool{}, map[string]bool{}
 	for _, s := range p.allSystems() {
-		for what, seen := range map[string]map[string]bool{s.Name: names, s.Label: labels, s.Room: rooms} {
+		for what, seen := range map[string]map[string]bool{s.Name: names, s.Room: rooms} {
 			if seen[what] {
 				t.Fatalf("%q is planned twice", what)
 			}

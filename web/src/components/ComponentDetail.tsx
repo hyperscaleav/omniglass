@@ -8,6 +8,7 @@ import OccurrenceList from "./OccurrenceList";
 import CommandsPanel from "./CommandsPanel";
 import DependenciesPanel from "./DependenciesPanel";
 import IdentitiesPanel from "./IdentitiesPanel";
+import SystemName from "./SystemName";
 import HealthBadge from "./HealthBadge";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
@@ -441,15 +442,13 @@ export default function ComponentDetail(props: { id: string; host: DetailHost })
                         <For each={rows()}>
                           {(row) => (
                             <li class="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5">
-                              <Show when={row.systemId} fallback={<span>{row.label}</span>}>
-                                <button type="button" class="cursor-pointer hover:underline" onClick={() => blades.push({ kind: "system", id: row.systemId! })}>{row.label}</button>
+                              {/* The system's name with its address beside it (#2757). */}
+                              <Show when={row.systemId} fallback={<SystemName label={row.label} address={row.where} />}>
+                                <button type="button" class="min-w-0 cursor-pointer text-left hover:underline" onClick={() => blades.push({ kind: "system", id: row.systemId! })}><SystemName label={row.label} address={row.where} /></button>
                               </Show>
                               <For each={slotsIn(row.systemId)}>
                                 {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
                               </For>
-                              <Show when={row.where}>
-                                <span class="text-xs text-base-content/55">{row.where}</span>
-                              </Show>
                               <Show when={row.primary && rows().length > 1}>
                                 <span class="ml-auto rounded-field border border-primary/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-primary">primary</span>
                               </Show>

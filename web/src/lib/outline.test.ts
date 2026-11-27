@@ -92,6 +92,25 @@ describe("a location wears its system", () => {
     expect(ba.health).toBe("degraded");
   });
 
+  // A room is its name and its address (#2757): the location row reads the
+  // address, so the system it wears brings its name, and the matches list the
+  // location under the same two. A system named for its room has no second name.
+  it("gives the system the address of the room it sits at, and the room's entry its name", () => {
+    const o = buildOutline(input(view, extra));
+    const ba = child(child(o.roots[0], "West"), "Boardroom A");
+    expect(ba.systems.map((s) => [s.label, s.address])).toEqual([["Boardroom", "Boardroom A"]]);
+    const entry = entriesOf(o).find((e) => e.kind === "location" && e.label === "Boardroom A")!;
+    expect(entry.name).toBe("Boardroom");
+  });
+
+  it("carries no second name for a system named for its room", () => {
+    const same = { ...view, systems: [sys("s-ba", "Boardroom A", "ba", "healthy", [])] };
+    const o = buildOutline(input(same, { systems: [{ id: uuidFor("s-ba") }] }));
+    const ba = child(child(o.roots[0], "West"), "Boardroom A");
+    expect(ba.systems[0].address).toBeUndefined();
+    expect(entriesOf(o).find((e) => e.kind === "location" && e.label === "Boardroom A")!.name).toBeUndefined();
+  });
+
   it("lists the system's components directly beneath the location, by name, with product and health", () => {
     const ba = child(child(buildOutline(input(view, extra)).roots[0], "West"), "Boardroom A");
     expect(ba.groups).toHaveLength(1);

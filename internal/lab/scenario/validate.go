@@ -51,6 +51,7 @@ type compiled struct {
 type compiledStandard struct {
 	name       string
 	systemType string
+	roomName   string
 	components []Count
 	slots      []SlotFill
 }
@@ -98,6 +99,7 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 	for _, a := range m.Archetypes {
 		probs = append(probs, checkArchetype(a, declared, archetypes)...)
 	}
+	probs = append(probs, checkRoomNames(m)...)
 	probs = append(probs, checkSiteBounds(m)...)
 	probs = append(probs, checkPushers(m, cat)...)
 	probs = append(probs, checkServices(m, cat)...)
@@ -121,7 +123,7 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
 	}
 	name := s.Name.Name
-	cs := compiledStandard{name: name, systemType: s.SystemType.Name}
+	cs := compiledStandard{name: name, systemType: s.SystemType.Name, roomName: strings.TrimSpace(s.RoomName)}
 
 	st, known := cat.Standard(name)
 	if !known {
@@ -423,4 +425,18 @@ func sortedSlots(m map[string]Ref) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// checkRoomNames holds each archetype's naming themes to the ones the scenario
+// package knows (#2757). An archetype naming none takes the default theme.
+func checkRoomNames(m *Manifest) []Problem {
+	var probs []Problem
+	for _, a := range m.Archetypes {
+		for _, t := range a.RoomNames {
+			if _, ok := roomThemes[t.Name]; !ok {
+				probs = append(probs, Problem{Line: lineOr(t.Line, a.Line), Message: fmt.Sprintf("archetype %q names the room theme %q, which is not one of %s", a.Name.Name, t.Name, strings.Join(RoomThemes(), ", "))})
+			}
+		}
+	}
+	return probs
 }

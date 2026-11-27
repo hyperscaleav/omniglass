@@ -172,3 +172,41 @@ func TestSiteWorldRefusesANameThePlatformWouldRefuse(t *testing.T) {
 		t.Fatalf("two systems of one name gave %v, want a refusal", err)
 	}
 }
+
+// The world names each room the plan's way (#2757): a room's label is its
+// system's, and every room a service covers carries it, so a platform that
+// lists rooms lists the name a company gave and the address beside it.
+func TestTheWorldCarriesEachRoomsNameAndAddress(t *testing.T) {
+	m, cat := corporate(t)
+	plan, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worlds, err := SiteWorlds(m, cat, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := map[string]string{}
+	for _, s := range plan.allSystems() {
+		labels[s.Name] = s.Label
+	}
+	for _, w := range worlds {
+		for _, site := range w.Sites {
+			for _, r := range site.Rooms {
+				if r.Label == "" || r.Label != labels[r.System] {
+					t.Fatalf("room %s of %s is labeled %q, the plan names it %q", r.System, site.Name, r.Label, labels[r.System])
+				}
+				if r.Name == r.Label {
+					t.Fatalf("room %s: the name and the address are both %q", r.System, r.Name)
+				}
+			}
+		}
+		for _, svc := range w.Services {
+			for _, c := range svc.Covers {
+				if c.Label != labels[c.System] {
+					t.Fatalf("service %s covers %s as %q, the plan names it %q", svc.Name, c.System, c.Label, labels[c.System])
+				}
+			}
+		}
+	}
+}

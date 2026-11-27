@@ -1,8 +1,8 @@
-// Package fleet holds the two helpers the simulator and the scale lab share
-// when they name and identify simulated things: Enrich, which gives a device
-// its per-instance identity, and NameGenerator, which labels a system. The
+// Package fleet holds the helper the simulator shares when it identifies
+// simulated things: Enrich, which gives a device its per-instance identity. The
 // fleet itself is not defined here: a simulated system is built to a standard
-// from the platform's template catalog (internal/lab/scenario resolves one).
+// from the platform's template catalog (internal/lab/scenario resolves one), and
+// a room's name is the scenario's (internal/lab/scenario, room names).
 package fleet
 
 import (

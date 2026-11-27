@@ -123,7 +123,11 @@ type Standard struct {
 	// it, so a demo can fix a fault from the console. Few, by design: a
 	// control face is one more endpoint polling every such device.
 	Control []Ref `yaml:"control"`
-	Line    int   `yaml:"-"`
+	// RoomName is what a room of this standard is called when it is known by
+	// what it is ("Huddle", "Auditorium"): numbered within its site, a lone one
+	// unnumbered. Empty leaves its rooms to the site's naming theme (#2757).
+	RoomName string `yaml:"room_name"`
+	Line     int    `yaml:"-"`
 }
 
 // Archetype is one kind of site, each site a campus with its own outpost (one
@@ -140,7 +144,11 @@ type Archetype struct {
 	TypicalSystems int        `yaml:"typical_systems"`
 	Buildings      []Building `yaml:"buildings"`
 	Systems        Ratios     `yaml:"systems"`
-	Line           int        `yaml:"-"`
+	// RoomNames are the naming themes (RoomThemes) its sites take, a headquarters
+	// its first and the repeated sites each the next, in turn: a company names
+	// its rooms after something, one theme a site (#2757).
+	RoomNames []Ref `yaml:"room_names"`
+	Line      int   `yaml:"-"`
 }
 
 // Building is one building of a site and how many floors it has.
@@ -195,7 +203,7 @@ func (rs *Ratios) UnmarshalYAML(n *yaml.Node) error {
 // UnmarshalYAML decodes a standard and keeps its line.
 func (s *Standard) UnmarshalYAML(n *yaml.Node) error {
 	type plain Standard
-	if err := decodeKnown(n, (*plain)(s), "name", "system_type", "products", "control"); err != nil {
+	if err := decodeKnown(n, (*plain)(s), "name", "system_type", "products", "control", "room_name"); err != nil {
 		return err
 	}
 	s.Line = n.Line
@@ -205,7 +213,7 @@ func (s *Standard) UnmarshalYAML(n *yaml.Node) error {
 // UnmarshalYAML decodes an archetype and keeps its line.
 func (a *Archetype) UnmarshalYAML(n *yaml.Node) error {
 	type plain Archetype
-	if err := decodeKnown(n, (*plain)(a), "name", "label", "headquarters", "weight", "typical_systems", "buildings", "systems"); err != nil {
+	if err := decodeKnown(n, (*plain)(a), "name", "label", "headquarters", "weight", "typical_systems", "buildings", "systems", "room_names"); err != nil {
 		return err
 	}
 	a.Line = n.Line

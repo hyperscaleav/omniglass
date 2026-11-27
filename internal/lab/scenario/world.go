@@ -134,7 +134,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 	rooms := make([]world.Room, 0, len(sp.Systems))
 	cover := map[string]world.Cover{}
 	for _, sys := range sp.Systems {
-		r := world.Room{Name: sys.Room, Building: sys.Building, Standard: sys.Standard, System: sys.Name}
+		r := world.Room{Name: sys.Room, Label: sys.Label, Building: sys.Building, Standard: sys.Standard, System: sys.Name}
 		if k, ok := m.MeetingKnobs(sys.Standard); ok {
 			r.Capacity = k.Attendance.Max
 		}
@@ -147,7 +147,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 			}
 		}
 		rooms = append(rooms, r)
-		cover[sys.Name] = world.Cover{System: sys.Name, Site: site, Building: sys.Building, Room: sys.Room}
+		cover[sys.Name] = world.Cover{System: sys.Name, Site: site, Building: sys.Building, Room: sys.Room, Label: sys.Label}
 	}
 	w.Sites = []world.Site{{Name: site, Archetype: sp.Archetype, Rooms: rooms}}
 	// A service covers rooms beyond its own site (#2765): the other sites'
@@ -163,7 +163,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 			}
 			var rs []world.Room
 			for _, sys := range other.Systems {
-				r := world.Room{Name: sys.Room, Building: sys.Building, Standard: sys.Standard, System: sys.Name}
+				r := world.Room{Name: sys.Room, Label: sys.Label, Building: sys.Building, Standard: sys.Standard, System: sys.Name}
 				if k, ok := m.MeetingKnobs(sys.Standard); ok {
 					r.Capacity = k.Attendance.Max
 				}
@@ -178,7 +178,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 					}
 				}
 				rs = append(rs, r)
-				cover[sys.Name] = world.Cover{System: sys.Name, Site: other.Name, Building: sys.Building, Room: sys.Room}
+				cover[sys.Name] = world.Cover{System: sys.Name, Site: other.Name, Building: sys.Building, Room: sys.Room, Label: sys.Label}
 			}
 			w.Sites = append(w.Sites, world.Site{Name: other.Name, Archetype: other.Archetype, Rooms: rs})
 		}

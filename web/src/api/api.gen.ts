@@ -8531,6 +8531,8 @@ export type SearchEntityBody = {
   id: string;
   /** The entity's display label, when it has one */
   label?: string;
+  /** A system's address: the label (the name when it has none) of the location it sits at, when the caller may read that location. A company names its rooms (the system's label) and addresses them (the location), and the console shows both */
+  location?: string;
   /** The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is */
   location_path?: string;
   /** The entity's name; many components share one, the location_path tells them apart */

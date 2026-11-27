@@ -1308,11 +1308,13 @@ standards:
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
     control: [main-display]     # optional: slots whose devices also get their second face
+    room_name: Huddle           # optional: its rooms are named for what they are, "Huddle 3" (#2757)
 archetypes:
   - name: hq
     label: Headquarters
     headquarters: true          # placed exactly once, under its own name
     typical_systems: 250        # how many systems a site of this kind typically has
+    room_names: [scientists]    # the naming theme a site's rooms take, one theme a site (#2757)
     buildings:
       - { name: tower, floors: 30 }
     systems:                    # standard -> ratio, in tie-break order
@@ -1493,9 +1495,18 @@ within 60). A small N can round a rare standard at a small site to zero; that is
 Each site's systems are then placed in its archetype's standard order, round-robin over its floors
 (buildings in order, floors bottom up), so system `j` of a site with `F` floors sits in room
 `j ÷ F + 1` of floor `j mod F`: every floor fills evenly. A system is named `<site>-<standard>-<k>`,
-its room `<site>-<building>-<floor>-<room>`, and it takes a friendly label from the same name
-generator the simulator's fleets use, seeded from the scenario, site, standard and index, so the same
-manifest at the same size always resolves to the same plan.
+its room `<site>-<building>-<floor>-<room>`, and it takes the name a company would give the room as
+its label (#2757): the location stays the address ("Hq Tower 12 01") and the system's label is the
+name ("Curie"), and the console shows both. A site names its rooms after one theme, a word list the
+scenario package holds in one place (`scientists`, `peaks`, `rivers`, `parks`, `lakes`, `bridges`), the
+archetype's `room_names` giving the theme (a repeated archetype's sites take its themes in turn: the
+headquarters after scientists, the regional offices after peaks, rivers and parks), each word taken
+once in a site and a site that runs a theme dry taking its words again numbered 2, 3 and so on. A
+standard with a `room_name` is named for what it is instead (a huddle room, an auditorium, signage),
+numbered in the order the site has them and a lone one unnumbered. The word is picked by a hash of the
+scenario, site, standard and index, so the same manifest at the same size always resolves to the same
+plan, and a name is unique within its site, never across the plan (two sites may each have a
+"Huddle 1").
 
 ## Why Docker is required
 

@@ -33,9 +33,10 @@ func uccWorld(t *testing.T, at *time.Time) (*Device, *calendar.Calendar, map[str
 	svc := world.Service{Name: "ucc-hq", Profile: "ucc-platform", Webhook: true}
 	for _, n := range []string{"r1", "r2", "r3"} {
 		sys := "hq-" + n
-		site.Rooms = append(site.Rooms, world.Room{Name: n, Building: "tower", System: sys})
+		label := uccRoomLabels[n]
+		site.Rooms = append(site.Rooms, world.Room{Name: n, Label: label, Building: "tower", System: sys})
 		rooms[sys] = calendar.Room{Site: "hq", Building: "tower", Room: n}
-		svc.Covers = append(svc.Covers, world.Cover{System: sys, Site: "hq", Building: "tower", Room: n})
+		svc.Covers = append(svc.Covers, world.Cover{System: sys, Site: "hq", Building: "tower", Room: n, Label: label})
 	}
 	w.Sites = []world.Site{site}
 	w.Services = []world.Service{svc}
@@ -48,6 +49,9 @@ func uccWorld(t *testing.T, at *time.Time) (*Device, *calendar.Calendar, map[str
 	tickByName(t, d, "rooms_calendar") // the account learns its rooms from the world
 	return d, cal, rooms
 }
+
+// uccRoomLabels are the names the world gives the three rooms (#2757).
+var uccRoomLabels = map[string]string{"r1": "Curie", "r2": "Hopper", "r3": "Huddle 3"}
 
 type uccRoom struct {
 	Status, Meeting, Topic string
@@ -272,6 +276,29 @@ func TestTheUCCPlatformPostsAMeetingsBoundaries(t *testing.T) {
 	for sys := range got {
 		if _, ok := want[sys]; !ok {
 			t.Errorf("%s was told %v with no boundary on the calendar", sys, got[sys])
+		}
+	}
+}
+
+// The platform lists each room by the name a company gave it, the address
+// beside it as a field of its own, as a rooms API lists a room and where it is
+// (#2757); the id stays the system.
+func TestTheUCCPlatformListsEachRoomByNameWithItsAddress(t *testing.T) {
+	at := time.Date(2026, 11, 26, 10, 0, 0, 0, time.UTC)
+	d, _, _ := uccWorld(t, &at)
+	var doc struct {
+		Rooms []struct{ ID, Name, Address string }
+	}
+	if err := json.Unmarshal(uccCall(t, d, http.MethodGet, "/api/rooms", ""), &doc); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][2]string{}
+	for _, r := range doc.Rooms {
+		got[r.ID] = [2]string{r.Name, r.Address}
+	}
+	for n, label := range uccRoomLabels {
+		if want := [2]string{label, n}; got["hq-"+n] != want {
+			t.Errorf("room hq-%s lists as %v, want name %q and address %q", n, got["hq-"+n], want[0], want[1])
 		}
 	}
 }

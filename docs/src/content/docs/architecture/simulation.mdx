@@ -484,7 +484,8 @@ Devices that read the calendar:
   - The **scheduling service** is one account for the whole fleet, a conduit
     ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)):
     the lab places it once, at the headquarters, covering every room the plan books. Its rooms list
-    is token-paged, one record per room named by the room's system, with that
+    is token-paged, one record per room keyed by the room's system and listed by its `name` (the name a
+    company gave the room, as a calendar lists it) with its `address` (the location) beside it, with that
     room's booking state, bookings today and left, the organizer holding it and the next start, all
     off the calendar. A driver polls it and fans each record out to the system the lab's installer
     bound that room id to; a room nobody bound lands in the conduit's unbound inbox. It also counts
@@ -523,7 +524,9 @@ Devices that read the calendar:
   names. The lab places it once, at the headquarters, covering every room of every site, and its
   world owns the ids: a room is its system's name, a device has the stable id the world gives it.
   - **The rooms list** is token-paged (`page_size`, `next_page_token`, the last room of the page, empty
-    on the last), one record per room: its `id` and `name`, its `status` (`available`, `in-meeting`,
+    on the last), one record per room: its `id`, its `name` (the name a company gave the room, "Curie" or
+    "Huddle 3", the world's label for it) with the room's `address` (its location) as a field beside it,
+    its `status` (`available`, `in-meeting`,
     `offline`), the `meeting` it holds (`id`, `topic`, `start`, `participants`, empty when there is none),
     the `booking` that holds it now (a booked no-show leaves the room available with its booking) and the
     `next` booked one, all from the calendar. A room is in a meeting exactly when somebody is in it.

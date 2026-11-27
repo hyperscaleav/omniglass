@@ -149,6 +149,45 @@ describe("expander names", () => {
   });
 });
 
+// A room is its name and its address (#2757): the location row reads the address,
+// and the system it wears leads the row with its name, in the tree and in the
+// matches. A system named for its room (the huddle's "Huddle" at "Huddle Room"
+// is not; "Auditorium AV" is not) has a name of its own here, so the
+// fixture's room "Media Lab" is renamed to say the system once.
+describe("a room's name and its address", () => {
+  it("leads a location's row with the name of the system it wears, the address after it", async () => {
+    mount();
+    await screen.findByRole("tree");
+    expand("Headquarters");
+    expand("West Building");
+    const r = row("Huddle Room");
+    expect(r.querySelector("[data-system-label]")?.textContent).toBe("Huddle");
+    // The location's own label is the address, still the row's name.
+    expect(labelOf(r)).toBe("Huddle Room");
+  });
+
+  it("says a system named for its room once", async () => {
+    const same = { ...view, systems: (view.systems ?? []).map((s) => (s.name === "s-huddle" ? { ...s, label: "Huddle Room" } : s)) } as unknown as FleetView;
+    mount("/web/explore", owner, same);
+    await screen.findByRole("tree");
+    expand("Headquarters");
+    expand("West Building");
+    expect(row("Huddle Room").querySelector("[data-system-label]")).toBeNull();
+  });
+
+  it("lists a match under the same two", async () => {
+    mount();
+    await screen.findByRole("tree");
+    const filter = screen.getByPlaceholderText(/^filter by/) as HTMLInputElement;
+    const results = () => within(screen.getByRole("list", { name: "Matches" })).getAllByRole("listitem");
+    fireEvent.input(filter, { target: { value: "Huddle" } });
+    fireEvent.keyDown(filter, { key: "Enter" });
+    await waitFor(() => expect(results().length).toBeGreaterThan(0));
+    const hit = results().find((r) => (r.textContent ?? "").includes("Huddle Room"));
+    expect(hit?.querySelector("[data-system-label]")?.textContent).toBe("Huddle");
+  });
+});
+
 describe("arrival", () => {
   it("shows the top-level locations only, sorted by name, collapsed", async () => {
     mount();

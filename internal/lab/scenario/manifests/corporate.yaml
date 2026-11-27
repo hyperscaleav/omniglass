@@ -24,6 +24,7 @@ sites:
 standards:
   - name: huddle-room
     system_type: huddle
+    room_name: Huddle
     products:
       main-display: boreal-edge-55
       conf-bar: kestrel-vroom
@@ -54,6 +55,7 @@ standards:
     control: [main-display]
   - name: divisible-conference
     system_type: conference
+    room_name: Auditorium
     products:
       video-bar: kestrel-vroom
       camera: kestrel-gaze-p2
@@ -78,6 +80,7 @@ standards:
     control: [video-bar, people-counter]
   - name: ds55
     system_type: sign
+    room_name: Signage
     products:
       panel: boreal-edge-55
       player: boreal-cast-m1
@@ -87,6 +90,7 @@ archetypes:
     label: Headquarters
     headquarters: true
     typical_systems: 250
+    room_names: [scientists]
     buildings:
       - { name: tower, floors: 30 }
       - { name: annex, floors: 10 }
@@ -101,6 +105,7 @@ archetypes:
     label: Regional Office
     weight: 1
     typical_systems: 80
+    room_names: [peaks, rivers, parks]
     buildings:
       - { name: main, floors: 8 }
     systems:
@@ -113,6 +118,7 @@ archetypes:
     label: Branch Office
     weight: 2
     typical_systems: 25
+    room_names: [lakes, bridges, parks, rivers]
     buildings:
       - { name: main, floors: 3 }
     systems:

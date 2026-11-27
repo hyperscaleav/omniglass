@@ -29,6 +29,7 @@ type searchEntityWire struct {
 	Name         string `json:"name"`
 	LocationPath string `json:"location_path"`
 	System       string `json:"system"`
+	Location     string `json:"location"`
 }
 
 func names(es []searchEntityWire) []string {
@@ -193,5 +194,30 @@ func TestSearchRanksTheExactNameFirst(t *testing.T) {
 	got := f.search(f.owner, "lobby", 1, http.StatusOK)
 	if n := names(got.Locations); len(n) != 1 || n[0] != "lobby" {
 		t.Errorf("limit 1 for lobby = %v, want the exact name, not annex-lobby", n)
+	}
+}
+
+// A system hit carries the label of the location it sits at (#2757): the room's
+// name is the system's, its address the location's, and the palette reads the
+// two together. A scoped caller who cannot read the location still finds the
+// system, with no address to name.
+func TestSearchSystemHitsCarryTheirLocationsLabel(t *testing.T) {
+	t.Parallel()
+	f := newSearchFixture(t)
+
+	var loc struct {
+		Name  string `json:"name"`
+		Label string `json:"label"`
+	}
+	if err := json.Unmarshal(f.c.do(f.owner, http.MethodGet, "/locations/east-auditorium", nil, http.StatusOK), &loc); err != nil {
+		t.Fatal(err)
+	}
+	want := loc.Label
+	if want == "" {
+		want = loc.Name
+	}
+	got := f.search(f.owner, "av-east", 0, http.StatusOK)
+	if len(got.Systems) != 1 || got.Systems[0].Location != want {
+		t.Fatalf("systems = %+v, want av-east at the location %q", got.Systems, want)
 	}
 }

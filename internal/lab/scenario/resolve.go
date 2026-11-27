@@ -3,8 +3,6 @@ package scenario
 import (
 	"fmt"
 	"sort"
-
-	"github.com/hyperscaleav/omniglass/sim/fleet"
 )
 
 // MaxSystems bounds the size knob: the name generator's space of distinct
@@ -174,17 +172,18 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	type site struct {
 		name, label string
 		arch        *Archetype
+		ordinal     int // the repeat of its archetype, 1 for the headquarters
 	}
 	var sites []site
 	perArchetype := archetypeSites(m, SiteCount(m, size))
 	for i := range m.Archetypes {
 		a := &m.Archetypes[i]
 		if a.Headquarters {
-			sites = append(sites, site{name: a.Name.Name, label: a.Label, arch: a})
+			sites = append(sites, site{name: a.Name.Name, label: a.Label, arch: a, ordinal: 1})
 			continue
 		}
 		for k := 1; k <= perArchetype[i]; k++ {
-			sites = append(sites, site{name: fmt.Sprintf("%s-%02d", a.Name.Name, k), label: siteLabel(a, k), arch: a})
+			sites = append(sites, site{name: fmt.Sprintf("%s-%02d", a.Name.Name, k), label: siteLabel(a, k), arch: a, ordinal: k})
 		}
 	}
 	weights := make([]int, len(sites))
@@ -193,11 +192,10 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	}
 	perSite := apportion(size-len(sites), weights)
 
-	names := fleet.NewNameGenerator()
 	plan := &Plan{Scenario: m.Name, Label: m.Label, Size: size}
 	byArchetype := map[string][]SystemPlan{}
 	for i, s := range sites {
-		sp := resolveSite(m.Name, s.name, s.label, s.arch, perSite[i]+1, c, names)
+		sp := resolveSite(m.Name, s.name, s.label, s.arch, s.ordinal, perSite[i]+1, c)
 		sp.Totals = count(m, sp.Systems)
 		sp.Pushers = placePushers(m.Pushers, sp.Name, sp.Systems, cat)
 		plan.Sites = append(plan.Sites, sp)
@@ -341,7 +339,7 @@ func siteLabel(a *Archetype, k int) string {
 // by index: system j lands on floor j mod F of the site's F floors (buildings
 // in order, floors bottom up) in that floor's room j/F+1, so every floor
 // fills evenly.
-func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled, names *fleet.NameGenerator) SitePlan {
+func resolveSite(scenario, name, label string, a *Archetype, ordinal, n int, c *compiled) SitePlan {
 	sp := SitePlan{Name: name, Label: label, Archetype: a.Name.Name}
 	type floor struct{ building, name string }
 	var floors []floor
@@ -359,6 +357,12 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 	}
 	perStandard := apportion(n, ratios)
 
+	theme := defaultRoomTheme
+	if len(a.RoomNames) > 0 {
+		theme = a.RoomNames[(ordinal-1)%len(a.RoomNames)].Name
+	}
+	namer := newRoomNamer(scenario, name, theme)
+
 	j := 0
 	for i, r := range a.Systems {
 		cs := c.standards[r.Standard.Name]
@@ -366,7 +370,7 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 			fl := floors[j%len(floors)]
 			sp.Systems = append(sp.Systems, SystemPlan{
 				Name:       fmt.Sprintf("%s-%s-%d", name, cs.name, k),
-				Label:      names.Next(fmt.Sprintf("%s/%s/%s/%d", scenario, name, cs.name, k)),
+				Label:      roomLabel(namer, cs, k, perStandard[i]),
 				Standard:   cs.name,
 				SystemType: cs.systemType,
 				Building:   fl.building,
@@ -446,4 +450,13 @@ func apportion(total int, weights []int) []int {
 		out[i]++
 	}
 	return out
+}
+
+// roomLabel is the name the k-th of n rooms of a standard goes by (#2757): the
+// standard's function when it has one, else the next word of the site's theme.
+func roomLabel(r *roomNamer, cs compiledStandard, k, n int) string {
+	if cs.roomName != "" {
+		return function(cs.roomName, k, n)
+	}
+	return r.themed(cs.name, k)
 }
