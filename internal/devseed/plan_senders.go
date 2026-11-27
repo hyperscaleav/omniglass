@@ -15,9 +15,9 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
-// A plan's webhook sender (#1747) is an outside actor that speaks for a site
+// A plan's webhook sender (#1747) is an outside actor that speaks for systems
 // as a component of its own: a meeting platform account whose rooms are the
-// site's systems. It seeds as that component, one webhook endpoint of the
+// systems it covers (the whole fleet's, #2790). It seeds as that component, one webhook endpoint of the
 // driver its simulator profile names (server hosted, so on no outpost), a
 // signing secret minted for this seed alone, and one identity binding per
 // system, named for the system, on the driver's room identity. The simulator
