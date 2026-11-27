@@ -189,6 +189,9 @@ templates:
         - name: video-bar
           label: Video Bar
           accepted_types: [video-bar]
+        - name: codec
+          label: Codec
+          accepted_types: [codec]
         - name: main-display
           label: Main Display
           quorum: 2
