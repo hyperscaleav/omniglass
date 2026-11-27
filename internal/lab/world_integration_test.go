@@ -284,7 +284,6 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	}
 	t.Logf("%d bar readings (%d in a call) and %d platform room readings (%d in-call) agreed with the calendar; room %s of %d bars", barReads, barCalls, uccReads, uccCalls, bars[0].room.Key(), len(bars))
 
-
 	// The profile's {room} token expands to the real room, never empty.
 	var vb bar
 	for _, b := range bars {
