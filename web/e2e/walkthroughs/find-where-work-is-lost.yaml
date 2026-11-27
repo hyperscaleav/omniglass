@@ -13,21 +13,20 @@
 # component, where each delivery series lives.
 #
 # The figures are a report window's (collection.report_seconds); a
-# walkthrough lab's seed sets it to 10s, so the first wait allows for that
-# first window to land.
+# walkthrough lab's seed sets it to 10s, so the ready wait, off camera,
+# allows for that first window to land.
 title: Find where work is lost
 description: Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch the outage land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.
+ready:
+  goto: /platform?open=pipeline
+  wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
 steps:
   - goto: /platform?open=pipeline
-    caption: Platform health draws the path a sample takes from its run to the store, one hop at a time.
-  - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))', timeout: 30000 }
-    caption: Each hop shows what it took in, what it handed on, and the share it lost. 0% is healthy.
+    caption: Platform health draws the path a sample takes from its run to the store. Each hop shows what it took in, what it handed on, and the share it lost; 0% is healthy.
     hold: 500
   - click: '[data-testid=pipeline-hop-ingest]'
-    caption: Open the ingest hop. It says what counts as lost there, the keys it is read from, and the server component that records it.
-  - wait: { selector: '[data-testid=pipeline-hop-detail]' }
-    caption: Every hop is read from the same three keys, one series per kind, so one rule reads them all.
-    hold: 1000
+    caption: Open the ingest hop. It says what counts as lost there and the keys it is read from, one series per kind, so one rule reads every hop.
+    hold: 500
   - goto: /components/panel-2
     caption: Touch Panel 2 is simulated, so it can be broken on purpose.
   - click: { role: button, name: Open simulation }
@@ -47,11 +46,11 @@ steps:
   - wait: { selector: '[data-testid=pipeline]:has([data-testid=pipeline-hop-outpost] [data-testid=hop-loss]:text-is("0%")):has([data-testid=pipeline-hop-ingest] [data-testid=hop-loss]:text-is("0%"))' }
     caption: Every hop still reads 0%. A device that did not answer is not work the platform dropped. A hop that does lose a share is tinted, so it stands out.
     poster: true
-    hold: 1000
+    hold: 500
   - click: '[data-testid=pipeline-hop-outpost]'
     caption: Open the outpost hop. Each outpost's own share is a row.
   - click: '[data-testid=pipeline-hop-detail] [data-testid^=pipeline-component-] a'
     caption: Follow the outpost's row to its platform component.
   - wait: { selector: '[data-testid=vital-delivery-loss-ratio]' }
     caption: The outpost's delivery series live on its component, one per kind, like any other metric.
-    hold: 1000
+    hold: 500
