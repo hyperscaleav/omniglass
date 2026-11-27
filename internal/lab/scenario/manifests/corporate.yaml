@@ -56,6 +56,8 @@ standards:
     system_type: conference
     products:
       video-bar: kestrel-vroom
+      camera: kestrel-gaze-p2
+      recorder: recording-service
       main-display: boreal-edge-86
       room-mic: lyra-arc-a2
       dsp: polaris-dsp-16
@@ -187,6 +189,7 @@ calendar:
       attendance: { min: 2, max: 4 }
       walk_in_rate: 0.12
       hours: { start: 8, end: 18 }
+      recording_rate: 0.05
     mr65:
       booking_rate: 0.40
       slot_mix: { 15: 1, 30: 5, 60: 3 }
@@ -196,6 +199,7 @@ calendar:
       attendance: { min: 3, max: 8 }
       walk_in_rate: 0.08
       hours: { start: 8, end: 18 }
+      recording_rate: 0.15
     mr75:
       booking_rate: 0.45
       slot_mix: { 15: 1, 30: 4, 60: 4 }
@@ -205,6 +209,7 @@ calendar:
       attendance: { min: 4, max: 12 }
       walk_in_rate: 0.06
       hours: { start: 8, end: 18 }
+      recording_rate: 0.2
     mr86:
       booking_rate: 0.50
       slot_mix: { 30: 3, 60: 5 }
@@ -214,6 +219,7 @@ calendar:
       attendance: { min: 6, max: 16 }
       walk_in_rate: 0.04
       hours: { start: 8, end: 18 }
+      recording_rate: 0.3
     divisible-conference:
       booking_rate: 0.60
       slot_mix: { 30: 2, 60: 6 }
@@ -223,3 +229,4 @@ calendar:
       attendance: { min: 8, max: 30 }
       walk_in_rate: 0.02
       hours: { start: 8, end: 18 }
+      recording_rate: 0.5

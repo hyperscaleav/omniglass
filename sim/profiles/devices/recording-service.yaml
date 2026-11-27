@@ -8,6 +8,13 @@
 # healthy by its own account, how much it is carrying, whether its storage
 # is filling, and when a recording fails.
 #
+# In a lab with a calendar (#2775) its work is the lab's: it records the
+# meetings the lab calendar says are recorded (a seeded share of the meetings
+# held, set by the scenario's recording_rate; a no-show is never recorded) in
+# the rooms it speaks for, or in its own room when it sits in one. The recordings
+# in progress and the queue of those just finished, waiting to be written, are
+# read off the calendar. Without one it drifts on its own as it always did.
+#
 # Its one face is an HTTPS JSON API behind an api key header
 # (X-Recording-Key), the way a software service is watched: a health route
 # and a work route to poll, and a live feed that names a recording the
@@ -83,18 +90,24 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The work moves: recordings start and finish, the queue rises and drains,
-# and storage fills slowly between bounds. A scenario timeline can fail a
-# recording or fill the disk later.
+# The work moves: recordings start and finish and the queue rises and
+# drains, from the lab calendar where the service has rooms to read (those it
+# covers, else its own), else on their own. Storage fills slowly between
+# bounds on its own. A scenario timeline can fail a recording or fill the
+# disk later.
 behaviors:
-  - name: recordings_drift
+  # A recording is in progress while a recorded meeting runs in a room the
+  # service reads; it is queued for ten minutes after it ends, waiting to be
+  # written. The service reads the rooms it covers, else the room it sits in.
+  # A service with no meeting in any room (no calendar) drifts as before.
+  - name: room_recordings
     schedule:
       interval: 60s
     mutations:
       - path: status.recordings.in_progress
-        value: "{{ round 0 (clamp 0.0 12.0 (randStep 1.5 .State.status.recordings.in_progress)) }}"
+        value: '{{ $any := false }}{{ $n := 0 }}{{ range coveredRooms }}{{ if or (roomMeetingNow .site .building .room) (roomMeetingNext .site .building .room) }}{{ $any = true }}{{ end }}{{ with roomMeetingNow .site .building .room }}{{ if .recorded }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ end }}{{ if not coveredRooms }}{{ if or meetingNow meetingNext }}{{ $any = true }}{{ end }}{{ with meetingNow }}{{ if .recorded }}{{ $n = 1 }}{{ end }}{{ end }}{{ end }}{{ if $any }}{{ $n }}{{ else }}{{ round 0 (clamp 0.0 12.0 (randStep 1.5 .State.status.recordings.in_progress)) }}{{ end }}'
       - path: status.recordings.queue_depth
-        value: "{{ round 0 (clamp 0.0 40.0 (randStep 4.0 .State.status.recordings.queue_depth)) }}"
+        value: '{{ $any := false }}{{ $n := 0 }}{{ range coveredRooms }}{{ if or (roomMeetingNow .site .building .room) (roomMeetingNext .site .building .room) }}{{ $any = true }}{{ end }}{{ with roomMeetingPrev .site .building .room }}{{ if and .recorded (le (sub now .end) 600) }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ end }}{{ if not coveredRooms }}{{ if or meetingNow meetingNext }}{{ $any = true }}{{ end }}{{ with meetingPrev }}{{ if and .recorded (le (sub now .end) 600) }}{{ $n = 1 }}{{ end }}{{ end }}{{ end }}{{ if $any }}{{ $n }}{{ else }}{{ round 0 (clamp 0.0 40.0 (randStep 4.0 .State.status.recordings.queue_depth)) }}{{ end }}'
 
   - name: storage_drift
     schedule:

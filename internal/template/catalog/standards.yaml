@@ -189,6 +189,12 @@ templates:
         - name: video-bar
           label: Video Bar
           accepted_types: [video-bar]
+        - name: camera
+          label: Camera
+          accepted_types: [camera]
+        - name: recorder
+          label: Recorder
+          accepted_types: [generic-service]
         - name: main-display
           label: Main Display
           quorum: 2
