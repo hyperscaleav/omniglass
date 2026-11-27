@@ -401,6 +401,16 @@ by its key with `roomMeetingNow` and `roomMeetingNext`. A service that speaks fo
 service resolves its owner to the room key before it reads, through
 [the world the simulator holds](#the-world-it-holds).
 
+Devices that read the calendar:
+
+- **Boreal displays, projectors and signage** (#2768): the Edge display and the Beam projector wake
+  (power on, the conferencing input) two minutes before a booked meeting someone will attend, at the
+  start of a walk-in, and sleep five minutes after it ends, a no-show leaving them as they were; the
+  projector's light-source hours grow only while it is on. The Cast signage player follows the
+  building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
+  the world's knobs give them), and the
+  player plays inside them and stops outside.
+
 ### A simulated service posts from the start
 
 A webhook's URL carries a token the server mints when the endpoint is created, so no profile can name
