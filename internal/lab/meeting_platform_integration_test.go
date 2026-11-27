@@ -220,6 +220,13 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 				device = device || (u.Key == "ucc-device-id" && strings.HasPrefix(u.Value, "zd-"))
 			}
 			if room && device {
+				// The account's rooms list holds rooms only: a device id is
+				// bound as a device, so it never waits as a room (#2757).
+				for _, u := range unbound.Identities {
+					if u.Key == "ucc-room-id" && strings.HasPrefix(u.Value, "dev-") {
+						t.Fatalf("the conduit %s holds %q unbound as a room id, want device ids only as devices", conduit, u.Value)
+					}
+				}
 				break
 			}
 		}

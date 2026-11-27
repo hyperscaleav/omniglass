@@ -140,8 +140,8 @@ type SimWebhook struct {
 	Path   string
 	Scheme string
 	Secret string
-	// Identities are the values bound on the component, in order (#1747): a
-	// platform account's room ids, which the simulator adds to the account
+	// Identities are the values bound to a system on the component, in order
+	// (#1747): a platform account's room ids, which the simulator adds to the account
 	// so its reports name every bound room.
 	Identities []string
 }
@@ -223,15 +223,17 @@ func (p *PG) OutpostSimWebhooks(ctx context.Context, name string) (map[string]Si
 	return out, nil
 }
 
-// boundValues reads the distinct identity values bound on each conduit, in
-// order, keyed by conduit id.
+// boundValues reads the distinct identity values bound to a system on each
+// conduit, in order, keyed by conduit id: the room ids a platform account
+// lists. A value bound to a component is a device's id, which the account
+// lists as a device, never as a room (#2757).
 func (p *PG) boundValues(ctx context.Context, conduits []string) (map[string][]string, error) {
 	if len(conduits) == 0 {
 		return nil, nil
 	}
 	rows, err := p.pool.Query(ctx, `
 		select distinct conduit_id::text, value from identity_binding
-		where conduit_id = any($1::uuid[]) order by 1, 2`, conduits)
+		where conduit_id = any($1::uuid[]) and owner_kind = 'system' order by 1, 2`, conduits)
 	if err != nil {
 		return nil, err
 	}

@@ -421,6 +421,14 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 					t.Errorf("platform %s names %v, want it to name system %s", comp, h.Identities, s)
 				}
 			}
+			// A device id is no room: the account lists its rooms, so the
+			// simulator is handed room ids alone, never the device ids bound
+			// on the same conduit (#2757).
+			for _, id := range h.Identities {
+				if strings.HasPrefix(id, "dev-") {
+					t.Errorf("platform %s is handed %q to add as a room, want room ids only", comp, id)
+				}
+			}
 			if h.Path == "" || h.Secret == "" {
 				t.Errorf("platform %s posts to %q (secret set %v), want a path and a secret", comp, h.Path, h.Secret != "")
 			}
