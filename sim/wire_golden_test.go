@@ -5,10 +5,12 @@ package sim
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -18,13 +20,17 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 )
 
-// Golden wire transcripts (#2832): the bytes a simulated product put on the
-// wire when a YAML profile defined it, recorded once from that profile and
-// kept as testdata. A family that replaces a profile is held to them: the same
-// requests, in the same order, answered with the same statuses, headers,
-// bytes and state, and the same SNMP types and values. This file is the
-// recorder's script and the replay both families share; each family's own test
-// supplies its product list and script.
+// Golden wire transcripts (#2832, generalized by #2845): the bytes a simulated
+// product put on the wire, recorded once and kept as testdata. A family that
+// replaces a profile is held to the transcript the profile recorded: the same
+// requests, in the same order, answered with the same statuses, headers, bytes
+// and state, and the same SNMP types and values. A family with no profile
+// behind it records its own and holds itself to it.
+//
+// Nothing here is a family's: each family supplies a wireFamily (its products,
+// its script of requests, SNMP reads, drifting behaviors and room day), and the
+// recorder and the replay below run it. Recording the next family is a script
+// file and one command, documented in testdata/wire/README.md.
 //
 // A transcript is deterministic: the device's clock is pinned, its uptime
 // anchor fixed, its behaviors held still, and its id and hostname are the
@@ -88,16 +94,73 @@ type wireTranscript struct {
 	RoomDays map[string][]wireChange `json:"room_days,omitempty"`
 }
 
-// wireSource says where a transcript was recorded from.
-const wireSource = "recorded from the YAML profile before its deletion (#2832); see sim/testdata/wire/README.md"
+// defaultWireDir is where a family's goldens live unless it says otherwise.
+const defaultWireDir = "testdata/wire"
 
-func goldenPath(product string) string {
-	return filepath.Join("testdata", "wire", product+".json")
+// wireFamily is everything the harness needs to record and replay one family's
+// transcripts: it is the only thing a family writes.
+type wireFamily struct {
+	// Name is the family's name, what the recorder is asked for.
+	Name string
+	// Products are the products it records, one transcript each.
+	Products []string
+	// Engine is an engine serving the family (a fresh one per call).
+	Engine func(t testing.TB) *Engine
+	// Dir is the golden directory, defaultWireDir when empty.
+	Dir string
+	// Source is the transcripts' provenance note.
+	Source string
+	// Frozen, when set, says why the family must never be re-recorded: its
+	// transcripts came from a profile that no longer exists, and recording
+	// the family from itself would make the hold on that profile vacuous.
+	Frozen string
+	// BootEpoch is the state path the device's uptime anchor lives at,
+	// "status.device.boot_epoch" when empty.
+	BootEpoch string
+	// Script is the HTTP requests of the transcript, Quirk steps last.
+	Script []wireStep
+	// Writes move SNMP-visible state away from rest between the two SNMP
+	// reads; OIDs are the scalars read, Walks the subtrees walked. All three
+	// are empty for a family with no SNMP face.
+	Writes      []wireStep
+	OIDs, Walks []string
+	// Ticks are the drifting behaviors ticked tickRuns times each.
+	Ticks []tickPlan
+	// RoomDay walks the device through the parity room day and returns what
+	// moved; the harness runs it once with the lab calendar and once without.
+	// Nil for a family that does not follow a room.
+	RoomDay func(d *Device, at *time.Time) []wireChange
+	// Body maps a recorded response body to what the family answers now, for
+	// a difference the family means (a product naming its own model where the
+	// profile named one for all). Nil compares the bytes as recorded.
+	Body func(t *testing.T, product, golden string) string
 }
 
-func writeGolden(t *testing.T, tr wireTranscript) {
+func (f wireFamily) dir() string {
+	if f.Dir != "" {
+		return f.Dir
+	}
+	return defaultWireDir
+}
+
+func (f wireFamily) bootEpoch() string {
+	if f.BootEpoch != "" {
+		return f.BootEpoch
+	}
+	return "status.device.boot_epoch"
+}
+
+// wireFamilies is every family the recorder knows; a family's script file adds
+// itself here.
+var wireFamilies []wireFamily
+
+func goldenPath(f wireFamily, product string) string {
+	return filepath.Join(f.dir(), product+".json")
+}
+
+func writeGolden(t *testing.T, f wireFamily, tr wireTranscript) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(goldenPath(tr.Product)), 0o755); err != nil {
+	if err := os.MkdirAll(f.dir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	var buf bytes.Buffer
@@ -107,14 +170,14 @@ func writeGolden(t *testing.T, tr wireTranscript) {
 	if err := enc.Encode(tr); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(goldenPath(tr.Product), buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(goldenPath(f, tr.Product), buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func readGolden(t *testing.T, product string) wireTranscript {
+func readGolden(t *testing.T, f wireFamily, product string) wireTranscript {
 	t.Helper()
-	b, err := os.ReadFile(goldenPath(product))
+	b, err := os.ReadFile(goldenPath(f, product))
 	if err != nil {
 		t.Fatalf("the golden transcript of %s: %v", product, err)
 	}
@@ -127,8 +190,9 @@ func readGolden(t *testing.T, product string) wireTranscript {
 
 // wireDevice serves one product of the engine for a transcript: started, its
 // behaviors held still, its clock pinned and its uptime anchor fixed.
-func wireDevice(t *testing.T, e *Engine, product string) *Device {
+func wireDevice(t *testing.T, fam wireFamily, product string) *Device {
 	t.Helper()
+	e := fam.Engine(t)
 	r, ok := e.cat.ForProduct(product)
 	if !ok {
 		t.Fatalf("the catalog simulates no %s", product)
@@ -145,7 +209,9 @@ func wireDevice(t *testing.T, e *Engine, product string) *Device {
 	at := wireClock
 	d.SetClock(func() time.Time { return at })
 	s := d.State()
-	s["status"].(map[string]any)["device"].(map[string]any)["boot_epoch"] = wireBoot
+	if err := SetPath(s, fam.bootEpoch(), wireBoot); err != nil {
+		t.Fatal(err)
+	}
 	d.SetState(s, d.Version)
 	return d
 }
@@ -284,8 +350,8 @@ func (w *watchChanges) sample(at string) {
 	}
 }
 
-// roomDay is the room day the behavior transcripts walk: the parity day
-// (calendar's hand-checked room day) at the parity room.
+// roomDayEngine serves the product in the parity room (calendar's hand-checked
+// room day), at the day's start, with the lab calendar or without it.
 func roomDayEngine(t *testing.T, e *Engine, product string, noCalendar bool) (*Device, *time.Time) {
 	t.Helper()
 	r, ok := e.cat.ForProduct(product)
@@ -305,4 +371,255 @@ func roomDayEngine(t *testing.T, e *Engine, product string, noCalendar bool) (*D
 		d.calSrc = func() *calendar.Calendar { return nil }
 	}
 	return d, &at
+}
+
+// tickRuns is how many times each drifting behavior is ticked in a
+// transcript, and the sequence of the paths it moves is recorded.
+const tickRuns = 24
+
+// tickPlan names a behavior to tick and the paths whose values are recorded
+// after each tick.
+type tickPlan struct {
+	name  string
+	paths []string
+}
+
+// recordTicks ticks each behavior tickRuns times and records the values.
+func recordTicks(d *Device, plans []tickPlan) map[string][]any {
+	out := map[string][]any{}
+	for _, p := range plans {
+		var seq []any
+		for i := 0; i < tickRuns; i++ {
+			if !d.TickBehavior(p.name) {
+				panic("no behavior " + p.name)
+			}
+			row := map[string]any{}
+			for _, path := range p.paths {
+				row[path] = d.ReadPath(path)
+			}
+			seq = append(seq, row)
+		}
+		out[p.name] = seq
+	}
+	return out
+}
+
+// roomDayWalk is the pinned room day a room-following device is walked
+// through: from..to in steps, an operator's hand in the middle of meetings
+// where the parity day puts one.
+func roomDayWalk(d *Device, at *time.Time, w *watchChanges, from, to string, step time.Duration, tick func(hms string), operator func(hms string)) {
+	for tm := parityAt(from); !tm.After(parityAt(to)); tm = tm.Add(step) {
+		*at = tm
+		hms := tm.Format("15:04:05")
+		operator(hms)
+		tick(hms)
+		w.sample(hms)
+	}
+}
+
+// roomDays walks the product through the family's room day, with the lab
+// calendar and without it.
+func roomDays(t *testing.T, fam wireFamily, product string) map[string][]wireChange {
+	out := map[string][]wireChange{}
+	for _, noCal := range []bool{false, true} {
+		key := "calendar"
+		if noCal {
+			key = "no-calendar"
+		}
+		d, at := roomDayEngine(t, fam.Engine(t), product, noCal)
+		out[key] = fam.RoomDay(d, at)
+	}
+	return out
+}
+
+// collectWire plays the family's script against one product and returns the
+// transcript: the recorder writes it, the replay compares it. Both run this one
+// path, so what is recorded and what is replayed cannot differ in how it is
+// gathered.
+func collectWire(t *testing.T, fam wireFamily, product string) wireTranscript {
+	t.Helper()
+	tr := wireTranscript{Product: product, Source: fam.Source}
+	d := wireDevice(t, fam, product)
+	tr.State = stateJSON(d)
+	if fam.OIDs != nil {
+		tr.SNMP = map[string][]wireOID{"rest": wireSNMPGet(t, d, fam.OIDs)}
+		tr.Walks = map[string][]wireOID{}
+		for _, w := range fam.Walks {
+			tr.Walks[w+"@rest"] = wireSNMPWalk(t, d, w)
+		}
+		runWireHTTP(t, d, fam.Writes)
+		tr.SNMP["written"] = wireSNMPGet(t, d, fam.OIDs)
+		for _, w := range fam.Walks {
+			tr.Walks[w+"@written"] = wireSNMPWalk(t, d, w)
+		}
+		if len(tr.Walks) == 0 {
+			tr.Walks = nil
+		}
+		d = wireDevice(t, fam, product)
+	}
+	tr.HTTP = runWireHTTP(t, d, fam.Script)
+	if len(fam.Ticks) > 0 {
+		tr.Ticks = recordTicks(wireDevice(t, fam, product), fam.Ticks)
+	}
+	if fam.RoomDay != nil {
+		tr.RoomDays = roomDays(t, fam, product)
+	}
+	return tr
+}
+
+// diffWire is what a replayed transcript differs in from the golden, one line
+// each. A step marked Quirk is an accident of the profile's templates the
+// family refuses instead: it must answer 400 and change nothing, and its bytes
+// are not compared.
+func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTranscript) []string {
+	t.Helper()
+	var out []string
+	add := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
+	if g, w := canon(t, got.State), canon(t, want.State); g != w {
+		add("initial state:\n got %s\nwant %s", g, w)
+	}
+	for _, k := range []string{"rest", "written"} {
+		if !reflect.DeepEqual(got.SNMP[k], want.SNMP[k]) {
+			add("SNMP %s:\n got %+v\nwant %+v", k, got.SNMP[k], want.SNMP[k])
+		}
+	}
+	for k, w := range want.Walks {
+		if !reflect.DeepEqual(got.Walks[k], w) {
+			add("SNMP walk %s:\n got %+v\nwant %+v", k, got.Walks[k], w)
+		}
+	}
+	if len(got.HTTP) != len(want.HTTP) {
+		return append(out, fmt.Sprintf("%d steps replayed, %d recorded", len(got.HTTP), len(want.HTTP)))
+	}
+	for i, w := range want.HTTP {
+		have := got.HTTP[i]
+		name := have.Name
+		if w.Quirk != "" {
+			if have.Status != 400 || have.StateChange {
+				add("%s: %s: status %d, state changed %v; want a refusal that changes nothing (the profile: %s)", product, name, have.Status, have.StateChange, w.Quirk)
+			}
+			continue
+		}
+		if have.Status != w.Status {
+			add("%s: %s: status %d, want %d", product, name, have.Status, w.Status)
+		}
+		if !reflect.DeepEqual(have.Headers, w.Headers) {
+			add("%s: %s: headers %v, want %v", product, name, have.Headers, w.Headers)
+		}
+		wantBody := w.Response
+		if fam.Body != nil {
+			wantBody = fam.Body(t, product, wantBody)
+		}
+		if have.Response != wantBody {
+			add("%s: %s: body differs from the recorded one:\n got %q\nwant %q", product, name, firstDiff(have.Response, wantBody), firstDiff(wantBody, have.Response))
+		}
+		if have.StateChange != w.StateChange {
+			add("%s: %s: state changed %v, recorded %v", product, name, have.StateChange, w.StateChange)
+		}
+		if w.State != nil && canon(t, have.State) != canon(t, w.State) {
+			add("%s: %s: state after:\n got %s\nwant %s", product, name, canon(t, have.State), canon(t, w.State))
+		}
+	}
+	if !sameJSON(t, got.Ticks, want.Ticks) {
+		add("%s: drift sequences differ from the recorded seeded run:\n got %v\nwant %v", product, got.Ticks, want.Ticks)
+	}
+	gd, wd := canonChanges(t, got.RoomDays), canonChanges(t, want.RoomDays)
+	for key := range want.RoomDays {
+		if !reflect.DeepEqual(gd[key], wd[key]) {
+			add("%s: the %s room day differs from the recorded one:\n got %v\nwant %v", product, key, firstChanges(got.RoomDays[key]), firstChanges(want.RoomDays[key]))
+		}
+	}
+	return out
+}
+
+// replayWire holds one product of a family to its golden transcript.
+func replayWire(t *testing.T, fam wireFamily, product string) {
+	t.Helper()
+	for _, d := range diffWire(t, fam, product, collectWire(t, fam, product), readGolden(t, fam, product)) {
+		t.Error(d)
+	}
+}
+
+// recordable is why a family may not be recorded, nil when it may.
+func recordable(fam wireFamily) error {
+	if fam.Frozen != "" {
+		return fmt.Errorf("family %s is frozen: %s", fam.Name, fam.Frozen)
+	}
+	return nil
+}
+
+// wireRecordFamily names the family TestRecordWire records, e.g.
+// go test ./sim -run TestRecordWire -wire.family=<name>.
+var wireRecordFamily = flag.String("wire.family", "", "record the golden wire transcripts of the named family (see testdata/wire/README.md)")
+
+// TestRecordWire is the recorder: it plays the named family's script and
+// writes a transcript per product. It does nothing unless -wire.family is set,
+// and refuses a family whose goldens came from a profile that is gone.
+func TestRecordWire(t *testing.T) {
+	if *wireRecordFamily == "" {
+		t.Skip("set -wire.family=<name> to record a family's transcripts")
+	}
+	for _, fam := range wireFamilies {
+		if fam.Name != *wireRecordFamily {
+			continue
+		}
+		if err := recordable(fam); err != nil {
+			t.Fatal(err)
+		}
+		for _, product := range fam.Products {
+			writeGolden(t, fam, collectWire(t, fam, product))
+		}
+		return
+	}
+	names := make([]string, len(wireFamilies))
+	for i, f := range wireFamilies {
+		names[i] = f.Name
+	}
+	t.Fatalf("no family %q to record; known: %v", *wireRecordFamily, names)
+}
+
+func canon(t *testing.T, raw []byte) string {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatalf("not JSON: %v: %s", err, raw)
+	}
+	out, _ := json.Marshal(v)
+	return string(out)
+}
+
+func canonChanges(t *testing.T, m map[string][]wireChange) map[string][]string {
+	out := map[string][]string{}
+	for k, v := range m {
+		for _, c := range v {
+			b, _ := json.Marshal(c)
+			out[k] = append(out[k], string(b))
+		}
+	}
+	return out
+}
+
+func firstChanges(c []wireChange) []wireChange {
+	if len(c) > 12 {
+		return c[:12]
+	}
+	return c
+}
+
+func sameJSON(t *testing.T, a, b any) bool {
+	t.Helper()
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return bytes.Equal(x, y)
+}
+
+// firstDiff is the text of a from where it first differs from b, to a few
+// lines on.
+func firstDiff(a, b string) string {
+	i := 0
+	for i < len(a) && i < len(b) && a[i] == b[i] {
+		i++
+	}
+	start := max(i-40, 0)
+	return a[start:min(i+80, len(a))]
 }

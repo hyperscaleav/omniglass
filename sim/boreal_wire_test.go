@@ -153,15 +153,6 @@ func castScript() []wireStep {
 	}
 }
 
-// tickRuns is how many times each drifting behavior is ticked in a
-// transcript, and the sequence of the paths it moves is recorded.
-const tickRuns = 24
-
-type tickPlan struct {
-	name  string
-	paths []string
-}
-
 func edgeTicks() []tickPlan {
 	return []tickPlan{{"temperature_drift", []string{"status.display.temperature"}}}
 }
@@ -177,39 +168,6 @@ func castTicks() []tickPlan {
 	return []tickPlan{
 		{"storage_drift", []string{"status.storage.used_percent"}},
 		{"playlist_advance", []string{"status.playback.index", "status.playback.content"}},
-	}
-}
-
-// recordTicks ticks each behavior tickRuns times and records the values.
-func recordTicks(d *Device, plans []tickPlan) map[string][]any {
-	out := map[string][]any{}
-	for _, p := range plans {
-		var seq []any
-		for i := 0; i < tickRuns; i++ {
-			if !d.TickBehavior(p.name) {
-				panic("no behavior " + p.name)
-			}
-			row := map[string]any{}
-			for _, path := range p.paths {
-				row[path] = d.ReadPath(path)
-			}
-			seq = append(seq, row)
-		}
-		out[p.name] = seq
-	}
-	return out
-}
-
-// roomDayWalk is the pinned room day a room-following device is walked
-// through: from..to in steps, an operator's hand in the middle of meetings
-// where the parity day puts one.
-func roomDayWalk(d *Device, at *time.Time, w *watchChanges, from, to string, step time.Duration, tick func(hms string), operator func(hms string)) {
-	for tm := parityAt(from); !tm.After(parityAt(to)); tm = tm.Add(step) {
-		*at = tm
-		hms := tm.Format("15:04:05")
-		operator(hms)
-		tick(hms)
-		w.sample(hms)
 	}
 }
 
@@ -239,53 +197,71 @@ func displayOperator(d *Device, inputPath string) func(string) {
 	}
 }
 
-var displayWatch = func(input string) []string {
+func displayWatch(input string) []string {
 	return []string{"status.device.power", input, "status.sim.busy", "status.sim.known", "status.sim.awake", "status.sim.until"}
 }
 
-// recordRoomDays walks the product through the parity room day, with and
-// without a calendar, and returns what moved.
-func roomDayFor(t *testing.T, newEngine func() *Engine, product string) map[string][]wireChange {
-	out := map[string][]wireChange{}
-	for _, noCal := range []bool{false, true} {
-		key := "calendar"
-		if noCal {
-			key = "no-calendar"
-		}
-		e := newEngine()
-		d, at := roomDayEngine(t, e, product, noCal)
-		var w *watchChanges
-		switch product {
-		case borealCastProduct:
-			w = newWatch(d, "status.playback.state", "status.playback.index", "status.playback.content", "status.sim.open")
-			step := 0
-			operator := func(hms string) {
-				step++
-				if step%3 == 0 {
-					d.TickBehavior("playlist_advance")
-				}
-				s := d.State()
-				switch hms {
-				case "03:00:00":
-					s["status"].(map[string]any)["playback"].(map[string]any)["state"] = "playing"
-					d.SetState(s, d.Version+1)
-				case "10:00:00":
-					s["status"].(map[string]any)["playback"].(map[string]any)["state"] = "paused"
-					d.SetState(s, d.Version+1)
-				}
-			}
-			w.sample("start")
-			roomDayWalk(d, at, w, "00:00:00", "23:59:00", time.Minute, func(string) { d.TickBehavior("building_day") }, operator)
-		default:
-			input := "status.display.input"
-			if product == borealBeamProduct {
-				input = "status.projector.input"
-			}
-			w = newWatch(d, displayWatch(input)...)
-			w.sample("start")
-			roomDayWalk(d, at, w, "07:00:00", "15:00:00", 30*time.Second, func(string) { d.TickBehavior("room_meeting") }, displayOperator(d, input))
-		}
-		out[key] = w.out
+// displayRoomDay walks a display or projector through the parity room day: it
+// follows the room's meetings, and an operator's hand lands in the middle of
+// one.
+func displayRoomDay(input string) func(d *Device, at *time.Time) []wireChange {
+	return func(d *Device, at *time.Time) []wireChange {
+		w := newWatch(d, displayWatch(input)...)
+		w.sample("start")
+		roomDayWalk(d, at, w, "07:00:00", "15:00:00", 30*time.Second, func(string) { d.TickBehavior("room_meeting") }, displayOperator(d, input))
+		return w.out
 	}
-	return out
 }
+
+// castRoomDay walks the player through the building's day, not the room's
+// meetings: the building opens and closes it, and an operator pauses it.
+func castRoomDay(d *Device, at *time.Time) []wireChange {
+	w := newWatch(d, "status.playback.state", "status.playback.index", "status.playback.content", "status.sim.open")
+	step := 0
+	operator := func(hms string) {
+		step++
+		if step%3 == 0 {
+			d.TickBehavior("playlist_advance")
+		}
+		s := d.State()
+		switch hms {
+		case "03:00:00":
+			s["status"].(map[string]any)["playback"].(map[string]any)["state"] = "playing"
+			d.SetState(s, d.Version+1)
+		case "10:00:00":
+			s["status"].(map[string]any)["playback"].(map[string]any)["state"] = "paused"
+			d.SetState(s, d.Version+1)
+		}
+	}
+	w.sample("start")
+	roomDayWalk(d, at, w, "00:00:00", "23:59:00", time.Minute, func(string) { d.TickBehavior("building_day") }, operator)
+	return w.out
+}
+
+// The Boreal families, as the harness records and replays them. Their goldens
+// were recorded from the YAML profiles the families replaced, so they are
+// frozen: recording one from the family would make the hold on the profile
+// vacuous.
+const borealFrozen = "recorded from the YAML profile before its deletion (#2832); re-recording from the Go family would hold it to itself"
+
+var borealWalks = []string{"1.3.6.1.4.1.55520", "1.3.6.1.2.1.1"}
+
+func borealFamily(name string, products []string, script, writes []wireStep, oids, walks []string, ticks []tickPlan, roomDay func(*Device, *time.Time) []wireChange, body func(*testing.T, string, string) string) wireFamily {
+	return wireFamily{
+		Name: name, Products: products, Engine: shippedEngineOf, Source: wireBorealSource, Frozen: borealFrozen,
+		Script: script, Writes: writes, OIDs: oids, Walks: walks, Ticks: ticks, RoomDay: roomDay, Body: body,
+	}
+}
+
+// wireBorealSource is the provenance note the Boreal transcripts carry.
+const wireBorealSource = "recorded from the YAML profile before its deletion (#2832); see sim/testdata/wire/README.md"
+
+func shippedEngineOf(t testing.TB) *Engine { return shippedEngine(t) }
+
+var (
+	borealEdgeWire = borealFamily("boreal-edge", borealEdgeProducts, edgeScript(), edgeWrites(), edgeOIDs, borealWalks, edgeTicks(), displayRoomDay("status.display.input"), asOwnModel)
+	borealBeamWire = borealFamily("boreal-beam", []string{borealBeamProduct}, beamScript(), beamWrites(), beamOIDs, borealWalks, beamTicks(), displayRoomDay("status.projector.input"), nil)
+	borealCastWire = borealFamily("boreal-cast", []string{borealCastProduct}, castScript(), nil, nil, nil, castTicks(), castRoomDay, nil)
+)
+
+func init() { wireFamilies = append(wireFamilies, borealEdgeWire, borealBeamWire, borealCastWire) }

@@ -26,7 +26,7 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 | `sim/simhub/` | Registry of the simulators connected to a server. |
 | `sim/simoutpost/` | The simulator running beside or inside an outpost. |
 | `sim/mailsim/` | The simulated mail server. |
-| `sim/simtest/` | Test helpers for loopback addressing. |
+| `sim/simtest/` | Test helpers for loopback addressing. `simtest/shipped` builds an engine or catalog over the shipped YAML profiles and every Go family, the one door tests outside `sim/profile` use. |
 
 ## Running it
 
@@ -56,16 +56,22 @@ resolves to a family when one claims it, else to its YAML profile. The worked ex
 `sim/device/borealedge`, the Boreal Edge display, with `borealbeam` and `borealcast` beside it.
 
 1. **Record the profile first**, when one exists. On the base branch, play the family's script against
-   the YAML profile and commit the transcript as testdata (`sim/testdata/wire`, `sim/wire_golden_test.go`
-   and `sim/boreal_wire_test.go` are the harness and a script). Then write the family and make
-   `sim/boreal_parity_test.go`'s pattern pass: same status, headers, bytes, state, SNMP types and
-   values, drift sequences and room-day behavior. Delete the profile and its templates in the same slice.
+   the YAML profile and commit the transcript as testdata. A script is one `wireFamily` value (its
+   products, requests, SNMP reads, drifting behaviors and room day) in a `sim/<family>_wire_test.go`,
+   recorded with one command, `go test ./sim -run 'TestRecordWire$' -wire.family=<name>`; see
+   [sim/testdata/wire/README.md](testdata/wire/README.md). Then write the family and add its replay,
+   `replayWire(t, family, product)`: same status, headers, bytes, state, SNMP types and values, drift
+   sequences and room-day behavior (`sim/boreal_parity_test.go` is the worked example,
+   `sim/wire_family_test.go` the smallest one). Delete the profile and its templates in the same
+   slice, and mark the family `Frozen` so its transcripts are never re-recorded from itself. A family
+   with no profile behind it records its own the same way.
 2. **The model table.** A typed `Row` (`Product`, `Diagonal`, `Resolution`, and whatever else the
    models differ by) written once, wrapped with `spec.Table`, each row's `Model`, `Summary` and `State`
    overlay saying what the product reports of itself. Five sizes are five rows, never five packages;
    a model gets a package only when its API differs.
 3. **Interfaces and state.** Declare the surfaces as `profile.Interface` (protocol, port, auth) and the
-   state tree with its defaults. A read-derived value (uptime) is a `Computed` field.
+   state tree with its defaults. A read-derived uptime is a typed `spec.Elapsed{Path, Since}` in `Spec.Elapsed`: the engine seeds an
+   unset anchor, reads whole seconds since it at `Path`, and a reboot resets it by writing the anchor.
 4. **Answers.** JSON is a typed struct through `httpapi.Document` (or `httpapi.Status`). A route that
    sets state from a body is an `httpapi.Control`, a reboot an `httpapi.Action`; SNMP is
    `sim/surface/snmp` plus typed scalars (`surface.Text`, `surface.Integer`, each `.At(statePath)`);
@@ -77,7 +83,34 @@ resolves to a family when one claims it, else to its YAML profile. The worked ex
    second family will want it.
 6. **Tests.** `spectest.Conform(t, Spec())` over the whole table, then the family's own: a
    `spectest.NewFake` stands in for the device, so a handler, a surface and a tick are unit tests with
-   no engine. The engine-level proof is the parity test above.
+   no engine. The engine-level proof is the parity test above. A test outside package `sim` that needs an
+   engine takes `shipped.Engine(t)` (or `shipped.Catalog(t)`) from `sim/simtest/shipped`, and inside
+   package `sim` `shippedEngine(t)`: both serve the YAML profiles and every family, so converting a
+   product to a family changes no test. A test never builds an engine from the YAML store
+   (`sim.NewEngine(store, ...)`); `internal/build`'s `TestTestsBuildTheirEngineOverTheShippedCatalog`
+   fails it.
+
+### Policies
+
+Written once here, so the next family repeats no workaround.
+
+- **Quirk steps last.** A request the YAML profile answered with an accident of its templates (an
+  unquoted word written into a JSON document, `<no value>` written to state) is marked `Quirk` in the
+  script: the family refuses it with a 400 that changes nothing, and the replay checks that
+  divergence, not the bytes. Such a request leaves state behind in the recording, which would carry
+  into every step after it, so the quirk steps go at the end of the script.
+- **`httpapi.Control` refuses an unreadable body.** A body that was sent but is not a JSON object
+  (text, an array, `null`, a truncated document) is a 400 `{"error":"the request body is not a JSON
+  object"}` and writes nothing, as a field outside its list or of the wrong type already is. An empty
+  body is a request with every field missing, refused by name as before. A family needs no check of
+  its own for either.
+- **A test that names a shipped product pins it.** `internal/build`'s catalog guard
+  (`TestTestsDoNotBorrowTheSeedCatalog`) fails a `*_test.go` that names a seeded product SKU outside its
+  pin files. An end-to-end test whose point is a shipped product (a lab test reading the Boreal Edge off
+  the live simulator, an API test holding a component's simulation route to a family's identity) is added
+  to that guard's `pinFiles` with a one-line reason and the issue; a behavior test mints its own product
+  (`storagetest.MintProduct`) instead. Converting a family moves no pin: the SKU is the same.
+- **Uptime is `spec.Elapsed`.** A family never registers a YAML `Computed` field.
 
 `sim/spec/spectest` is also a small family used by the engine's tests.
 

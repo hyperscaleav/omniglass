@@ -8,7 +8,7 @@ refs: [2829, 2826]
 
 - **Date:** 2026-11-27 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/)
 - **Decision:** `sim/spec` defines `Definition` (id, kind, identity, surfaces, initial state, products,
-  behaviors, computed fields, push and webhook faces). A YAML profile satisfies it through an adapter
+  behaviors, elapsed uptimes, push and webhook faces). A YAML profile satisfies it through an adapter
   (`spec.FromProfile`); a Go family satisfies it as a `spec.Spec` (identity, a typed `Model` table,
   interfaces and ports, the state tree, `HTTPRoute` and `Command` handlers as Go funcs, an `Animator`
   seam). `spec.Catalog` resolves a product: a family that claims it (its name or one of its models)
@@ -23,3 +23,7 @@ refs: [2829, 2826]
   a family's API as it shows a profile's. The `Animator` is the seam the shared behavior primitives
   plug into; until they land a family may run YAML-style behaviors through the existing machinery.
   The Go handlers are not rendered from templates: a response is a typed Go value the engine encodes.
+- **Amended (#2845):** a family's read-derived uptime is a typed `spec.Elapsed{Path, Since}` in
+  `Spec.Elapsed`, not the YAML `profile.Computed` it first reused; `Definition.ElapsedList` replaces
+  `ComputedList`, and a YAML profile's `computed:` block is presented through the same list. The value
+  read, and so every wire transcript, is unchanged.

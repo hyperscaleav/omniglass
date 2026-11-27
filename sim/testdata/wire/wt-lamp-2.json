@@ -1,0 +1,435 @@
+{
+ "product": "wt-lamp-2",
+ "source": "recorded from the test-only lamp family; see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "model": "Lamp 2"
+   }
+  },
+  "status": {
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   },
+   "lamp": {
+    "busy": false,
+    "level": 50,
+    "power": "on",
+    "temperature": 40
+   }
+  }
+ },
+ "http": [
+  {
+   "Name": "the status document",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"level\":50,\"power\":\"on\",\"temperature\":40,\"uptime\":3600}",
+   "state_change": false
+  },
+  {
+   "Name": "an unknown path",
+   "Method": "GET",
+   "Path": "/nope",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "power off",
+   "Method": "POST",
+   "Path": "/api/power",
+   "Body": "{\"power\": \"off\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"power\": \"off\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "model": "Lamp 2"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "lamp": {
+      "busy": false,
+      "level": 50,
+      "power": "off",
+      "temperature": 40
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "power refused",
+   "Method": "POST",
+   "Path": "/api/power",
+   "Body": "{\"power\": \"dim\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.lamp.power\",\"value\":\"dim\",\"enum\":[\"on\",\"off\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "model": "Lamp 2"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "lamp": {
+      "busy": false,
+      "level": 50,
+      "power": "off",
+      "temperature": 40
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "level 80",
+   "Method": "POST",
+   "Path": "/api/level",
+   "Body": "{\"level\": 80}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"power\": \"off\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "model": "Lamp 2"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "lamp": {
+      "busy": false,
+      "level": 80,
+      "power": "off",
+      "temperature": 40
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "power with a body no one can read",
+   "Method": "POST",
+   "Path": "/api/power",
+   "Body": "power=on",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"the request body is not a JSON object\"}",
+   "state_change": false
+  },
+  {
+   "Name": "reboot",
+   "Method": "POST",
+   "Path": "/api/admin/reboot",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "model": "Lamp 2"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "lamp": {
+      "busy": false,
+      "level": 80,
+      "power": "off",
+      "temperature": 40
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status document after a reboot",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"level\":80,\"power\":\"off\",\"temperature\":40,\"uptime\":0}",
+   "state_change": false
+  },
+  {
+   "Name": "level a word",
+   "Method": "POST",
+   "Path": "/api/level",
+   "Body": "{\"level\": \"loud\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote the word into state",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"level must be a number\"}",
+   "state": {
+    "configuration": {
+     "device": {
+      "model": "Lamp 2"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "lamp": {
+      "busy": false,
+      "level": 80,
+      "power": "off",
+      "temperature": 40
+     }
+    }
+   },
+   "state_change": false
+  }
+ ],
+ "snmp": {
+  "rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Lamp 2"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.99999.1.1.0",
+    "type": "OctetString",
+    "value": "on"
+   }
+  ],
+  "written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Lamp 2"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.99999.1.1.0",
+    "type": "OctetString",
+    "value": "off"
+   }
+  ]
+ },
+ "walks": {
+  "1.3.6.1.2.1.1@rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Lamp 2"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ],
+  "1.3.6.1.2.1.1@written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Lamp 2"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ]
+ },
+ "ticks": {
+  "temperature_drift": [
+   {
+    "status.lamp.temperature": 39.2
+   },
+   {
+    "status.lamp.temperature": 39.3
+   },
+   {
+    "status.lamp.temperature": 40.2
+   },
+   {
+    "status.lamp.temperature": 41.1
+   },
+   {
+    "status.lamp.temperature": 41.2
+   },
+   {
+    "status.lamp.temperature": 41.6
+   },
+   {
+    "status.lamp.temperature": 41.1
+   },
+   {
+    "status.lamp.temperature": 41.8
+   },
+   {
+    "status.lamp.temperature": 42.3
+   },
+   {
+    "status.lamp.temperature": 41.3
+   },
+   {
+    "status.lamp.temperature": 41.8
+   },
+   {
+    "status.lamp.temperature": 41.6
+   },
+   {
+    "status.lamp.temperature": 41.3
+   },
+   {
+    "status.lamp.temperature": 42.2
+   },
+   {
+    "status.lamp.temperature": 41.9
+   },
+   {
+    "status.lamp.temperature": 42.8
+   },
+   {
+    "status.lamp.temperature": 42.2
+   },
+   {
+    "status.lamp.temperature": 42.4
+   },
+   {
+    "status.lamp.temperature": 41.7
+   },
+   {
+    "status.lamp.temperature": 42.5
+   },
+   {
+    "status.lamp.temperature": 41.5
+   },
+   {
+    "status.lamp.temperature": 41.6
+   },
+   {
+    "status.lamp.temperature": 40.7
+   },
+   {
+    "status.lamp.temperature": 41.5
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.lamp.busy",
+    "value": false
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.lamp.busy",
+    "value": true
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.lamp.busy",
+    "value": false
+   }
+  ]
+ }
+}
