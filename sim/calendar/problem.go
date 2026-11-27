@@ -292,3 +292,12 @@ func mapProblem(m map[string]any, p Problem) {
 		m["pin_value"] = pin.Value
 	}
 }
+
+// clone is an own copy of the pin, nil for none.
+func (p *Pin) clone() *Pin {
+	if p == nil {
+		return nil
+	}
+	c := *p
+	return &c
+}

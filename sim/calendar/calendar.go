@@ -143,6 +143,7 @@ func MeetingEntry(start, end time.Time, room Room, m Meeting) Entry {
 
 // ProblemEntry is a problem entry; its kind and payload agree by construction.
 func ProblemEntry(start, end time.Time, room Room, p Problem) Entry {
+	p.Impairment.Pin = p.Impairment.Pin.clone() // own copy: a reader's write cannot reach the spec
 	return Entry{Kind: KindProblem, Start: start, End: end, Room: room, payload: p}
 }
 
@@ -155,6 +156,7 @@ func (e Entry) AsMeeting() (Meeting, bool) {
 // AsProblem is the entry's problem, and false for an entry of another kind.
 func (e Entry) AsProblem() (Problem, bool) {
 	p, ok := e.payload.(Problem)
+	p.Impairment.Pin = p.Impairment.Pin.clone()
 	return p, ok && e.Kind == KindProblem
 }
 

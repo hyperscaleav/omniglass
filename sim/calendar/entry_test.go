@@ -124,3 +124,16 @@ func TestEntryExportsNoPayloadField(t *testing.T) {
 		}
 	}
 }
+
+func TestAProblemEntryOwnsItsPin(t *testing.T) {
+	pin := &Pin{Path: "status.device.power", Value: "off"}
+	e := ProblemEntry(t0, t0.Add(time.Hour), roomA, Problem{Name: "p", Impairment: Impairment{Pin: pin}})
+	got, _ := e.AsProblem()
+	got.Impairment.Pin.Value = "on"
+	if pin.Value != "off" {
+		t.Fatal("a reader's write reached the spec's pin")
+	}
+	if again, _ := e.AsProblem(); again.Impairment.Pin.Value != "off" {
+		t.Fatal("a reader's write reached the entry's pin")
+	}
+}
