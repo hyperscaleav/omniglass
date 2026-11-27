@@ -64,6 +64,9 @@ standards:
       wireless-mic: lyra-hx-1
       dsp: polaris-dsp-16
       amplifier: polaris-amp-4100
+      control-system: newtron-core-3
+      video-switcher: meridian-mx-84
+      display-endpoint: meridian-xl-1
       power: ferrite-pdu-4c
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5

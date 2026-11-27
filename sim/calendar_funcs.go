@@ -37,6 +37,10 @@ func (d *Device) Room() calendar.Room { return d.room }
 //	meetingsBetween a b   -> the room's meetings overlapping [a, b) (unix seconds), in start order
 //	roomMeetingNow s b r  -> the same for the room site s, building b, room r
 //	roomMeetingNext s b r
+//	roomInUse lead tail   -> whether the device's room is in use: lead seconds before a booked
+//	                         meeting someone attends (at a walk-in's start) to tail seconds after
+//	                         its end, a no-show using nothing (calendar_use.go, #2776)
+//	meetingSharing        -> whether the meeting running in the device's room is sharing content now
 //	meetingPrev           -> the device's own room's last meeting that has ended by now, nil when none (#2775)
 //	roomMeetingPrev s b r -> the last meeting of that room that has ended by now, nil when none (#2775)
 //	ownerRoom o           -> the {site, building, room} of the system o in the world, nil when none
@@ -122,7 +126,9 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		"roomMeetingNext": func(site, building, room string) map[string]any {
 			return read(calendar.Room{Site: site, Building: building, Room: room}, true)
 		},
-		"meetingPrev": func() map[string]any { return prev(d.room) },
+		"roomInUse":      d.roomInUse,
+		"meetingSharing": d.meetingSharing,
+		"meetingPrev":    func() map[string]any { return prev(d.room) },
 		"roomMeetingPrev": func(site, building, room string) map[string]any {
 			return prev(calendar.Room{Site: site, Building: building, Room: room})
 		},

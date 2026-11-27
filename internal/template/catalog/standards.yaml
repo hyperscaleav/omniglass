@@ -215,6 +215,15 @@ templates:
         - name: amplifier
           label: Amplifier
           accepted_types: [amplifier]
+        - name: control-system
+          label: Control System
+          accepted_types: [control-processor]
+        - name: video-switcher
+          label: Video Switcher
+          accepted_types: [presentation-switcher]
+        - name: display-endpoint
+          label: Display Endpoint
+          accepted_types: [av-extender]
         - name: power
           label: Power Conditioner
           accepted_types: [power-device]
