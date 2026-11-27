@@ -870,6 +870,48 @@ func TestSeedPlanRoomOccupancyFollowsItsPeopleCounter(t *testing.T) {
 	t.Fatalf("%s declares no occupancy-count", system)
 }
 
+// A corporate room's room-temperature follows its control processor (#2757).
+// The standard declares room-temperature on the system, and the processor
+// reports it on its component, so the plan seeds the one calc rule that
+// carries it up: the same primitive as the room's occupancy, with no second
+// mechanism. Land a reading on a conference room's processor and the room's
+// own room-temperature follows it, by that rule.
+func TestSeedPlanRoomTemperatureFollowsItsControlProcessor(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	if _, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 20), devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	const system = "hq-divisible-conference-1"
+	var processor, sysID string
+	if err := conn.QueryRow(ctx, `select c.id::text, s.id::text from component c, system s where c.name = $1 and s.name = $2`,
+		scenario.ComponentName(system, "control-system", 1), system).Scan(&processor, &sysID); err != nil {
+		t.Fatalf("the plan seeds no control processor in %s: %v", system, err)
+	}
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: processor, Key: "room-sensor-temperature", Value: 23.4, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.DrainCalcPending(ctx, 1000); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName != "room-temperature" {
+			continue
+		}
+		if !m.IsSampled || string(m.Value) != "23.4" || m.SourceRule != "room-temperature" {
+			t.Fatalf("%s room-temperature = %s (sampled %v, by rule %q), want the processor's 23.4 by room-temperature", system, m.Value, m.IsSampled, m.SourceRule)
+		}
+		return
+	}
+	t.Fatalf("%s declares no room-temperature", system)
+}
+
 // The counter's feed rides the counter's own second face: a corporate
 // conference room's people counter has the http API's endpoint and the raw-TCP
 // feed's, the one that reports the head-count (#2757).

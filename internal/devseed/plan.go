@@ -334,39 +334,49 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		}
 	}
 	run.done("slots")
-	if err := seedRoomOccupancyRule(ctx, gw, actorID); err != nil {
+	if err := seedRoomRules(ctx, gw, actorID); err != nil {
 		return nil, nil, err
 	}
 	run.done("rules")
 	return sysIDs, compIDs, nil
 }
 
-// roomOccupancyRule is the calc rule that carries a people counter's reading up
-// to its room (#2757): the standard declares occupancy-count on the system,
-// and a counter reports people-count on its component, so the rule reads that
-// from every counter the system's slots hold and writes the most any sees as
-// the room's own. Seeded with the plan, as the plan's components are, and
-// inert in a room with no counter.
-const roomOccupancyRule = "room-occupancy"
-
-// seedRoomOccupancyRule seeds roomOccupancyRule once; a plan seeded again finds
-// it and leaves it as it is.
-func seedRoomOccupancyRule(ctx context.Context, gw storage.Gateway, actorID string) error {
-	if _, err := gw.GetCalcRule(ctx, roomOccupancyRule); err == nil {
-		return nil
-	} else if !errors.Is(err, storage.ErrCalcRuleNotFound) {
-		return fmt.Errorf("devseed: look up calc rule %q: %w", roomOccupancyRule, err)
-	}
-	_, err := gw.CreateCalcRule(ctx, actorID, storage.CalcRuleSpec{
-		Name: roomOccupancyRule, Label: "Room occupancy",
+// roomRules are the calc rules that carry a member's reading up to its room
+// (#2757): a standard declares a metric on the system, a device reports it on
+// its component, and a rule reads it from every member the system's slots hold
+// and writes one value as the room's own. Seeded with the plan, as the plan's
+// components are, and inert in a room with no such member.
+var roomRules = []storage.CalcRuleSpec{
+	{
+		Name: "room-occupancy", Label: "Room occupancy",
 		Description: "A room's occupancy-count is the most people any of its people counters reports.",
 		OwnerKind:   "system",
 		Inputs:      []rules.CalcInput{{Alias: "c", Key: "people-count"}},
 		Reduce:      rules.CalcReduce{Expr: "max(c)"},
 		OutputKey:   "occupancy-count",
-	}, scope.Set{All: true})
-	if err != nil && !errors.Is(err, storage.ErrCalcRuleExists) {
-		return fmt.Errorf("devseed: create calc rule %q: %w", roomOccupancyRule, err)
+	},
+	{
+		Name: "room-temperature", Label: "Room temperature",
+		Description: "A room's room-temperature is the average of what its members read, the control processor's sensor being the lab's.",
+		OwnerKind:   "system",
+		Inputs:      []rules.CalcInput{{Alias: "c", Key: "room-sensor-temperature"}},
+		Reduce:      rules.CalcReduce{Expr: "avg(c)"},
+		OutputKey:   "room-temperature",
+	},
+}
+
+// seedRoomRules seeds each of roomRules once; a plan seeded again finds them
+// and leaves them as they are.
+func seedRoomRules(ctx context.Context, gw storage.Gateway, actorID string) error {
+	for _, spec := range roomRules {
+		if _, err := gw.GetCalcRule(ctx, spec.Name); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrCalcRuleNotFound) {
+			return fmt.Errorf("devseed: look up calc rule %q: %w", spec.Name, err)
+		}
+		if _, err := gw.CreateCalcRule(ctx, actorID, spec, scope.Set{All: true}); err != nil && !errors.Is(err, storage.ErrCalcRuleExists) {
+			return fmt.Errorf("devseed: create calc rule %q: %w", spec.Name, err)
+		}
 	}
 	return nil
 }

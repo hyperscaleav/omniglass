@@ -242,6 +242,36 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 		return "attended", nil
 	}, func(time.Time) []string { return []string{"attended"} })
 
+	// The room's own room-temperature follows its control processor, which
+	// reads the room phase: the processor's NVP reading lands
+	// room-sensor-temperature on its component, the plan's room-temperature
+	// rule carries it up to the system (#2757). A room in a meeting reads
+	// warm from the setpoint, never outside a sane band.
+	agrees("room system's room-temperature in a sane band", func() (string, error) {
+		var series struct {
+			Samples []struct {
+				TS    time.Time `json:"ts"`
+				Value float64   `json:"value"`
+			} `json:"samples"`
+		}
+		if err := censusGetJSON(ctx, client, base, "/systems/"+url.PathEscape(tgt.system)+"/metrics/room-temperature/samples?hours=1", &series); err != nil {
+			return "", err
+		}
+		if len(series.Samples) == 0 {
+			return "", fmt.Errorf("%s has no room-temperature sample yet", tgt.system)
+		}
+		newest := series.Samples[0]
+		for _, sm := range series.Samples {
+			if sm.TS.After(newest.TS) {
+				newest = sm
+			}
+		}
+		if newest.Value < 20 || newest.Value > 27 {
+			return fmt.Sprintf("%.1f (outside 20 to 27)", newest.Value), nil
+		}
+		return "in band", nil
+	}, func(time.Time) []string { return []string{"in band"} })
+
 	agrees("display awake", func() (string, error) {
 		return fireOn(ctx, client, base, tgt.system, tgt.dev["main-display"], map[string]string{"surface": "snmp", "oid": "1.3.6.1.4.1.55520.1.1.1.0"})
 	}, func(time.Time) []string { return []string{"on"} })

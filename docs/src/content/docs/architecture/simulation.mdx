@@ -550,7 +550,7 @@ Devices that read the calendar:
   control processor holds the room's system power (`status.control.room_power`, read as `GET ROOMPOWER`) on
   from (by default) two minutes before a booked meeting someone attends (at the start of a walk-in) to five minutes after
   it ends, the window the displays wake in, and runs the start-meeting macro as it goes on and the end-meeting
-  macro as it goes to standby, the last one and the second it ran held beside it (`GET MACRO`). The touch
+  macro as it goes to standby, the last one and the second it ran held beside it (`GET MACRO`). It also reads the room's temperature (`status.room.temperature_c`, `GET ROOMTEMP`), as a real processor polls a room sensor: the room warms with the people in a held meeting toward the setpoint plus a load per attendee and settles back between meetings and overnight, with small noise, and a processor with no calendar reads the setpoint with the same noise. Its driver collects it as `room-sensor-temperature`, and the plan's `room-temperature` calc rule carries it up to the room system's own `room-temperature`, as `room-occupancy` does for the people counter. The touch
   panel wakes in the same window and its active page is idle, in-call while the meeting is held, and sharing
   through the middle third of a meeting of half an hour or more, a no-show leaving it idle. The switcher routes
   the conferencing input while a meeting is held, the lectern laptop through the sharing stretch and the empty
