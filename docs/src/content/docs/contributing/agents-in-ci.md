@@ -39,9 +39,10 @@ merging it, and releasing it. Everything between the gates runs without a person
    reruns the required checks on it on top of `main` and squash-merges it when they pass. There is
    no staging branch: `main` is the integration branch, a feature that is not ready ships dark
    behind a flag, and a bad merge is reverted on `main`.
-5. **Release.** A `release/x.y` branch is cut from `main` and tagged `rc.N`
-   ([release CI](/contributing/release-ci/)). Only fixes are cherry-picked onto it, never
-   features. **Gate 3:** the architect approves the final tag.
+5. **Release.** release-please keeps one release PR open on `main` with the next version and
+   its notes ([release CI](/contributing/release-ci/)). There are no release branches and no
+   backports: a fix ships in the next release. **Gate 3:** the architect merges the release PR,
+   which tags the merge commit and publishes the release.
 
 ## Building a ticket
 
