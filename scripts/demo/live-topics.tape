@@ -12,26 +12,18 @@ Enter
 Wait
 Show
 
-Type "# Follow Touch Panel 2's topic for eight seconds, in the background"
+# One line holds the watch and the write, so no hold the recorder puts between typed lines (the
+# prompt returns only after a line's output has had its read time, #1247) can outrun the watch. The
+# CLI prints a stream when it ends, so the watch file is read after `wait`.
+Type "# Follow Touch Panel 2's topic, then drop its touch surface out: an alarm, which recomputes its health"
 Enter
 Wait
-Type `omniglass view watch --topics component:panel-2 --duration-seconds 8 > watch.txt &`
-Enter
-Wait
-Hide
-Type `demo_hush 'sleep 3'`
-Enter
-Wait
-Show
-Type "# Its touch surface drops out: an alarm, which recomputes its health"
-Enter
-Wait
-Type `omniglass component alarm create panel-2 --severity high --message 'touch unresponsive' --dedup-key touch | jq -c '{severity, message}'`
+Type `omniglass view watch --topics component:panel-2 --duration-seconds 6 > watch.txt & sleep 2; omniglass component alarm create panel-2 --severity high --message 'touch unresponsive' --dedup-key touch | jq -c '{severity, message}'; wait`
 Enter
 Wait
 Type "# The stream named the panel once the write committed: refetch it, nothing more"
 Enter
 Wait
-Type `wait; grep -A1 '^event: changed' watch.txt | sed -n 's/^data: //p' | jq -c '{topic, op}'`
+Type `grep -A1 '^event: changed' watch.txt | sed -n 's/^data: //p' | jq -c '{topic, op}'`
 Enter
 Wait
