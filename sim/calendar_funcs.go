@@ -133,5 +133,8 @@ func (d *Device) behaviorFuncs() template.FuncMap {
 	for name, fn := range d.calendarFuncs() {
 		funcs[name] = fn
 	}
+	for name, fn := range d.buildingFuncs() {
+		funcs[name] = fn
+	}
 	return funcs
 }
