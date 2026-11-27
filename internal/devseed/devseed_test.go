@@ -1031,14 +1031,14 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		// from its physical home in A, so both halves name dsp-1 and amp-1.
 		{room: "boardroom-a", want: map[string]string{
 			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
-			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1", "codec": "codec-1", "camera": "camera-1", "recorder": "service-1", "wireless-mic": "mic-3",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1", "codec": "codec-1", "control-system": "processor-1", "video-switcher": "switcher-1", "display-endpoint": "extender-1", "camera": "camera-1", "recorder": "service-1", "wireless-mic": "mic-3",
 		}},
 		// B's own devices are the first OF THEIR OWN ROOM (the
 		// placement-scoped index at work, not duplicates), while the rack's
 		// names stay the ones it minted in A.
 		{room: "boardroom-b", want: map[string]string{
 			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
-			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1", "codec": "codec-1", "camera": "camera-1", "recorder": "service-1", "wireless-mic": "mic-3",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1", "codec": "codec-1", "control-system": "processor-1", "video-switcher": "switcher-1", "display-endpoint": "extender-1", "camera": "camera-1", "recorder": "service-1", "wireless-mic": "mic-3",
 		}},
 	} {
 		rows, err := conn.Query(ctx, `

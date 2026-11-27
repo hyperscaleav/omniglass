@@ -554,6 +554,15 @@ components:
   - key: cam-a
     product: kestrel-gaze-p2
     location: boardroom-a
+  - key: cp-a
+    product: newtron-core-3
+    location: boardroom-a
+  - key: sw-a
+    product: meridian-mx-84
+    location: boardroom-a
+  - key: ext-a
+    product: meridian-xl-1
+    location: boardroom-a
   - key: codec-a
     product: kestrel-relay-c1
     location: boardroom-a
@@ -568,6 +577,15 @@ components:
     location: boardroom-b
   - key: cam-b
     product: kestrel-gaze-p2
+    location: boardroom-b
+  - key: cp-b
+    product: newtron-core-3
+    location: boardroom-b
+  - key: sw-b
+    product: meridian-mx-84
+    location: boardroom-b
+  - key: ext-b
+    product: meridian-xl-1
     location: boardroom-b
   - key: codec-b
     product: kestrel-relay-c1
@@ -1496,6 +1514,15 @@ slot_assignments:
     slot: codec
     component: codec-a
   - system: boardroom-a
+    slot: control-system
+    component: cp-a
+  - system: boardroom-a
+    slot: video-switcher
+    component: sw-a
+  - system: boardroom-a
+    slot: display-endpoint
+    component: ext-a
+  - system: boardroom-a
     slot: camera
     component: cam-a
   - system: boardroom-a
@@ -1540,6 +1567,15 @@ slot_assignments:
   - system: boardroom-b
     slot: codec
     component: codec-b
+  - system: boardroom-b
+    slot: control-system
+    component: cp-b
+  - system: boardroom-b
+    slot: video-switcher
+    component: sw-b
+  - system: boardroom-b
+    slot: display-endpoint
+    component: ext-b
   - system: boardroom-b
     slot: camera
     component: cam-b
