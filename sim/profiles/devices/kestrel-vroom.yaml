@@ -196,6 +196,9 @@ interfaces:
           status.sim.dialed: false
           status.sim.dial_ticks: 0
           status.sim.hungup: true
+          status.sim.start_at: 0
+          status.sim.end_at: 0
+          status.sim.plan_at: 0
         events:
           - name: call-ended
             data: '{"id":"{{ .State | get "status" | get "call" | get "id" }}"}'
@@ -279,13 +282,14 @@ computed:
 # The bar talks on its own, off the lab calendar (#2757, #2767): its calls are
 # the meetings its room holds (meetingNow), so the scheduling panel, the
 # booking service, the meeting platform and the codec beside it all say the
-# same thing of one room. The bar keeps no schedule of its own. One call per
+# same thing of one room. One call per
 # held meeting (none for a no-show), starting and ending at the first tick on
 # or after the meeting does, participants joining and leaving inside it (never
 # more than the meeting's actual, from the device's own draws), content shared
 # now and then, its call stats drifting and its log stream. A meeting that
 # starts as the last one ends moves the call on in one tick (turn). With no
-# calendar, or a bar in no room, there is no call. No tick is faster than 15 s
+# calendar (a bar in no room, the dev fleet with no world) the bar keeps
+# #2754's own schedule, its plan and slot bookkeeping below, exactly as it was. No tick is faster than 15 s
 # (#1360's cost rule: richness from more kinds of signal, not more samples),
 # and a tick streams only what it changed, so the live feed carries a call's
 # transitions, not a heartbeat. A dial (POST /api/call/dial) makes it talk now
@@ -306,6 +310,11 @@ behaviors:
         value: '{{ .State.status.call.participants }}'
       - path: status.sim.id_prev
         value: '{{ .State.status.call.id }}'
+      # A bar whose room has a calendar follows it; one with none (the dev fleet
+      # has no world) keeps #2754's own schedule below, as it always did. Once a
+      # calendar has shown itself the bar keeps following it.
+      - path: status.sim.cal
+        value: '{{ if or .State.status.sim.cal meetingNow meetingNext }}true{{ else }}false{{ end }}'
       - path: status.sim.skip
         value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with meetingNow }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
       - path: status.sim.hungup
@@ -315,22 +324,42 @@ behaviors:
       - path: status.sim.want_n
         value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
       - path: status.sim.event
-        value: '{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $a := $s.want_n }}{{ if $s.dialed }}{{ $a = 8 }}{{ end }}{{ $move := "" }}{{ if chance 0.08 }}{{ if and (lt $n $a) (gt $n 1) }}{{ if chance 0.5 }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ else if lt $n $a }}{{ $move = "join" }}{{ else if gt $n 1 }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if eq $s.want "" }}end{{ else if ne $s.want .State.status.call.id }}turn{{ else }}{{ $move }}{{ end }}{{ else if and (ne $s.want "") (not $s.dialed) }}start{{ end }}'
+        value: '{{ if .State.status.sim.cal }}{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $a := $s.want_n }}{{ if $s.dialed }}{{ $a = 8 }}{{ end }}{{ $move := "" }}{{ if chance 0.08 }}{{ if and (lt $n $a) (gt $n 1) }}{{ if chance 0.5 }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ else if lt $n $a }}{{ $move = "join" }}{{ else if gt $n 1 }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if eq $s.want "" }}end{{ else if ne $s.want .State.status.call.id }}turn{{ else }}{{ $move }}{{ end }}{{ else if and (ne $s.want "") (not $s.dialed) }}start{{ end }}{{ else }}{{ $now := now }}{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $move := "" }}{{ if chance 0.08 }}{{ if or (le $n 2) (and (lt $n 8) (chance 0.5)) }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if ge $now $s.end_at }}end{{ else }}{{ $move }}{{ end }}{{ else if and (gt $s.start_at 0) (ge $now $s.start_at) (lt $now $s.end_at) }}start{{ end }}{{ end }}'
       - path: status.sim.dial_ticks
         value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (ne $s.event "end") }}{{ add $s.dial_ticks 1 }}{{ else }}0{{ end }}'
       - path: status.sim.dialed
         value: '{{ if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.sim.dialed }}{{ end }}'
       - path: status.call.active
         value: '{{ $e := .State.status.sim.event }}{{ if or (eq $e "start") (eq $e "turn") }}true{{ else if eq $e "end" }}false{{ else }}{{ .State.status.call.active }}{{ end }}'
+      - path: status.sim.call_seq
+        value: '{{ if eq .State.status.sim.event "start" }}{{ add .State.status.sim.call_seq 1 }}{{ else }}{{ .State.status.sim.call_seq }}{{ end }}'
       - path: status.call.id
-        value: '{{ $e := .State.status.sim.event }}{{ if or (eq $e "start") (eq $e "turn") }}{{ .State.status.sim.want }}{{ else }}{{ .State.status.call.id }}{{ end }}'
+        value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ if or (eq $e "turn") (and $s.cal (eq $e "start")) }}{{ $s.want }}{{ else if eq $e "start" }}c{{ add 9000 $s.call_seq }}{{ else }}{{ .State.status.call.id }}{{ end }}'
       # A call opens with half to all of who came, then people join and leave
       # inside it, never past who came.
       - path: status.call.participants
-        value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "start") (eq $e "turn") }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
+        value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "turn") (and $s.cal (eq $e "start")) }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "start" }}{{ randInt 2 6 }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
       # The room shares a laptop now and then in a call.
       - path: status.presentation.local_active
         value: '{{ if .State.status.call.active }}{{ if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
+      # A meeting falling due under a dialed call is skipped.
+      - path: status.sim.start_at
+        value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (gt $s.start_at 0) (ge now $s.start_at) }}0{{ else }}{{ $s.start_at }}{{ end }}'
+      # Planning: a free room books (or leaves free) its next slot.
+      - path: status.sim.plan
+        value: '{{ $s := .State.status.sim }}{{ $now := now }}{{ and (not $s.cal) (not .State.status.call.active) (ge $now $s.plan_at) (or (eq $s.start_at 0) (ge $now $s.end_at)) }}'
+      - path: status.sim.slot
+        value: '{{ if .State.status.sim.plan }}{{ $r := randInt 1 20 }}{{ if le $r 3 }}15{{ else if le $r 12 }}30{{ else }}60{{ end }}{{ else }}{{ .State.status.sim.slot }}{{ end }}'
+      - path: status.sim.boundary
+        value: '{{ if .State.status.sim.plan }}{{ if eq .State.status.sim.slot 15 }}{{ nextSlot now 15 }}{{ else }}{{ nextSlot now 30 }}{{ end }}{{ else }}{{ .State.status.sim.boundary }}{{ end }}'
+      - path: status.sim.booked
+        value: '{{ if .State.status.sim.plan }}{{ chance 0.5 }}{{ else }}{{ .State.status.sim.booked }}{{ end }}'
+      - path: status.sim.start_at
+        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}{{ add $s.boundary (mul 60 (randInt -2 5)) }}{{ else }}0{{ end }}{{ else }}{{ $s.start_at }}{{ end }}'
+      - path: status.sim.end_at
+        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}{{ sub (add $s.boundary (mul 60 $s.slot)) (mul 60 (randInt 0 5)) }}{{ else }}0{{ end }}{{ else }}{{ $s.end_at }}{{ end }}'
+      - path: status.sim.plan_at
+        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}0{{ else }}{{ sub (add $s.boundary (mul 60 $s.slot)) 120 }}{{ end }}{{ else }}{{ $s.plan_at }}{{ end }}'
     events:
       - name: call-ended
         data: '{{ $s := .State.status.sim }}{{ if or (eq $s.event "end") (eq $s.event "turn") }}{"id":"{{ $s.id_prev }}","participants":{{ $s.participants_prev }}}{{ end }}'
@@ -474,10 +503,19 @@ defaults:
     # simulator's, not the codec's: no template serves it.
     sim:
       event: ""
+      cal: false
       want: ""
       want_n: 0
       skip: 0
       hungup: false
+      plan: false
+      slot: 30
+      boundary: 0
+      booked: false
+      start_at: 0
+      end_at: 0
+      plan_at: 0
+      call_seq: 0
       dialed: false
       dial_ticks: 0
       dial_length: 30

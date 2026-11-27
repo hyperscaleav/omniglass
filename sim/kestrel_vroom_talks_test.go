@@ -293,18 +293,184 @@ func TestTheVRoomsDayFollowsTheLabCalendar(t *testing.T) {
 		perDay["call-started"], heldEntries, active, moves, occurrences, perDay["log"])
 }
 
-// A bar placed in no room, or in a lab with no calendar, has nothing to act
-// out: it never takes a call by itself.
-func TestTheVRoomWithNoCalendarStaysIdle(t *testing.T) {
-	d := loadVRoom(t, "bar")
-	evs := simulateDay(t, d, time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC), 6*60, nil)
-	for _, ev := range evs {
-		if ev.name != "log" {
-			t.Fatalf("a bar with no calendar reported %s %s", ev.name, ev.data)
+// With no calendar (the dev fleet has no world) the bar keeps #2754's own
+// meeting schedule exactly (#2767):  over a simulated day
+// on a pinned clock, each call starts within its jitter (2 minutes early to
+// 5 late, a tick's minute on top) of a 15-minute boundary, calls never
+// overlap, the room is in a call for roughly half the day (it books about
+// half its slots), participants move only inside a call, and every
+// occurrence is also a log line in the codec's idiom, beside a status line
+// every 15 minutes. It logs the per-bar rates a fleet's cost is read from.
+func TestTheVRoomsDayWithNoCalendarFollowsItsOwnSchedule(t *testing.T) {
+	day := time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC)
+	var events, logs, calls int
+	var shares []float64
+	for _, id := range []string{"hq-divisible-conference-1-videobar-1", "hq-mr65-3-videobar-1", "branch-2-huddle-room-7-videobar-1", "regional-1-mr75-2-videobar-1"} {
+		d := loadVRoom(t, id)
+		evs := simulateDay(t, d, day, 24*60, nil)
+		var inCall bool
+		var started time.Time
+		var id string
+		var busy time.Duration
+		var netDegraded bool
+		perDay := map[string]int{}
+		for _, ev := range evs {
+			perDay[ev.name]++
+			switch ev.name {
+			case "call-started":
+				if inCall {
+					t.Fatalf("%s: a call started at %s inside call %s", d.DeviceID, ev.at.Format("15:04"), id)
+				}
+				var body struct {
+					ID string `json:"id"`
+					N  int    `json:"participants"`
+				}
+				if err := json.Unmarshal([]byte(ev.data), &body); err != nil || body.ID == "" || body.N < 2 || body.N > 6 {
+					t.Fatalf("%s: call-started %q", d.DeviceID, ev.data)
+				}
+				off := ev.at.Sub(ev.at.Truncate(15 * time.Minute))
+				if off > 6*time.Minute && off < 12*time.Minute {
+					t.Errorf("%s: a call started at %s, %s past a 15-minute boundary: outside its jitter", d.DeviceID, ev.at.Format("15:04"), off)
+				}
+				inCall, started, id = true, ev.at, body.ID
+			case "call-ended":
+				if !inCall {
+					t.Fatalf("%s: a call ended at %s with none in progress", d.DeviceID, ev.at.Format("15:04"))
+				}
+				if length := ev.at.Sub(started); length < 5*time.Minute || length > 68*time.Minute {
+					t.Errorf("%s: call %s ran %s, want most of a 15 to 60 minute slot", d.DeviceID, id, length)
+				}
+				busy += ev.at.Sub(started)
+				inCall = false
+			case "participant-joined", "participant-left":
+				if !inCall || !strings.Contains(ev.data, `"call_id":"`+id+`"`) {
+					t.Fatalf("%s: %s %q at %s outside call %s", d.DeviceID, ev.name, ev.data, ev.at.Format("15:04"), id)
+				}
+			case "log":
+				var line struct{ Severity, Facility, Text string }
+				if err := json.Unmarshal([]byte(ev.data), &line); err != nil || (line.Severity != "INFO" && line.Severity != "WARN") || !strings.HasPrefix(line.Facility, "kvroom.") || line.Text == "" {
+					t.Fatalf("%s: log line %q, want a severity, a kvroom facility and its text", d.DeviceID, ev.data)
+				}
+				// The uplink's lines are its transitions: degraded, then
+				// recovered, never the same twice running.
+				if line.Facility == "kvroom.net" {
+					degraded := line.Severity == "WARN"
+					if degraded == netDegraded {
+						t.Fatalf("%s: %q at %s repeats the uplink's state", d.DeviceID, line.Text, ev.at.Format("15:04"))
+					}
+					netDegraded = degraded
+					perDay["net"]++
+				}
+			}
+		}
+		shares = append(shares, busy.Hours()/24)
+		if share := busy.Hours() / 24; perDay["call-started"] < 8 || share < 0.15 || share > 0.75 {
+			t.Errorf("%s: %d calls, in a call %.0f%% of the day; want a room booking about half its slots", d.DeviceID, perDay["call-started"], share*100)
+		}
+		occurrences := perDay["call-started"] + perDay["call-ended"] + perDay["participant-joined"] + perDay["participant-left"]
+		if perDay["log"] != occurrences+96+perDay["net"] {
+			t.Errorf("%s: %d log lines, want one per occurrence (%d), 96 status lines and the uplink's %d", d.DeviceID, perDay["log"], occurrences, perDay["net"])
+		}
+		if perDay["participant-joined"]+perDay["participant-left"] == 0 {
+			t.Errorf("%s: no participant moved all day", d.DeviceID)
+		}
+		t.Logf("%s: %d calls, in a call %.0f%% of the day, %v", d.DeviceID, perDay["call-started"], busy.Hours()/24*100, perDay)
+		events += occurrences
+		logs += perDay["log"]
+		calls += perDay["call-started"]
+	}
+	var mean float64
+	for _, x := range shares {
+		mean += x / float64(len(shares))
+	}
+	if mean < 0.3 || mean > 0.6 {
+		t.Errorf("the bars were in a call %.0f%% of the day on average, want a fleet booking about half its slots", mean*100)
+	}
+	t.Logf("per bar per hour: %.1f calls, %.1f events, %.1f log lines",
+		float64(calls)/4/24, float64(events)/4/24, float64(logs)/4/24)
+}
+
+// A dialed call talks now (#2754): POST /api/call/dial starts it at once
+// with its event and log line, the schedule does not fight it (a meeting
+// falling due under it is skipped, and no tick ends it early), a hang-up
+// ends it at once, and a call nobody hangs up ends after the default length.
+func TestTheVRoomsDialedCallWithNoCalendarTalksNowAndTheScheduleYields(t *testing.T) {
+	d := loadVRoom(t, "hq-divisible-conference-1-videobar-1")
+	from := time.Date(2026, 11, 26, 9, 55, 30, 0, time.UTC)
+	at := from
+	d.SetClock(func() time.Time { return at })
+	// A meeting is booked for 10:00 to 10:30, five minutes off.
+	for path, v := range map[string]any{"status.sim.start_at": from.Add(4*time.Minute + 30*time.Second).Unix(), "status.sim.end_at": from.Add(34*time.Minute + 30*time.Second).Unix()} {
+		if err := SetPath(d.state, path, v); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if d.ReadPath("status.call.active") != false {
-		t.Fatal("a bar with no calendar is in a call")
+	named := func(since uint64) []string {
+		var out []string
+		for _, ev := range d.events.replayFrom(strconv.FormatUint(since+1, 10)) {
+			if ev.name != "change" {
+				out = append(out, ev.name+" "+ev.data)
+			}
+		}
+		return out
+	}
+	mark := d.events.seq
+	if res := d.Operate(Operation{Kind: "http", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c42","participants":3}`}); res.Status != 200 {
+		t.Fatalf("dial = %+v", res)
+	}
+	got := strings.Join(named(mark), "\n")
+	if !strings.Contains(got, `call-started {"id":"c42","participants":3}`) || !strings.Contains(got, `"text":"Call started (id=c42`) {
+		t.Fatalf("the dial reported\n%s\nwant call-started and its log line at once", got)
+	}
+	mark = d.events.seq
+	for i := 1; i <= 20; i++ {
+		at = from.Add(time.Duration(i) * time.Minute)
+		tickByName(t, d, "call_cycle")
+	}
+	for _, ev := range named(mark) {
+		if strings.HasPrefix(ev, "call-started") || strings.HasPrefix(ev, "call-ended") {
+			t.Fatalf("twenty minutes into a dialed call the schedule reported %q; it should yield", ev)
+		}
+	}
+	if d.ReadPath("status.call.id") != "c42" || d.ReadPath("status.call.active") != true {
+		t.Fatalf("the dialed call is %v/%v, want c42 still up", d.ReadPath("status.call.id"), d.ReadPath("status.call.active"))
+	}
+	mark = d.events.seq
+	if res := d.Operate(Operation{Kind: "http", Method: "POST", Path: "/api/call/disconnect", Body: "{}"}); res.Status != 200 {
+		t.Fatalf("disconnect = %+v", res)
+	}
+	got = strings.Join(named(mark), "\n")
+	if !strings.Contains(got, `call-ended {"id":"c42"}`) || !strings.Contains(got, "reason=local-hangup") {
+		t.Fatalf("the hang-up reported\n%s\nwant call-ended and its log line at once", got)
+	}
+	// The skipped meeting does not start late once the dialed call is gone.
+	mark = d.events.seq
+	at = from.Add(21 * time.Minute)
+	tickByName(t, d, "call_cycle")
+	for _, ev := range named(mark) {
+		if strings.HasPrefix(ev, "call-started") {
+			t.Fatalf("the meeting skipped under the dialed call started late: %q", ev)
+		}
+	}
+
+	// A dialed call nobody hangs up ends after the default length.
+	if res := d.Operate(Operation{Kind: "http", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c43"}`}); res.Status != 200 {
+		t.Fatalf("dial = %+v", res)
+	}
+	length, _, _ := toFloat(d.ReadPath("status.sim.dial_length"))
+	mark = d.events.seq
+	ended := -1
+	for i := 1; i <= int(length)+2 && ended < 0; i++ {
+		at = from.Add(time.Duration(21+i) * time.Minute)
+		tickByName(t, d, "call_cycle")
+		for _, ev := range named(mark) {
+			if strings.HasPrefix(ev, `call-ended {"id":"c43"`) {
+				ended = i
+			}
+		}
+	}
+	if ended != int(length) {
+		t.Fatalf("an unanswered dialed call ended after %d ticks, want the default %v", ended, length)
 	}
 }
 

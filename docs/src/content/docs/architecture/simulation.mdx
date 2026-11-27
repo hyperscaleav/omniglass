@@ -355,7 +355,7 @@ speaker level and microphone level while a call is up and rests them when the ro
 the codec's own load, temperature, fan and memory, and writes the WARN line a bar's network log does
 when loss crosses 3% and an INFO line when it recovers. On the corporate
 lab's calendar a bar runs about 1.7 named events and 6.7 log lines an hour (11 feed events counting
-state changes), and the schedule is the room's, not the bar's own.
+state changes), and the schedule is the room's, not the bar's own (a bar with no calendar keeps its own).
 
 A call on demand still talks now: the bar's own dial route starts one at once with its event and log
 line, a meeting running under it is skipped, and it ends at the bar's hang-up route or after
@@ -418,7 +418,8 @@ Devices that read the calendar:
   hang-up on the device holds against the calendar. The UCC platform reads each room it speaks for
   through the system the room's id names, as in-call or idle with the meeting's id and who came, and
   posts a signed `room.meeting.started` and `room.meeting.ended` at each boundary, one a tick, none
-  for what was already running when it was subscribed. A bar keeps no schedule of its own.
+  for what was already running when it was subscribed. A bar whose room has no calendar (the dev fleet
+  has no world) keeps #2754's own schedule, exactly as before.
 
 ### A simulated service posts from the start
 
