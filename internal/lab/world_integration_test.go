@@ -113,8 +113,7 @@ func startCorporateLab(t *testing.T, name string, systems int) (string, *http.Cl
 // stood over the window before it. The {room} token in a bar's profile
 // expands to the room the plan put its system in.
 //
-// The Relay C1 codec follows the same calendar, but no shipped scenario places
-// one, so it is proven by its unit test (sim/kestrel_relay_talks_test.go).
+// The conference rooms' Relay C1 codecs are read the same way as the bars.
 func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	ctx := context.Background()
 	const systems = 20
@@ -141,16 +140,15 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 		t.Fatal("the corporate world holds no calendar")
 	}
 	type bar struct {
-		system string
-		room   calendar.Room
+		system, product string
+		room            calendar.Room
 	}
 	var bars []bar
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
 			for _, d := range r.Devices {
-				if d.Profile == "kestrel-vroom" {
-					bars = append(bars, bar{r.System, calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}})
-					break
+				if d.Profile == "kestrel-vroom" || d.Profile == "kestrel-relay-c1" {
+					bars = append(bars, bar{r.System, d.Profile, calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}})
 				}
 			}
 		}
@@ -214,7 +212,7 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	for time.Now().Before(end) && (first.IsZero() || time.Since(first) < 3*time.Minute) {
 		for _, b := range bars {
 			lo := time.Now().Add(-75 * time.Second) // the bar reads on a minute tick
-			body, err := labcheck.FireOnShowcaseBody(ctx, client, base, b.system, "kestrel-vroom", labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/call"})
+			body, err := labcheck.FireOnShowcaseBody(ctx, client, base, b.system, b.product, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/call"})
 			hi := time.Now()
 			if err != nil {
 				continue // the simulator may not serve it yet
@@ -286,12 +284,20 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	}
 	t.Logf("%d bar readings (%d in a call) and %d platform room readings (%d in-call) agreed with the calendar; room %s of %d bars", barReads, barCalls, uccReads, uccCalls, bars[0].room.Key(), len(bars))
 
+
 	// The profile's {room} token expands to the real room, never empty.
-	app, err := labcheck.FireOnShowcaseBody(ctx, client, base, bars[0].system, "kestrel-vroom", labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/app"})
+	var vb bar
+	for _, b := range bars {
+		if b.product == "kestrel-vroom" {
+			vb = b
+			break
+		}
+	}
+	app, err := labcheck.FireOnShowcaseBody(ctx, client, base, vb.system, vb.product, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/app"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	at, _ := w.PlaceSystem(bars[0].system)
+	at, _ := w.PlaceSystem(vb.system)
 	want := fmt.Sprintf("room-%s-%s-%s@", at.Site, at.Building, at.Room)
 	if !strings.Contains(app, want) {
 		t.Fatalf("the bar's sign-in is not for its room (want %q in): %s", want, app)
