@@ -154,7 +154,9 @@ behaviors:
         value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "start") (eq $e "turn") }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
       # The room shares now and then in a call, and stops when it ends.
       - path: status.content.sharing
-        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ meetingSharing }}{{ else if chance 0.05 }}{{ not .State.status.content.sharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.content.sharing }}{{ end }}'
+        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ if ne meetingSharing .State.status.sim.share_prev }}{{ meetingSharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if chance 0.05 }}{{ not .State.status.content.sharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.content.sharing }}{{ end }}'
+      - path: status.sim.share_prev
+        value: '{{ if hasCalendar }}{{ meetingSharing }}{{ else }}{{ .State.status.sim.share_prev }}{{ end }}'
       - path: status.content.source
         value: '{{ if .State.status.content.sharing }}{{ if .State.status.content.source }}{{ .State.status.content.source }}{{ else }}{{ $r := randInt 1 4 }}{{ if eq $r 1 }}hdmi1{{ else if eq $r 2 }}hdmi2{{ else if eq $r 3 }}usbc{{ else }}wireless{{ end }}{{ end }}{{ end }}'
 
@@ -185,6 +187,7 @@ defaults:
       skip: 0
       hungup: false
       dialed: false
+      share_prev: false
     network:
       ipv4:
         address: ""

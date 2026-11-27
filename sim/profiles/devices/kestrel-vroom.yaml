@@ -341,9 +341,14 @@ behaviors:
         value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "turn") (and $s.cal (eq $e "start")) }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "start" }}{{ randInt 2 6 }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
       # The room shares a laptop in a call: through the stretch of the meeting the
       # calendar says (meetingSharing, #2776) in a room with a calendar, now and
-      # then from the device's own draws otherwise or in a dialed call.
+      # then from the device's own draws otherwise or in a dialed call; an operator's
+      # change holds until the calendar's sharing next changes.
       - path: status.presentation.local_active
-        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ meetingSharing }}{{ else if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
+        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ if ne meetingSharing .State.status.sim.share_prev }}{{ meetingSharing }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
+      # The calendar's sharing is an edge: an operator's change holds until
+      # meetingSharing next changes (share_prev is what it last read).
+      - path: status.sim.share_prev
+        value: '{{ if hasCalendar }}{{ meetingSharing }}{{ else }}{{ .State.status.sim.share_prev }}{{ end }}'
       # A meeting falling due under a dialed call is skipped.
       - path: status.sim.start_at
         value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (gt $s.start_at 0) (ge now $s.start_at) }}0{{ else }}{{ $s.start_at }}{{ end }}'
@@ -506,6 +511,7 @@ defaults:
     sim:
       event: ""
       cal: false
+      share_prev: false
       want: ""
       want_n: 0
       skip: 0

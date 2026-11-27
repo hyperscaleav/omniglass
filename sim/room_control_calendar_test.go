@@ -359,3 +359,50 @@ func readIn(m map[string]any, path string) any {
 	}
 	return cur
 }
+
+// An operator's change to what a room shares holds until the calendar's
+// sharing next changes, then the calendar resumes: on the bar (its local
+// presentation) and on the codec (its content route), inside a meeting.
+func TestAnOperatorsContentSharingHoldsUntilTheCalendarMoves(t *testing.T) {
+	day := time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC)
+	room, _ := busyDay(t, 7, day)
+	bar, cal := loadVRoomIn(t, "hq-divisible-conference-1-videobar-1", room, 7)
+	relay := loadRelayIn(t, "hq-divisible-conference-1-codec-1", room, 7)
+	at := day
+	bar.SetClock(func() time.Time { return at })
+	relay.SetClock(func() time.Time { return at })
+	var forced bool
+	var until time.Time
+	for i := range 24 * 60 {
+		at = day.Add(time.Duration(i) * time.Minute)
+		tickByName(t, bar, "call_cycle")
+		tickByName(t, relay, "call_cycle")
+		e, ok := held(cal, room, at)
+		sharing := ok && wantShare(e, at)
+		if !forced {
+			// Early in a long meeting, before its sharing stretch: stop-sharing is the
+			// calendar's answer, so the operator starts it.
+			if ok && !sharing && e.End.Sub(e.Start) >= 30*time.Minute && at.Sub(e.Start) >= 2*time.Minute && at.Sub(e.Start) < e.End.Sub(e.Start)/3-2*time.Minute {
+				setPath(t, bar, "status.presentation.local_active", true)
+				setPath(t, relay, "status.content.sharing", true)
+				forced, until = true, e.Start.Add(e.End.Sub(e.Start)/3)
+			}
+			continue
+		}
+		if at.Before(until) {
+			if bar.ReadPath("status.presentation.local_active") != true || relay.ReadPath("status.content.sharing") != true {
+				t.Fatalf("%s: the operator's share dropped before the calendar's sharing moved", at.Format("15:04"))
+			}
+			continue
+		}
+		// The calendar's sharing started (or the meeting moved): it resumes.
+		if got := bar.ReadPath("status.presentation.local_active") == true; got != sharing {
+			t.Fatalf("%s: the bar shares %v, the calendar says %v", at.Format("15:04"), got, sharing)
+		}
+		if got := relay.ReadPath("status.content.sharing") == true; got != sharing {
+			t.Fatalf("%s: the codec shares %v, the calendar says %v", at.Format("15:04"), got, sharing)
+		}
+		return
+	}
+	t.Fatal("the day held no long meeting to override")
+}
