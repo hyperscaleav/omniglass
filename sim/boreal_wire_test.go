@@ -52,15 +52,11 @@ func edgeScript() []wireStep {
 		wirePost("brightness 0", "/api/display/brightness", `{"brightness": 0}`),
 		wirePost("brightness a fraction", "/api/display/brightness", `{"brightness": 72.5}`),
 		wirePost("brightness 100", "/api/display/brightness", `{"brightness": 100}`),
-		{Name: "brightness a word", Method: "POST", Path: "/api/display/brightness", Body: `{"brightness": "abc"}`, Snapshot: true, Quirk: "the template wrote the word into state and answered a document that is not JSON"},
-		{Name: "brightness missing", Method: "POST", Path: "/api/display/brightness", Body: `{}`, Snapshot: true, Quirk: "the template wrote <no value> into state"},
 		wirePost("volume 33", "/api/audio/volume", `{"volume": 33}`),
 		wirePost("volume 0", "/api/audio/volume", `{"volume": 0}`),
-		{Name: "volume a word", Method: "POST", Path: "/api/audio/volume", Body: `{"volume": "loud"}`, Snapshot: true, Quirk: "the template wrote the word into state and answered a document that is not JSON"},
 		wirePost("mute", "/api/audio/mute", `{"mute": true}`),
 		wirePost("unmute", "/api/audio/mute", `{"mute": false}`),
 		wirePost("mute as a word", "/api/audio/mute", `{"mute": "true"}`),
-		{Name: "mute a number", Method: "POST", Path: "/api/audio/mute", Body: `{"mute": 7}`, Snapshot: true, Quirk: "the template wrote the number into state"},
 		wirePost("set it all away from default", "/api/display/input", `{"input": "usbc"}`),
 		wireGet("the dashboard changed", "/"),
 		wirePost("reboot", "/api/admin/reboot", `{}`),
@@ -71,6 +67,12 @@ func edgeScript() []wireStep {
 		wirePost("mute again", "/api/audio/mute", `{"mute": true}`),
 		wirePost("factory reset", "/api/admin/factory-reset", `{}`),
 		wireGet("the dashboard after a factory reset", "/"),
+		// The requests the profile answered with an accident of its templates
+		// come last, so the state they left does not carry into the rest.
+		{Name: "brightness a word", Method: "POST", Path: "/api/display/brightness", Body: `{"brightness": "abc"}`, Snapshot: true, Quirk: "the template wrote the word into state and answered a document that is not JSON"},
+		{Name: "brightness missing", Method: "POST", Path: "/api/display/brightness", Body: `{}`, Snapshot: true, Quirk: "the template wrote <no value> into state"},
+		{Name: "volume a word", Method: "POST", Path: "/api/audio/volume", Body: `{"volume": "loud"}`, Snapshot: true, Quirk: "the template wrote the word into state and answered a document that is not JSON"},
+		{Name: "mute a number", Method: "POST", Path: "/api/audio/mute", Body: `{"mute": 7}`, Snapshot: true, Quirk: "the template wrote the number into state"},
 	}
 }
 
