@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"sync"
 	"text/template"
 	"time"
 
@@ -78,12 +79,28 @@ func RoomBookingsAt(c *calendar.Calendar, room calendar.Room, at time.Time) map[
 //	                       .Owner); a system the world does not name reads as a
 //	                       room with no booking
 func (d *Device) bookingFuncs() template.FuncMap {
+	// A behavior's mutations each read the room in the same tick, and a read
+	// generates three days of the calendar, so the last reading is kept for
+	// its room, calendar and second: the rest of the tick reuses it.
+	var mu sync.Mutex
+	var last struct {
+		room calendar.Room
+		cal  *calendar.Calendar
+		sec  int64
+		out  map[string]any
+	}
 	read := func(room calendar.Room) map[string]any {
-		c := d.calendarSrc()
+		c, at := d.calendarSrc(), d.clock()
 		if room == (calendar.Room{}) {
 			c = nil // no room: nothing is booked in it
 		}
-		return RoomBookingsAt(c, room, d.clock())
+		mu.Lock()
+		defer mu.Unlock()
+		if last.out != nil && last.room == room && last.cal == c && last.sec == at.Unix() {
+			return last.out
+		}
+		last.room, last.cal, last.sec, last.out = room, c, at.Unix(), RoomBookingsAt(c, room, at)
+		return last.out
 	}
 	return template.FuncMap{
 		"servedRooms": func() []map[string]any {
