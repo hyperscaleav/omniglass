@@ -36,6 +36,9 @@ const (
 	HardMaxPages           = 1000
 	DefaultMaxPagedRecords = 10000
 	HardMaxPagedRecords    = 100000
+	// MaxPagedBytes bounds the records one walk holds in memory at once:
+	// pages of large records are bounded by size as well as by count.
+	MaxPagedBytes = 32 << 20
 )
 
 // Pagination is the rule on an http poll's request.
@@ -210,6 +213,7 @@ func (p *Pagination) Walk(endpoint, records string, fetch func(PageRequest) (Pag
 	maxPages, maxRecords := p.PagesCap(), p.RecordsCap()
 	var first []byte
 	var all []json.RawMessage
+	held := 0
 	cursor, page := "", p.firstPage()
 	for n := 1; ; n++ {
 		if n > maxPages {
@@ -230,6 +234,12 @@ func (p *Pagination) Walk(endpoint, records string, fetch func(PageRequest) (Pag
 		if len(all)+len(recs) > maxRecords {
 			return nil, fmt.Errorf("%s: more than the cap of %d records (max_records) by page %d; nothing landed", endpoint, maxRecords, n)
 		}
+		for _, r := range recs {
+			held += len(r)
+		}
+		if held > MaxPagedBytes {
+			return nil, fmt.Errorf("%s: the records held pass %d MiB by page %d; nothing landed", endpoint, MaxPagedBytes>>20, n)
+		}
 		all = append(all, recs...)
 		switch p.Style {
 		case PageCursor:
@@ -243,7 +253,7 @@ func (p *Pagination) Walk(endpoint, records string, fetch func(PageRequest) (Pag
 				return mergeRecords(first, records, all)
 			}
 			if next == cursor {
-				return nil, fmt.Errorf("%s: page %d answered the cursor it was asked with (%q), a list that never ends; nothing landed", endpoint, n, next)
+				return nil, fmt.Errorf("%s: page %d answered the cursor it was asked with, a list that never ends; nothing landed", endpoint, n)
 			}
 			cursor = next
 		case PageNumber:

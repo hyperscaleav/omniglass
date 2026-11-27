@@ -246,6 +246,7 @@ func TestPaginationValidation(t *testing.T) {
 		"two totals":           {Style: driver.PageNumber, PageParam: "p", PagesFrom: "a", TotalFrom: "b", SizeParam: "s", Size: 1},
 		"max pages too large":  {Style: driver.PageNumber, PageParam: "p", MaxPages: driver.HardMaxPages + 1},
 		"max records too many": {Style: driver.PageNumber, PageParam: "p", MaxRecords: driver.HardMaxPagedRecords + 1},
+		"reserved header":      {Style: driver.PageCursor, CursorFrom: "n", CursorHeader: "Authorization"},
 		"empty step":           {Style: driver.PageCursor, CursorFrom: "a..b", CursorParam: "c"},
 	}
 	for name, p := range bad {
@@ -280,4 +281,19 @@ func parseValidate(raw string) error {
 func pagedSpec(p *driver.Pagination) string {
 	pj, _ := json.Marshal(p)
 	return `{"version":1,"transport":"http","polls":[{"name":"rooms","schedule":{"every":"30s"},"request":{"path":"/r","paginate":` + string(pj) + `},"records":"rooms","identity":{"key":"ucc-room-id","extract":{"jsonpath":"id"}},"emits":[{"name":"call-state","extract":{"jsonpath":"state"}}]}]}`
+}
+
+// A walk of large records is bounded by the bytes it holds, not only their
+// count, and a refused cursor never echoes its value in the fault.
+func TestPaginationHoldsBoundedBytes(t *testing.T) {
+	big := strings.Repeat("x", 1<<20)
+	p := &driver.Pagination{Style: driver.PageCursor, CursorFrom: "next", CursorParam: "c"}
+	n := 0
+	_, err := p.Walk("ep GET /x", "rooms", func(driver.PageRequest) (driver.Page, error) {
+		n++
+		return driver.Page{Body: []byte(fmt.Sprintf(`{"rooms":[{"id":%q}],"next":"p%d"}`, big, n))}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "32 MiB") || n > 40 {
+		t.Errorf("n=%d err=%v", n, err)
+	}
 }

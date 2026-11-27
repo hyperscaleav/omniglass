@@ -182,6 +182,19 @@ func validateHTTPRequest(what string, r Request, command bool, ss *SessionSpec) 
 				return fmt.Errorf("driver: %s paginate parameter %q is also a declared query parameter", what, name)
 			}
 		}
+		if h := r.Paginate.CursorHeader; h != "" && slices.Contains(reservedHeaders, strings.ToLower(h)) {
+			return fmt.Errorf("driver: %s paginate may not set the %s header: a credential enters only through the session's scheme, and the client owns the rest", what, h)
+		}
+		if ss != nil && ss.APIKey != nil {
+			for _, n := range []string{r.Paginate.SizeParam, r.Paginate.CursorParam, r.Paginate.PageParam} {
+				if ss.APIKey.In == APIKeyInQuery && n == ss.APIKey.Name {
+					return fmt.Errorf("driver: %s paginate parameter %q is where the session's api key rides", what, n)
+				}
+			}
+			if ss.APIKey.In == APIKeyInHeader && strings.EqualFold(r.Paginate.CursorHeader, ss.APIKey.Name) {
+				return fmt.Errorf("driver: %s paginate header %s is where the session's api key rides", what, r.Paginate.CursorHeader)
+			}
+		}
 		if _, dup := r.Headers[r.Paginate.CursorHeader]; dup && r.Paginate.CursorHeader != "" {
 			return fmt.Errorf("driver: %s paginate header %q is also a declared header", what, r.Paginate.CursorHeader)
 		}
