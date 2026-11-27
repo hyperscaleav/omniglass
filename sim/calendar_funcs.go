@@ -41,6 +41,10 @@ func (d *Device) Room() calendar.Room { return d.room }
 //	                         meeting someone attends (at a walk-in's start) to tail seconds after
 //	                         its end, a no-show using nothing (calendar_use.go, #2776)
 //	meetingSharing        -> whether the meeting running in the device's room is sharing content now
+//	problemsNow           -> the scripted problems active in the device's own room now, each a map
+//	                         (kind, name, role, unplugged, loss_pct, pin_path, pin_value, start, end);
+//	                         a fact of the world the executor applies (problems.go), for a profile
+//	                         that wants to read it, never to re-implement it (#2769)
 //	meetingPrev           -> the device's own room's last meeting that has ended by now, nil when none (#2775)
 //	roomMeetingPrev s b r -> the last meeting of that room that has ended by now, nil when none (#2775)
 //	ownerRoom o           -> the {site, building, room} of the system o in the world, nil when none
@@ -125,6 +129,13 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		},
 		"roomMeetingNext": func(site, building, room string) map[string]any {
 			return read(calendar.Room{Site: site, Building: building, Room: room}, true)
+		},
+		"problemsNow": func() []map[string]any {
+			var out []map[string]any
+			for _, e := range d.calendarSrc().ProblemsNow(d.room, d.clock()) {
+				out = append(out, e.Map())
+			}
+			return out
 		},
 		"roomInUse":      d.roomInUse,
 		"meetingSharing": d.meetingSharing,

@@ -1218,6 +1218,16 @@ calendar:                       # what every room acts out on the simulator's cl
       walk_in_rate: 0.08        # the chance a free 15-minute cell holds a walk-in
       hours: { start: 8, end: 18 }   # UTC hours meetings fall in; omit for the whole day
       recording_rate: 0.15      # the share of meetings that took place that are recorded
+  problems:                     # what goes wrong on a schedule (#2769), scripted and not drawn
+    - name: tuesday-display-dark
+      cadence: weekly           # daily; weekly (with weekday); monthly (with day, or nth and weekday)
+      weekday: tuesday
+      at: "14:00"               # UTC time of day it starts
+      for: 2h                   # how long it lasts, up to a day
+      spread: 30m               # optional: each room starts a seeded whole number of minutes later, up to this
+      scope: { standard: mr86, role: main-display }   # standard, site (or its archetype) and rooms (system names); role is a slot
+      impairment:               # exactly one of: unplugged, loss_pct, pin
+        pin: { path: status.device.power, value: "off" }
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
@@ -1244,8 +1254,15 @@ A slot under `control` must be one the standard fills. The `calendar` block is o
 `meetings` names a standard of the scenario, with its knobs checked at load (a rate between 0 and 1, a
 slot mix of 15, 30 and 60 minutes, an attendance range from at least one, hours inside the day); a
 refusal names the field, as `calendar.meetings.mr65.booking_rate`. What the knobs produce is the
-[lab calendar](/architecture/simulation/#the-lab-calendar). A scale lab hands each outpost's simulator
-the world its plan resolves to (below). The validator collects every problem at once and names
+[lab calendar](/architecture/simulation/#the-lab-calendar). Each of its `problems` is a name, a
+cadence (`daily`; `weekly` on a `weekday`; `monthly` on a `day` of 1 to 28 or on the `nth` weekday), a UTC `at`
+and a `for` of up to a day, and a scope: any of a `standard`, a `site` (a site's name or its archetype's) and
+`rooms` (system names), which must all match, plus the `role`, the slot of the room the problem lands on
+(never a product). A problem sets exactly one impairment: `unplugged` (dark on every protocol), `loss_pct`
+(packets lost) or a `pin` (a state path held at a value). A scope that names no standard, site or room, a
+role no standard in scope fills, a name used twice or a named room the plan lacks is refused, naming the
+problem and the field, as `calendar.problems.tuesday-display-dark.scope.role`. A scale lab hands each
+outpost's simulator the world its plan resolves to (below), problems included. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text

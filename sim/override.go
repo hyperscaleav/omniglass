@@ -300,3 +300,20 @@ func (d *Device) overrideRuntimeTickAll() {
 		d.tickOverride(o)
 	}
 }
+
+// WritePath writes the value an expression renders to a state path once, now,
+// as a scenario's override would on its tick, tagged with the same cause. It is
+// how a scenario applies a pin the moment it opens and puts a path back the
+// moment it closes, without waiting for a tick (#2769).
+func (d *Device) WritePath(overrideID, path, expression string) error {
+	d.ensureRand()
+	m, err := compileBehaviorMutationList([]profile.Mutation{{Path: path, Value: expression, Optional: true}}, d.behaviorFuncs())
+	if err != nil {
+		return fmt.Errorf("override %q on %q: %w", overrideID, path, err)
+	}
+	if len(m) != 1 {
+		return fmt.Errorf("override %q: compileBehaviorMutationList produced %d mutations, want 1", overrideID, len(m))
+	}
+	d.tickOverride(&overrideEntry{OverrideID: overrideID, Path: path, Mutation: m[0]})
+	return nil
+}

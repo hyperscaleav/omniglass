@@ -327,8 +327,10 @@ func (w *World) Standards() []string {
 // and profile, and the system and room it sits in.
 type Listing struct {
 	ID, Name, Type, Firmware, Product, Profile string
-	System                                     string
-	Site, Building, Room                       string
+	// Slot is the role the device plays in its room.
+	Slot                 string
+	System               string
+	Site, Building, Room string
 }
 
 // Listed is the devices the named service lists, in id order: every device
@@ -361,7 +363,7 @@ func (w *World) Listed(service string) []Listing {
 					continue
 				}
 				out = append(out, Listing{ID: d.ID, Name: d.Name, Type: d.Platform, Firmware: d.Firmware, Product: d.Product,
-					Profile: d.Profile, System: r.System, Site: s.Name, Building: r.Building, Room: r.Name})
+					Profile: d.Profile, Slot: d.Slot, System: r.System, Site: s.Name, Building: r.Building, Room: r.Name})
 			}
 		}
 	}
