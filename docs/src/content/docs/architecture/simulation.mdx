@@ -580,6 +580,45 @@ Devices that read the calendar:
   busy room's rack reads more by evening than an idle one's. The mains voltage stays noise. A PDU
   whose room holds no calendar keeps its earlier random walk.
 
+#### Behavior primitives
+
+The readings above are written once, in Go, as the shared primitives of `sim/behave` (#2830, the first wave of
+[the Go device families](https://github.com/hyperscaleav/omniglass/issues/2826)); the profiles still
+carry their own copies until a family composes the primitive and the profile drops its YAML. Each primitive is a pure
+function of the room's state (`calendar.StateAt`, or the engine's memo of it), the device's previous typed state, typed
+parameters and the instant, and returns the device's next typed state. It takes and returns plain values, never a family's
+spec, so any family composes it.
+
+Four rules hold for every primitive. It is **deterministic**: the only randomness is the per-device source passed in,
+seeded from the device id the way the engine seeds the one its profile behaviors draw from, and a primitive draws
+exactly as the behavior it replaces did, in the same order, so a device that moves to Go keeps its seeded run. It
+carries the **no-calendar fallback**: a device whose room has no calendar keeps the behavior it had before it read one,
+so a family never branches on it. It has **no magic numbers**: every rate, band and threshold is a field of a typed
+parameter struct whose default is the number the profiles use today, and the room's wake lead, cooldown and sharing
+stretch arrive already resolved from the meeting knobs. And it does **no I/O**: the clock is an argument, and the
+calendar is read only by the few readers that say so.
+
+| Primitive | What the device does | Replaces |
+| --- | --- | --- |
+| `PowerFollowsRoom`, `InputFollowsMeeting` | wakes on the edge of the room going busy, sleeps once the cooldown has run, selects the conferencing input on the wake; an operator's change inside a meeting holds | the displays' and the projector's `room_meeting` |
+| `RoomPower` | a controller's power follows the room's use, and runs the start or end macro on the edge only | the control processor's `room_meeting` |
+| `FollowsCall`, `PlanOwnSchedule` | starts, turns and ends the call the meeting wants, opens it with half to all of who came, joins and leaves within who came; with no calendar a bar plans its own day | the video bar's and the relay's `call_cycle` |
+| `ContentSharing`, `ContentSource` | shares through the stretch the room phase says; an operator's share or stop holds until it next changes | the bar's and the relay's sharing |
+| `PeopleCount` | the calendar's actual attendees, one fewer now and then; with no calendar a walk or the call's own count | the census counter's `occupancy_drift`, the bar's `people_count` |
+| `Climate` | the room's temperature moves toward the setpoint plus a load per attendee while in use | the control processor's `room_climate` |
+| `Battery`, `SpansBetween` | a pack's charge over the 48 hours before now, from the room's meetings alone | the transmitter's `battery_drain` |
+| `Recordings`, `PerRoom` | recordings in progress and the queue, over the rooms a service covers or its own | the recording service's `room_recordings` |
+| `BuildingDay`, `BuildingSpan` | a signage player plays inside the building's hours and stops outside | the signage player's `building_day` |
+| `BookingsAt`, `RoomBooking`, `SumBookings`, `FixedDay` | a room's booked count, state, now and next, and the day a service with no calendar keeps | the panel's, the scheduling service's and the booking service's readings |
+| `MicActivity`, `MicLevel`, `Gates`, `AmpSignalPresent`, `AmpTemperature`, `AmpOutputLevel`, `OutletCurrent` | microphones, mixer gates, amplifier signal and levels and a PDU outlet's load follow the people in the room | the Lyra, Polaris and Ferrite room behaviors |
+
+Each primitive has a table test over the pinned room day of the calendar's own phase tests (a booked meeting, a
+walk-in, a back-to-back pair, a meeting that shares, a no-show, a scripted impairment, and a room with no calendar),
+and a **parity test** that drives today's profile through the engine on a pinned clock, a tick at a time over that
+day, runs the primitive from the typed state the device holds with a twin of its random source, and compares every
+path the primitive owns. The two cannot drift apart unseen: a tick that draws a different number of times fails the
+next comparison.
+
 #### Reading the calendar back
 
 The lab calendar is the ground truth a learner lays beside what Omniglass detected, so a lab server
