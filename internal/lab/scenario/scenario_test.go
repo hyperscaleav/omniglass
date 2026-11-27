@@ -1216,3 +1216,41 @@ func TestCorporatePlacesOneSchedulingServiceForTheWholeFleet(t *testing.T) {
 		}
 	}
 }
+
+// A service entry may carry the label its component reads as (#2757); the plan
+// hands it on, and the shipped corporate account-wide services each declare one.
+func TestServicesCarryTheirLabelIntoThePlan(t *testing.T) {
+	m, err := Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Resolve(m, cat, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{}
+	for _, s := range m.Services {
+		if s.Label == "" {
+			t.Errorf("service %s declares no label", s.Name.Name)
+		}
+		want[fmt.Sprintf("%s-%s-1", plan.Sites[0].Name, s.Name.Name)] = s.Label
+	}
+	got := map[string]string{}
+	for _, p := range plan.Sites[0].Pushers {
+		if p.Service {
+			got[p.Name] = p.Label
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("plan has services %v, manifest has %v", got, want)
+	}
+	for n, l := range want {
+		if got[n] != l {
+			t.Errorf("service %s planned with label %q, want %q", n, got[n], l)
+		}
+	}
+}

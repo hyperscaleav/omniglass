@@ -81,6 +81,9 @@ type componentRow struct {
 	// Platform is the kind a meeting platform lists the component as, "" when
 	// it lists none (scenario.SlotFill.Platform, #2790).
 	Platform string
+	// Label is the label the component is created with ("" lets the platform
+	// make it): a polled service's, from its manifest entry (#2757).
+	Label string
 }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
@@ -146,7 +149,7 @@ func rowsOf(p *scenario.Plan) planRows {
 			if !ps.IsComponent() {
 				continue
 			}
-			r.Components = append(r.Components, componentRow{Key: ps.Name, Name: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
+			r.Components = append(r.Components, componentRow{Key: ps.Name, Name: ps.Name, Label: ps.Label, Product: ps.Profile, Site: site.Name, Room: site.Name})
 			comp := len(r.Components) - 1
 			if ps.Webhook {
 				r.Senders = append(r.Senders, senderRow{Comp: comp, Systems: ps.Systems, Service: ps.Service})
@@ -277,7 +280,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 	compIDs := make([]string, 0, len(rows.Components))
 	for _, c := range rows.Components {
 		prod, loc := c.Product, locIDs[c.Room]
-		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{Name: c.Name, ProductName: &prod, LocationName: &loc}, all, all, all, all)
+		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{Name: c.Name, Label: c.Label, ProductName: &prod, LocationName: &loc}, all, all, all, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}

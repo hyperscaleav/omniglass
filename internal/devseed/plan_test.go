@@ -750,3 +750,31 @@ func TestSeedPlanOnboardsEveryComponentUnderTheWorldsName(t *testing.T) {
 		t.Fatal("no outpost listed a device")
 	}
 }
+
+// An account-wide service reads as the manifest labels it, not as its
+// component type's "Generic Service" (#2757).
+func TestSeedPlanLabelsServicesByManifest(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := corporatePlan(t, 3)
+	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, svc := range m.Services {
+		if svc.Label == "" {
+			t.Errorf("service %s declares no label", svc.Name.Name)
+		}
+		name := fmt.Sprintf("%s-%s-1", p.Sites[0].Name, svc.Name.Name)
+		var got string
+		if err := conn.QueryRow(ctx, `select coalesce(label, '') from component where name = $1`, name).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != svc.Label {
+			t.Errorf("service %s reads %q, want the manifest's %q", name, got, svc.Label)
+		}
+	}
+}

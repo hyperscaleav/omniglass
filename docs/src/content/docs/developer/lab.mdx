@@ -1335,6 +1335,7 @@ pushers:                        # outside actors that report by pushing, placed 
 services:                       # polled cloud services: one account for the whole scenario (#2765)
   - name: scheduling            # placed once, at the headquarters, as <hq>-scheduling-1
     profile: scheduling-service # a product the simulator serves; it covers every system of every site
+    label: Scheduling Platform  # optional: what its component reads as in a console (#2757)
   - name: meeting               # <hq>-meeting-1
     profile: ucc-platform       # a profile with a webhook face is a signed-webhook sender as well (#2790)
   - name: recording             # <hq>-recording-1, the one recording service for every room (#2757)

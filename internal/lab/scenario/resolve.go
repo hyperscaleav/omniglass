@@ -71,6 +71,8 @@ type PusherPlan struct {
 	// the fleet, covering Systems. It is also a webhook sender (Webhook) when
 	// its profile posts webhooks as well (#2790).
 	Service bool
+	// Label is the service's manifest label (#2757), "" for none.
+	Label string
 }
 
 // IsComponent says whether the actor is a component the site's simulator
@@ -230,7 +232,7 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 			// platform, #2790) is a sender too: its signed posts name the
 			// rooms it covers as a polled list does.
 			sender := cat.Sender != nil && cat.Sender(d.Profile.Name)
-			hq.Pushers = append(hq.Pushers, PusherPlan{Name: fmt.Sprintf("%s-%s-1", hq.Name, d.Name.Name), Profile: d.Profile.Name, Systems: all, Service: true, Webhook: sender})
+			hq.Pushers = append(hq.Pushers, PusherPlan{Name: fmt.Sprintf("%s-%s-1", hq.Name, d.Name.Name), Profile: d.Profile.Name, Systems: all, Service: true, Webhook: sender, Label: d.Label})
 			plan.Pushers = addCount(plan.Pushers, d.Profile.Name, 1)
 		}
 	}

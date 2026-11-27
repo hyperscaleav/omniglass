@@ -143,10 +143,13 @@ pushers:
 services:
   - name: scheduling
     profile: scheduling-service
+    label: Scheduling Platform
   - name: meeting
     profile: ucc-platform
+    label: Meeting Platform
   - name: recording
     profile: recording-service
+    label: Recording Service
 
 # The past a lab seeded with --health-history carries (#2728, ADR-2726): every
 # system healthy for the 30 days before the lab started, except the showcase

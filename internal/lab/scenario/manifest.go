@@ -86,13 +86,17 @@ func (p *Pusher) UnmarshalYAML(n *yaml.Node) error {
 type Service struct {
 	Name    Ref `yaml:"name"`
 	Profile Ref `yaml:"profile"`
-	Line    int `yaml:"-"`
+	// Label is what the service's component reads as in a console (#2757),
+	// "Meeting Platform" rather than its component type's "Generic Service".
+	// Empty leaves the platform's own label.
+	Label string `yaml:"label"`
+	Line  int    `yaml:"-"`
 }
 
 // UnmarshalYAML decodes a service and keeps its line.
 func (s *Service) UnmarshalYAML(n *yaml.Node) error {
 	type plain Service
-	if err := decodeKnown(n, (*plain)(s), "name", "profile"); err != nil {
+	if err := decodeKnown(n, (*plain)(s), "name", "profile", "label"); err != nil {
 		return err
 	}
 	s.Line = n.Line
