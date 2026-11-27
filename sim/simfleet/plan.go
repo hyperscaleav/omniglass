@@ -78,8 +78,8 @@ var AttachSecret = map[string]string{
 // protocol beside the one its product's driver speaks. The Boreal display's
 // SNMP agent only reads it, and its web admin switches it (#2649); the
 // Kestrel bar's https API is joined by the control socket its touch panel
-// drives, a held websocket (#2754). Planned only where it is asked for,
-// never fleet wide.
+// drives, a held websocket (#2754). Planned only where it is asked for, never
+// fleet wide.
 var Control = map[string]string{
 	"boreal-edge-snmp": "boreal-edge-web",
 	"kestrel-api":      "kestrel-ws",

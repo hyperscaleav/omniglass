@@ -51,8 +51,11 @@ func uccCall(t *testing.T, d *Device, method, path, body string) []byte {
 
 type uccRooms struct {
 	Rooms []struct {
-		ID, Name, State, Meeting string
-		Participants             int
+		ID, Name, Status string
+		Meeting          struct {
+			ID           string
+			Participants int
+		}
 	}
 }
 
@@ -64,7 +67,7 @@ func readRooms(t *testing.T, d *Device) map[string]string {
 	}
 	out := map[string]string{}
 	for _, room := range r.Rooms {
-		out[room.ID] = room.State
+		out[room.ID] = room.Status
 	}
 	return out
 }
@@ -72,7 +75,7 @@ func readRooms(t *testing.T, d *Device) map[string]string {
 func TestTheUCCPlatformSpeaksForManyRooms(t *testing.T) {
 	d := uccPlatform(t)
 	rooms := readRooms(t, d)
-	if len(rooms) != 5 || rooms["zr-huddle-north"] != "in-call" || rooms["zr-boardroom-a"] != "idle" || rooms["zr-boardroom-b"] != "in-call" {
+	if len(rooms) != 5 || rooms["zr-huddle-north"] != "in-meeting" || rooms["zr-boardroom-a"] != "available" || rooms["zr-boardroom-b"] != "in-meeting" {
 		t.Fatalf("rooms = %v, want the five seeded rooms with their state", rooms)
 	}
 
@@ -83,7 +86,7 @@ func TestTheUCCPlatformSpeaksForManyRooms(t *testing.T) {
 	// A meeting in a room the account has not seen: it joins the list, and
 	// the post names it.
 	uccCall(t, d, http.MethodPost, "/api/rooms/meetings/start", `{"room":"zr-annex-2","id":"m-3001","participants":5}`)
-	if got := readRooms(t, d); got["zr-annex-2"] != "in-call" || len(got) != 6 {
+	if got := readRooms(t, d); got["zr-annex-2"] != "in-meeting" || len(got) != 6 {
 		t.Fatalf("after the start, rooms = %v, want zr-annex-2 in a call", got)
 	}
 	uccCall(t, d, http.MethodPost, "/api/rooms/meetings/end", `{"room":"zr-huddle-north"}`)
@@ -172,7 +175,7 @@ func TestARefusedStartLeavesTheRoomListReadable(t *testing.T) {
 		if !json.Valid(raw) {
 			t.Fatalf("after start %s the room list is not JSON: %s", body, raw)
 		}
-		if readRooms(t, d)["zr-new"] == "in-call" {
+		if readRooms(t, d)["zr-new"] == "in-meeting" {
 			t.Errorf("a refused start %s left the room reading in a call", body)
 		}
 	}
@@ -189,7 +192,7 @@ func TestTheUCCPlatformAddsRoomsAndReportsOnItsOwn(t *testing.T) {
 	uccCall(t, d, http.MethodPost, "/api/rooms", `{"id":"hq-conf-1"}`)
 	uccCall(t, d, http.MethodPost, "/api/rooms", `{"id":"zr-huddle-north"}`)
 	rooms := readRooms(t, d)
-	if rooms["hq-conf-1"] != "idle" || rooms["zr-huddle-north"] != "in-call" || len(rooms) != 6 {
+	if rooms["hq-conf-1"] != "available" || rooms["zr-huddle-north"] != "in-meeting" || len(rooms) != 6 {
 		t.Fatalf("rooms = %v, want hq-conf-1 added idle and zr-huddle-north still in a call", rooms)
 	}
 	rec := httptest.NewRecorder()

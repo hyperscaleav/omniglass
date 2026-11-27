@@ -94,16 +94,16 @@ func TestManifestRefusesTheRetiredUCCServiceProfile(t *testing.T) {
 		t.Fatalf("corporate does not validate as shipped: %v", err)
 	}
 	swapped := 0
-	for i := range m.Pushers {
-		if strings.HasPrefix(m.Pushers[i].Profile.Name, "ucc-") {
-			m.Pushers[i].Profile.Name = "ucc-service"
+	for i := range m.Services {
+		if strings.HasPrefix(m.Services[i].Profile.Name, "ucc-") {
+			m.Services[i].Profile.Name = "ucc-service"
 			swapped++
 		}
 	}
 	if swapped == 0 {
-		t.Fatal("corporate declares no UCC pusher to swap")
+		t.Fatal("corporate declares no UCC service to swap")
 	}
 	if err := scenario.Validate(m, cat); err == nil {
-		t.Error("a pusher of the retired ucc-service profile validates, want it refused")
+		t.Error("a service of the retired ucc-service profile validates, want it refused")
 	}
 }

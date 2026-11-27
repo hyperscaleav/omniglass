@@ -48,6 +48,7 @@ type World struct {
 	slots   map[string]string
 	systems map[string]Placement
 	covers  map[string][]Placement
+	listed  sync.Map // service name -> []Listing
 }
 
 // index builds the lookups once; a World is read-only after it is loaded.
@@ -99,14 +100,21 @@ type Room struct {
 // Device is one planned component: the name the world gives it (unique across
 // the plan, and the name the lab's seed onboards the component under, so a
 // simulator joins a pulled device by an exact name), the product it is, and
-// the simulator profile that serves it ("" when none does).
+// the simulator profile that serves it ("" when none does). The world owns its
+// id as it owns its name (#2790): a stable, deterministic id a cloud platform
+// that lists devices names it by. Platform is the kind of device a meeting
+// platform lists it as ("" when it lists none: a display or an amplifier is
+// no part of its account) and Firmware the version the device itself reports.
 type Device struct {
 	Name string `json:"name"`
 	// Slot is the role the device plays in its room (main-display,
 	// wireless-mic), which a scripted problem lands on (#2769).
-	Slot    string `json:"slot,omitempty"`
-	Product string `json:"product"`
-	Profile string `json:"profile,omitempty"`
+	Slot     string `json:"slot,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Product  string `json:"product"`
+	Profile  string `json:"profile,omitempty"`
+	Platform string `json:"platform,omitempty"`
+	Firmware string `json:"firmware,omitempty"`
 }
 
 // Service is a device that speaks for systems rather than sitting in one
@@ -116,10 +124,13 @@ type Service struct {
 	Name string `json:"name"`
 	// Address is the loopback address a pulled service (a webhook sender)
 	// is planned at; a token pusher is no pulled device and has none.
-	Address string  `json:"address,omitempty"`
-	Profile string  `json:"profile"`
-	Webhook bool    `json:"webhook,omitempty"`
-	Covers  []Cover `json:"covers,omitempty"`
+	Address string `json:"address,omitempty"`
+	Profile string `json:"profile"`
+	Webhook bool   `json:"webhook,omitempty"`
+	// Polled is a service the fleet polls, a component whether or not it
+	// also posts webhooks (#2765, #2790).
+	Polled bool    `json:"polled,omitempty"`
+	Covers []Cover `json:"covers,omitempty"`
 }
 
 // Cover is one system a service speaks for, and where that system sits.
@@ -160,7 +171,7 @@ func (w *World) Validate() error {
 		}
 		names[p.Name] = true
 	}
-	seen := map[string]bool{}
+		seen, ids := map[string]bool{}, map[string]string{}
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
 			for _, d := range r.Devices {
@@ -168,6 +179,13 @@ func (w *World) Validate() error {
 					return fmt.Errorf("world: device %q is placed twice", d.Name)
 				}
 				seen[d.Name] = true
+				if d.ID == "" {
+					continue
+				}
+				if other, dup := ids[d.ID]; dup {
+					return fmt.Errorf("world: devices %q and %q share the id %q", other, d.Name, d.ID)
+				}
+				ids[d.ID] = d.Name
 			}
 		}
 	}
@@ -301,5 +319,53 @@ func (w *World) Standards() []string {
 		out = append(out, s)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// Listing is one device a platform lists (#2790): the world's id for it, its
+// name, the kind the platform lists it as, the version it reports, the product
+// and profile, and the system and room it sits in.
+type Listing struct {
+	ID, Name, Type, Firmware, Product, Profile string
+	System                                     string
+	Site, Building, Room                       string
+}
+
+// Listed is the devices the named service lists, in id order: every device
+// with a platform kind in a room the service covers. A world is read-only once
+// loaded, so the list is built once per service. None for a name that is no
+// service.
+func (w *World) Listed(service string) []Listing {
+	if w == nil {
+		return nil
+	}
+	if v, ok := w.listed.Load(service); ok {
+		return v.([]Listing)
+	}
+	covered := map[string]bool{}
+	for _, s := range w.Services {
+		if s.Name == service {
+			for _, c := range s.Covers {
+				covered[c.System] = true
+			}
+		}
+	}
+	var out []Listing
+	for _, s := range w.Sites {
+		for _, r := range s.Rooms {
+			if !covered[r.System] {
+				continue
+			}
+			for _, d := range r.Devices {
+				if d.Platform == "" || d.ID == "" {
+					continue
+				}
+				out = append(out, Listing{ID: d.ID, Name: d.Name, Type: d.Platform, Firmware: d.Firmware, Product: d.Product,
+					Profile: d.Profile, System: r.System, Site: s.Name, Building: r.Building, Room: r.Name})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	w.listed.Store(service, out)
 	return out
 }

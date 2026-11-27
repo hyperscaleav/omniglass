@@ -105,32 +105,31 @@
       "drivers": [
         "kestrel-gaze-api",
         "kestrel-relay-api",
-        "recording-service-api",
-        "ucc-rooms"
+        "recording-service-api"
       ],
       "memory_per_task_kib": {
-        "median": 10.128125,
+        "median": 6.5875,
         "min": 3.47375,
         "max": 48.41875,
-        "n": 4
+        "n": 3
       },
       "memory_per_endpoint_kib": {
-        "median": 13.781875,
+        "median": 13.895,
         "min": 13.175,
         "max": 96.8375,
-        "n": 4
+        "n": 3
       },
       "cpu_per_run_ms": {
-        "median": 6.2325312993600095,
+        "median": 5.48409804887775,
         "min": 5.0743377372085,
-        "max": 7.21982653700496,
-        "n": 4
+        "max": 6.980964549842269,
+        "n": 3
       },
       "millicores_per_task": {
-        "median": 0.2077510433120003,
+        "median": 0.182803268295925,
         "min": 0.16914459124028333,
-        "max": 0.240660884566832,
-        "n": 4
+        "max": 0.23269881832807562,
+        "n": 3
       }
     },
     {
@@ -144,32 +143,31 @@
       "drivers": [
         "kestrel-gaze-api",
         "kestrel-relay-api",
-        "recording-service-api",
-        "ucc-rooms"
+        "recording-service-api"
       ],
       "memory_per_task_kib": {
-        "median": 10.128125,
+        "median": 6.5875,
         "min": 3.47375,
         "max": 48.41875,
-        "n": 4
+        "n": 3
       },
       "memory_per_endpoint_kib": {
-        "median": 13.781875,
+        "median": 13.895,
         "min": 13.175,
         "max": 96.8375,
-        "n": 4
+        "n": 3
       },
       "cpu_per_run_ms": {
-        "median": 6.2325312993600095,
+        "median": 5.48409804887775,
         "min": 5.0743377372085,
-        "max": 7.21982653700496,
-        "n": 4
+        "max": 6.980964549842269,
+        "n": 3
       },
       "millicores_per_task": {
-        "median": 0.020775104331200032,
+        "median": 0.018280326829592502,
         "min": 0.016914459124028336,
-        "max": 0.0240660884566832,
-        "n": 4
+        "max": 0.02326988183280756,
+        "n": 3
       }
     },
     {
@@ -774,17 +772,11 @@
       "kind": "https",
       "product": "ucc-platform",
       "polls": [
+        "30s",
         "30s"
       ],
-      "measured": true,
-      "step_tasks": 1600,
-      "memory_per_task_kib": 13.66875,
-      "memory_per_endpoint_kib": 13.66875,
-      "millicores_per_task": 0.240660884566832,
-      "cpu_per_run_ms": 7.21982653700496,
-      "thread_cpu_per_run_ms": 0.6972145544097208,
-      "thread_share": 0.09656943291312788,
-      "reason": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
+      "measured": false,
+      "reason": "its polls changed since the sweep; not yet measured at its polls"
     },
     {
       "driver": "ucc-webhook",

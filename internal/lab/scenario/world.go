@@ -1,6 +1,8 @@
 package scenario
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"hash/fnv"
 
@@ -28,6 +30,46 @@ const maxComponentNameLen = 100
 // own name generator is not asked.
 func ComponentName(system, slot string, n int) string {
 	return fmt.Sprintf("%s-%s-%d", system, slot, n)
+}
+
+// DeviceID is the id the world gives the component of that name (#2790): the
+// one a cloud platform that lists devices names it by. The world owns it as it
+// owns the name, and it is a pure function of the name, so every run, every
+// outpost and the lab's own seed agree on it without asking anyone.
+func DeviceID(name string) string {
+	sum := sha256.Sum256([]byte("omniglass-lab-device:" + name))
+	return "dev-" + hex.EncodeToString(sum[:])[:16]
+}
+
+// platformDeviceTypes is the kind a meeting platform lists a device as, by the
+// component type of its product (a type within it counts): the codec, bar,
+// controller, scheduling panel, camera and microphone a real account manages.
+// A display, an amplifier or a power strip is no part of its account.
+var platformDeviceTypes = []struct{ componentType, kind string }{
+	{"codec", "codec"},
+	{"video-bar", "bar"},
+	{"touch-panel", "controller"},
+	{"scheduling-panel", "scheduling-panel"},
+	{"camera", "camera"},
+	{"mic", "microphone"},
+}
+
+// PlatformDeviceType is the kind a meeting platform lists the product as, ""
+// when it lists none. Pure over the catalog.
+func PlatformDeviceType(cat Catalog, product string) string {
+	if cat.Product == nil || cat.Within == nil {
+		return ""
+	}
+	ct, ok := cat.Product(product)
+	if !ok {
+		return ""
+	}
+	for _, t := range platformDeviceTypes {
+		if cat.Within(ct, t.componentType) {
+			return t.kind
+		}
+	}
+	return ""
 }
 
 // SiteWorld is the world one site's simulator holds, resolved from the plan
@@ -78,13 +120,6 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 		return nil, err
 	}
 	w.Problems = m.ScriptedProblems()
-	profileOf := func(product string) string {
-		if cat.SimProfile == nil {
-			return ""
-		}
-		p, _ := cat.SimProfile(product)
-		return p
-	}
 	names := map[string]bool{}
 	claim := func(name string) error {
 		switch {
@@ -108,9 +143,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 				if err := claim(ComponentName(sys.Name, fill.Slot, i)); err != nil {
 					return nil, err
 				}
-				r.Devices = append(r.Devices, world.Device{
-					Name: ComponentName(sys.Name, fill.Slot, i), Slot: fill.Slot, Product: fill.Product, Profile: profileOf(fill.Product),
-				})
+				r.Devices = append(r.Devices, worldDevice(cat, ComponentName(sys.Name, fill.Slot, i), fill))
 			}
 		}
 		rooms = append(rooms, r)
@@ -134,6 +167,16 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 				if k, ok := m.MeetingKnobs(sys.Standard); ok {
 					r.Capacity = k.Attendance.Max
 				}
+				// Only the devices a platform lists come in (#2790): a cloud
+				// account names the devices of every site, and the rest are
+				// that site's own simulator's to serve.
+				for _, fill := range sys.Slots {
+					for i := 1; i <= fill.Count; i++ {
+						if d := worldDevice(cat, ComponentName(sys.Name, fill.Slot, i), fill); d.Platform != "" {
+							r.Devices = append(r.Devices, d)
+						}
+					}
+				}
 				rs = append(rs, r)
 				cover[sys.Name] = world.Cover{System: sys.Name, Site: other.Name, Building: sys.Building, Room: sys.Room}
 			}
@@ -149,7 +192,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 				return nil, err
 			}
 		}
-		svc := world.Service{Name: p.Name, Profile: p.Profile, Webhook: p.Webhook}
+		svc := world.Service{Name: p.Name, Profile: p.Profile, Webhook: p.Webhook, Polled: p.Service}
 		for _, s := range p.Systems {
 			c, ok := cover[s]
 			if !ok {
@@ -179,4 +222,18 @@ func checkProblemRooms(m *Manifest, plan *Plan) error {
 		}
 	}
 	return nil
+}
+
+// worldDevice is the world's device for the n-th component of a slot's fill:
+// its name and id, the product and the simulator profile that serves it, the
+// kind a meeting platform lists it as and the firmware it reports.
+func worldDevice(cat Catalog, name string, fill SlotFill) world.Device {
+	d := world.Device{Name: name, Slot: fill.Slot, ID: DeviceID(name), Product: fill.Product, Platform: fill.Platform}
+	if cat.SimProfile != nil {
+		d.Profile, _ = cat.SimProfile(fill.Product)
+	}
+	if cat.Firmware != nil {
+		d.Firmware = cat.Firmware(fill.Product)
+	}
+	return d
 }

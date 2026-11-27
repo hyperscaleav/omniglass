@@ -36,8 +36,8 @@ func TestEverySimulatedWebhookSenderNamesAShippedWebhookDriver(t *testing.T) {
 				keys[l.Identity.Key] = true
 			}
 		}
-		if len(keys) != 1 {
-			t.Errorf("%s names driver %s with identity keys %v, want exactly one room identity", name, p.Webhook.Driver, keys)
+		if len(keys) == 0 {
+			t.Errorf("%s names driver %s whose listeners name no identity, want at least the room's", name, p.Webhook.Driver)
 		}
 		if p.Webhook.Provision == "" {
 			t.Errorf("%s names a driver but no provision route, so its account never learns the bound rooms", name)

@@ -168,5 +168,8 @@ func (d *Device) behaviorFuncs() template.FuncMap {
 	for name, fn := range d.buildingFuncs() {
 		funcs[name] = fn
 	}
+	for name, fn := range d.listingFuncs() {
+		funcs[name] = fn
+	}
 	return funcs
 }

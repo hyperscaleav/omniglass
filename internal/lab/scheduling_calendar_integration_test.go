@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -166,14 +167,39 @@ func TestIntegrationCorporateSchedulingReadsTheCalendar(t *testing.T) {
 			}
 		}
 	}
+	// The platform pages its room list, ten rooms a page (the driver's rule, #2789): the
+	// ids the poll walks are the covered systems and the room nobody bound,
+	// sorted, so the rooms from the eleventh on are only ever read from a later
+	// page. Judge some of each: a value on a room of a later page can only come
+	// of a walk that followed the cursor.
+	const pageSize = 10
+	ids := []string{"unassigned-room"}
+	for _, c := range covers {
+		ids = append(ids, c.System)
+	}
+	sort.Strings(ids)
+	if len(ids) <= pageSize {
+		t.Fatalf("the platform lists %d rooms, want more than the %d a page holds so the poll must walk", len(ids), pageSize)
+	}
+	rank := map[string]int{}
+	for i, id := range ids {
+		rank[id] = i
+	}
 	// Judge the rooms the booking service does not also push for, so a value
 	// on a system can only be the conduit's.
-	judged := 0
+	judged, late := 0, 0
 	for _, c := range covers {
-		if pushed[c.System] || judged >= 3 {
+		if pushed[c.System] {
+			continue
+		}
+		onLaterPage := rank[c.System] >= pageSize
+		if judged >= 5 || (judged >= 2 && !onLaterPage) || (late >= 3 && onLaterPage) {
 			continue
 		}
 		judged++
+		if onLaterPage {
+			late++
+		}
 		room := calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}
 		fan := read("/systems/" + url.PathEscape(c.System) + "/properties/booking-state/samples?hours=1")
 		for _, sm := range fan.Samples {
@@ -187,6 +213,9 @@ func TestIntegrationCorporateSchedulingReadsTheCalendar(t *testing.T) {
 				t.Fatalf("the conduit fanned booking-count %s to %s at %s; the calendar never says so in the two minutes before", v, c.System, sm.TS)
 			}
 		}
+	}
+	if late == 0 {
+		t.Fatalf("no judged room sits past the first page of %d; the walk past one page proved nothing", pageSize)
 	}
 	if judged == 0 {
 		t.Fatal("every covered room is also pushed for; no room tells the conduit's values apart")
@@ -212,5 +241,5 @@ func TestIntegrationCorporateSchedulingReadsTheCalendar(t *testing.T) {
 		}
 		time.Sleep(10 * time.Second)
 	}
-	t.Logf("%s: %d count and %d state samples agree with the calendar; panel %s: %d samples agree; %d rooms fan out from %s", covered.System, len(count.Samples), len(state.Samples), panel, len(panelJudged), judged, conduit)
+	t.Logf("%s: %d count and %d state samples agree with the calendar; panel %s: %d samples agree; %d rooms (%d past the first page) fan out from %s", covered.System, len(count.Samples), len(state.Samples), panel, len(panelJudged), judged, late, conduit)
 }

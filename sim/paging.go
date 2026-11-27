@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -60,4 +61,34 @@ func pageKeys(m any, after any, size any) map[string]any {
 	return map[string]any{"keys": page, "next": next}
 }
 
-func init() { templateFuncs["pageKeys"] = pageKeys }
+// whole is a number read back from state as a whole number: state round-trips
+// through JSON, which hands a count or a unix time back as a float, and a
+// template that prints one would write 1.79565124e+09. Zero for a value that
+// is no number.
+//
+//	"start": {{ whole (index $r "start") }}
+func whole(v any) int64 {
+	switch n := v.(type) {
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	case float64:
+		return int64(n)
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+		f, _ := n.Float64()
+		return int64(f)
+	case string:
+		i, _ := strconv.ParseInt(n, 10, 64)
+		return i
+	}
+	return 0
+}
+
+func init() {
+	templateFuncs["pageKeys"] = pageKeys
+	templateFuncs["whole"] = whole
+}
