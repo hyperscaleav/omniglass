@@ -110,13 +110,6 @@ interfaces:
         visibility: private
         doc: { summary: "Recent device logs (private; undocumented direct-call route)", tags: [api, logs, private] }
 
-      # The #2773 probe (#2767 replaces it): the room's own meeting, read off the lab calendar (#2757): the
-      # organizer of the meeting running in the room now, the start of the
-      # next and the room's key. A bar placed in no room reads empty.
-      - match: "GET /api/room"
-        template: api/kestrel-vroom/room.json.gotempl
-        doc: { summary: "The room's current and next meeting, from the room's calendar", tags: [api, calendar] }
-
       - match: "GET /api/call"
         template: api/kestrel-vroom/call.json.gotempl
         doc: { summary: "Current call state", tags: [api, call] }
@@ -174,10 +167,10 @@ interfaces:
         doc: { summary: "Place a call (the room joins a meeting)", tags: [api, control] }
         example: |
           {"id": "c9001", "participants": 3}
-        # A dialed call starts now, whatever the room's schedule (#2754): the
-        # schedule skips a meeting that falls due under it, and the call
-        # runs until it is hung up or for the default length
-        # (status.sim.dial_length minutes of call_cycle ticks).
+        # A dialed call starts now, whatever the lab calendar holds (#2754): a
+        # meeting running under it is skipped, and the call runs until it is
+        # hung up or for the default length (status.sim.dial_length minutes
+        # of call_cycle ticks).
         mutations:
           - { path: status.call.id, value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
           - { path: status.call.active, value: true }
@@ -194,16 +187,15 @@ interfaces:
         template: api/kestrel-vroom/system-ack.json.gotempl
         doc: { summary: "Disconnect active call", tags: [api, control] }
         example: "{}"
-        # A hang-up ends the call now, dialed or scheduled, and drops the
-        # meeting it ended so the schedule books the room's next slot.
+        # A hang-up ends the call now, dialed or on the calendar, and the
+        # next tick marks the meeting it ended as skipped, so the bar does not
+        # join it again; the room's next meeting is joined as it comes.
         mutate:
           status.call.active: false
           status.call.participants: 0
           status.sim.dialed: false
           status.sim.dial_ticks: 0
-          status.sim.start_at: 0
-          status.sim.end_at: 0
-          status.sim.plan_at: 0
+          status.sim.hungup: true
         events:
           - name: call-ended
             data: '{"id":"{{ .State | get "status" | get "call" | get "id" }}"}'
@@ -282,97 +274,76 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The bar talks on its own (#2754): it keeps its room's meeting schedule,
-# its participants coming and going in a call, its call stats drifting and
-# its log stream, so a lab's every video bar shows what a codec reports
-# without anyone dialing. No tick is faster than 15 s (#1360's cost rule:
-# richness from more kinds of signal, not more samples), and a tick streams
-# only what it changed, so the live feed carries a call's transitions, not a
-# heartbeat. A dial (POST /api/call/dial) makes it talk now.
+# The bar talks on its own, off the lab calendar (#2757, #2767): its calls are
+# the meetings its room holds (meetingNow), so the scheduling panel, the
+# booking service, the meeting platform and the codec beside it all say the
+# same thing of one room. The bar keeps no schedule of its own. One call per
+# held meeting (none for a no-show), starting and ending at the first tick on
+# or after the meeting does, participants joining and leaving inside it (never
+# more than the meeting's actual, from the device's own draws), content shared
+# now and then, its call stats drifting and its log stream. A meeting that
+# starts as the last one ends moves the call on in one tick (turn). With no
+# calendar, or a bar in no room, there is no call. No tick is faster than 15 s
+# (#1360's cost rule: richness from more kinds of signal, not more samples),
+# and a tick streams only what it changed, so the live feed carries a call's
+# transitions, not a heartbeat. A dial (POST /api/call/dial) makes it talk now
+# and a hang-up leaves the meeting it ended: the calendar yields to both.
 behaviors:
-  # The room's meetings, on the wall clock, one tick a minute. When the room
-  # is free it books its next slot: a 15, 30 or 60 minute slot (15%, 45%,
-  # 40%) starting on the next half hour (a 15 minute one on the next
-  # quarter), taken about half the time (a slot it leaves free is planned
-  # past). A booked meeting starts 2 minutes
-  # early to 5 late, and ends up to 5 minutes before its slot does. In a
-  # call a participant joins or leaves now and then (8% a minute). The
-  # draws are the device's own source, so a bar keeps the same schedule on
-  # every run. status.sim.event names what this tick did (start, end, join,
-  # leave, or nothing), and the events and log lines read it. A dialed call
-  # owns the room: a meeting falling due under it is skipped, and it ends
-  # at hang-up or after status.sim.dial_length ticks. The bookkeeping
-  # (status.sim) is the simulator's, outside the paths the live feed streams.
+  # One tick a minute reads the calendar once into status.sim.want (the call
+  # the room should be in, "c<start>", empty for none) and want_n (who came),
+  # and the rest of the tick reads those. status.sim.event names what the tick
+  # did (start, end, turn, join, leave, or nothing); the events and log lines
+  # read it. The bookkeeping (status.sim) is the simulator's, outside the
+  # paths the live feed streams. status.sim.skip is the start of a meeting a
+  # dial overtook or a hang-up ended: it is not joined.
   - name: call_cycle
     schedule:
       interval: 60s
     mutations:
       - path: status.sim.participants_prev
         value: '{{ .State.status.call.participants }}'
+      - path: status.sim.id_prev
+        value: '{{ .State.status.call.id }}'
+      - path: status.sim.skip
+        value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with meetingNow }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
+      - path: status.sim.hungup
+        value: 'false'
+      - path: status.sim.want
+        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}c{{ .start }}{{ end }}{{ end }}'
+      - path: status.sim.want_n
+        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
       - path: status.sim.event
-        value: '{{ $now := now }}{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $move := "" }}{{ if chance 0.08 }}{{ if or (le $n 2) (and (lt $n 8) (chance 0.5)) }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if ge $now $s.end_at }}end{{ else }}{{ $move }}{{ end }}{{ else if and (gt $s.start_at 0) (ge $now $s.start_at) (lt $now $s.end_at) }}start{{ end }}'
+        value: '{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $a := $s.want_n }}{{ if $s.dialed }}{{ $a = 8 }}{{ end }}{{ $move := "" }}{{ if chance 0.08 }}{{ if and (lt $n $a) (gt $n 1) }}{{ if chance 0.5 }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ else if lt $n $a }}{{ $move = "join" }}{{ else if gt $n 1 }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ if ge (add $s.dial_ticks 1) $s.dial_length }}end{{ else }}{{ $move }}{{ end }}{{ else if eq $s.want "" }}end{{ else if ne $s.want .State.status.call.id }}turn{{ else }}{{ $move }}{{ end }}{{ else if and (ne $s.want "") (not $s.dialed) }}start{{ end }}'
       - path: status.sim.dial_ticks
         value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (ne $s.event "end") }}{{ add $s.dial_ticks 1 }}{{ else }}0{{ end }}'
       - path: status.sim.dialed
         value: '{{ if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.sim.dialed }}{{ end }}'
       - path: status.call.active
-        value: '{{ $e := .State.status.sim.event }}{{ if eq $e "start" }}true{{ else if eq $e "end" }}false{{ else }}{{ .State.status.call.active }}{{ end }}'
-      - path: status.sim.call_seq
-        value: '{{ if eq .State.status.sim.event "start" }}{{ add .State.status.sim.call_seq 1 }}{{ else }}{{ .State.status.sim.call_seq }}{{ end }}'
+        value: '{{ $e := .State.status.sim.event }}{{ if or (eq $e "start") (eq $e "turn") }}true{{ else if eq $e "end" }}false{{ else }}{{ .State.status.call.active }}{{ end }}'
       - path: status.call.id
-        value: '{{ if eq .State.status.sim.event "start" }}c{{ add 9000 .State.status.sim.call_seq }}{{ else }}{{ .State.status.call.id }}{{ end }}'
+        value: '{{ $e := .State.status.sim.event }}{{ if or (eq $e "start") (eq $e "turn") }}{{ .State.status.sim.want }}{{ else }}{{ .State.status.call.id }}{{ end }}'
+      # A call opens with half to all of who came, then people join and leave
+      # inside it, never past who came.
       - path: status.call.participants
-        value: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ if eq $e "start" }}{{ randInt 2 6 }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
+        value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "start") (eq $e "turn") }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
       # The room shares a laptop now and then in a call.
       - path: status.presentation.local_active
         value: '{{ if .State.status.call.active }}{{ if chance 0.05 }}{{ not .State.status.presentation.local_active }}{{ else }}{{ .State.status.presentation.local_active }}{{ end }}{{ else }}false{{ end }}'
-      # A meeting falling due under a dialed call is skipped.
-      - path: status.sim.start_at
-        value: '{{ $s := .State.status.sim }}{{ if and .State.status.call.active $s.dialed (gt $s.start_at 0) (ge now $s.start_at) }}0{{ else }}{{ $s.start_at }}{{ end }}'
-      # Planning: a free room books (or leaves free) its next slot.
-      - path: status.sim.plan
-        value: '{{ $s := .State.status.sim }}{{ $now := now }}{{ and (not .State.status.call.active) (ge $now $s.plan_at) (or (eq $s.start_at 0) (ge $now $s.end_at)) }}'
-      - path: status.sim.slot
-        value: '{{ if .State.status.sim.plan }}{{ $r := randInt 1 20 }}{{ if le $r 3 }}15{{ else if le $r 12 }}30{{ else }}60{{ end }}{{ else }}{{ .State.status.sim.slot }}{{ end }}'
-      - path: status.sim.boundary
-        value: '{{ if .State.status.sim.plan }}{{ if eq .State.status.sim.slot 15 }}{{ nextSlot now 15 }}{{ else }}{{ nextSlot now 30 }}{{ end }}{{ else }}{{ .State.status.sim.boundary }}{{ end }}'
-      - path: status.sim.booked
-        value: '{{ if .State.status.sim.plan }}{{ chance 0.5 }}{{ else }}{{ .State.status.sim.booked }}{{ end }}'
-      - path: status.sim.start_at
-        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}{{ add $s.boundary (mul 60 (randInt -2 5)) }}{{ else }}0{{ end }}{{ else }}{{ $s.start_at }}{{ end }}'
-      - path: status.sim.end_at
-        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}{{ sub (add $s.boundary (mul 60 $s.slot)) (mul 60 (randInt 0 5)) }}{{ else }}0{{ end }}{{ else }}{{ $s.end_at }}{{ end }}'
-      - path: status.sim.plan_at
-        value: '{{ $s := .State.status.sim }}{{ if $s.plan }}{{ if $s.booked }}0{{ else }}{{ sub (add $s.boundary (mul 60 $s.slot)) 120 }}{{ end }}{{ else }}{{ $s.plan_at }}{{ end }}'
     events:
+      - name: call-ended
+        data: '{{ $s := .State.status.sim }}{{ if or (eq $s.event "end") (eq $s.event "turn") }}{"id":"{{ $s.id_prev }}","participants":{{ $s.participants_prev }}}{{ end }}'
+      # The codec's log stream (event: log): one line per occurrence, its
+      # severity, facility and text as the bar's own log writes them.
+      - name: log
+        data: '{{ $s := .State.status.sim }}{{ if or (eq $s.event "end") (eq $s.event "turn") }}{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ $s.id_prev }}, peers={{ $s.participants_prev }}, reason=remote-hangup)"}{{ end }}'
       - name: call-started
-        data: '{{ if eq .State.status.sim.event "start" }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.call.participants }}}{{ end }}'
+        data: '{{ $e := .State.status.sim.event }}{{ if or (eq $e "start") (eq $e "turn") }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.call.participants }}}{{ end }}'
       - name: participant-joined
         data: '{{ if eq .State.status.sim.event "join" }}{"call_id":"{{ .State.status.call.id }}","participant":"guest-{{ .State.status.call.participants }}","participants":{{ .State.status.call.participants }}}{{ end }}'
       - name: participant-left
         data: '{{ if eq .State.status.sim.event "leave" }}{"call_id":"{{ .State.status.call.id }}","participant":"guest-{{ .State.status.sim.participants_prev }}","participants":{{ .State.status.call.participants }}}{{ end }}'
-      - name: call-ended
-        data: '{{ if eq .State.status.sim.event "end" }}{"id":"{{ .State.status.call.id }}","participants":{{ .State.status.sim.participants_prev }}}{{ end }}'
-      # The codec's log stream (event: log): one line per occurrence, its
-      # severity, facility and text as the bar's own log writes them.
       - name: log
-        data: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ $id := .State.status.call.id }}{{ if eq $e "start" }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if eq $e "join" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "leave" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "end" }}{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ $id }}, peers={{ .State.status.sim.participants_prev }}, reason=remote-hangup)"}{{ end }}'
-
-  # The #2773 probe, which #2767 (conferencing) replaces with the bar's real
-  # call behavior: it exists so a lab test can observe a real device reading
-  # its room's meeting. The room's calendar, read through the device's room: the lab
-  # calendar is the one every device of the room speaks of, so the bar reads
-  # it and does not keep a second schedule of its own. Empty with no world.
-  - name: room_calendar
-    schedule:
-      interval: 15s
-    mutations:
-      - path: status.room.meeting_organizer
-        value: '{{ with meetingNow }}{{ .organizer }}{{ end }}'
-      - path: status.room.next_start
-        value: '{{ with meetingNext }}{{ .start }}{{ else }}0{{ end }}'
-      - path: status.room.key
-        value: '{{ with meetingNext }}{{ .site }}/{{ .building }}/{{ .room }}{{ end }}'
+        data: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ $id := .State.status.call.id }}{{ if or (eq $e "start") (eq $e "turn") }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if eq $e "join" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "leave" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ end }}'
 
   # A status line every 15 minutes, call or none, so the log stream is not
   # only a call's.
@@ -455,13 +426,6 @@ defaults:
     presentation:
       # Local (HDMI/USB-C) presentation active vs idle.
       local_active: false
-    # The room's meetings off the lab calendar (room_calendar): who has the
-    # room now, when the next starts (unix seconds, 0 for none) and the
-    # room's key (site/building/room).
-    room:
-      meeting_organizer: ""
-      next_start: 0
-      key: ""
     logs:
       # Recent device log lines, surfaced over the PRIVATE /api/logs
       # route. The web admin "Recent logs" card fetches this from client
@@ -500,24 +464,22 @@ defaults:
       jitter_ms: 0
       bitrate_kbps: 0
       frame_rate: 0
-    # The schedule's bookkeeping (call_cycle): what this tick did, the
-    # meeting it has booked (its slot, boundary, start and end, unix
-    # seconds; 0 for none), when it plans next, the calls it has placed, a
-    # dialed call and its length, and the count before this tick. The
+    # The call cycle's bookkeeping: what this tick did, the call the room's
+    # meeting says it should be in and how many came (read off the lab
+    # calendar, empty and 0 for none), the start of a meeting a dial overtook
+    # or a hang-up ended (skipped), a hang-up waiting for the next tick, a
+    # dialed call and its length, and the id and count before this tick. The
     # simulator's, not the codec's: no template serves it.
     sim:
       event: ""
-      plan: false
-      slot: 30
-      boundary: 0
-      booked: false
-      start_at: 0
-      end_at: 0
-      plan_at: 0
-      call_seq: 0
+      want: ""
+      want_n: 0
+      skip: 0
+      hungup: false
       dialed: false
       dial_ticks: 0
       dial_length: 30
+      id_prev: ""
       participants_prev: 0
       net_event: ""
       uplink_degraded: false
