@@ -130,7 +130,7 @@ behaviors:
       - path: status.switcher.input
         value: '{{ $s := .State.status.sim }}{{ if ne $s.want $s.prev }}{{ $s.want }}{{ else }}{{ .State.status.switcher.input }}{{ end }}'
       - path: status.switcher.signal
-        value: '{{ $sw := .State.status.switcher }}{{ get $sw.inputs $sw.input | get "signal" }}'
+        value: '{{ $sw := .State.status.switcher }}{{ if hasCalendar }}{{ get $sw.inputs $sw.input | get "signal" }}{{ else }}{{ $sw.signal }}{{ end }}'
 
   - name: signal_follow
     schedule:
