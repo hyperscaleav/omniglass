@@ -1241,6 +1241,39 @@ drivers:
           identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
           emits:
             - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
+  - id: scheduling-service-api
+    label: Scheduling Service Rooms
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The room-booking platform's room list (#2765, ADR-1282): one poll of
+      # GET /api/rooms reads every room the account serves, one record per
+      # room, each naming its room by id, so each room's booking state and the
+      # bookings left in its day land on the system or component bound to that
+      # id on this component (the conduit). The platform answers over https on
+      # 443, its key pinned on first use, every request carrying its token.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: token, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: token
+        scheme: api-key
+        api_key: { in: header, name: X-Sched-Token }
+      polls:
+        - name: rooms
+          schedule: { every: 30s }
+          # TODO(#2789): the platform pages this list (next_page_token); the
+          # driver walks one page, the largest it allows, until the paging
+          # rule lands.
+          request: { path: /api/rooms, query: { page_size: "300" } }
+          records: rooms
+          identity: { key: sched-room-id, extract: { jsonpath: id } }
+          emits:
+            - { name: booking-state, extract: { jsonpath: state } }
+            - { name: booking-count, extract: { jsonpath: remaining } }
   - id: ucc-rooms
     label: UCC Rooms
     version: "1.0.0"
@@ -1265,7 +1298,18 @@ drivers:
       polls:
         - name: rooms
           schedule: { every: 30s }
-          request: { path: /api/rooms }
+          # The room list pages (#2789): each answer carries the cursor of the
+          # next page in next_page_token, sent back as the query parameter of
+          # the same name, until an answer carries none; one poll walks every
+          # page and fans every room out.
+          request:
+            path: /api/rooms
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 100
+              cursor_from: next_page_token
+              cursor_param: next_page_token
           records: rooms
           identity: { key: ucc-room-id, extract: { jsonpath: id } }
           emits:

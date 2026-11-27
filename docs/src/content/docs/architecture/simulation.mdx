@@ -414,6 +414,27 @@ Devices that read the calendar:
   building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
   the world's knobs give them), and the
   player plays inside them and stops outside.
+- **The scheduling surfaces** (#2765): the booking service, the scheduling service and the Slate 5
+  panel say what the calendar says of a room, through `bookings`, `roomBookings` and `ownerBookings`
+  (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked
+  meeting holds its room from the earlier of its slot's start and its own to the later of its slot's
+  end and its own.
+  - The **booking service** pushes each system's `booking-count` (booked meetings left in the day, the
+    one running included) and `booking-state` for the room the world places the system in. It pushes
+    for the system names the world gives it, since a grant carries only the server's ids.
+  - The **scheduling service** is one account for the whole fleet, a conduit
+    ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)):
+    the lab places it once, at the headquarters, covering every room the plan books. Its rooms list
+    is token-paged, one record per room named by the room's system, with that
+    room's booking state, bookings today and left, the organizer holding it and the next start, all
+    off the calendar. A driver polls it and fans each record out to the system the lab's installer
+    bound that room id to; a room nobody bound lands in the conduit's unbound inbox. It also counts
+    today's booked meetings, those still to come and the rooms with one in progress across the rooms it covers.
+  - The **scheduling panel** reads its own room: booked or free, `GET CURRENT` and `GET NEXT` for the
+    booked meeting holding the room and the next (`<start> <end> <organizer>` of the slot, or
+    `none`). BOOK and RELEASE are a momentary override that holds until the calendar's reading changes.
+  - A device with no calendar (the dev fleet has no world file) keeps its previous behavior exactly: the
+    booking service its fixed meeting day, the scheduling service its 8 and no rooms, the panel its buttons.
 - **Room audio** (#2774): the ceiling microphone is active, with its level up and mute moving now and
   then, while someone is in the room (a no-show holds its slot with nobody in it, so it is idle). The
   wireless pack transmits in the same hours, and its battery is a pure function of the calendar over

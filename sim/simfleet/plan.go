@@ -28,6 +28,9 @@ const (
 	// UCCTokenSecret is the simulated UCC platform's api token (#1282), the
 	// one its http api's X-UCC-Token header demands.
 	UCCTokenSecret = "sim-ucc-token"
+	// SchedTokenSecret is the simulated scheduling service's api token
+	// (#2765), the one its http api's X-Sched-Token header demands.
+	SchedTokenSecret = "sim-sched-token"
 	// CastKeySecret is the simulated Boreal Cast media player's api key
 	// (#893), sent in the header its API demands.
 	CastKeySecret = "sim-cast-key"
@@ -55,6 +58,7 @@ var AttachSecret = map[string]string{
 	"kestrel-gaze-api":       KestrelLoginSecret,
 	"tessellate-census-http": CensusKeySecret,
 	"ucc-rooms":              UCCTokenSecret,
+	"scheduling-service-api": SchedTokenSecret,
 	"boreal-cast-api":        CastKeySecret,
 	"recording-service-api":  RecordingKeySecret,
 	"lyra-arc-snmp":          CommunitySecret,
@@ -219,6 +223,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// first use, its key in the header the service demands.
 	"recording-service-api": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "key": RecordingKeySecret}
+	},
+	// The scheduling service's https API on 443 (#2765), its key pinned on
+	// first use, its token in the header the service demands.
+	"scheduling-service-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": SchedTokenSecret}
 	},
 	// The UCC platform's https API on 443 (#1282), its key pinned on first
 	// use, its token in the header the platform demands.

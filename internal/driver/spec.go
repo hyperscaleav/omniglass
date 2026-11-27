@@ -142,6 +142,10 @@ type Request struct {
 	// (DefaultCommandRetries). The endpoint's timeout bounds the whole
 	// exchange, each attempt an equal share of it.
 	Retries *int `json:"retries,omitempty"`
+	// Paginate is how an http poll's list answer pages (#2789): the engine
+	// walks every page in one poll and reads the function's records out of
+	// all of them. Absent, the request is one page.
+	Paginate *Pagination `json:"paginate,omitempty"`
 }
 
 // The retry defaults and bound (#1037). A poll or the request rung re-asks
@@ -738,6 +742,9 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		if p.Records != "" && (!IsHTTP(s.Transport) || p.Request.FormatOf() != FormatJSON) {
 			return fmt.Errorf("driver: poll %q declares records, which read an array out of a JSON body; a %s answer is not one (records ride an http poll of format json)", p.Name, pollAnswer(s.Transport, p.Request))
+		}
+		if p.Request.Paginate != nil && p.Records == "" {
+			return fmt.Errorf("driver: poll %q paginates, which gathers the records of every page; declare records, the array each page carries", p.Name)
 		}
 		if IsWebSocket(s.Transport) {
 			if err := validateFrameRequest(fmt.Sprintf("poll %q", p.Name), p.Request); err != nil {

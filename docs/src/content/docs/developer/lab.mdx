@@ -1202,6 +1202,9 @@ pushers:                        # outside actors that report by pushing, placed 
   - name: ucc                   # each placed one is <site>-ucc-<k>
     profile: ucc-platform       # a simulator profile with a webhook face: a signed-webhook sender
     per_site: 1                 # systems omitted: it speaks for every one of the site's systems
+services:                       # polled cloud services: one account for the whole scenario (#2765)
+  - name: scheduling            # placed once, at the headquarters, as <hq>-scheduling-1
+    profile: scheduling-service # a product the simulator serves; it covers every system of every site
 calendar:                       # what every room acts out on the simulator's clock (#2757)
   meetings:
     mr65:                       # a standard of this scenario; knobs per standard

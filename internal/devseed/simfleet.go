@@ -41,6 +41,8 @@ var simSecrets = []storage.SecretSpec{
 		OwnerKind: "platform", Fields: map[string]string{"key": "census-lab-key"}},
 	{Name: simfleet.UCCTokenSecret, Label: "Simulated UCC platform api token", SecretType: "api-key",
 		OwnerKind: "platform", Fields: map[string]string{"key": "ucc-lab-token"}},
+	{Name: simfleet.SchedTokenSecret, Label: "Simulated scheduling service api token", SecretType: "api-key",
+		OwnerKind: "platform", Fields: map[string]string{"key": "sched-lab-token"}},
 	{Name: simfleet.CastKeySecret, Label: "Simulated Boreal Cast player api key", SecretType: "api-key",
 		OwnerKind: "platform", Fields: map[string]string{"key": "boreal-cast-key"}},
 	{Name: simfleet.RecordingKeySecret, Label: "Simulated recording service api key", SecretType: "api-key",

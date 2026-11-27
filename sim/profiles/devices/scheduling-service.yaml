@@ -7,8 +7,27 @@
 # network band.
 #
 # Course datapoints (HTTP, token auth, one way in):
-#   status.bookings.today  , bookings scheduled for today
-#   configuration.sync_ok  , last config sync succeeded
+#   status.bookings.today        , booked meetings today across the rooms it serves
+#   status.bookings.remaining    , of those, the ones not over (the one running included)
+#   status.bookings.in_progress  , rooms a booked meeting holds now
+#   configuration.rooms_served   , rooms the platform speaks for
+#   configuration.sync_ok        , last config sync succeeded
+#
+# The sim is; Omniglass learns (#2757, #2765). The counts are the lab
+# calendar's booked entries (a walk-in is no booking, a no-show is one) for
+# the rooms the world says this service speaks for (a service the world
+# covers rooms for) or, placed in a room, that room (servedRooms), recomputed
+# each tick on the device's clock. A service the world covers no room for (the
+# dev fleet has no world file) has no calendar and keeps its previous
+# behavior exactly: today's count stays the fixed 8.
+#
+# GET /api/rooms lists every room it serves as a record (ADR-1282, the same
+# fan-out shape as the meeting platform's): its id is the system the room
+# belongs to, with that room's booking state, booked meetings today and left,
+# the organizer holding it now and the next start. A driver polls it once and
+# each record's values land on the system its room id is bound to; the
+# unassigned-room record is bound to nothing and lands in the conduit's
+# unbound inbox.
 #
 # Auth: header token. public_paths exempts the dashboard root.
 
@@ -51,6 +70,10 @@ interfaces:
         template: api/scheduling-service/status.json.gotempl
         doc: { summary: "Service status (today's bookings, sync health)", tags: [api, status] }
 
+      - match: "GET /api/rooms"
+        template: api/scheduling-service/rooms.json.gotempl
+        doc: { summary: "Every room the platform serves with its bookings, one record each", tags: [api, rooms, fan-out] }
+
       - match: "GET /api/bookings"
         template: api/scheduling-service/bookings.json.gotempl
         doc: { summary: "Today's bookings + config sync flag", tags: [api, bookings] }
@@ -62,13 +85,38 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
+behaviors:
+  - name: bookings_sync
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.bookings.today
+        value: '{{ if servedRooms }}{{ $n := 0 }}{{ range servedRooms }}{{ $n = add $n (roomBookings .site .building .room).today }}{{ end }}{{ $n }}{{ else }}{{ .State.status.bookings.today }}{{ end }}'
+      - path: status.bookings.remaining
+        value: '{{ $n := 0 }}{{ range servedRooms }}{{ $n = add $n (roomBookings .site .building .room).remaining }}{{ end }}{{ $n }}'
+      - path: status.bookings.in_progress
+        value: '{{ $n := 0 }}{{ range servedRooms }}{{ if (roomBookings .site .building .room).booked }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ $n }}'
+      # The rooms it serves, one record each, named by the system the room
+      # belongs to (the room id the lab's installer binds, ADR-1282), with the
+      # booked meetings the calendar holds for it. unassigned-room is a room the
+      # platform knows and nobody bound: its values land in the conduit's
+      # unbound inbox. With no rooms to serve the records stay as they were.
+      - path: status.rooms
+        value: '{{ if servedRooms }}{ {{- $sep := "" }}{{ range servedRooms }}{{ $b := roomBookings .site .building .room }}{{ $sep }}{{ marshal (or .system .room) }}: {"state": {{ marshal $b.state }}, "today": {{ $b.today }}, "remaining": {{ $b.remaining }}, "current": {{ with $b.now }}{{ marshal .organizer }}{{ else }}""{{ end }}, "next_start": {{ with $b.next }}{{ .slot_start }}{{ else }}0{{ end }}}{{ $sep = "," }}{{ end }},"unassigned-room": {"state": "free", "today": 0, "remaining": 0, "current": "", "next_start": 0} }{{ else }}{{ marshal .State.status.rooms }}{{ end }}'
+      - path: configuration.rooms_served
+        value: '{{ len servedRooms }}'
+
 defaults:
   status:
     device:
       boot_epoch: 0
     bookings:
       today: 8
+      remaining: 0
+      in_progress: 0
+    rooms: {}
   configuration:
+    rooms_served: 0
     sync_ok: true
     device:
       serial: ""

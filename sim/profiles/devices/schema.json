@@ -125,7 +125,7 @@
         },
         "body": {
           "type": "string",
-          "description": "Template rendered per system to the push route's JSON body, over the device's state (.State, .Defaults), .Owner (the system's id) and .Now (the device's clock). bookingsAt .Now <windows> reads a list of HH:MM-HH:MM UTC windows as {State, Remaining}."
+          "description": "Template rendered per system to the push route's JSON body, over the device's state (.State, .Defaults), .Owner (the system's id) and .Now (the device's clock). bookingsAt .Now <windows> reads a list of HH:MM-HH:MM UTC windows as {State, Remaining}; ownerBookings .Owner reads the lab calendar's booked meetings for that system's room as {today, remaining, booked, state, now, next}."
         }
       }
     },

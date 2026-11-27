@@ -41,6 +41,12 @@ type Manifest struct {
 	// a webhook face (a signed-webhook sender, #1747), how many a site, and
 	// how many of the site's systems each is scoped to.
 	Pushers []Pusher `yaml:"pushers"`
+	// Services are the polled cloud services the scenario has (#2765): one
+	// account for the whole fleet, not a box in each room or a service a
+	// site. Each is a component of a product the simulator serves, placed
+	// once at the headquarters and covering every system of the plan, so the
+	// simulator knows which rooms it speaks for.
+	Services []Service `yaml:"services"`
 	// HealthHistory is the past a lab seeded with --health-history carries
 	// (#2728); nil when the scenario declares none.
 	HealthHistory *HealthHistory `yaml:"health_history"`
@@ -72,6 +78,24 @@ func (p *Pusher) UnmarshalYAML(n *yaml.Node) error {
 		return err
 	}
 	p.Line = n.Line
+	return nil
+}
+
+// Service is one polled cloud service a scenario places once: the name its
+// component is made from and the product it is, which the simulator serves.
+type Service struct {
+	Name    Ref `yaml:"name"`
+	Profile Ref `yaml:"profile"`
+	Line    int `yaml:"-"`
+}
+
+// UnmarshalYAML decodes a service and keeps its line.
+func (s *Service) UnmarshalYAML(n *yaml.Node) error {
+	type plain Service
+	if err := decodeKnown(n, (*plain)(s), "name", "profile"); err != nil {
+		return err
+	}
+	s.Line = n.Line
 	return nil
 }
 
@@ -238,7 +262,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "health_history", "calendar"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "services", "health_history", "calendar"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file
