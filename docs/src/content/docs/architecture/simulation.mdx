@@ -395,7 +395,9 @@ runs and across engines:
 
 The engine holds the calendar (`Engine.SetCalendar`) and reads time only through each device's clock,
 the seam a test pins. A behavior's template reads its own room with `meetingNow` and `meetingNext`
-(each a map of the meeting, or nothing), and any template, a push body included, reads another room
+(each a map of the meeting, or nothing), `meetingsBetween` reads the room's meetings over a window of
+unix seconds (what a charge or a warm-up is built from), `hasCalendar` says whether the room has a
+calendar at all, and any template, a push body included, reads another room
 by its key with `roomMeetingNow` and `roomMeetingNext`. A service that speaks for many rooms reads by
 **room key**, not by system: the calendar is keyed by room, and a push's `.Owner` is a system, so a
 service resolves its owner to the room key before it reads, through
@@ -410,6 +412,15 @@ Devices that read the calendar:
   building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
   the world's knobs give them), and the
   player plays inside them and stops outside.
+- **Room audio** (#2774): the ceiling microphone is active, with its level up and mute moving now and
+  then, while someone is in the room (a no-show holds its slot with nobody in it, so it is idle). The
+  wireless pack transmits in the same hours, and its battery is a pure function of the calendar over
+  the 48 hours before now (`meetingsBetween`): it drains in use and recharges on its dock between
+  meetings, so the charge reads the same at any instant on any run, and a scheduled problem can pin it.
+  The DSP opens a gate for every two attendees actually in the room, up to its four table and ceiling
+  strips, and raises their peak with the head count; the amplifier carries signal and warms while the
+  room is in use. Each sits at its noise floor otherwise. A device whose room holds no calendar
+  (`hasCalendar`) keeps its earlier drift unchanged.
 
 ### A simulated service posts from the start
 

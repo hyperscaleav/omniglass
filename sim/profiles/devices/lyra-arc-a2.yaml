@@ -5,6 +5,11 @@
 # array microphone, powered and connected over one network cable, that
 # feeds its DSP over the network. An operator watches it for mute
 # and for a level that says it hears the place it is in.
+#
+# It reads its room's meeting off the lab calendar (#2774): active, with its
+# level up and mute moving now and then, while the room is in use; idle and
+# at its noise floor between meetings and through a no-show. Noise: the
+# level's walk and which moment a mute toggles, both draws of the device.
 
 name: lyra-arc-a2
 manufacturer: Lyra
@@ -71,16 +76,32 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# The input level rides speech where it hears: it moves every few
-# seconds within a talker's range, a behavior a scenario can drive (a
-# meeting starting, a silent place).
+# The mic follows the room's meeting off the lab calendar (#2774), read
+# through the device clock: it is active while someone is in the room (a
+# no-show holds its slot with nobody in it, so the room is not in use), and
+# idle between meetings. Mute moves now and then inside a call, a draw of the
+# device's own, and is left as it is between meetings, so a mute an operator
+# sets (POST /api/mute) holds until the next call; whether the room is in use
+# is the calendar's.
 behaviors:
+  - name: call_state
+    schedule:
+      interval: 15s
+    mutations:
+      - path: status.mic.active
+        value: '{{ with meetingNow }}{{ gt .actual 0 }}{{ else }}false{{ end }}'
+      - path: status.mic.mute
+        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}'
+
+  # The input level rides speech where it hears: it walks within a talker's
+  # range while the room is in use and the mic open, and sits at its noise
+  # floor otherwise, a behavior a scenario can still drive.
   - name: level_drift
     schedule:
       interval: 15s
     mutations:
       - path: status.mic.level_db
-        value: "{{ round 1 (clamp -70.0 -20.0 (randStep 4.0 .State.status.mic.level_db)) }}"
+        value: '{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}'
 
 defaults:
   status:
@@ -88,7 +109,8 @@ defaults:
       boot_epoch: 0
     mic:
       mute: false
-      level_db: -42
+      level_db: -69
+      active: false
     network:
       ipv4:
         address: ""

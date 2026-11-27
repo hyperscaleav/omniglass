@@ -247,7 +247,9 @@ func TestPolarisAmpStandbyAndProtectResetOverHTTP(t *testing.T) {
 // TestPolarisAmpDrifts: the amplifier's temperature, fan and output levels
 // are behaviors, so a running amplifier's readings move as a real one's do
 // and a timeline can drive them later. One tick of each writes every path it
-// names, each still inside its band.
+// names, each still inside its band; with no meeting in the room (this
+// device has no calendar) the outputs sit at their floor, and what they do
+// in a meeting is room_audio_test.go's.
 func TestPolarisAmpDrifts(t *testing.T) {
 	d := startAmp(t)
 	d.StopBehaviors()
@@ -291,6 +293,6 @@ func TestPolarisAmpDrifts(t *testing.T) {
 	inBand("status.amp.temperature", 34, 52)
 	inBand("status.amp.fan_rpm", 2200, 3600)
 	for n := 0; n < 4; n++ {
-		inBand(fmt.Sprintf("status.channels.%d.output_db", n), -40, -6)
+		inBand(fmt.Sprintf("status.channels.%d.output_db", n), -92, -88)
 	}
 }
