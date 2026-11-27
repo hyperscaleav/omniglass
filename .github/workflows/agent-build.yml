@@ -21,13 +21,15 @@ permissions:
   actions: read
   checks: read
 
-concurrency:
-  group: agent-build-${{ github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   build:
     if: github.event.label.name == 'run:dev-gha' && vars.AGENT_CI_ENABLED == 'true'
+    # Job-level, not workflow-level: a workflow-level group queues every
+    # event, skipped ones too, and GitHub cancels all but one pending run,
+    # leaving cancelled runs (a red X) on the commit they file under.
+    concurrency:
+      group: agent-build-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
