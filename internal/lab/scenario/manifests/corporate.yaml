@@ -64,6 +64,7 @@ standards:
       wireless-mic: lyra-hx-1
       dsp: polaris-dsp-16
       amplifier: polaris-amp-4100
+      power: ferrite-pdu-4c
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
     # The conference rooms' video bars talk over two protocols (#2754): the
