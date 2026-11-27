@@ -15,12 +15,14 @@ Show
 # The CLI prints a stream only when it ends, so the visible watch cannot be read while it runs. A
 # hidden probe follows the same topic over a plain socket (the recorder has no curl) into its own
 # file: its first `mark` says the stream is connected (the alarm waits for it), and its `changed`
-# says the notice landed (the read waits for it). The watch runs longer than the holds the recorder
-# puts between lines (#1247) can sum to, and the hidden `wait` lets it end before it is read.
+# says the notice landed (the read waits for it). The visible watch outlasts the holds and typing the
+# recorder puts between its start and the alarm (measured at about 19 s, #1247) more than twice over,
+# and the hidden `wait` lets it end before it is read: it cannot be ended early, since the CLI
+# prints a stream only at its end.
 Type "# Follow Touch Panel 2's topic in the background"
 Enter
 Wait
-Type `omniglass view watch --topics component:panel-2 --duration-seconds 20 > watch.txt &`
+Type `omniglass view watch --topics component:panel-2 --duration-seconds 45 > watch.txt &`
 Enter
 Wait
 Hide
