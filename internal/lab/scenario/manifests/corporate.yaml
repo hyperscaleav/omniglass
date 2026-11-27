@@ -58,8 +58,10 @@ standards:
       video-bar: kestrel-vroom
       camera: kestrel-gaze-p2
       recorder: recording-service
+      codec: kestrel-relay-c1
       main-display: boreal-edge-86
       room-mic: lyra-arc-a2
+      wireless-mic: lyra-hx-1
       dsp: polaris-dsp-16
       amplifier: polaris-amp-4100
       touch-control: newtron-panel-7

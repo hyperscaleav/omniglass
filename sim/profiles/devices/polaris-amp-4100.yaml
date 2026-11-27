@@ -15,6 +15,10 @@
 # speaker on it reports through the amplifier, since the speaker
 # itself has no network interface.
 #
+# It reads its room's meeting off the lab calendar (#2774): its outputs carry
+# the program and its heatsink warms while the room is in use, and it sits at
+# its floor with signal absent otherwise (a no-show included).
+#
 # Its control face is the same HTTP JSON API the DSP has, behind the
 # same header token: standby and wake, and the protect reset an
 # operator reaches for once the fault is cleared.
@@ -119,16 +123,19 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# A running amplifier's readings move: the heatsink warms and cools with
-# the program, the fan follows, and the outputs ride the program level.
-# Each is a behavior a scenario timeline can drive or override later.
+# A running amplifier's readings follow its room's meeting off the lab
+# calendar (#2774), read through the device clock: the outputs carry the
+# program while someone is in the room and the amplifier is on, and sit at
+# their floor with signal absent otherwise; the heatsink warms toward a
+# loaded temperature in use and cools toward an idle one, so the temperature
+# follows the load. Noise: the level's walk, the fan, the temperature's jitter.
 behaviors:
   - name: temperature_drift
     schedule:
       interval: 60s
     mutations:
       - path: status.amp.temperature
-        value: "{{ sigfig 3 (clamp 34.0 52.0 (randStep 1.0 .State.status.amp.temperature)) }}"
+        value: '{{ if not hasCalendar }}{{ sigfig 3 (clamp 34.0 52.0 (randStep 1.0 .State.status.amp.temperature)) }}{{ else }}{{ $t := round 3 .State.status.amp.temperature }}{{ $to := 36.0 }}{{ with meetingNow }}{{ if and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ $to = 46.0 }}{{ end }}{{ end }}{{ sigfig 3 (clamp 34.0 52.0 (add (randStep 0.3 $t) (mul 0.15 (sub $to $t)))) }}{{ end }}'
 
   - name: fan_drift
     schedule:
@@ -141,14 +148,16 @@ behaviors:
     schedule:
       interval: 30s
     mutations:
+      - path: status.amp.signal_present
+        value: '{{ if not hasCalendar }}{{ .State.status.amp.signal_present }}{{ else }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ $live }}{{ end }}'
       - path: status.channels.0.output_db
-        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 0 | get "output_db"))) }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 0 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 0 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -24.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
       - path: status.channels.1.output_db
-        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 1 | get "output_db"))) }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 1 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 1 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -24.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
       - path: status.channels.2.output_db
-        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 2 | get "output_db"))) }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 2 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 2 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -27.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
       - path: status.channels.3.output_db
-        value: '{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 3 | get "output_db"))) }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 (index .State.status.channels 3 | get "output_db"))) }}{{ else }}{{ $v := round 3 (index .State.status.channels 3 | get "output_db") }}{{ $live := false }}{{ with meetingNow }}{{ $live = and (gt .actual 0) (eq (print $.State.status.amp.power) "on") }}{{ end }}{{ if $live }}{{ if lt $v -45.0 }}{{ $v = -27.0 }}{{ end }}{{ round 1 (clamp -40.0 -6.0 (randStep 2.0 $v)) }}{{ else }}{{ round 1 (clamp -92.0 -88.0 (randStep 1.0 -90.0)) }}{{ end }}{{ end }}'
 
 defaults:
   status:
@@ -157,6 +166,7 @@ defaults:
     amp:
       power: "on"
       protect: normal
+      signal_present: false
       temperature: 41
       fan_rpm: 2800
     # Four channels, indexed 0..3 in state and 1..4 in the SNMP channel
