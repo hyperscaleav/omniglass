@@ -55,7 +55,7 @@ the scale lab runs the same judgment against a lab of any size.
 One device is also held to a **showcase floor**, the most a single device says: on a 20-system
 corporate lab (the smallest with a divisible conference room), `make test-lab` holds the headquarters
 conference room's video bar to 20 metrics, 8 properties, an event it caught itself and a log line
-within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754). The room's schedule may
+within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754). The room's calendar may
 put no meeting in that window, so the test first dials a call on the bar through
 `POST /components/{name}/simulation:fire`, as a demo would.
 
@@ -272,11 +272,11 @@ A standard's `control` list names the slots whose devices are wired with a **sec
 another endpoint on the same device: the boardroom displays (`mr86`) get their web admin beside their
 SNMP agent, so a demo can switch an input from the console, and the divisible conference rooms' video
 bars get their websocket control socket (`kestrel-ws`, wss on 9443) beside their https API, so one bar
-talks over two protocols (#2754). Every video bar in the lab keeps its room's meeting schedule, drifts
+talks over two protocols (#2754). Every video bar in the lab acts out its room's meetings off the lab calendar, drifts
 its call stats in a call and logs on its own
-([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about 3 events and
-9 log lines a bar an hour, beside its polls, or under one event and three log lines a second across
-the 950 or so bars of a 1,000-system lab.
+([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about 1.7 events and
+6.7 log lines a bar an hour, beside its polls, or under half an event and two log lines a second across
+the 920 or so bars of a 1,000-system lab.
 
 ```sh
 omniglass lab run --scenario corporate --systems 300
