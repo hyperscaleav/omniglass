@@ -19,6 +19,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // startCorporateLab runs `lab run --scenario corporate --systems N` on a real
@@ -171,10 +172,10 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	// could have been empty, and the most who could have come.
 	held := func(room calendar.Room, from, to time.Time) (could, couldNot bool, most int) {
 		for at := from; !at.After(to); at = at.Add(5 * time.Second) {
-			if e, ok := cal.Now(room, at); ok && e.Meeting.Outcome != calendar.OutcomeNoShow {
+			if e, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(e).Outcome != calendar.OutcomeNoShow {
 				could = true
-				if e.Meeting.Actual > most {
-					most = e.Meeting.Actual
+				if caltest.M(e).Actual > most {
+					most = caltest.M(e).Actual
 				}
 			} else {
 				couldNot = true

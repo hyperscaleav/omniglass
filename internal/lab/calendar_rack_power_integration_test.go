@@ -11,6 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // The rack power conditioner follows the lab calendar (#2777): on a real
@@ -67,7 +68,7 @@ func TestIntegrationCorporateRackPowerFollowsTheCalendar(t *testing.T) {
 	// [start-40s, end].
 	expect := func(at time.Time) string {
 		call := false
-		if e, ok := cal.Now(room, at); ok && e.Meeting.Outcome != calendar.OutcomeNoShow && e.Meeting.Actual > 0 {
+		if e, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(e).Outcome != calendar.OutcomeNoShow && caltest.M(e).Actual > 0 {
 			call = true
 		}
 		v, p, a := 150, 180, 120

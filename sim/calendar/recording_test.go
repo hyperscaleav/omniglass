@@ -42,14 +42,14 @@ func TestNoShowIsNeverRecordedAndTheExtremesHold(t *testing.T) {
 	}{{0, false}, {1, true}} {
 		var held, recorded int
 		for _, e := range Generate(roomA, recKnobs(tc.rate), 4, day0, day0.AddDate(0, 0, 14)) {
-			if e.Meeting.Outcome == OutcomeNoShow {
-				if e.Meeting.Recorded {
+			if mt(e).Outcome == OutcomeNoShow {
+				if mt(e).Recorded {
 					t.Fatalf("a no-show at %s is recorded", e.Start)
 				}
 				continue
 			}
 			held++
-			if e.Meeting.Recorded {
+			if mt(e).Recorded {
 				recorded++
 			}
 		}
@@ -78,12 +78,12 @@ func TestRecordedShareHoldsOverAMonthAndMovesNothingElse(t *testing.T) {
 		}
 		for i, e := range on {
 			o := off[i]
-			if !e.Start.Equal(o.Start) || !e.End.Equal(o.End) || e.Meeting.Actual != o.Meeting.Actual || e.Meeting.Outcome != o.Meeting.Outcome || e.Meeting.Organizer != o.Meeting.Organizer {
+			if !e.Start.Equal(o.Start) || !e.End.Equal(o.End) || mt(e).Actual != mt(o).Actual || mt(e).Outcome != mt(o).Outcome || mt(e).Organizer != mt(o).Organizer {
 				t.Fatalf("recording_rate moved entry %d: %+v vs %+v", i, e, o)
 			}
-			if e.Meeting.Outcome != OutcomeNoShow {
+			if mt(e).Outcome != OutcomeNoShow {
 				held++
-				if e.Meeting.Recorded {
+				if mt(e).Recorded {
 					recorded++
 				}
 			}
@@ -105,19 +105,19 @@ func TestRecordedIsTheSameWhateverTheWindow(t *testing.T) {
 	whole := Generate(roomA, k, 5, day0, day0.AddDate(0, 0, 7))
 	byDay := map[time.Time]bool{}
 	for _, e := range whole {
-		byDay[e.Start] = e.Meeting.Recorded
+		byDay[e.Start] = mt(e).Recorded
 	}
 	for d := 0; d < 7; d++ {
 		from := day0.AddDate(0, 0, d)
 		for _, e := range Generate(roomA, k, 5, from.Add(9*time.Hour), from.Add(11*time.Hour)) {
-			if byDay[e.Start] != e.Meeting.Recorded {
-				t.Fatalf("%s: recorded %v through a two-hour window, %v through the week", e.Start, e.Meeting.Recorded, byDay[e.Start])
+			if byDay[e.Start] != mt(e).Recorded {
+				t.Fatalf("%s: recorded %v through a two-hour window, %v through the week", e.Start, mt(e).Recorded, byDay[e.Start])
 			}
 		}
 	}
 	differs := false
 	for _, e := range whole {
-		if recordedDraw(6, roomA, e.Meeting.SlotStart) != recordedDraw(5, roomA, e.Meeting.SlotStart) {
+		if recordedDraw(6, roomA, mt(e).SlotStart) != recordedDraw(5, roomA, mt(e).SlotStart) {
 			differs = true
 		}
 	}
@@ -128,7 +128,7 @@ func TestRecordedIsTheSameWhateverTheWindow(t *testing.T) {
 
 func TestMapCarriesRecorded(t *testing.T) {
 	for _, e := range Generate(roomA, recKnobs(1), 3, day0, day0.AddDate(0, 0, 3)) {
-		if e.Meeting.Outcome == OutcomeNoShow {
+		if mt(e).Outcome == OutcomeNoShow {
 			continue
 		}
 		if m := e.Map(); m["recorded"] != true {
@@ -142,20 +142,20 @@ func TestMapCarriesRecorded(t *testing.T) {
 // Prev is the last entry that has ended at or before t.
 func TestPrev(t *testing.T) {
 	c := New(2, func(Room) (Knobs, bool) { return knobs(), true })
-	es := c.Entries(roomA, day0, day0.AddDate(0, 0, 2))
+	es := c.Entries(roomA, day0, day0.AddDate(0, 0, 2), MeetingKinds)
 	if len(es) < 3 {
 		t.Fatal("too few entries")
 	}
 	at := es[2].End
-	got, ok := c.Prev(roomA, at)
+	got, ok := c.Prev(roomA, at, MeetingKinds)
 	if !ok || !got.End.Equal(at) || !got.Start.Equal(es[2].Start) {
 		t.Fatalf("Prev at the end of entry 2 = %v %v, want entry 2", got, ok)
 	}
-	if got, ok := c.Prev(roomA, at.Add(-time.Second)); !ok || got.End.After(at.Add(-time.Second)) {
+	if got, ok := c.Prev(roomA, at.Add(-time.Second), MeetingKinds); !ok || got.End.After(at.Add(-time.Second)) {
 		t.Fatalf("Prev before an entry's end returned one still running: %v", got)
 	}
 	var none *Calendar
-	if _, ok := none.Prev(roomA, at); ok {
+	if _, ok := none.Prev(roomA, at, MeetingKinds); ok {
 		t.Fatal("a nil calendar has a previous entry")
 	}
 }

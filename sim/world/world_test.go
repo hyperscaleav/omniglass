@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 func testKnobs() calendar.Knobs {
@@ -110,11 +111,11 @@ func TestTheCalendarFollowsEachRoomsStandard(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	r1 := calendar.Room{Site: "hq", Building: "tower", Room: "r1"}
 	want := calendar.Generate(r1, testKnobs(), 7, day, day.Add(24*time.Hour))
-	got := cal.Entries(r1, day, day.Add(24*time.Hour))
+	got := cal.Entries(r1, day, day.Add(24*time.Hour), calendar.MeetingKinds)
 	if len(want) == 0 || len(got) != len(want) {
 		t.Fatalf("the huddle room holds %d entries, Generate gives %d", len(got), len(want))
 	}
-	if n := len(cal.Entries(calendar.Room{Site: "hq", Building: "tower", Room: "r2"}, day, day.Add(24*time.Hour))); n != 0 {
+	if n := len(cal.Entries(calendar.Room{Site: "hq", Building: "tower", Room: "r2"}, day, day.Add(24*time.Hour), calendar.MeetingKinds)); n != 0 {
 		t.Fatalf("a room of a standard with no knobs holds %d entries", n)
 	}
 	w.Meetings = nil
@@ -151,8 +152,8 @@ func TestAProblemLandsInTheRoomsItsScopeNames(t *testing.T) {
 	mon := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 	names := func(room calendar.Room) []string {
 		var out []string
-		for _, e := range cal.Problems(room, mon, mon.AddDate(0, 0, 1)) {
-			out = append(out, e.Problem.Name+"/"+e.Problem.Role)
+		for _, e := range cal.Entries(room, mon, mon.AddDate(0, 0, 1), calendar.ProblemKinds) {
+			out = append(out, caltest.P(e).Name+"/"+caltest.P(e).Role)
 		}
 		return out
 	}
@@ -166,7 +167,7 @@ func TestAProblemLandsInTheRoomsItsScopeNames(t *testing.T) {
 		t.Error("SlotOf does not read the device's slot")
 	}
 	w.Sites[0].Archetype = "regional"
-	if got := w.Calendar().Problems(r2, mon, mon.AddDate(0, 0, 1)); len(got) != 1 {
+	if got := w.Calendar().Entries(r2, mon, mon.AddDate(0, 0, 1), calendar.ProblemKinds); len(got) != 1 {
 		t.Errorf("a problem scoped to site hq lost room r2 when only the archetype changed: %v", got)
 	}
 	// A world with no meeting knobs and no problems has no calendar.

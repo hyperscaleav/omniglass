@@ -72,10 +72,10 @@ func TestADayIsIdenticalForItsSeedAcrossRunsAndCalendars(t *testing.T) {
 	}
 	c1 := New(42, func(Room) (Knobs, bool) { return k, true })
 	c2 := New(42, func(Room) (Knobs, bool) { return k, true })
-	if !reflect.DeepEqual(c1.Entries(roomA, from, to), c2.Entries(roomA, from, to)) {
+	if !reflect.DeepEqual(c1.Entries(roomA, from, to, MeetingKinds), c2.Entries(roomA, from, to, MeetingKinds)) {
 		t.Fatal("two calendars differ for one seed")
 	}
-	if !reflect.DeepEqual(first, c1.Entries(roomA, from, to)) {
+	if !reflect.DeepEqual(first, c1.Entries(roomA, from, to, MeetingKinds)) {
 		t.Fatal("the calendar differs from the generator")
 	}
 	// Asked through a wider window, the day is the same entries.
@@ -99,14 +99,14 @@ func TestADayIsIdenticalForItsSeedAcrossRunsAndCalendars(t *testing.T) {
 
 func TestAnUnknownRoomHasNoEntries(t *testing.T) {
 	c := New(1, func(Room) (Knobs, bool) { return Knobs{}, false })
-	if got := c.Entries(roomA, day0, day0.Add(24*time.Hour)); len(got) != 0 {
+	if got := c.Entries(roomA, day0, day0.Add(24*time.Hour), MeetingKinds); len(got) != 0 {
 		t.Fatalf("entries for a room with no knobs: %v", got)
 	}
-	if _, ok := c.Now(roomA, day0); ok {
+	if _, ok := c.Now(roomA, day0, MeetingKinds); ok {
 		t.Fatal("a meeting in a room with no knobs")
 	}
 	var nilCal *Calendar
-	if _, ok := nilCal.Next(roomA, day0); ok {
+	if _, ok := nilCal.Next(roomA, day0, MeetingKinds); ok {
 		t.Fatal("a meeting in a nil calendar")
 	}
 }
@@ -114,23 +114,23 @@ func TestAnUnknownRoomHasNoEntries(t *testing.T) {
 func TestNowAndNext(t *testing.T) {
 	k := knobs()
 	c := New(7, func(Room) (Knobs, bool) { return k, true })
-	es := c.Entries(roomA, day0, day0.Add(24*time.Hour))
+	es := c.Entries(roomA, day0, day0.Add(24*time.Hour), MeetingKinds)
 	if len(es) < 3 {
 		t.Fatalf("only %d entries", len(es))
 	}
 	e := es[1]
 	mid := e.Start.Add(e.End.Sub(e.Start) / 2)
-	got, ok := c.Now(roomA, mid)
+	got, ok := c.Now(roomA, mid, MeetingKinds)
 	if !ok || !got.Start.Equal(e.Start) {
 		t.Fatalf("Now(mid) = %v, %v; want entry at %v", got, ok, e.Start)
 	}
-	if _, ok := c.Now(roomA, e.End); ok {
-		next, _ := c.Now(roomA, e.End)
+	if _, ok := c.Now(roomA, e.End, MeetingKinds); ok {
+		next, _ := c.Now(roomA, e.End, MeetingKinds)
 		if next.Start.Equal(e.Start) {
 			t.Fatal("an entry is still on at its own end")
 		}
 	}
-	nxt, ok := c.Next(roomA, mid)
+	nxt, ok := c.Next(roomA, mid, MeetingKinds)
 	if !ok || !nxt.Start.After(mid) {
 		t.Fatalf("Next(mid) = %v, %v", nxt, ok)
 	}
@@ -139,7 +139,7 @@ func TestNowAndNext(t *testing.T) {
 	}
 	// Past the last entry of a day, next is the next day's first.
 	last := es[len(es)-1]
-	n2, ok := c.Next(roomA, last.End)
+	n2, ok := c.Next(roomA, last.End, MeetingKinds)
 	if !ok || !n2.Start.After(last.End.Add(-time.Second)) || n2.Start.Before(day0.Add(24*time.Hour)) {
 		t.Fatalf("Next after the day's last = %v, %v", n2, ok)
 	}
@@ -152,7 +152,7 @@ func TestNoOverlapAndJitterBoundsOverAMonth(t *testing.T) {
 	for _, r := range []Room{roomA, roomB, {Site: "br1", Building: "main", Room: "huddle-2"}} {
 		es := Generate(r, k, 99, from, to)
 		for i, e := range es {
-			if e.Kind != KindMeeting || e.Meeting == nil {
+			if _, ok := e.AsMeeting(); !ok {
 				t.Fatalf("%v: entry %d is no meeting", r, i)
 			}
 			if !e.End.After(e.Start) {
@@ -165,7 +165,7 @@ func TestNoOverlapAndJitterBoundsOverAMonth(t *testing.T) {
 			if e.Start.Before(day0) || h < 8 || e.End.After(time.Date(e.Start.Year(), e.Start.Month(), e.Start.Day(), 18, 0, 0, 0, time.UTC)) {
 				t.Fatalf("%v: entry %d %v to %v outside the hours", r, i, e.Start, e.End)
 			}
-			m := e.Meeting
+			m := mt(e)
 			if m.Origin == OriginBooked {
 				d := m.SlotStart.Sub(e.Start)
 				if d > MaxEarlyStart || -d > MaxLateStart {
@@ -197,7 +197,7 @@ func TestConfiguredRatesHoldOverAMonth(t *testing.T) {
 		r := Room{Site: "hq", Building: "tower", Room: "r" + string(rune('a'+i))}
 		es := Generate(r, k, 5, from, to)
 		for _, e := range es {
-			m := e.Meeting
+			m := mt(e)
 			if m.Origin == OriginWalkIn {
 				walkIns++
 				continue
@@ -217,7 +217,7 @@ func TestConfiguredRatesHoldOverAMonth(t *testing.T) {
 		for c := from; c.Before(to); c = c.Add(SlotUnit) {
 			touched := false
 			for _, e := range es {
-				if e.Meeting.Origin == OriginBooked && e.Start.Before(c.Add(SlotUnit)) && e.End.After(c) {
+				if mt(e).Origin == OriginBooked && e.Start.Before(c.Add(SlotUnit)) && e.End.After(c) {
 					touched = true
 					break
 				}
@@ -247,7 +247,7 @@ func TestNoShowsAreEmptyAndHeldAreAttended(t *testing.T) {
 	k := knobs()
 	seenNoShow, seenHeld := false, false
 	for _, e := range Generate(roomA, k, 3, day0, day0.AddDate(0, 0, 30)) {
-		m := e.Meeting
+		m := mt(e)
 		switch {
 		case m.Outcome == OutcomeNoShow:
 			seenNoShow = true
@@ -299,3 +299,6 @@ func TestMapShape(t *testing.T) {
 		t.Fatalf("map = %v", m)
 	}
 }
+
+// mt is the entry's meeting, or the zero meeting for another kind.
+func mt(e Entry) Meeting { m, _ := e.AsMeeting(); return m }

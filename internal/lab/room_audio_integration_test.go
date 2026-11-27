@@ -11,6 +11,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
+	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // A room's audio chain reads its room's meeting (#2774): on a corporate lab
@@ -68,12 +70,12 @@ func TestIntegrationCorporateRoomAudioReadsItsMeeting(t *testing.T) {
 	possible := func(lo, hi time.Time) (in, gates map[int]bool) {
 		in, gates = map[int]bool{}, map[int]bool{}
 		for t := lo; !t.After(hi); t = t.Add(5 * time.Second) {
-			e, ok := cal.Now(room, t)
-			if !ok || e.Meeting.Actual == 0 {
+			e, ok := cal.Now(room, t, calendar.MeetingKinds)
+			if !ok || caltest.M(e).Actual == 0 {
 				in[0], gates[0] = true, true
 				continue
 			}
-			in[1], gates[min(4, (e.Meeting.Actual+1)/2)] = true, true
+			in[1], gates[min(4, (caltest.M(e).Actual+1)/2)] = true, true
 		}
 		return in, gates
 	}
@@ -95,7 +97,7 @@ func TestIntegrationCorporateRoomAudioReadsItsMeeting(t *testing.T) {
 	charge := func(at time.Time) float64 {
 		lvl := 100.0
 		for m := at.Add(-48 * time.Hour); m.Before(at); m = m.Add(time.Minute) {
-			if e, ok := cal.Now(room, m); ok && e.Meeting.Actual > 0 {
+			if e, ok := cal.Now(room, m, calendar.MeetingKinds); ok && caltest.M(e).Actual > 0 {
 				lvl -= 0.4
 			} else {
 				lvl += 0.8

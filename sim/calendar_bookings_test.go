@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -30,19 +31,19 @@ func bookingDay(t *testing.T) (*calendar.Calendar, time.Time, []calendar.Entry, 
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	for seed := int64(1); seed < 200; seed++ {
 		cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return calTestKnobs(), true })
-		es := cal.Entries(bookingRoom, day, day.Add(24*time.Hour))
+		es := cal.Entries(bookingRoom, day, day.Add(24*time.Hour), calendar.MeetingKinds)
 		var held, noShow, walkIn calendar.Entry
 		for _, e := range es {
 			switch {
-			case e.Meeting.Origin == calendar.OriginWalkIn && walkIn.Meeting == nil:
+			case caltest.M(e).Origin == calendar.OriginWalkIn && !caltest.IsMeeting(walkIn):
 				walkIn = e
-			case e.Meeting.Outcome == calendar.OutcomeNoShow && noShow.Meeting == nil:
+			case caltest.M(e).Outcome == calendar.OutcomeNoShow && !caltest.IsMeeting(noShow):
 				noShow = e
-			case e.Meeting.Origin == calendar.OriginBooked && e.Meeting.Outcome != calendar.OutcomeNoShow && held.Meeting == nil:
+			case caltest.M(e).Origin == calendar.OriginBooked && caltest.M(e).Outcome != calendar.OutcomeNoShow && !caltest.IsMeeting(held):
 				held = e
 			}
 		}
-		if held.Meeting != nil && noShow.Meeting != nil && walkIn.Meeting != nil {
+		if caltest.IsMeeting(held) && caltest.IsMeeting(noShow) && caltest.IsMeeting(walkIn) {
 			return cal, day, es, held, noShow, walkIn
 		}
 	}
@@ -54,11 +55,11 @@ func bookingDay(t *testing.T) (*calendar.Calendar, time.Time, []calendar.Entry, 
 // together.
 func span(e calendar.Entry) (time.Time, time.Time) {
 	from, to := e.Start, e.End
-	if e.Meeting.SlotStart.Before(from) {
-		from = e.Meeting.SlotStart
+	if caltest.M(e).SlotStart.Before(from) {
+		from = caltest.M(e).SlotStart
 	}
-	if e.Meeting.SlotEnd.After(to) {
-		to = e.Meeting.SlotEnd
+	if caltest.M(e).SlotEnd.After(to) {
+		to = caltest.M(e).SlotEnd
 	}
 	return from, to
 }
@@ -75,7 +76,7 @@ func TestRoomBookingsAgreeWithTheCalendarAtEveryInstant(t *testing.T) {
 		var next *calendar.Entry
 		for i := range es {
 			e := es[i]
-			if e.Meeting.Origin != calendar.OriginBooked {
+			if caltest.M(e).Origin != calendar.OriginBooked {
 				continue
 			}
 			from, to := span(e)
@@ -104,8 +105,8 @@ func TestRoomBookingsAgreeWithTheCalendarAtEveryInstant(t *testing.T) {
 			}
 			continue
 		}
-		if got["next"] == nil || got["next"].(map[string]any)["organizer"] != next.Meeting.Organizer {
-			t.Fatalf("at %s: next is %v, want %s", at.Format("15:04"), got["next"], next.Meeting.Organizer)
+		if got["next"] == nil || got["next"].(map[string]any)["organizer"] != caltest.M(*next).Organizer {
+			t.Fatalf("at %s: next is %v, want %s", at.Format("15:04"), got["next"], caltest.M(*next).Organizer)
 		}
 	}
 }

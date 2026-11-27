@@ -19,10 +19,8 @@ func (d *Device) meetingsBetween(from, to int64) []map[string]any {
 		return nil
 	}
 	var out []map[string]any
-	for _, e := range c.Entries(d.room, time.Unix(from, 0).UTC(), time.Unix(to, 0).UTC()) {
-		if e.Kind == calendar.KindMeeting {
-			out = append(out, e.Map())
-		}
+	for _, e := range c.Entries(d.room, time.Unix(from, 0).UTC(), time.Unix(to, 0).UTC(), calendar.MeetingKinds) {
+		out = append(out, e.Map())
 	}
 	return out
 }

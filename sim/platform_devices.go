@@ -168,9 +168,9 @@ func (e *Engine) scriptedOffline(l world.Listing, now time.Time) (int64, bool) {
 		return 0, false
 	}
 	room := calendar.Room{Site: l.Site, Building: l.Building, Room: l.Room}
-	for _, p := range c.ProblemsNow(room, now) {
-		if p.Problem.Impairment.Unplugged && p.Problem.Role == l.Slot {
-			return p.Start.Unix(), true
+	for _, e := range c.Active(room, now, calendar.ProblemKinds) {
+		if p, ok := e.AsProblem(); ok && p.Impairment.Unplugged && p.Role == l.Slot {
+			return e.Start.Unix(), true
 		}
 	}
 	return 0, false

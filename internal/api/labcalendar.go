@@ -47,7 +47,7 @@ type labCalendarOutput struct {
 // labCalendarPayload is the entry's kind-specific fields as an open object.
 func labCalendarPayload(e calendar.Entry) map[string]any {
 	p := map[string]any{}
-	if m := e.Meeting; m != nil {
+	if m, ok := e.AsMeeting(); ok {
 		p["origin"] = string(m.Origin)
 		p["organizer"] = m.Organizer
 		p["expected"] = m.Expected
@@ -57,7 +57,7 @@ func labCalendarPayload(e calendar.Entry) map[string]any {
 		p["slot_end"] = m.SlotEnd.UTC().Format(time.RFC3339)
 		p["recorded"] = m.Recorded
 	}
-	if pr := e.Problem; pr != nil {
+	if pr, ok := e.AsProblem(); ok {
 		p["name"] = pr.Name
 		p["role"] = pr.Role
 		p["unplugged"] = pr.Impairment.Unplugged
@@ -110,7 +110,7 @@ func registerLabCalendarRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 				in.System != "" && in.System != r.System:
 				continue
 			}
-			for _, e := range src.All(r.Room, in.Start, in.End) {
+			for _, e := range src.Entries(r.Room, in.Start, in.End, calendar.AllKinds) {
 				out.Body.Entries = append(out.Body.Entries, labCalendarEntry{
 					Kind: string(e.Kind), Start: e.Start.UTC(), End: e.End.UTC(),
 					Site: r.Site, Building: r.Building, Room: r.Room.Room, System: r.System,

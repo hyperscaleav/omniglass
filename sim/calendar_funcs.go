@@ -70,9 +70,9 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		var e calendar.Entry
 		var ok bool
 		if next {
-			e, ok = c.Next(room, at)
+			e, ok = c.Next(room, at, calendar.MeetingKinds)
 		} else {
-			e, ok = c.Now(room, at)
+			e, ok = c.Now(room, at, calendar.MeetingKinds)
 		}
 		if !ok {
 			return nil
@@ -84,7 +84,7 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		if c == nil {
 			return nil
 		}
-		if e, ok := c.Prev(room, d.clock()); ok {
+		if e, ok := c.Prev(room, d.clock(), calendar.MeetingKinds); ok {
 			return e.Map()
 		}
 		return nil
@@ -132,7 +132,7 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		},
 		"problemsNow": func() []map[string]any {
 			var out []map[string]any
-			for _, e := range d.calendarSrc().ProblemsNow(d.room, d.clock()) {
+			for _, e := range d.calendarSrc().Active(d.room, d.clock(), calendar.ProblemKinds) {
 				out = append(out, e.Map())
 			}
 			return out

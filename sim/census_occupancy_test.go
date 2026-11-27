@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -56,29 +57,29 @@ func TestCensusOccupancyFollowsTheLabCalendar(t *testing.T) {
 			t.Fatalf("at %s people_count = %v: %v", at, d.ReadPath("status.occupancy.people_count"), err)
 		}
 		got := int64(count)
-		e, in := cal.Now(room, at)
+		e, in := cal.Now(room, at, calendar.MeetingKinds)
 		switch {
 		case !in:
 			outside++
 			if got != 0 {
 				t.Fatalf("at %s outside any meeting people_count = %d", at, got)
 			}
-		case e.Meeting.Outcome == calendar.OutcomeNoShow:
+		case caltest.M(e).Outcome == calendar.OutcomeNoShow:
 			noShow++
 			if got != 0 {
 				t.Fatalf("at %s in a no-show people_count = %d", at, got)
 			}
 		default:
-			actual := int64(e.Meeting.Actual)
+			actual := int64(caltest.M(e).Actual)
 			if got != actual && !(actual > 1 && got == actual-1) {
-				t.Fatalf("at %s in a %s %s people_count = %d, the meeting had %d", at, e.Meeting.Origin, e.Meeting.Outcome, got, actual)
+				t.Fatalf("at %s in a %s %s people_count = %d, the meeting had %d", at, caltest.M(e).Origin, caltest.M(e).Outcome, got, actual)
 			}
 			if got == actual {
 				full++
 			} else {
 				steppedOut++
 			}
-			if e.Meeting.Origin == calendar.OriginWalkIn {
+			if caltest.M(e).Origin == calendar.OriginWalkIn {
 				walkIn++
 			} else {
 				held++

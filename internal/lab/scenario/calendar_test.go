@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // #2764: a scenario declares the meetings its rooms hold as knobs per
@@ -174,8 +175,8 @@ func TestTheCorporateScenarioScriptsProblemsOnItsRoles(t *testing.T) {
 	var dead int
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
-			for _, e := range cal.Problems(calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}, day, day.AddDate(0, 0, 1)) {
-				if e.Problem.Name == "weekly-dead-mic-battery" {
+			for _, e := range cal.Entries(calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}, day, day.AddDate(0, 0, 1), calendar.ProblemKinds) {
+				if caltest.P(e).Name == "weekly-dead-mic-battery" {
 					dead++
 					if r.Standard != "divisible-conference" {
 						t.Errorf("the dead battery landed in a %s room", r.Standard)

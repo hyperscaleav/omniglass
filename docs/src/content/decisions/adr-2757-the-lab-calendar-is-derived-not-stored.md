@@ -3,7 +3,7 @@ title: "The lab calendar is derived, not stored, and a scripted source feeds it 
 date: 2026-11-26
 status: Accepted
 summary: "A lab's meetings are one calendar every simulated room acts out, a pure function of the scenario's calendar block, a seed and a window, so every simulator and the server compute the same one with nothing stored or shipped; services that span rooms read it by room key; a scripted problem source joins it on the same clock as a second entry kind."
-refs: [2757, 2764, 2769, 2773]
+refs: [2757, 2764, 2769, 2773, 2798]
 ---
 
 - **Date:** 2026-11-26 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/)
@@ -73,9 +73,8 @@ refs: [2757, 2764, 2769, 2773]
 - **Amended (#2769): scripted problems.** The second kind is built. A scenario's `calendar.problems` scripts
   recurring problems (a cadence, a UTC time and duration, a scope resolved from the plan and the world, and
   the role of the room it lands on, never a product), derived like the meetings from the world and the seed:
-  only an optional `spread` is drawn, a seeded whole-minute offset inside the cadence. `Entries`, `Now`, `Next`
-  and `Prev` stay the meetings alone so no reader of a meeting meets another kind; `Problems`,
-  `ProblemsNow` and `All` read the rest. One executor in the simulator applies a problem's impairment as its
+  only an optional `spread` is drawn, a seeded whole-minute offset inside the cadence. (Superseded by the
+  #2798 amendment below: the meetings-only and `All` split is gone.) One executor in the simulator applies a problem's impairment as its
   window opens and clears it as it closes: a pin through the behavior-override seam (put back as it was), and
   unplugged or packet loss through the netns impairer, merged with the server's own impairment and refused
   with a log line without NET_ADMIN. Omniglass is told nothing; the meeting platform's devices list reads a
@@ -90,3 +89,17 @@ refs: [2757, 2764, 2769, 2773]
   it) wins, the losers kept and restored in order as winners release. Each source releases only its own. The
   meeting platform's offline listing asks the arbiter, which holds scripted problems as a derivation from the
   calendar (central, so it also answers for devices another simulator serves) beside the registered wants.
+
+- **Amended (#2798): an entry is a sum type, and there is one query.** `calendar.Entry` carries its kind and
+  exactly one payload, `Meeting` or `Problem`, behind a sealed `Payload` interface; the payload is not an
+  exported field. `NewEntry(kind, ...)` refuses a payload of another kind or none, `MeetingEntry` and
+  `ProblemEntry` build one that agrees by construction, and `AsMeeting` and `AsProblem` return the payload by
+  value with a false for another kind, so a kind added later (#2314's scenes, #1362's narrative steps)
+  cannot nil-deref a reader that does not know it. The meetings-only `Entries`, `Now`, `Next`, `Prev` and
+  the `Problems`, `ProblemsNow`, `All` trio become one surface: `Entries(room, from, to, kinds)`, with
+  `Active(room, t, kinds)`, `Now`, `Next` and `Prev` taking the same `Kinds` (`MeetingKinds`,
+  `ProblemKinds`, `AllKinds`; the empty set reads nothing), so every caller states what it reads. Results
+  stay in start order, meetings before problems that start together, so `Entry.Map()` and the
+  `GET /lab/calendar` payload are unchanged on the wire (a golden of a pinned day, recorded before the
+  change, holds it). A guard test (`internal/build`) keeps payload pointers, entry literals and the
+  `caltest` helper out of non-test code outside `sim/calendar`.
