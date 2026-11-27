@@ -35,9 +35,16 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
     >
       <span class="flex min-w-0 items-center gap-2 pr-4" style={{ "padding-left": `${props.depth * 22}px` }}>
         <span class="flex-none text-base-content/35"><Dynamic component={resolveIcon(r().icon)} size={16} /></span>
-        <span data-label class="truncate font-data text-[13px]">{r().label}</span>
+        <span data-label class="min-w-[4rem] truncate font-data text-[13px]">{r().label}</span>
+        {/* The chip gives way first, so the name stays readable beside it: it
+            shrinks before the name does (a flex-none chip once squeezed the name
+            to nothing), and in a narrow table it is a bare count whose title
+            carries the systems, as the outline's is. */}
         <Show when={r().also.length > 0}>
-          <span class="flex-none rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55">also in {r().also.join(", ")}</span>
+          <span data-also-in title={`Also in ${r().also.join(", ")}`} class="shrink-[999] truncate rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55 @max-[56rem]:px-1">
+            <span class="@max-[56rem]:hidden">also in {r().also.join(", ")}</span>
+            <span class="hidden @max-[56rem]:inline">+{r().also.length}</span>
+          </span>
         </Show>
       </span>
       <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noSlot ? "not in a slot" : r().slot}</span>
