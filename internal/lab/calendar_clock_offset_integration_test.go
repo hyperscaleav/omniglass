@@ -16,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // A lab test proves a meeting live, not only idle (#2800): the lab runs with
@@ -105,12 +106,12 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 	var meeting calendar.Entry
 	from := time.Now().Add(24 * time.Hour).Truncate(time.Hour)
 	for _, c := range targets {
-		for _, e := range cal.Entries(c.room, from, from.Add(10*24*time.Hour)) {
-			mt := e.Meeting
+		for _, e := range cal.Entries(c.room, from, from.Add(10*24*time.Hour), calendar.MeetingKinds) {
+			mt := caltest.M(e)
 			if mt.Origin != calendar.OriginBooked || mt.Outcome != calendar.OutcomeHeld || mt.Actual < 2 || e.End.Sub(e.Start) < 55*time.Minute {
 				continue
 			}
-			if len(cal.Problems(c.room, e.Start.Add(-time.Hour), e.End.Add(time.Hour))) > 0 {
+			if len(cal.Entries(c.room, e.Start.Add(-time.Hour), e.End.Add(time.Hour), calendar.ProblemKinds)) > 0 {
 				continue
 			}
 			if tgt.system == "" || e.Start.Before(meeting.Start) {
@@ -123,15 +124,15 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 	}
 	offset := time.Until(meeting.Start.Add(into)).Round(time.Second)
 	t.Logf("%s: the offset %v puts the simulator at %s, %v into %s's meeting of %d (%s to %s)", tgt.system, offset,
-		time.Now().Add(offset).UTC().Format(time.RFC3339), into, meeting.Meeting.Organizer, meeting.Meeting.Actual,
+		time.Now().Add(offset).UTC().Format(time.RFC3339), into, caltest.M(meeting).Organizer, caltest.M(meeting).Actual,
 		meeting.Start.UTC().Format(time.RFC3339), meeting.End.UTC().Format(time.RFC3339))
 
 	base, client := startCorporateLabWith(t, "clockoffset", systems, "--sim-clock-offset", offset.String())
 
 	simAt := func(real time.Time) time.Time { return real.Add(offset) }
 	heldAt := func(at time.Time) (calendar.Entry, bool) {
-		e, ok := cal.Now(tgt.room, at)
-		if !ok || e.Meeting.Outcome == calendar.OutcomeNoShow {
+		e, ok := cal.Now(tgt.room, at, calendar.MeetingKinds)
+		if !ok || caltest.M(e).Outcome == calendar.OutcomeNoShow {
 			return calendar.Entry{}, false
 		}
 		return e, true
@@ -207,8 +208,8 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 		}
 		// The counter reads who is in the room, one fewer for a moment as
 		// somebody settles, up to the most the meeting brought.
-		if n < 1 || n > meeting.Meeting.Actual {
-			return fmt.Sprintf("%d (outside 1 to %d)", n, meeting.Meeting.Actual), nil
+		if n < 1 || n > caltest.M(meeting).Actual {
+			return fmt.Sprintf("%d (outside 1 to %d)", n, caltest.M(meeting).Actual), nil
 		}
 		return "attended", nil
 	}, func(time.Time) []string { return []string{"attended"} })
@@ -285,8 +286,8 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 			if r.ID != tgt.system {
 				continue
 			}
-			if r.Status == "in-meeting" && (r.Meeting.Participants < 1 || r.Meeting.Participants > meeting.Meeting.Actual) {
-				return fmt.Sprintf("in-meeting with %d (outside 1 to %d)", r.Meeting.Participants, meeting.Meeting.Actual), nil
+			if r.Status == "in-meeting" && (r.Meeting.Participants < 1 || r.Meeting.Participants > caltest.M(meeting).Actual) {
+				return fmt.Sprintf("in-meeting with %d (outside 1 to %d)", r.Meeting.Participants, caltest.M(meeting).Actual), nil
 			}
 			return r.Status, nil
 		}

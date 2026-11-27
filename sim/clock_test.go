@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -37,8 +38,8 @@ func meetingAndOffset(t *testing.T, seed int64, room calendar.Room) (calendar.En
 	t.Helper()
 	ref := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return calTestKnobs(), true })
 	from := time.Now().Add(72 * time.Hour).Truncate(24 * time.Hour)
-	for _, e := range ref.Entries(room, from, from.Add(48*time.Hour)) {
-		if e.Meeting.Origin == calendar.OriginBooked && e.Meeting.Outcome != calendar.OutcomeNoShow && e.End.Sub(e.Start) >= 30*time.Minute {
+	for _, e := range ref.Entries(room, from, from.Add(48*time.Hour), calendar.MeetingKinds) {
+		if caltest.M(e).Origin == calendar.OriginBooked && caltest.M(e).Outcome != calendar.OutcomeNoShow && e.End.Sub(e.Start) >= 30*time.Minute {
 			mid := e.Start.Add(e.End.Sub(e.Start) / 2)
 			return e, time.Until(mid)
 		}
@@ -83,10 +84,10 @@ func TestEngineClockOffsetMovesEveryCalendarFunc(t *testing.T) {
 		}
 	}
 	inMeeting := `{{ with meetingNow }}{{ .organizer }}{{ else }}none{{ end }}`
-	if got := stampBehavior(t, offsetDev, inMeeting); got != e.Meeting.Organizer {
-		t.Fatalf("the offset engine's room reads %v, want the meeting's %q", got, e.Meeting.Organizer)
+	if got := stampBehavior(t, offsetDev, inMeeting); got != caltest.M(e).Organizer {
+		t.Fatalf("the offset engine's room reads %v, want the meeting's %q", got, caltest.M(e).Organizer)
 	}
-	if got := stampBehavior(t, realDev, inMeeting); got == e.Meeting.Organizer {
+	if got := stampBehavior(t, realDev, inMeeting); got == caltest.M(e).Organizer {
 		t.Fatalf("the engine on real time reads the meeting three days out")
 	}
 
