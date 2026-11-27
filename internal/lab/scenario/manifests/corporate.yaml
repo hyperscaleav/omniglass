@@ -56,6 +56,7 @@ standards:
     system_type: conference
     products:
       video-bar: kestrel-vroom
+      codec: kestrel-relay-c1
       main-display: boreal-edge-86
       room-mic: lyra-arc-a2
       dsp: polaris-dsp-16

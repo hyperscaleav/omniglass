@@ -2754,6 +2754,13 @@
       ]
      },
      {
+      "name": "codec",
+      "label": "Codec",
+      "accepted_types": [
+       "codec"
+      ]
+     },
+     {
       "name": "main-display",
       "label": "Main Display",
       "quorum": 2,
