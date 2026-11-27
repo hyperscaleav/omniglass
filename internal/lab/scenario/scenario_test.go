@@ -1141,7 +1141,7 @@ func TestCorporatePlacesOneSchedulingServiceForTheWholeFleet(t *testing.T) {
 			if i != 0 {
 				t.Errorf("site %s carries the polled service %s, want the headquarters only", s.Name, ps.Name)
 			}
-			if ps.Profile == "scheduling-service" {
+			if ps.Profile == m.Services[0].Profile.Name {
 				found = append(found, ps)
 			}
 		}

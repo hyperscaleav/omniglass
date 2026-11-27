@@ -174,7 +174,7 @@ interfaces:
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 1 }}', pattern: "^[0-9]{1,3}$" }
         emit:
           url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
-          body: '{"event":"room.participant.joined","room_id":"{{ .Request.Body.room }}","participants":{{ or .Request.Body.participants 1 }},"ts":{{ now }}}'
+          body: '{"event":"room.participant.joined","room_id":{{ marshal .Request.Body.room }},"participants":{{ whole (or .Request.Body.participants 1) }},"ts":{{ now }}}'
           headers: { X-UCC-Event: room.participant.joined }
           sign: *ucc-sign
 
@@ -187,7 +187,7 @@ interfaces:
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 0 }}', pattern: "^[0-9]{1,3}$" }
         emit:
           url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
-          body: '{"event":"room.participant.left","room_id":"{{ .Request.Body.room }}","participants":{{ or .Request.Body.participants 0 }},"ts":{{ now }}}'
+          body: '{"event":"room.participant.left","room_id":{{ marshal .Request.Body.room }},"participants":{{ whole (or .Request.Body.participants 0) }},"ts":{{ now }}}'
           headers: { X-UCC-Event: room.participant.left }
           sign: *ucc-sign
 
@@ -204,7 +204,7 @@ interfaces:
           - { path: 'status.devices.{{ segment .Request.Body.device }}.last_seen', value: "{{ now }}" }
         emit:
           url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
-          body: '{"event":"device.status.changed","room_id":"{{ .Request.Body.room }}","device_id":"{{ .Request.Body.device }}","status":"{{ .Request.Body.status }}","ts":{{ now }}}'
+          body: '{"event":"device.status.changed","room_id":{{ marshal .Request.Body.room }},"device_id":{{ marshal .Request.Body.device }},"status":{{ marshal .Request.Body.status }},"ts":{{ now }}}'
           headers: { X-UCC-Event: device.status.changed }
           sign: *ucc-sign
 

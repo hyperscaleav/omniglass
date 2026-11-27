@@ -1360,7 +1360,7 @@ drivers:
             paginate:
               style: cursor
               size_param: page_size
-              size: 50
+              size: 20
               cursor_from: next_page_token
               cursor_param: next_page_token
               max_pages: 600

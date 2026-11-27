@@ -30,6 +30,8 @@ import (
 func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 	ctx := context.Background()
 	const systems = 20
+	// pageOfDevices is the device page the driver declares (ucc-rooms, 20 a page).
+	const pageOfDevices = 20
 	base, client := startCorporateLab(t, "meeting", systems)
 
 	m, err := scenario.Shipped("corporate")
@@ -55,7 +57,7 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 	var conduit string
 	var covers []string
 	for _, svc := range w.Services {
-		if svc.Webhook && svc.Profile == "ucc-platform" {
+		if svc.Webhook && svc.Polled {
 			conduit = svc.Name
 			for _, c := range svc.Covers {
 				covers = append(covers, c.System)
@@ -66,8 +68,8 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 		t.Fatalf("the headquarters' world holds the meeting platform %q covering %d rooms, want it covering all %d", conduit, len(covers), systems)
 	}
 	listed := w.Listed(conduit)
-	if len(listed) <= 50 {
-		t.Fatalf("the world lists %d devices, want more than the fifty a page holds so the poll must walk", len(listed))
+	if len(listed) <= pageOfDevices {
+		t.Fatalf("the world lists %d devices, want more than the %d a page holds so the poll must walk", len(listed), pageOfDevices)
 	}
 	sort.Strings(covers)
 
