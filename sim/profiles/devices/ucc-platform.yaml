@@ -15,6 +15,14 @@
 #   status.rooms.<id>.meeting  , the meeting in progress, empty when idle
 #   status.rooms.<id>.participants , people in the meeting
 #
+# The rooms the world places read off the lab calendar (#2757, #2767): a
+# room is in a call exactly when its meeting (ownerMeetingNow, the room of
+# the system its id names) has somebody in it, the meeting is named by its
+# start and the room, participants are who came, and the platform posts
+# room.meeting.started and room.meeting.ended at each boundary. A room the
+# world does not name (the dev fixture's, an id a demo invents) keeps the state
+# its routes gave it.
+#
 # Auth: header token (X-UCC-Token). public_paths exempts the dashboard.
 
 name: ucc-platform
@@ -141,11 +149,37 @@ interfaces:
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }
 
-# The account's periodic digest (#1747): every thirty seconds it posts the
-# same batched rooms.state report the report route posts, so a scale lab's
-# account is heard on its own. Before the account is subscribed its target
-# is empty and nothing is sent.
+# The account's behaviors (#1747, #2767). rooms_calendar, every 15 seconds,
+# reads each room the world places off the lab calendar into status.rooms and
+# tells the server when a meeting begins or ends: one post a tick, an ended
+# before a started when a meeting follows another, in room-id order when
+# several fall due together. Before the account is subscribed, and for a room
+# it has just learned, it posts nothing and takes the room's state as it
+# stands, so a lab does not announce every meeting already running; the batched
+# report below tells the whole state. status.sim is the simulator's: told is
+# the meeting each room was last told of ("-" for none) and announce is what
+# this tick posts.
 behaviors:
+  - name: rooms_calendar
+    schedule:
+      interval: 15s
+    mutations:
+      - path: status.rooms
+        value: '{{ $sep := "" }}{ {{- range $id, $r := (.State | get "status" | get "rooms") }}{{ $sep }}{{ marshal $id }}: {{ with ownerRoom $id }}{{ with ownerMeetingNow $id }}{{ if ne .outcome "no-show" }}{"name": {{ marshal (or (index $r "name") $id) }}, "state": "in-call", "meeting": "m-{{ .start }}-{{ $id }}", "participants": {{ .actual }}}{{ else }}{"name": {{ marshal (or (index $r "name") $id) }}, "state": "idle", "meeting": "", "participants": 0}{{ end }}{{ else }}{"name": {{ marshal (or (index $r "name") $id) }}, "state": "idle", "meeting": "", "participants": 0}{{ end }}{{ else }}{"name": {{ marshal (or (index $r "name") $id) }}, "state": {{ marshal (or (index $r "state") "idle") }}, "meeting": {{ marshal (or (index $r "meeting") "") }}, "participants": {{ or (index $r "participants") 0 }}}{{ end }}{{ $sep = "," }}{{ end }} }'
+      - path: status.sim.announce
+        value: '{{ $told := .State.status.sim.told }}{{ $out := `{"kind":"","room":"","meeting":""}` }}{{ if .State | get "configuration" | get "webhook" | get "target_url" }}{{ range $id, $r := (.State | get "status" | get "rooms") }}{{ if and (ownerRoom $id) (eq $out `{"kind":"","room":"","meeting":""}`) }}{{ $t := index $told $id }}{{ if $t }}{{ if and (ne $t "-") (or (eq $r.state "idle") (ne $r.meeting $t)) }}{{ $out = printf `{"kind":"ended","room":%s,"meeting":%s}` (marshal $id) (marshal $t) }}{{ else if and (eq $t "-") (eq $r.state "in-call") }}{{ $out = printf `{"kind":"started","room":%s,"meeting":%s}` (marshal $id) (marshal $r.meeting) }}{{ end }}{{ end }}{{ end }}{{ end }}{{ end }}{{ $out }}'
+      - path: status.sim.told
+        value: '{{ $s := .State.status.sim }}{{ $sub := .State | get "configuration" | get "webhook" | get "target_url" }}{{ $sep := "" }}{ {{- range $id, $r := (.State | get "status" | get "rooms") }}{{ if ownerRoom $id }}{{ $sep }}{{ marshal $id }}: {{ $v := index $s.told $id }}{{ if and $sub $v }}{{ if eq $s.announce.room $id }}{{ if eq $s.announce.kind "started" }}{{ marshal $r.meeting }}{{ else }}"-"{{ end }}{{ else }}{{ marshal $v }}{{ end }}{{ else if eq $r.state "in-call" }}{{ marshal $r.meeting }}{{ else }}"-"{{ end }}{{ $sep = "," }}{{ end }}{{ end }} }'
+    emit:
+      url: '{{ $a := .State.status.sim.announce }}{{ if $a.kind }}{{ .State | get "configuration" | get "webhook" | get "target_url" }}{{ end }}'
+      body: '{"event":"room.meeting.{{ .State.status.sim.announce.kind }}","room_id":"{{ .State.status.sim.announce.room }}","meeting":"{{ .State.status.sim.announce.meeting }}","ts":{{ now }}}'
+      headers: { X-UCC-Event: 'room.meeting.{{ .State.status.sim.announce.kind }}' }
+      sign: *ucc-sign
+
+  # The account's periodic digest (#1747): every thirty seconds it posts the
+  # same batched rooms.state report the report route posts, so a scale lab's
+  # account is heard on its own. Before the account is subscribed its target
+  # is empty and nothing is sent.
   - name: rooms_report
     schedule:
       interval: 30s
@@ -180,6 +214,11 @@ defaults:
   status:
     device:
       boot_epoch: 0
+    # What the calendar behavior has told the server: the meeting each placed
+    # room was last told of ("-" for none), and this tick's post.
+    sim:
+      told: {}
+      announce: { kind: "", room: "", meeting: "" }
     rooms:
       zr-boardroom-a: { name: "Boardroom A", state: idle, meeting: "", participants: 0 }
       zr-huddle-north: { name: "Huddle North", state: in-call, meeting: "m-1001", participants: 3 }

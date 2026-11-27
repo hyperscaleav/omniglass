@@ -55,7 +55,7 @@ the scale lab runs the same judgment against a lab of any size.
 One device is also held to a **showcase floor**, the most a single device says: on a 20-system
 corporate lab (the smallest with a divisible conference room), `make test-lab` holds the headquarters
 conference room's video bar to 20 metrics, 8 properties, an event it caught itself and a log line
-within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754). The room's schedule may
+within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754). The room's calendar may
 put no meeting in that window, so the test first dials a call on the bar through
 `POST /components/{name}/simulation:fire`, as a demo would.
 
@@ -272,11 +272,11 @@ A standard's `control` list names the slots whose devices are wired with a **sec
 another endpoint on the same device: the boardroom displays (`mr86`) get their web admin beside their
 SNMP agent, so a demo can switch an input from the console, and the divisible conference rooms' video
 bars get their websocket control socket (`kestrel-ws`, wss on 9443) beside their https API, so one bar
-talks over two protocols (#2754). Every video bar in the lab keeps its room's meeting schedule, drifts
+talks over two protocols (#2754). Every video bar in the lab acts out its room's meetings off the lab calendar, drifts
 its call stats in a call and logs on its own
-([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about 3 events and
-9 log lines a bar an hour, beside its polls, or under one event and three log lines a second across
-the 950 or so bars of a 1,000-system lab.
+([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about 1.7 events and
+6.7 log lines a bar an hour, beside its polls, or under half an event and two log lines a second across
+the 920 or so bars of a 1,000-system lab.
 
 ```sh
 omniglass lab run --scenario corporate --systems 300
@@ -336,13 +336,13 @@ measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost
 - **a simulated component**, its simulator's share and the collection from it: about 0.9 MiB and a
   thousandth of a core.
 
-So `corporate` at 1,000 systems (18 sites, 3,028 components) needs about 3.5 GiB and 3.2 cores, and at
-3,000 (30 sites, 8,974 components) about 9.1 GiB and 9.3 cores, before Postgres's shared buffers (below).
+So `corporate` at 1,000 systems (18 sites, 3,064 components) needs about 3.5 GiB and 3.3 cores, and at
+3,000 (30 sites, 9,046 components) about 9.2 GiB and 9.4 cores, before Postgres's shared buffers (below).
 CPU, not memory, is what runs out first on most machines: the reference WSL setup of 12 GB on a
 12-core host fits 3,000 systems with little to spare. `--plan` ends with the decision for this machine:
 
 ```text
-Preflight: about 9.1 GiB of memory and 9.3 cores (the server and Postgres, an outpost for each of 30 sites, 8974 simulated components).
+Preflight: about 9.2 GiB of memory and 9.4 cores (the server and Postgres, an outpost for each of 30 sites, 9046 simulated components).
 Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
 This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
@@ -351,7 +351,7 @@ Decision: fits.
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3028 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+error: A scale lab of 1000 systems (18 sites, 3064 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
   To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
 ```
 

@@ -343,23 +343,23 @@ device keeps the same schedule on every run and a test drives a simulated day on
 No behavior in a shipped profile ticks faster than 15 seconds: a device gets richer by reporting more
 kinds of signal, not more samples (#1360).
 
-The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab keeps its room's meeting
-schedule, a tick a minute. When the room is free it books its next slot, 15, 30 or 60 minutes,
-starting on the next half hour (a 15-minute one on the next quarter), and takes about half the slots
-it considers; a meeting starts up to 2 minutes early or 5 late and ends up to 5 minutes before its
-slot does. The call reports `call-started` (a fresh call id, two to six participants) and
-`call-ended`, and in between a participant joins or leaves now and then (`participant-joined`,
+The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab acts out its room's meetings
+off the [lab calendar](#the-lab-calendar), a tick a minute: one call per held meeting, starting and
+ending at the first tick on or after the meeting does, none for a no-show. The call reports
+`call-started` (the meeting's id, at least half of who came) and `call-ended`, and in between a
+participant joins or leaves now and then, never past who came (`participant-joined`,
 `participant-left`). Each occurrence is also an `event: log` line in the codec's idiom (a severity, a
 facility such as `kvroom.call`, and its text), beside a status line every 15 minutes. A second
 behavior, every 30 seconds, drifts the call's packet loss (a ratio), jitter, bitrate, frame rate,
 speaker level and microphone level while a call is up and rests them when the room is idle, drifts
 the codec's own load, temperature, fan and memory, and writes the WARN line a bar's network log does
-when loss crosses 3% and an INFO line when it recovers. A bar runs about 0.6 calls, 3 events and 9 log
-lines an hour. Booking tables would drive the schedule in time; today it is each bar's own draws.
+when loss crosses 3% and an INFO line when it recovers. On the corporate
+lab's calendar a bar runs about 1.7 named events and 6.7 log lines an hour (11 feed events counting
+state changes), and the schedule is the room's, not the bar's own (a bar with no calendar keeps its own).
 
 A call on demand still talks now: the bar's own dial route starts one at once with its event and log
-line, a meeting falling due under it is skipped, and it ends at the bar's hang-up route or after
-30 minutes, so a demo or a test can make a bar talk without waiting for its schedule. The
+line, a meeting running under it is skipped, and it ends at the bar's hang-up route or after
+30 minutes, so a demo or a test can make a bar talk without waiting for a meeting. The
 `kestrel-api` driver lands all of it from one held feed and two polls, and in the corporate lab's
 conference rooms the bar's websocket control socket is a second endpoint beside its https API
 ([the scale lab](/developer/lab/#scale-lab-scenarios)).
@@ -395,7 +395,9 @@ runs and across engines:
 
 The engine holds the calendar (`Engine.SetCalendar`) and reads time only through each device's clock,
 the seam a test pins. A behavior's template reads its own room with `meetingNow` and `meetingNext`
-(each a map of the meeting, or nothing), and any template, a push body included, reads another room
+(each a map of the meeting, or nothing), `meetingsBetween` reads the room's meetings over a window of
+unix seconds (what a charge or a warm-up is built from), `hasCalendar` says whether the room has a
+calendar at all, and any template, a push body included, reads another room
 by its key with `roomMeetingNow` and `roomMeetingNext`. A service that speaks for many rooms reads by
 **room key**, not by system: the calendar is keyed by room, and a push's `.Owner` is a system, so a
 service resolves its owner to the room key before it reads, through
@@ -416,6 +418,27 @@ Devices that read the calendar:
   out. The lab's conference rooms carry one, so its count rises at a meeting's start and falls at its end.
   A counter with no calendar (the dev fleet, which holds no world) keeps its own random walk, as a room
   with no calendar is left as it was.
+
+- **Room audio** (#2774): the ceiling microphone is active, with its level up and mute moving now and
+  then, while someone is in the room (a no-show holds its slot with nobody in it, so it is idle). The
+  wireless pack transmits in the same hours, and its battery is a pure function of the calendar over
+  the 48 hours before now (`meetingsBetween`): it drains in use and recharges on its dock between
+  meetings, so the charge reads the same at any instant on any run, and a scheduled problem can pin it.
+  The DSP opens a gate for every two attendees actually in the room, up to its four table and ceiling
+  strips, and raises their peak with the head count; the amplifier carries signal and warms while the
+  room is in use. Each sits at its noise floor otherwise. A device whose room holds no calendar
+  (`hasCalendar`) keeps its earlier drift unchanged.
+
+- **Conferencing, the video bar, the codec and the meeting platform** (#2767): a held meeting is a
+  call. The Kestrel VRoom bar and the Relay C1 codec are in a call exactly when their room's meeting
+  has somebody in it (a no-show has none, a walk-in has one), at the first tick on or after it starts
+  and ends; participants open at half to all of who came and move inside it, content is shared now
+  and then, and a meeting that starts as the last one ends moves the call on in one tick. A dial or a
+  hang-up on the device holds against the calendar. The UCC platform reads each room it speaks for
+  through the system the room's id names, as in-call or idle with the meeting's id and who came, and
+  posts a signed `room.meeting.started` and `room.meeting.ended` at each boundary, one a tick, none
+  for what was already running when it was subscribed. A bar whose room has no calendar (the dev fleet
+  has no world) keeps #2754's own schedule, exactly as before.
 
 ### A simulated service posts from the start
 

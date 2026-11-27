@@ -183,12 +183,15 @@ templates:
     name: divisible-conference
     label: Divisible Conference
     description: >-
-      One side of a combinable space: two displays and two room microphones each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.
+      One side of a combinable space: two displays, two room microphones and a wireless microphone each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.
     standard:
       slots:
         - name: video-bar
           label: Video Bar
           accepted_types: [video-bar]
+        - name: codec
+          label: Codec
+          accepted_types: [codec]
         - name: main-display
           label: Main Display
           quorum: 2
@@ -197,6 +200,9 @@ templates:
           label: Room Microphone
           quorum: 2
           accepted_types: [ceiling-mic]
+        - name: wireless-mic
+          label: Wireless Microphone
+          accepted_types: [wireless-mic]
         - name: dsp
           label: DSP
           accepted_types: [dsp]
