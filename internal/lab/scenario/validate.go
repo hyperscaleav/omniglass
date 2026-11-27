@@ -100,6 +100,7 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 	}
 	probs = append(probs, checkSiteBounds(m)...)
 	probs = append(probs, checkPushers(m, cat)...)
+	probs = append(probs, checkServices(m, cat)...)
 	probs = append(probs, checkHealthHistory(m)...)
 	probs = append(probs, checkCalendar(m)...)
 
@@ -372,6 +373,35 @@ func checkPushers(m *Manifest, cat Catalog) []Problem {
 		}
 		if p.Systems != nil && *p.Systems < 1 {
 			add(p.Line, "pusher %q has no systems to scope it to; give it systems of at least 1", name)
+		}
+	}
+	return probs
+}
+
+// checkServices checks each polled service declaration (#2765): a name unique
+// among the pushers and services and a product the simulator serves (the lab
+// seeds it as a component, polled like any).
+func checkServices(m *Manifest, cat Catalog) []Problem {
+	var probs []Problem
+	add := func(line int, format string, args ...any) {
+		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
+	}
+	seen := map[string]int{}
+	for _, p := range m.Pushers {
+		seen[p.Name.Name] = lineOr(p.Name.Line, p.Line)
+	}
+	for _, s := range m.Services {
+		name := s.Name.Name
+		switch {
+		case !legalName(name):
+			add(lineOr(s.Name.Line, s.Line), "service name %q is not a name (lowercase letters, digits and dashes, at most %d)", name, maxNameLen)
+		case seen[name] != 0:
+			add(lineOr(s.Name.Line, s.Line), "service %q has the name of a pusher or service on line %d", name, seen[name])
+		default:
+			seen[name] = lineOr(s.Name.Line, s.Line)
+		}
+		if _, ok := cat.Product(s.Profile.Name); !ok || cat.Simulated == nil || !cat.Simulated(s.Profile.Name) {
+			add(lineOr(s.Profile.Line, s.Line), "product %q of service %q is not one the simulator serves", s.Profile.Name, name)
 		}
 	}
 	return probs

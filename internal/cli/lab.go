@@ -950,8 +950,8 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return fmt.Errorf("lab seed: %s carries no token hash for the outpost %s", lab.SiteOutpostTokenHashesEnv, outpost)
 		}
 		for _, p := range site.Pushers {
-			if p.Webhook {
-				continue // a webhook sender signs its posts, and needs no bearer token
+			if p.IsComponent() {
+				continue // a webhook sender signs its posts, a polled service is read: neither needs a bearer token
 			}
 			if _, ok := pushers[p.Name]; !ok {
 				return fmt.Errorf("lab seed: %s carries no token for the pusher %s", lab.PusherTokensEnv, p.Name)

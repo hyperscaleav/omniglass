@@ -56,7 +56,9 @@ type PlanResult struct {
 	// Endpoints, which is the simulated fleet's), its own signing secret and
 	// a binding per system it speaks for.
 	Senders int
-	Phases  []PlanPhase
+	// Services is the polled services seeded (#2765), each with an identity binding per room it covers.
+	Services int
+	Phases   []PlanPhase
 	// Induced is the device InduceUnregistered attached, nil when off.
 	Induced *Induced
 }
@@ -87,6 +89,8 @@ type planRows struct {
 	Systems    []systemRow
 	Components []componentRow
 	Senders    []senderRow
+	// Services are the polled services (#2765): components with no slot and no webhook.
+	Services []serviceRow
 }
 
 // rowsOf flattens a plan. Pure.
@@ -123,11 +127,15 @@ func rowsOf(p *scenario.Plan) planRows {
 			}
 		}
 		for _, ps := range site.Pushers {
-			if !ps.Webhook {
+			if !ps.IsComponent() {
 				continue
 			}
 			r.Components = append(r.Components, componentRow{Key: ps.Name, Name: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
-			r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+			if ps.Webhook {
+				r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+			} else {
+				r.Services = append(r.Services, serviceRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+			}
 		}
 	}
 	return r
@@ -164,7 +172,7 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	if err != nil {
 		return res, err
 	}
-	res.Locations, res.Systems, res.Components, res.Slots = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-len(rows.Senders)
+	res.Locations, res.Systems, res.Components, res.Slots = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-len(rows.Senders)-len(rows.Services)
 	n, err := seedPlanPushers(ctx, gw, actorID, p, sysIDs)
 	if err != nil {
 		return res, err
@@ -175,6 +183,10 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 		return res, err
 	}
 	run.done("senders")
+	if res.Services, err = seedPlanServices(ctx, gw, actorID, rows, compIDs, sysIDs); err != nil {
+		return res, err
+	}
+	run.done("services")
 	if opts.Endpoints {
 		n, induced, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
 		if err != nil {
@@ -195,8 +207,8 @@ func seedPlanPushers(ctx context.Context, gw storage.Gateway, actorID string, p 
 	n := 0
 	for _, site := range p.Sites {
 		for _, ps := range site.Pushers {
-			if ps.Webhook {
-				continue // a sender speaks as its component (seedPlanSenders)
+			if ps.IsComponent() {
+				continue // a sender speaks as its component (seedPlanSenders); a service is polled
 			}
 			for _, sys := range ps.Systems {
 				id, ok := sysIDs[sys]

@@ -37,9 +37,13 @@ func (d *Device) Room() calendar.Room { return d.room }
 //	meetingsBetween a b   -> the room's meetings overlapping [a, b) (unix seconds), in start order
 //	roomMeetingNow s b r  -> the same for the room site s, building b, room r
 //	roomMeetingNext s b r
+//	meetingPrev           -> the device's own room's last meeting that has ended by now, nil when none (#2775)
+//	roomMeetingPrev s b r -> the last meeting of that room that has ended by now, nil when none (#2775)
 //	ownerRoom o           -> the {site, building, room} of the system o in the world, nil when none
 //	ownerMeetingNow o     -> the meeting in system o's room now (ownerMeetingNext: the next)
 //	coveredRooms          -> the rooms a service device speaks for, each {site, building, room}
+//	bookings, roomBookings s b r, ownerBookings o
+//	                      -> a room's booked meetings alone (calendar_bookings.go)
 //
 // A meeting reads as a map: kind, origin, organizer, expected, actual,
 // outcome, start, end, slot_start, slot_end (unix seconds) and the room's
@@ -67,12 +71,22 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		}
 		return e.Map()
 	}
+	prev := func(room calendar.Room) map[string]any {
+		c := d.calendarSrc()
+		if c == nil {
+			return nil
+		}
+		if e, ok := c.Prev(room, d.clock()); ok {
+			return e.Map()
+		}
+		return nil
+	}
 	placed := func(p world.Placement) map[string]any {
 		return map[string]any{"site": p.Site, "building": p.Building, "room": p.Room}
 	}
 	// ownerRoom is the room of a push's .Owner system, through the world.
 	ownerRoom := func(owner string) (world.Placement, bool) { return d.world().PlaceSystem(owner) }
-	return template.FuncMap{
+	funcs := template.FuncMap{
 		"ownerRoom": func(owner string) map[string]any {
 			if p, ok := ownerRoom(owner); ok {
 				return placed(p)
@@ -108,7 +122,15 @@ func (d *Device) calendarFuncs() template.FuncMap {
 		"roomMeetingNext": func(site, building, room string) map[string]any {
 			return read(calendar.Room{Site: site, Building: building, Room: room}, true)
 		},
+		"meetingPrev": func() map[string]any { return prev(d.room) },
+		"roomMeetingPrev": func(site, building, room string) map[string]any {
+			return prev(calendar.Room{Site: site, Building: building, Room: room})
+		},
 	}
+	for name, fn := range d.bookingFuncs() {
+		funcs[name] = fn
+	}
+	return funcs
 }
 
 // world is how the device reaches its engine's world; a device that stands

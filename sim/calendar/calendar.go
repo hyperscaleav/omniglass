@@ -70,6 +70,11 @@ type Meeting struct {
 	Outcome   Outcome
 	SlotStart time.Time
 	SlotEnd   time.Time
+	// Recorded is whether the meeting is recorded (#2775): a fact of the
+	// lab, a seeded share (the knobs' RecordingRate) of the meetings that
+	// took place, never a no-show. Derived from the seed, the room and the
+	// meeting alone, so it moves no other draw and needs no state.
+	Recorded bool
 }
 
 // Entry is one thing on the calendar: a kind, the window it occupies on the
@@ -135,6 +140,9 @@ type Knobs struct {
 	// holds a walk-in.
 	WalkInRate float64 `yaml:"walk_in_rate" json:"walk_in_rate"`
 	Hours      Hours   `yaml:"hours" json:"hours"`
+	// RecordingRate is the share of meetings that took place (held, ended
+	// early or late, walk-ins; never a no-show) that are recorded (#2775).
+	RecordingRate float64 `yaml:"recording_rate" json:"recording_rate"`
 }
 
 // slotSizes are the slot lengths a mix may name, in minutes.
@@ -152,7 +160,7 @@ func (k Knobs) Validate() error {
 		name string
 		v    float64
 	}{{"booking_rate", k.BookingRate}, {"no_show_rate", k.NoShowRate}, {"ended_early_rate", k.EndEarlyRate},
-		{"ended_late_rate", k.EndLateRate}, {"walk_in_rate", k.WalkInRate}} {
+		{"ended_late_rate", k.EndLateRate}, {"walk_in_rate", k.WalkInRate}, {"recording_rate", k.RecordingRate}} {
 		if err := rate(c.name, c.v); err != nil {
 			return err
 		}
@@ -335,7 +343,19 @@ func generateDay(room Room, k Knobs, seed int64, day time.Time) []Entry {
 		}})
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Start.Before(entries[j].Start) })
+	for _, e := range entries {
+		e.Meeting.Recorded = e.Meeting.Outcome != OutcomeNoShow && recordedDraw(seed, room, e.Meeting.SlotStart) < k.RecordingRate
+	}
 	return entries
+}
+
+// recordedDraw is the meeting's own draw in [0, 1) for whether it is recorded,
+// a hash of the seed, the room and the slot it was booked on (a walk-in's own
+// start), so it consumes none of the day's random stream and a meeting is
+// recorded or not whichever window asks.
+func recordedDraw(seed int64, room Room, slotStart time.Time) float64 {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("recorded|%d|%s|%d", seed, room.Key(), slotStart.Unix())))
+	return float64(binary.BigEndian.Uint64(sum[:8])>>11) / (1 << 53)
 }
 
 // Map is the entry as a template reads it: lower-case keys, times as unix
@@ -353,6 +373,7 @@ func (e Entry) Map() map[string]any {
 		m["outcome"] = string(e.Meeting.Outcome)
 		m["slot_start"] = e.Meeting.SlotStart.Unix()
 		m["slot_end"] = e.Meeting.SlotEnd.Unix()
+		m["recorded"] = e.Meeting.Recorded
 	}
 	return m
 }
@@ -389,6 +410,30 @@ func (c *Calendar) Now(room Room, t time.Time) (Entry, bool) {
 		if !t.Before(e.Start) && t.Before(e.End) {
 			return e, true
 		}
+	}
+	return Entry{}, false
+}
+
+// prevHorizon is how far Prev looks back for the last entry.
+const prevHorizon = 8
+
+// Prev is the last entry that has ended at or before t, within a week and a
+// day back.
+func (c *Calendar) Prev(room Room, t time.Time) (Entry, bool) {
+	to := t
+	for back := 1; back <= prevHorizon; back++ {
+		from := t.AddDate(0, 0, -back)
+		var last Entry
+		found := false
+		for _, e := range c.Entries(room, from, to) {
+			if !e.End.After(t) {
+				last, found = e, true
+			}
+		}
+		if found {
+			return last, true
+		}
+		to = from
 	}
 	return Entry{}, false
 }

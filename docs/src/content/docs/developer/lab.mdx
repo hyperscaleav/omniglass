@@ -343,7 +343,7 @@ CPU, not memory, is what runs out first on most machines: the reference WSL setu
 
 ```text
 Preflight: about 9.2 GiB of memory and 9.4 cores (the server and Postgres, an outpost for each of 30 sites, 9046 simulated components).
-Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
+Postgres's shared buffers, sized to this host and fleet, come to 439 MiB: about 9.6 GiB in all.
 This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
 ```
@@ -351,8 +351,8 @@ Decision: fits.
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3064 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
-  To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
+error: A scale lab of 1000 systems (18 sites, 3064 simulated components) needs about 3.5 GiB of memory and 3.3 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 438, the largest that fits, or give Docker more memory or CPUs.
 ```
 
 Both were forced with the hidden `--host-memory`, which plans against a memory limit of your
@@ -1202,6 +1202,9 @@ pushers:                        # outside actors that report by pushing, placed 
   - name: ucc                   # each placed one is <site>-ucc-<k>
     profile: ucc-platform       # a simulator profile with a webhook face: a signed-webhook sender
     per_site: 1                 # systems omitted: it speaks for every one of the site's systems
+services:                       # polled cloud services: one account for the whole scenario (#2765)
+  - name: scheduling            # placed once, at the headquarters, as <hq>-scheduling-1
+    profile: scheduling-service # a product the simulator serves; it covers every system of every site
 calendar:                       # what every room acts out on the simulator's clock (#2757)
   meetings:
     mr65:                       # a standard of this scenario; knobs per standard
@@ -1213,6 +1216,7 @@ calendar:                       # what every room acts out on the simulator's cl
       attendance: { min: 3, max: 8 }
       walk_in_rate: 0.08        # the chance a free 15-minute cell holds a walk-in
       hours: { start: 8, end: 18 }   # UTC hours meetings fall in; omit for the whole day
+      recording_rate: 0.15      # the share of meetings that took place that are recorded
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a

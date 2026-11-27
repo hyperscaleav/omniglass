@@ -56,6 +56,8 @@ standards:
     system_type: conference
     products:
       video-bar: kestrel-vroom
+      camera: kestrel-gaze-p2
+      recorder: recording-service
       codec: kestrel-relay-c1
       main-display: boreal-edge-86
       room-mic: lyra-arc-a2
@@ -135,6 +137,14 @@ pushers:
     profile: ucc-platform
     per_site: 1
 
+# Polled cloud services (#2765): one account for the whole fleet, placed once
+# at the headquarters and covering every room it books, not a box in each. The
+# simulator reads the rooms it covers off its world and reports their booked
+# meetings off the lab calendar, one paged room list.
+services:
+  - name: scheduling
+    profile: scheduling-service
+
 # The past a lab seeded with --health-history carries (#2728, ADR-2726): every
 # system healthy for the 30 days before the lab started, except the showcase
 # rooms the marketing captures visit, each down a few times, each time for the
@@ -191,6 +201,7 @@ calendar:
       attendance: { min: 2, max: 4 }
       walk_in_rate: 0.12
       hours: { start: 8, end: 18 }
+      recording_rate: 0.05
     mr65:
       booking_rate: 0.40
       slot_mix: { 15: 1, 30: 5, 60: 3 }
@@ -200,6 +211,7 @@ calendar:
       attendance: { min: 3, max: 8 }
       walk_in_rate: 0.08
       hours: { start: 8, end: 18 }
+      recording_rate: 0.15
     mr75:
       booking_rate: 0.45
       slot_mix: { 15: 1, 30: 4, 60: 4 }
@@ -209,6 +221,7 @@ calendar:
       attendance: { min: 4, max: 12 }
       walk_in_rate: 0.06
       hours: { start: 8, end: 18 }
+      recording_rate: 0.2
     mr86:
       booking_rate: 0.50
       slot_mix: { 30: 3, 60: 5 }
@@ -218,6 +231,7 @@ calendar:
       attendance: { min: 6, max: 16 }
       walk_in_rate: 0.04
       hours: { start: 8, end: 18 }
+      recording_rate: 0.3
     divisible-conference:
       booking_rate: 0.60
       slot_mix: { 30: 2, 60: 6 }
@@ -227,3 +241,4 @@ calendar:
       attendance: { min: 8, max: 30 }
       walk_in_rate: 0.02
       hours: { start: 8, end: 18 }
+      recording_rate: 0.5

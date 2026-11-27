@@ -19,7 +19,7 @@ standards:
 	block := func(knobs string) string {
 		return "calendar:\n  meetings:\n    sign-55:\n" + knobs
 	}
-	good := "      booking_rate: 0.4\n      slot_mix: {15: 1, 30: 3, 60: 2}\n      no_show_rate: 0.1\n      ended_early_rate: 0.2\n      ended_late_rate: 0.1\n      attendance: {min: 2, max: 6}\n      walk_in_rate: 0.1\n      hours: {start: 8, end: 18}\n"
+	good := "      booking_rate: 0.4\n      slot_mix: {15: 1, 30: 3, 60: 2}\n      no_show_rate: 0.1\n      ended_early_rate: 0.2\n      ended_late_rate: 0.1\n      attendance: {min: 2, max: 6}\n      walk_in_rate: 0.1\n      hours: {start: 8, end: 18}\n      recording_rate: 0.25\n"
 	m, err := Parse("t.yaml", []byte(base+block(good)))
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ standards:
 		t.Fatalf("a calendar block is refused: %v", err)
 	}
 	k, ok := m.MeetingKnobs("sign-55")
-	if !ok || k.BookingRate != 0.4 || k.SlotMix[30] != 3 || k.Attendance.Max != 6 || k.Hours.End != 18 {
+	if !ok || k.BookingRate != 0.4 || k.SlotMix[30] != 3 || k.Attendance.Max != 6 || k.Hours.End != 18 || k.RecordingRate != 0.25 {
 		t.Fatalf("parsed knobs = %+v, %v", k, ok)
 	}
 	if _, ok := m.MeetingKnobs("mr65"); ok {
@@ -36,6 +36,7 @@ standards:
 	}
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"booking rate past 1", base + block("      booking_rate: 1.5\n      slot_mix: {30: 1}\n      attendance: {min: 1, max: 2}\n"), "calendar.meetings.sign-55.booking_rate"},
+		{"recording rate past 1", base + block("      booking_rate: 0.5\n      slot_mix: {30: 1}\n      attendance: {min: 1, max: 2}\n      recording_rate: 1.5\n"), "calendar.meetings.sign-55.recording_rate"},
 		{"a 45-minute slot", base + block("      booking_rate: 0.5\n      slot_mix: {45: 1}\n      attendance: {min: 1, max: 2}\n"), "calendar.meetings.sign-55.slot_mix"},
 		{"inverted attendance", base + block("      booking_rate: 0.5\n      slot_mix: {30: 1}\n      attendance: {min: 5, max: 2}\n"), "calendar.meetings.sign-55.attendance"},
 		{"not a standard", base + "calendar:\n  meetings:\n    mr99:\n      booking_rate: 0.5\n", `calendar.meetings.mr99: "mr99" is no standard`},
@@ -72,6 +73,12 @@ func TestShippedCorporateDeclaresMeetingKnobs(t *testing.T) {
 		}
 		if !ok {
 			t.Errorf("standard %s has no meeting knobs", s.Name.Name)
+		}
+	}
+	// A share of every room's meetings is recorded (#2775).
+	for _, s := range m.Standards {
+		if k, ok := m.MeetingKnobs(s.Name.Name); ok && k.RecordingRate <= 0 {
+			t.Errorf("standard %s records no meetings", s.Name.Name)
 		}
 	}
 }

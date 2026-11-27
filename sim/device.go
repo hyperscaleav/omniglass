@@ -832,6 +832,17 @@ var templateFuncs = template.FuncMap{
 		}
 		return "", nil
 	},
+	// add sums two integers, for a counter a list template keeps.
+	"add": func(a, b int) int { return a + b },
+	// atoi reads a request value (a query parameter) as a non-negative
+	// integer, 0 when absent or malformed: a list route's page_size.
+	"atoi": func(v any) int {
+		n, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(v)))
+		if err != nil || n < 0 {
+			return 0
+		}
+		return n
+	},
 	// get retrieves a key from a map. Pipeline-friendly: {{ .State | get "status" | get "device" | get "power" }}
 	"get": func(key string, m any) any {
 		switch v := m.(type) {

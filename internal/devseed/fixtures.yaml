@@ -551,6 +551,9 @@ components:
   - key: proj-a
     product: boreal-beam-340
     location: boardroom-a
+  - key: cam-a
+    product: kestrel-gaze-p2
+    location: boardroom-a
   - key: codec-a
     product: kestrel-relay-c1
     location: boardroom-a
@@ -562,6 +565,9 @@ components:
     location: boardroom-b
   - key: proj-b
     product: boreal-beam-340
+    location: boardroom-b
+  - key: cam-b
+    product: kestrel-gaze-p2
     location: boardroom-b
   - key: codec-b
     product: kestrel-relay-c1
@@ -1490,6 +1496,12 @@ slot_assignments:
     slot: codec
     component: codec-a
   - system: boardroom-a
+    slot: camera
+    component: cam-a
+  - system: boardroom-a
+    slot: recorder
+    component: recording-service
+  - system: boardroom-a
     slot: wireless-mic
     component: wmic-a
   - system: boardroom-a
@@ -1528,6 +1540,12 @@ slot_assignments:
   - system: boardroom-b
     slot: codec
     component: codec-b
+  - system: boardroom-b
+    slot: camera
+    component: cam-b
+  - system: boardroom-b
+    slot: recorder
+    component: recording-service
   - system: boardroom-b
     slot: wireless-mic
     component: wmic-b

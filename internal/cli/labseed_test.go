@@ -383,8 +383,8 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := site.Totals.Components + senders[site.Name]; len(devices) != want {
-			t.Errorf("outpost %s simulates %d components, want the site's %d and its platform", name, len(devices), want)
+		if want := site.Simulated(); len(devices) != want {
+			t.Errorf("outpost %s simulates %d components, want the site's %d, its platform and any polled service", name, len(devices), want)
 		}
 		hooks, err := gw.OutpostSimWebhooks(ctx, name)
 		if err != nil {
@@ -414,7 +414,7 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 			addresses[d.Address] = d.ComponentID
 		}
 	}
-	if want := plan.Totals.Components + len(plan.Sites); len(addresses) != want {
+	if want := plan.Simulated(); len(addresses) != want {
 		t.Errorf("%d addresses for %d components and platforms", len(addresses), want)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,

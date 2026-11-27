@@ -381,7 +381,7 @@ organized it, how many were expected and how many came, how it went (**held**, *
 
 The scenario declares meetings in its `calendar.meetings` block, a set of knobs per standard
 (`booking_rate`, `slot_mix`, `no_show_rate`, `ended_early_rate`, `ended_late_rate`, `attendance`,
-`walk_in_rate`, `hours`); a bad block is refused at load naming the field
+`walk_in_rate`, `hours`, `recording_rate`); a bad block is refused at load naming the field
 ([the lab guide](/developer/lab/#scale-lab-scenarios)). Each room's day is generated whole from its
 seed, its room key and the UTC day, so a day reads the same whichever window asks for it, across
 runs and across engines:
@@ -391,14 +391,16 @@ runs and across engines:
 - a booked meeting starts up to 2 minutes early or 5 late and ends up to 5 minutes before or after
   its slot, a late end pushing the next start later, so meetings in a room never overlap;
 - a no-show holds its slot with nobody in it;
-- a free 15-minute cell no booking touches holds a short walk-in with `walk_in_rate`.
+- a free 15-minute cell no booking touches holds a short walk-in with `walk_in_rate`;
+- a meeting that took place (never a no-show) is recorded with `recording_rate`, a draw of its own
+  from the seed, the room and the slot, so it moves no other draw.
 
 The engine holds the calendar (`Engine.SetCalendar`) and reads time only through each device's clock,
 the seam a test pins. A behavior's template reads its own room with `meetingNow` and `meetingNext`
 (each a map of the meeting, or nothing), `meetingsBetween` reads the room's meetings over a window of
 unix seconds (what a charge or a warm-up is built from), `hasCalendar` says whether the room has a
 calendar at all, and any template, a push body included, reads another room
-by its key with `roomMeetingNow` and `roomMeetingNext`. A service that speaks for many rooms reads by
+by its key with `roomMeetingNow` and `roomMeetingNext`; `meetingPrev` and `roomMeetingPrev` read the last meeting that has ended. A service that speaks for many rooms reads by
 **room key**, not by system: the calendar is keyed by room, and a push's `.Owner` is a system, so a
 service resolves its owner to the room key before it reads, through
 [the world the simulator holds](#the-world-it-holds).
@@ -419,6 +421,28 @@ Devices that read the calendar:
   A counter with no calendar (the dev fleet, which holds no world) keeps its own random walk, as a room
   with no calendar is left as it was.
 
+
+- **The scheduling surfaces** (#2765): the booking service, the scheduling service and the Slate 5
+  panel say what the calendar says of a room, through `bookings`, `roomBookings` and `ownerBookings`
+  (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked
+  meeting holds its room from the earlier of its slot's start and its own to the later of its slot's
+  end and its own.
+  - The **booking service** pushes each system's `booking-count` (booked meetings left in the day, the
+    one running included) and `booking-state` for the room the world places the system in. It pushes
+    for the system names the world gives it, since a grant carries only the server's ids.
+  - The **scheduling service** is one account for the whole fleet, a conduit
+    ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)):
+    the lab places it once, at the headquarters, covering every room the plan books. Its rooms list
+    is token-paged, one record per room named by the room's system, with that
+    room's booking state, bookings today and left, the organizer holding it and the next start, all
+    off the calendar. A driver polls it and fans each record out to the system the lab's installer
+    bound that room id to; a room nobody bound lands in the conduit's unbound inbox. It also counts
+    today's booked meetings, those still to come and the rooms with one in progress across the rooms it covers.
+  - The **scheduling panel** reads its own room: booked or free, `GET CURRENT` and `GET NEXT` for the
+    booked meeting holding the room and the next (`<start> <end> <organizer>` of the slot, or
+    `none`). BOOK and RELEASE are a momentary override that holds until the calendar's reading changes.
+  - A device with no calendar (the dev fleet has no world file) keeps its previous behavior exactly: the
+    booking service its fixed meeting day, the scheduling service its 8 and no rooms, the panel its buttons.
 - **Room audio** (#2774): the ceiling microphone is active, with its level up and mute moving now and
   then, while someone is in the room (a no-show holds its slot with nobody in it, so it is idle). The
   wireless pack transmits in the same hours, and its battery is a pure function of the calendar over
@@ -439,6 +463,12 @@ Devices that read the calendar:
   posts a signed `room.meeting.started` and `room.meeting.ended` at each boundary, one a tick, none
   for what was already running when it was subscribed. A bar whose room has no calendar (the dev fleet
   has no world) keeps #2754's own schedule, exactly as before.
+- **PTZ camera and recording service** (#2775): the Gaze camera reports the people actually in its
+  room (nobody in a no-show), frames the group when a meeting starts (tracking on, a tighter shot for
+  fewer people) and returns to its home preset when it ends, holding still while the room is empty. The
+  recording service carries a recording in progress for each recorded meeting in the rooms it covers
+  (else its own room) and queues it for ten minutes after it ends. A room with no calendar keeps the
+  old drift. The recording failure feed stays route-driven; scheduled failures are #2769.
 
 ### A simulated service posts from the start
 
