@@ -1,7 +1,6 @@
 package sim
 
 import (
-	"sync"
 	"text/template"
 	"time"
 
@@ -81,30 +80,21 @@ func RoomBookingsAt(c *calendar.Calendar, room calendar.Room, at time.Time) map[
 //	                       room with no booking
 func (d *Device) bookingFuncs() template.FuncMap {
 	// A behavior's mutations each read the room in the same tick, and a read
-	// generates three days of the calendar, so the readings of one second are
-	// kept for their rooms (and dropped with the second or the calendar): a
-	// service reading thousands of rooms reads each once a tick.
-	var mu sync.Mutex
-	var cacheSec int64
-	var cacheCal *calendar.Calendar
-	cache := map[calendar.Room]map[string]any{}
+	// generates three days of the calendar, so the engine's memo keeps the
+	// reading of one second for its room (room_phase.go): a service reading
+	// thousands of rooms reads each once a tick, however many devices ask.
 	read := func(room calendar.Room) map[string]any {
-		c, at := d.calendarSrc(), d.clock()
+		c, at := d.calendarSrc(), d.clock().UTC().Truncate(time.Second)
 		if room == (calendar.Room{}) {
 			c = nil // no room: nothing is booked in it
 		}
-		mu.Lock()
-		defer mu.Unlock()
-		if cacheSec != at.Unix() || cacheCal != c {
-			clear(cache)
-			cacheSec, cacheCal = at.Unix(), c
-		}
-		if out, ok := cache[room]; ok {
-			return out
-		}
-		out := RoomBookingsAt(c, room, at)
-		cache[room] = out
-		return out
+		memo := d.roomMemo()
+		e := memo.entry(roomMemoKey{cal: c, w: nil, room: room, sec: at.Unix()})
+		e.bookOnce.Do(func() {
+			memo.books.Add(1)
+			e.book = RoomBookingsAt(c, room, at)
+		})
+		return e.book
 	}
 	return template.FuncMap{
 		"servedRooms": func() []map[string]any {

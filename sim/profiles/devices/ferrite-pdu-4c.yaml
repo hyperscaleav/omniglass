@@ -27,7 +27,7 @@
 # amplifier, outlet 4 nothing plugged in. The gear is awake by the displays'
 # rule (#2768): from two minutes before a booked meeting someone will attend
 # (at the start of a walk-in) until five minutes after its end, a no-show
-# waking nothing (roomInUse, the reading the control processor shares, #2776).
+# waking nothing (the room phase's in_use, the reading the whole room shares, #2797).
 # Each outlet reads a level, from the calendar alone, never
 # from the devices on it: video 150 mA in standby, 700 awake, 950 in a call
 # (a meeting with someone in the room); processors 180 and 300; amplifier
@@ -135,13 +135,13 @@ behaviors:
     mutations:
       - path: status.outlets.0.current_ma
         value: >-
-          {{- $o := index .State.status.outlets 0 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $awake := roomInUse 120 300 -}}{{- $call := false -}}{{- with meetingNow -}}{{- if and (ne .outcome "no-show") (gt .actual 0) -}}{{- $call = true -}}{{- end -}}{{- end -}}{{ $v := 150 }}{{ if $awake }}{{ $v = 700 }}{{ end }}{{ if $call }}{{ $v = 950 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
+          {{- $o := index .State.status.outlets 0 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $p := roomPhase -}}{{- $awake := $p.in_use -}}{{- $call := and $p.call_active (gt $p.attendees 0) -}}{{ $v := 150 }}{{ if $awake }}{{ $v = 700 }}{{ end }}{{ if $call }}{{ $v = 950 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
       - path: status.outlets.1.current_ma
         value: >-
-          {{- $o := index .State.status.outlets 1 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $awake := roomInUse 120 300 -}}{{- $call := false -}}{{- with meetingNow -}}{{- if and (ne .outcome "no-show") (gt .actual 0) -}}{{- $call = true -}}{{- end -}}{{- end -}}{{ $v := 180 }}{{ if $awake }}{{ $v = 300 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
+          {{- $o := index .State.status.outlets 1 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $p := roomPhase -}}{{- $awake := $p.in_use -}}{{- $call := and $p.call_active (gt $p.attendees 0) -}}{{ $v := 180 }}{{ if $awake }}{{ $v = 300 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
       - path: status.outlets.2.current_ma
         value: >-
-          {{- $o := index .State.status.outlets 2 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $awake := roomInUse 120 300 -}}{{- $call := false -}}{{- with meetingNow -}}{{- if and (ne .outcome "no-show") (gt .actual 0) -}}{{- $call = true -}}{{- end -}}{{- end -}}{{ $v := 120 }}{{ if $awake }}{{ $v = 500 }}{{ end }}{{ if $call }}{{ $v = 800 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
+          {{- $o := index .State.status.outlets 2 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $p := roomPhase -}}{{- $awake := $p.in_use -}}{{- $call := and $p.call_active (gt $p.attendees 0) -}}{{ $v := 120 }}{{ if $awake }}{{ $v = 500 }}{{ end }}{{ if $call }}{{ $v = 800 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
       - path: status.outlets.3.current_ma
         value: '{{ $o := index .State.status.outlets 3 }}{{ if and (eq (get "state" $o) "on") (not hasCalendar) }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
       - path: status.load.total_current_ma

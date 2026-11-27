@@ -99,11 +99,11 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.control.macro
-        value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := roomInUse 120 300 }}{{ if and $on (eq $c.room_power "standby") }}start-meeting{{ else if and (not $on) (eq $c.room_power "on") }}end-meeting{{ else }}{{ $c.macro }}{{ end }}{{ else }}{{ $c.macro }}{{ end }}'
+        value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := (roomPhase).in_use }}{{ if and $on (eq $c.room_power "standby") }}start-meeting{{ else if and (not $on) (eq $c.room_power "on") }}end-meeting{{ else }}{{ $c.macro }}{{ end }}{{ else }}{{ $c.macro }}{{ end }}'
       - path: status.control.macro_at
-        value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := roomInUse 120 300 }}{{ if or (and $on (eq $c.room_power "standby")) (and (not $on) (eq $c.room_power "on")) }}{{ now }}{{ else }}{{ $c.macro_at }}{{ end }}{{ else }}{{ $c.macro_at }}{{ end }}'
+        value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := (roomPhase).in_use }}{{ if or (and $on (eq $c.room_power "standby")) (and (not $on) (eq $c.room_power "on")) }}{{ now }}{{ else }}{{ $c.macro_at }}{{ end }}{{ else }}{{ $c.macro_at }}{{ end }}'
       - path: status.control.room_power
-        value: '{{ if hasCalendar }}{{ if roomInUse 120 300 }}on{{ else }}standby{{ end }}{{ else }}{{ .State.status.control.room_power }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ if (roomPhase).in_use }}on{{ else }}standby{{ end }}{{ else }}{{ .State.status.control.room_power }}{{ end }}'
 
 defaults:
   status:

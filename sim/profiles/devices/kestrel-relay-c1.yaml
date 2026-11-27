@@ -137,13 +137,13 @@ behaviors:
       interval: 60s
     mutations:
       - path: status.sim.skip
-        value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with meetingNow }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
+        value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with (roomPhase).meeting }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'
       - path: status.sim.hungup
         value: 'false'
       - path: status.sim.want
-        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}c{{ .start }}{{ end }}{{ end }}'
+        value: '{{ $skip := .State.status.sim.skip }}{{ with (roomPhase).meeting }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}c{{ .start }}{{ end }}{{ end }}'
       - path: status.sim.want_n
-        value: '{{ $skip := .State.status.sim.skip }}{{ with meetingNow }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
+        value: '{{ $skip := .State.status.sim.skip }}{{ with (roomPhase).meeting }}{{ if and (ne .outcome "no-show") (ne .start $skip) }}{{ .actual }}{{ else }}0{{ end }}{{ else }}0{{ end }}'
       - path: status.sim.event
         value: '{{ $s := .State.status.sim }}{{ $n := .State.status.call.participants }}{{ $a := $s.want_n }}{{ if $s.dialed }}{{ $a = 8 }}{{ end }}{{ $move := "" }}{{ if chance 0.08 }}{{ if and (lt $n $a) (gt $n 1) }}{{ if chance 0.5 }}{{ $move = "join" }}{{ else }}{{ $move = "leave" }}{{ end }}{{ else if lt $n $a }}{{ $move = "join" }}{{ else if gt $n 1 }}{{ $move = "leave" }}{{ end }}{{ end }}{{ if .State.status.call.active }}{{ if $s.dialed }}{{ $move }}{{ else if eq $s.want "" }}end{{ else if ne $s.want $s.call }}turn{{ else }}{{ $move }}{{ end }}{{ else if and (ne $s.want "") (not $s.dialed) }}start{{ end }}'
       - path: status.sim.call
@@ -154,9 +154,9 @@ behaviors:
         value: '{{ $s := .State.status.sim }}{{ $e := $s.event }}{{ $n := .State.status.call.participants }}{{ if or (eq $e "start") (eq $e "turn") }}{{ $lo := 1 }}{{ if gt $s.want_n 2 }}{{ $lo = round 0 (div $s.want_n 2) }}{{ end }}{{ randInt $lo $s.want_n }}{{ else if eq $e "join" }}{{ add $n 1 }}{{ else if eq $e "leave" }}{{ sub $n 1 }}{{ else if eq $e "end" }}0{{ else }}{{ $n }}{{ end }}'
       # The room shares now and then in a call, and stops when it ends.
       - path: status.content.sharing
-        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ if ne meetingSharing .State.status.sim.share_prev }}{{ meetingSharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if chance 0.05 }}{{ not .State.status.content.sharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.content.sharing }}{{ end }}'
+        value: '{{ if .State.status.call.active }}{{ if and hasCalendar (not .State.status.sim.dialed) }}{{ if ne (roomPhase).sharing .State.status.sim.share_prev }}{{ (roomPhase).sharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if chance 0.05 }}{{ not .State.status.content.sharing }}{{ else }}{{ .State.status.content.sharing }}{{ end }}{{ else if eq .State.status.sim.event "end" }}false{{ else }}{{ .State.status.content.sharing }}{{ end }}'
       - path: status.sim.share_prev
-        value: '{{ if hasCalendar }}{{ meetingSharing }}{{ else }}{{ .State.status.sim.share_prev }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ (roomPhase).sharing }}{{ else }}{{ .State.status.sim.share_prev }}{{ end }}'
       - path: status.content.source
         value: '{{ if .State.status.content.sharing }}{{ if .State.status.content.source }}{{ .State.status.content.source }}{{ else }}{{ $r := randInt 1 4 }}{{ if eq $r 1 }}hdmi1{{ else if eq $r 2 }}hdmi2{{ else if eq $r 3 }}usbc{{ else }}wireless{{ end }}{{ end }}{{ end }}'
 

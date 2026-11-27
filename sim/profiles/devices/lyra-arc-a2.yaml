@@ -89,9 +89,9 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.mic.active
-        value: '{{ if not hasCalendar }}{{ .State.status.mic.active }}{{ else }}{{ with meetingNow }}{{ gt .actual 0 }}{{ else }}false{{ end }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ .State.status.mic.active }}{{ else }}{{ gt (roomPhase).attendees 0 }}{{ end }}'
       - path: status.mic.mute
-        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ if not hasCalendar }}{{ $m }}{{ else }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ end }}'
+        value: '{{ $m := eq (print .State.status.mic.mute) "true" }}{{ if not hasCalendar }}{{ $m }}{{ else }}{{ if gt (roomPhase).attendees 0 }}{{ if chance 0.06 }}{{ not $m }}{{ else }}{{ $m }}{{ end }}{{ else }}{{ $m }}{{ end }}{{ end }}'
 
   # The input level rides speech where it hears: it walks within a talker's
   # range while the room is in use and the mic open, and sits at its noise
@@ -101,7 +101,7 @@ behaviors:
       interval: 15s
     mutations:
       - path: status.mic.level_db
-        value: '{{ if not hasCalendar }}{{ round 1 (clamp -70.0 -20.0 (randStep 4.0 .State.status.mic.level_db)) }}{{ else }}{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ with meetingNow }}{{ if gt .actual 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}{{ end }}'
+        value: '{{ if not hasCalendar }}{{ round 1 (clamp -70.0 -20.0 (randStep 4.0 .State.status.mic.level_db)) }}{{ else }}{{ $v := round 3 .State.status.mic.level_db }}{{ $open := false }}{{ if gt (roomPhase).attendees 0 }}{{ $open = not (eq (print $.State.status.mic.mute) "true") }}{{ end }}{{ if $open }}{{ if lt $v -55.0 }}{{ $v = -40.0 }}{{ end }}{{ round 1 (clamp -55.0 -20.0 (randStep 4.0 $v)) }}{{ else }}{{ round 1 (clamp -72.0 -66.0 (randStep 1.5 -69.0)) }}{{ end }}{{ end }}'
 
 defaults:
   status:

@@ -53,7 +53,9 @@ func (c *Calendar) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-var meetingKnobKeys = []string{"booking_rate", "slot_mix", "no_show_rate", "ended_early_rate", "ended_late_rate", "attendance", "walk_in_rate", "hours", "recording_rate"}
+var meetingKnobKeys = []string{"booking_rate", "slot_mix", "no_show_rate", "ended_early_rate", "ended_late_rate", "attendance", "walk_in_rate", "hours", "recording_rate", "wake_lead_seconds", "cooldown_seconds", "recording_tail_seconds", "sharing"}
+
+var sharingKeys = []string{"min_minutes", "parts", "from_part", "to_part"}
 
 // UnmarshalYAML reads a mapping of standard name to its meeting knobs, in
 // order, refusing a knob it does not know.
@@ -67,6 +69,11 @@ func (ms *Meetings) UnmarshalYAML(n *yaml.Node) error {
 		sm := StandardMeetings{Standard: Ref{Name: k.Value, Line: k.Line}, Line: k.Line}
 		if err := decodeKnown(v, &sm.Knobs, meetingKnobKeys...); err != nil {
 			return fmt.Errorf("calendar.meetings.%s: %w", k.Value, err)
+		}
+		if sh := mapValue(v, "sharing"); sh != nil {
+			if err := knownKeys(sh, sharingKeys); err != nil {
+				return fmt.Errorf("calendar.meetings.%s.sharing: %w", k.Value, err)
+			}
 		}
 		out = append(out, sm)
 	}

@@ -93,7 +93,7 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.extender.signal
-        value: '{{ if hasCalendar }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}present{{ else }}absent{{ end }}{{ else }}absent{{ end }}{{ else }}{{ .State.status.extender.signal }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ if (roomPhase).call_active }}present{{ else }}absent{{ end }}{{ else }}{{ .State.status.extender.signal }}{{ end }}'
 
 defaults:
   status:

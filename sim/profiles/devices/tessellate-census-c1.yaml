@@ -265,10 +265,10 @@ behaviors:
       # 2. The calendar's attendees, less the one who stepped out 15% of
       #    ticks. `actual` is zero for a no-show, so no-shows read empty. A
       #    calendar always has a next meeting within its horizon, so neither
-      #    meetingNow nor meetingNext means no calendar: the old walk.
+      #    a meeting running nor one ahead (the phase's scheduled) means no calendar: the old walk.
       - path: status.occupancy.people_count
         value: >-
-          {{ if or meetingNow meetingNext }}{{ with meetingNow }}{{ if and (gt .actual 1) (chance 0.15) }}{{ sub .actual 1 }}{{ else }}{{ .actual }}{{ end }}{{ else }}0{{ end }}{{ else }}{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}{{ end }}
+          {{ if (roomPhase).scheduled }}{{ with (roomPhase).meeting }}{{ if and (gt .actual 1) (chance 0.15) }}{{ sub .actual 1 }}{{ else }}{{ .actual }}{{ end }}{{ else }}0{{ end }}{{ else }}{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}{{ end }}
       # 3. Derive the occupancy change signal from new-vs-prev. `round 0`
       #    stores a whole-numbered value that the mutation pipeline
       #    coerces back to int64, so `sub` here returns int64 and the

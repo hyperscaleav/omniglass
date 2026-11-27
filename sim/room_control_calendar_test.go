@@ -89,41 +89,6 @@ func wantShare(e calendar.Entry, t time.Time) bool {
 	return dur >= 30*time.Minute && into >= dur && into < 2*dur
 }
 
-func TestSharesContentIsTheMiddleThirdOfALongHeldMeeting(t *testing.T) {
-	m := map[string]any{"outcome": "held", "start": int64(1000), "end": int64(1000 + 3600)}
-	for _, c := range []struct {
-		at   int64
-		want bool
-	}{{1000, false}, {1000 + 1199, false}, {1000 + 1200, true}, {1000 + 2399, true}, {1000 + 2400, false}, {1000 + 3600, false}, {900, false}} {
-		if got := sharesContent(m, c.at); got != c.want {
-			t.Errorf("at +%ds: shares %v, want %v", c.at-1000, got, c.want)
-		}
-	}
-	short := map[string]any{"outcome": "held", "start": int64(0), "end": int64(15 * 60)}
-	if sharesContent(short, 7*60) {
-		t.Error("a 15-minute meeting shares content")
-	}
-	noShow := map[string]any{"outcome": "no-show", "start": int64(0), "end": int64(3600)}
-	if sharesContent(noShow, 1800) || sharesContent(nil, 1800) {
-		t.Error("a no-show or no meeting shares content")
-	}
-}
-
-func TestRoomInUseWindow(t *testing.T) {
-	booked := map[string]any{"outcome": "held", "origin": "booked", "start": int64(1000), "end": int64(2000)}
-	walkIn := map[string]any{"outcome": "held", "origin": "walk-in", "start": int64(5000), "end": int64(5500)}
-	noShow := map[string]any{"outcome": "no-show", "origin": "booked", "start": int64(8000), "end": int64(9000)}
-	ms := []map[string]any{booked, walkIn, noShow}
-	for _, c := range []struct {
-		at   int64
-		want bool
-	}{{879, false}, {880, true}, {2299, true}, {2300, false}, {4999, false}, {5000, true}, {5799, true}, {5800, false}, {8500, false}} {
-		if got := roomInUse(ms, c.at, 120, 300); got != c.want {
-			t.Errorf("at %d: in use %v, want %v", c.at, got, c.want)
-		}
-	}
-}
-
 // Over a simulated day the processor's room power agrees with the calendar at
 // every sampled minute, and its last macro is the run that moved it: the start
 // macro at the minute the room woke, the end macro at the minute it slept.

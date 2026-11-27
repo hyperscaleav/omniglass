@@ -278,6 +278,11 @@ type Device struct {
 	// worldSrc reaches the engine's world (#2773), nil on a device standing
 	// alone.
 	worldSrc func() *world.World
+	// memo is the engine's memo of room readings (#2797), nil on a device
+	// standing alone, which keeps its own.
+	memo        *roomMemo
+	ownMemo     *roomMemo
+	ownMemoOnce sync.Once
 
 	mu    sync.RWMutex
 	state map[string]any
