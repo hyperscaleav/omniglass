@@ -679,6 +679,18 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 		if _, err := gw.SetEnrollmentToken(ctx, "", outpost, outpostTokenHash, all); err != nil {
 			return err
 		}
+		// A kept fleet seeded before a pusher was declared holds no user for
+		// its token (#2194): seed the pusher, or the emulator pushes with a
+		// token nothing matches and every push is a 401.
+		if st.HoldsData {
+			missing, err := devseed.EnsureSimPushers(ctx, gw, "")
+			if err != nil {
+				return err
+			}
+			for _, m := range missing {
+				fmt.Fprintf(out, "note: this lab's fleet lacks the pusher %s, so it does not push; omniglass lab run --fresh restores it\n", m)
+			}
+		}
 		if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
 			return err
 		}

@@ -2,38 +2,62 @@
 # The lab smoke (#1194): the user's path on a machine with only Docker. After
 # `make`, run ./bin/omniglass lab run as a person would, wait for its ready
 # banner, prove the console and the lab flag answer on the printed URL, stop
-# it with Ctrl-C (SIGINT), and prove it left no container and no network.
+# it with Ctrl-C (SIGINT), run it again on the data that kept (#2194), and prove
+# it left no container and no network.
 # CI runs it in test.yml, on the shared build; it also runs by hand from a checkout.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 project="omniglass-lab-smoke-$$"
-log="$(mktemp)"
-./bin/omniglass lab run --project "$project" --port 0 >"$log" 2>&1 &
-pid=$!
+log=""
+pid=""
 cleanup() {
-  kill -INT "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
+  [ -n "$pid" ] && kill -INT "$pid" 2>/dev/null || true
+  [ -n "$pid" ] && wait "$pid" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-for _ in $(seq 1 300); do
-  grep -q "Your omniglass lab is ready" "$log" && break
-  kill -0 "$pid" 2>/dev/null || { cat "$log"; echo "lab-smoke: the lab exited before it was ready" >&2; exit 1; }
-  sleep 2
-done
-cat "$log"
-grep -q "Your omniglass lab is ready" "$log" || { echo "lab-smoke: not ready within 10 minutes" >&2; exit 1; }
+# up starts the lab and waits for its ready banner, leaving its output in $log
+# and its console address in $url and $base.
+up() {
+  log="$(mktemp)"
+  ./bin/omniglass lab run --project "$project" --port 0 >"$log" 2>&1 &
+  pid=$!
+  for _ in $(seq 1 300); do
+    grep -q "Your omniglass lab is ready" "$log" && break
+    kill -0 "$pid" 2>/dev/null || { cat "$log"; echo "lab-smoke: the lab exited before it was ready" >&2; exit 1; }
+    sleep 2
+  done
+  cat "$log"
+  grep -q "Your omniglass lab is ready" "$log" || { echo "lab-smoke: not ready within 10 minutes" >&2; exit 1; }
+  url=$(sed -n 's/^  Console    \(http[^ ]*\)$/\1/p' "$log" | head -n1)
+  base=${url%/web}
+  [ -n "$url" ] || { echo "lab-smoke: no console URL in the output" >&2; exit 1; }
+  # A pusher the server refuses is named in the output (#2194): the lab comes up
+  # without it, so only the output says so.
+  if grep -q "cannot authenticate" "$log"; then echo "lab-smoke: a simulated pusher cannot authenticate" >&2; exit 1; fi
+}
 
-url=$(sed -n 's/^  Console    \(http[^ ]*\)$/\1/p' "$log" | head -n1)
-base=${url%/web}
-[ -n "$url" ] || { echo "lab-smoke: no console URL in the output" >&2; exit 1; }
+# down stops the lab with Ctrl-C (SIGINT), which keeps its data.
+down() {
+  kill -INT "$pid"
+  wait "$pid"
+  pid=""
+}
+
+up
 code=$(curl -sL -o /dev/null -w '%{http_code}' "$url")
 [ "$code" = 200 ] || { echo "lab-smoke: $url answered $code" >&2; exit 1; }
 curl -sf "$base/api/v1/auth/status" | grep -q '"lab":true' || { echo "lab-smoke: auth/status does not say lab" >&2; exit 1; }
+down
 
-kill -INT "$pid"
-wait "$pid"
+# A second run on the data the first kept (#2194): it must come up whole, as a
+# kept lab, with every pusher authenticating.
+up
+grep -q "kept this lab's fleet" "$log" || { echo "lab-smoke: the second run did not keep the first run's fleet" >&2; exit 1; }
+curl -sf "$base/api/v1/auth/status" | grep -q '"lab":true' || { echo "lab-smoke: the kept lab's auth/status does not say lab" >&2; exit 1; }
+down
+
 trap - EXIT
 left=$(docker ps -aq --filter "label=omniglass.lab=$project"; docker network ls -q --filter "label=omniglass.lab=$project")
 [ -z "$left" ] || { echo "lab-smoke: the lab left containers or networks behind: $left" >&2; exit 1; }

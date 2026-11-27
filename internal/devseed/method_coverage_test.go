@@ -197,3 +197,37 @@ func TestSeededFleetHoldsAPusherOnOneSystem(t *testing.T) {
 		t.Fatalf("a second run changed the pusher's grants: %v", got)
 	}
 }
+
+// TestEnsureSimPushersFindsTheSystemsTheSeedGranted proves a kept lab's
+// re-grant (#2194) resolves each pusher's system keys to the very rows the
+// first seed granted: the platform names the systems, so a read-only lookup
+// that picked another would grant the pusher a second system. On the seeded
+// fleet it finds every system, reports nothing missing and adds no grant.
+func TestEnsureSimPushersFindsTheSystemsTheSeedGranted(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("needs Postgres")
+	}
+	ctx, conn, gw := seededFleet(t)
+	count := func() (n int) {
+		t.Helper()
+		if err := conn.QueryRow(ctx, `select count(*) from machine s join user_grant g on g.user_id = s.user_id where s.name = 'sim-booking-service'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := count()
+	if before == 0 {
+		t.Fatal("the seeded fleet holds no grant for the pusher; the check checked nothing")
+	}
+	missing, err := devseed.EnsureSimPushers(ctx, gw, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("a seeded fleet is missing %v", missing)
+	}
+	if after := count(); after != before {
+		t.Fatalf("re-granting changed the pusher's grants from %d to %d: it resolved another system", before, after)
+	}
+}

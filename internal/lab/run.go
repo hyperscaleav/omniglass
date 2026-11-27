@@ -362,6 +362,9 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	}
 	res := ParseSeedResult(seedLog)
 	r.step("seed", res.Summary)
+	for _, n := range res.Notes {
+		r.step("note", n)
+	}
 	_ = r.Engine.StopAndRemove(ctx, seedID)
 	delete(lab.ids, "seed")
 
@@ -443,7 +446,14 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	}
 	lab.OutpostRunning = true
 	lab.guarded = append(lab.guarded, "outpost")
+	// A pusher the server refuses is said so by name now, not left to the
+	// emulator's log: its push fails every time, whatever the wait below ends
+	// up saying (#2194).
+	refused := r.checkPushers(ctx, lab, cfg.Pushers)
 	last, err := r.waitCollecting(ctx, lab, client, cfg.PlantedFaults)
+	if err != nil && len(refused) > 0 {
+		err = fmt.Errorf("%w (the pusher %s was refused its token by the server)", err, strings.Join(refused, ", "))
+	}
 	switch {
 	case errors.Is(err, errTimedOut) && last.Running == last.Components && last.Components > 0:
 		// Everything runs and the outpost collects; some endpoints have not read
@@ -454,6 +464,18 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 		return nil, r.withLogs(ctx, err, "outpost", id)
 	}
 	return lab, nil
+}
+
+// checkPushers says, by name, each pusher whose token the server refuses, and
+// returns them. The check is the pusher's own first call, made from here with
+// the token the lab minted it.
+func (r *Runner) checkPushers(ctx context.Context, lab *Lab, pushers []Pusher) []string {
+	c := &http.Client{Timeout: 10 * time.Second, Transport: r.HTTP.Transport}
+	bad := unauthenticatedPushers(ctx, c, lab.BaseURL, pushers)
+	for _, name := range bad {
+		r.step("pusher", fmt.Sprintf("%s cannot authenticate: the server answered 401 to its token, so it pushes nothing; omniglass lab run --fresh reseeds it", name))
+	}
+	return bad
 }
 
 // errTimedOut is a readiness wait that ran out of time.

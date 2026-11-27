@@ -47,3 +47,108 @@ func GrantPusher(ctx context.Context, gw storage.Gateway, actorID, service, syst
 	}
 	return nil
 }
+
+// EnsureSimPushers grants every pusher the fixtures declare (#1370, #1743) its
+// user and its systems on a fleet already seeded: the lab's kept run (#2194),
+// where a pusher added to the fixtures after the fleet was first seeded has no
+// user for the run's token to land on. It seeds nothing else and only reads
+// the fleet to find each pusher's systems, so a kept lab stays as it was kept.
+// Idempotent: a pusher the fleet holds is left as it is. A pusher whose system
+// the fleet no longer holds (an operator deleted it) is not granted, and comes
+// back in missing by name with the system key it lacked, so the caller can say
+// so; nothing pushes for it.
+func EnsureSimPushers(ctx context.Context, gw storage.Gateway, actorID string) (missing []string, err error) {
+	doc, err := Fixtures()
+	if err != nil {
+		return nil, err
+	}
+	if len(doc.SimPushers) == 0 {
+		return nil, nil
+	}
+	sysIDs, err := fixtureSystemIDs(ctx, gw, doc)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range doc.SimPushers {
+		ids := make([]string, 0, len(p.Systems))
+		for _, key := range p.Systems {
+			id, ok := sysIDs[key]
+			if !ok {
+				missing = append(missing, p.Name+" (system "+key+")")
+				ids = nil
+				break
+			}
+			ids = append(ids, id)
+		}
+		for _, id := range ids {
+			if err := GrantPusher(ctx, gw, actorID, p.Name, id); err != nil {
+				return missing, err
+			}
+		}
+	}
+	return missing, nil
+}
+
+// fixtureSystemIDs maps each fixture system's key to the row the fleet holds
+// for it, found the way runDoc finds it before it would create one: a named
+// row by its name, a platform-named one by claiming the next row of its own
+// placement and type in the order they were minted. Read-only; a system the
+// fleet lacks is left out. Every location and system is walked in fixture
+// order, as runDoc walks them, because the claim is positional.
+func fixtureSystemIDs(ctx context.Context, gw storage.Gateway, doc Doc) (map[string]string, error) {
+	all := scope.Set{All: true}
+	locIndex, err := locationGenIndex(ctx, gw, all)
+	if err != nil {
+		return nil, err
+	}
+	locIDs := map[string]string{}
+	for _, l := range doc.Locations {
+		parentID := locIDs[l.Parent]
+		if l.Parent != "" && parentID == "" {
+			continue // its parent is gone, so it is too
+		}
+		id, err := existingRowID(l.Name, l.Key, genSlot{bucket: bucketOf(parentID, ""), class: l.Type}, locIndex, func(name string) (string, error) {
+			existing, err := gw.GetLocation(ctx, name, all)
+			if errors.Is(err, storage.ErrLocationNotFound) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
+			return existing.ID, nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("devseed: find location %q: %w", l.Key, err)
+		}
+		if id != "" {
+			locIDs[l.Key] = id
+		}
+	}
+	sysIndex, err := systemGenIndex(ctx, gw, all)
+	if err != nil {
+		return nil, err
+	}
+	sysIDs := map[string]string{}
+	for _, s := range doc.Systems {
+		if s.Location != "" && locIDs[s.Location] == "" {
+			continue // its room is gone, so it is too
+		}
+		id, err := existingRowID(s.Name, s.Key, genSlot{bucket: bucketOf("", locIDs[s.Location]), class: s.SystemType}, sysIndex, func(name string) (string, error) {
+			existing, err := gw.GetSystem(ctx, name, all)
+			if errors.Is(err, storage.ErrSystemNotFound) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
+			return existing.ID, nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("devseed: find system %q: %w", s.Key, err)
+		}
+		if id != "" {
+			sysIDs[s.Key] = id
+		}
+	}
+	return sysIDs, nil
+}
