@@ -410,6 +410,21 @@ Devices that read the calendar:
   building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
   the world's knobs give them), and the
   player plays inside them and stops outside.
+- **The scheduling surfaces** (#2765): the booking service, the scheduling service and the Slate 5
+  panel say what the calendar says of a room, through `bookings`, `roomBookings` and `ownerBookings`
+  (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked
+  meeting holds its room from the earlier of its slot's start and its own to the later of its slot's
+  end and its own.
+  - The **booking service** pushes each system's `booking-count` (booked meetings left in the day, the
+    one running included) and `booking-state` for the room the world places the system in. It pushes
+    for the system names the world gives it, since a grant carries only the server's ids.
+  - The **scheduling service** counts today's booked meetings, those still to come and the rooms with
+    one in progress across the rooms it covers (`coveredRooms`), and reports how many it serves.
+  - The **scheduling panel** reads its own room: booked or free, `GET CURRENT` and `GET NEXT` for the
+    booked meeting holding the room and the next (`<start> <end> <organizer>` of the slot, or
+    `none`). BOOK and RELEASE are a momentary override that holds until the calendar's reading changes.
+  - A device with no calendar (the dev fleet has no world file) keeps its previous behavior exactly: the
+    booking service its fixed meeting day, the scheduling service its 8, the panel its buttons.
 
 ### A simulated service posts from the start
 

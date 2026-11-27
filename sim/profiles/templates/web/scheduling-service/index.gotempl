@@ -25,6 +25,9 @@
   <div class="card">
     <h2>Bookings</h2>
     <div class="row"><span class="k">today</span><span class="v">{{ .State | get "status" | get "bookings" | get "today" }}</span></div>
+    <div class="row"><span class="k">remaining</span><span class="v">{{ .State | get "status" | get "bookings" | get "remaining" }}</span></div>
+    <div class="row"><span class="k">in progress</span><span class="v">{{ .State | get "status" | get "bookings" | get "in_progress" }}</span></div>
+    <div class="row"><span class="k">rooms served</span><span class="v">{{ .State | get "configuration" | get "rooms_served" }}</span></div>
     <div class="row"><span class="k">config sync</span><span class="v">{{ if .State | get "configuration" | get "sync_ok" }}ok{{ else }}failed{{ end }}</span></div>
   </div>
   <div class="card">

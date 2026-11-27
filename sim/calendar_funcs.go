@@ -38,6 +38,8 @@ func (d *Device) Room() calendar.Room { return d.room }
 //	ownerRoom o           -> the {site, building, room} of the system o in the world, nil when none
 //	ownerMeetingNow o     -> the meeting in system o's room now (ownerMeetingNext: the next)
 //	coveredRooms          -> the rooms a service device speaks for, each {site, building, room}
+//	bookings, roomBookings s b r, ownerBookings o
+//	                      -> a room's booked meetings alone (calendar_bookings.go)
 //
 // A meeting reads as a map: kind, origin, organizer, expected, actual,
 // outcome, start, end, slot_start, slot_end (unix seconds) and the room's
@@ -70,7 +72,7 @@ func (d *Device) calendarFuncs() template.FuncMap {
 	}
 	// ownerRoom is the room of a push's .Owner system, through the world.
 	ownerRoom := func(owner string) (world.Placement, bool) { return d.world().PlaceSystem(owner) }
-	return template.FuncMap{
+	funcs := template.FuncMap{
 		"ownerRoom": func(owner string) map[string]any {
 			if p, ok := ownerRoom(owner); ok {
 				return placed(p)
@@ -105,6 +107,10 @@ func (d *Device) calendarFuncs() template.FuncMap {
 			return read(calendar.Room{Site: site, Building: building, Room: room}, true)
 		},
 	}
+	for name, fn := range d.bookingFuncs() {
+		funcs[name] = fn
+	}
+	return funcs
 }
 
 // world is how the device reaches its engine's world; a device that stands
