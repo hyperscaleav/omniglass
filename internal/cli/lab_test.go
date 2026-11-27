@@ -201,7 +201,7 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		}
 		return out.String()[strings.Index(out.String(), "\nPreflight"):]
 	}
-	need := lab.MeasuredCost.Estimate(18, 3100)
+	need := lab.MeasuredCost.Estimate(18, 3112)
 	for name, tc := range map[string]struct {
 		systems  int
 		mem      string
@@ -209,14 +209,14 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		want     []string
 	}{
 		"fits": {1000, "", host, []string{
-			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, an outpost for each of 18 sites, 3100 simulated components)",
+			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, an outpost for each of 18 sites, 3112 simulated components)",
 				lab.FormatMiB(need.MemMiB), need.CPU),
 			fmt.Sprintf("Postgres's shared buffers, sized to this host and fleet, come to 8.0 GiB: about %s in all.", lab.FormatMiB(need.MemMiB+8<<10)),
 			"This Docker host can spare 25.6 GiB and 9.6 cores (80% of its 32.0 GiB and 12 cores)", "Decision: fits."}},
 		// The corporate 3,000 runs on a 12 GB laptop: the buffers take what
 		// the fleet leaves spare rather than a quarter of the host.
 		"3,000 on a laptop": {3000, "12g", host, []string{"Decision: fits."}},
-		"refused": {3000, "4g", host, []string{"Decision: refused. A scale lab of 3000 systems (30 sites, 9118 simulated components)",
+		"refused": {3000, "4g", host, []string{"Decision: refused. A scale lab of 3000 systems (30 sites, 9142 simulated components)",
 			"this Docker host has 4.0 GiB and 12 cores", ", the largest that fits"}},
 		"none fits": {100, "64m", host, []string{"Decision: refused.", "Not even the smallest size fits", "the smallest scale lab, --systems 3"}},
 		"no docker": {100, "", func(context.Context, int64) (lab.HostResources, error) {
