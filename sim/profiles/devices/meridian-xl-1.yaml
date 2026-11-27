@@ -13,6 +13,12 @@
 # the signal on its input. Its control face is a small HTTP JSON API behind
 # the Meridian header key: status and reboot. An extender has no route, and
 # its API does not take one.
+#
+# The signal follows the room's meetings off the lab calendar (#2757, #2776):
+# present while a meeting is held, the switcher routing a source onto the
+# cable, and absent between meetings and through a no-show, when nothing is
+# routed. The link is the cable's and stays up; a scenario that pulls it is
+# not undone. An extender whose room has no calendar keeps its signal.
 
 name: meridian-xl-1
 manufacturer: Meridian
@@ -80,6 +86,14 @@ interfaces:
 
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+behaviors:
+  - name: room_meeting
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.extender.signal
+        value: '{{ if hasCalendar }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}present{{ else }}absent{{ end }}{{ else }}absent{{ end }}{{ else }}{{ .State.status.extender.signal }}{{ end }}'
 
 defaults:
   status:

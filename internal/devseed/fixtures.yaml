@@ -556,8 +556,9 @@ components:
     product: polaris-amp-4100
     location: boardroom-a
   # The room's rack power conditioner (#1368), a networked Ferrite PDU the
-  # simulator answers over SNMP. It classifies as a power-device, a type no
-  # slot's accepted_types names, so no slot can want it. It is in the room and
+  # simulator answers over SNMP. It classifies as a power-device, which the
+  # standard's optional power slot accepts (#2777, so a scale lab can staff
+  # it), but this room leaves that slot empty. The PDU is in the room and
   # accounted for, and nothing more, which is exactly the case membership
   # exists to carry. It is also the one component that keeps a typed label:
   # the operator calls it the power conditioner, not "Power Device 1".
@@ -1397,8 +1398,9 @@ systems:
     location: dep-r3
 
 # Membership without a job. The audio rack staffs dsp and amplifier in both
-# halves (below, through assignment), but the power conditioner fills no declared
-# slot at all: it is in the room, it is accounted for, and no slot wants it. A
+# halves (below, through assignment), but the power conditioner fills no slot
+# here (the standard's power slot stays empty): it is in the room, it is
+# accounted for, and no assignment names it. A
 # model that only knew about staffing would lose it. The depot's service stock
 # (the spare bars, mics, and displays racked in the bays) deliberately joins NO
 # system: stock relates to the bay it sits in, not to the bay's signage, so it

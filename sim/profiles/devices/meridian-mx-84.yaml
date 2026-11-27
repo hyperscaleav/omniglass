@@ -13,6 +13,13 @@
 # signal on the routed input, and a table of the signal on each input. Its
 # control face is a small HTTP JSON API behind a Meridian header key: set
 # the route, reboot.
+#
+# Its route follows the room's meetings off the lab calendar (#2757, #2776):
+# hdmi2, the conferencing codec's feed, while a meeting is held, hdmi1, the
+# lectern laptop, through the stretch content is shared (the video bar's own
+# call, which the switcher agrees with), and dp1, the input nothing is plugged
+# into, between meetings and through a no-show. A switcher whose room has no
+# calendar keeps the route it has.
 
 name: meridian-mx-84
 manufacturer: Meridian
@@ -108,6 +115,23 @@ computed:
 # drops it on the next tick. A scenario drives it by setting an input's
 # signal to absent.
 behaviors:
+  # The route is an edge, not a level: the meeting's wanted input is written
+  # when it changes, so an operator's route inside a meeting holds until the
+  # meeting asks for another. status.sim.want is the last input the meeting
+  # asked for.
+  - name: room_meeting
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.sim.prev
+        value: '{{ .State.status.sim.want }}'
+      - path: status.sim.want
+        value: '{{ if hasCalendar }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ if meetingSharing }}hdmi1{{ else }}hdmi2{{ end }}{{ else }}dp1{{ end }}{{ else }}dp1{{ end }}{{ else }}{{ .State.status.sim.want }}{{ end }}'
+      - path: status.switcher.input
+        value: '{{ $s := .State.status.sim }}{{ if ne $s.want $s.prev }}{{ $s.want }}{{ else }}{{ .State.status.switcher.input }}{{ end }}'
+      - path: status.switcher.signal
+        value: '{{ $sw := .State.status.switcher }}{{ if hasCalendar }}{{ get $sw.inputs $sw.input | get "signal" }}{{ else }}{{ $sw.signal }}{{ end }}'
+
   - name: signal_follow
     schedule:
       interval: 10s
@@ -129,6 +153,10 @@ defaults:
         hdmi2: { signal: present }
         hdmi3: { signal: present }
         dp1: { signal: absent }
+    sim:
+      # The input the meeting last asked for, and the one before it.
+      want: ""
+      prev: ""
     network:
       ipv4:
         address: ""

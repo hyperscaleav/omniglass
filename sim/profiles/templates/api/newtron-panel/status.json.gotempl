@@ -7,6 +7,8 @@
   },
   "panel": {
     "brightness": {{ .State | get "status" | get "panel" | get "brightness" }},
-    "occupancy": {{ .State | get "status" | get "panel" | get "occupancy" }}
+    "occupancy": {{ .State | get "status" | get "panel" | get "occupancy" }},
+    "awake": {{ .State | get "status" | get "panel" | get "awake" }},
+    "page": "{{ .State | get "status" | get "panel" | get "page" }}"
   }
 }
