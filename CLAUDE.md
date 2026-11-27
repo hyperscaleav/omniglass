@@ -154,7 +154,7 @@ Omniglass has external deployments and an installed base. Before changing a rele
 - If a smooth upgrade path exists (a deprecation period, an alias, a forward migration), prefer it over a hard cut.
 - Migrations stay forward-only: never edit an applied migration; express every schema change as a new migration.
 
-A change is released once it ships in a final release tag, not a release candidate.
+A change is released once it ships in a tagged release.
 
 ## Migrations and seeding
 

@@ -57,8 +57,8 @@ type Change struct {
 
 // Parse reads a commit as a conventional commit, the shape a squash merge on
 // main has: `<type>(<scope>)!: <description> (#<n>)`. It reports false for an
-// empty subject. The notes and the release cut (#2711) both read commits here,
-// so the two always agree on what is breaking.
+// empty subject. cmd/releasenotes, the local preview and the list of PRs a
+// release ships, is the only reader.
 func Parse(c Commit) (Change, bool) {
 	subject := strings.TrimSpace(c.Subject)
 	if subject == "" {
