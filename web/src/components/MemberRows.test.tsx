@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@solidjs/testing-library";
+import { render, fireEvent, screen } from "@solidjs/testing-library";
 import MemberRows from "./MemberRows";
 import type { MemberRow } from "../lib/detail";
 
@@ -13,7 +13,7 @@ const row = (over: Partial<MemberRow>): MemberRow => ({
 // squeezed the name to nothing: the row read as only "also in A, B, C". The
 // chip now gives way first and the name keeps a floor, as the outline's does.
 describe("MemberRows", () => {
-  it("keeps a shared component's name readable beside a long also-in chip", () => {
+  it("keeps a shared component's name readable beside a long also-in chip", async () => {
     const also = ["Auditorium", "Boardroom B", "Briefing Room"];
     render(() => <MemberRows rows={[row({ also })]} groups={[]} onOpen={() => {}} />);
     const name = screen.getByTestId("member-c1").querySelector("[data-label]") as HTMLElement;
@@ -23,7 +23,11 @@ describe("MemberRows", () => {
     expect(chip.className).toContain("shrink-[999]");
     expect(chip.className).toContain("truncate");
     expect(chip.className).not.toContain("flex-none");
-    expect(chip.getAttribute("title")).toBe("Also in Auditorium, Boardroom B, Briefing Room");
+    expect(chip.getAttribute("title")).toBeNull();
+    // The full list is one focus away, in the house tooltip.
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    chip.focus();
+    expect((await screen.findByRole("tooltip")).textContent).toContain("Also in Auditorium, Boardroom B, Briefing Room");
     expect(chip.textContent).toContain("also in Auditorium, Boardroom B, Briefing Room");
   });
 
