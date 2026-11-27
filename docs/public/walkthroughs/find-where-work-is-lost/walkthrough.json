@@ -1,110 +1,98 @@
 {
   "id": "find-where-work-is-lost",
   "title": "Find where work is lost",
-  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
+  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch the outage land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
   "steps": [
     {
       "n": 1,
       "kind": "goto",
-      "caption": "Platform health draws the path a sample takes from its run to the store, one hop at a time.",
+      "caption": "Platform health draws the path a sample takes from its run to the store. Each hop shows what it took in, what it handed on, and the share it lost; 0% is healthy.",
       "still": "step-01.png"
     },
     {
       "n": 2,
-      "kind": "wait",
-      "caption": "Each hop shows what it took in, what it handed on, and the share it lost. 0% is healthy.",
+      "kind": "click",
+      "caption": "Open the ingest hop. It says what counts as lost there and the keys it is read from, one series per kind, so one rule reads every hop.",
       "still": "step-02.png"
     },
     {
       "n": 3,
-      "kind": "click",
-      "caption": "Open the ingest hop. It says what counts as lost there, the keys it is read from, and the server component that records it.",
+      "kind": "goto",
+      "caption": "Touch Panel 2 is simulated, so it can be broken on purpose.",
       "still": "step-03.png"
     },
     {
       "n": 4,
-      "kind": "wait",
-      "caption": "Every hop is read from the same three keys, one series per kind, so one rule reads them all.",
+      "kind": "click",
+      "caption": "Open its simulation.",
       "still": "step-04.png"
     },
     {
       "n": 5,
-      "kind": "goto",
-      "caption": "Touch Panel 2 is simulated, so it can be broken on purpose.",
+      "kind": "click",
+      "caption": "Impairments are set on their own tab.",
       "still": "step-05.png"
     },
     {
       "n": 6,
       "kind": "click",
-      "caption": "Open its simulation.",
+      "caption": "Unplug it. It goes dark, so nothing can reach it.",
       "still": "step-06.png"
     },
     {
       "n": 7,
       "kind": "click",
-      "caption": "Impairments are set on their own tab.",
+      "caption": "Save. The simulator applies it on its next pull.",
       "still": "step-07.png"
     },
     {
       "n": 8,
-      "kind": "click",
-      "caption": "Unplug it. Every poll of it now fails.",
+      "kind": "press",
+      "caption": "Close the simulation.",
       "still": "step-08.png"
     },
     {
       "n": 9,
-      "kind": "click",
-      "caption": "Save. The simulator applies it on its next pull.",
+      "kind": "wait",
+      "caption": "The outage lands on the panel's own component. It reads down, and its polls are held, not run.",
       "still": "step-09.png"
     },
     {
       "n": 10,
-      "kind": "press",
-      "caption": "Close the simulation.",
+      "kind": "goto",
+      "caption": "Back on Platform health, Where work is lost still open.",
       "still": "step-10.png"
     },
     {
       "n": 11,
       "kind": "wait",
-      "caption": "The failed polls land on the panel's own component, as its poll failures.",
+      "caption": "Every hop still reads 0%. A device that did not answer is not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
       "still": "step-11.png"
     },
     {
       "n": 12,
-      "kind": "goto",
-      "caption": "Back on Platform health, Where work is lost still open.",
+      "kind": "click",
+      "caption": "Open the outpost hop. Each outpost's own share is a row.",
       "still": "step-12.png"
     },
     {
       "n": 13,
-      "kind": "wait",
-      "caption": "Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
+      "kind": "click",
+      "caption": "Follow the outpost's row to its platform component.",
       "still": "step-13.png"
     },
     {
       "n": 14,
-      "kind": "click",
-      "caption": "Open the outpost hop. Each outpost's own share is a row.",
-      "still": "step-14.png"
-    },
-    {
-      "n": 15,
-      "kind": "click",
-      "caption": "Follow the outpost's row to its platform component.",
-      "still": "step-15.png"
-    },
-    {
-      "n": 16,
       "kind": "wait",
       "caption": "The outpost's delivery series live on its component, one per kind, like any other metric.",
-      "still": "step-16.png"
+      "still": "step-14.png"
     }
   ],
-  "poster": "step-13.png",
+  "poster": "step-11.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 55.3,
-    "bytes": 919849,
-    "previewBytes": 653454
+    "seconds": 54.6,
+    "bytes": 828517,
+    "previewBytes": 655398
   }
 }
