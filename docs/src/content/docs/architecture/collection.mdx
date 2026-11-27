@@ -511,7 +511,7 @@ credential) whose data **fans out** to the entities it describes
   the outpost to; on the [webhook lane](/architecture/transports/#push-ingress-webhooks-on-the-server)
   it is the component the token's endpoint names. Both arrivals land the same rows.
 - **A paged list is one collection.** A conduit's list API pages, so its poll declares how
-  ([ADR-2789](/architecture/decisions/#adr-2789-a-poll-declares-how-its-list-pages-and-the-engine-walks-them)):
+  ([ADR-2789](/architecture/decisions/#adr-2789-a-poll-declares-how-its-list-pages-and-the-engine-walks-every-page-in-one-poll)):
   the engine walks every page in one poll, gathers the records, then identifies and fans out once. A
   failed page or a reached bound faults the poll and lands nothing.
 - **Nothing in a payload names an owner.** A payload names an identity, and only the bindings of the

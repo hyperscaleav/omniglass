@@ -5,7 +5,7 @@ refs: [2789, 2757]
 ---
 
 A driver's poll request may declare `paginate`, and one poll walks every page of the list
-([ADR-2789](/architecture/decisions/#adr-2789-a-poll-declares-how-its-list-pages-and-the-engine-walks-them)):
+([ADR-2789](/architecture/decisions/#adr-2789-a-poll-declares-how-its-list-pages-and-the-engine-walks-every-page-in-one-poll)):
 a cursor read from the body or a header and sent back as a query parameter or header, or a page number
 with an optional declared total. The records of every page are gathered, then identified and fanned
 out once, so a 3,000-room account is one collection. The engine names no field: the driver does. Bounds
