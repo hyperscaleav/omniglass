@@ -9797,6 +9797,22 @@ export type ValidateExpressionOutputBody = {
   value_type: ValidateExpressionOutputBodyValueType;
 };
 
+export type ViewChangedEvent = {
+  /** The entity's uuid */
+  id: string;
+  /** The entity's kind: component or system */
+  kind: string;
+  /** What happened to it: update (its state moved; refetch it) */
+  op: string;
+  /** The topic as the watch named it, kind:ref */
+  topic: string;
+  /**
+     * The tail sequence of the newest change this notice stands for
+     * @minimum 0
+     */
+  v: number;
+};
+
 export type ViewMarkEvent = {
   /** The stream's position: every binding has every row up to it */
   cursor: string;
@@ -9808,6 +9824,8 @@ export type ViewResetEvent = {
      * @nullable
      */
   bindings: number[] | null;
+  /** The topics' position is one the tail no longer holds (too old, or from before a server restart): changes may have been missed, so refetch everything the topics show, and reconnect with no topics_cursor */
+  topics?: boolean;
 };
 
 export type ViewTailMetricBody = {
@@ -10357,10 +10375,20 @@ export const ListUsersKind = {
 
 export type WatchViewsParams = {
   /**
-   * The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)
+   * The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now). Give bindings, topics, or both
    * @maxLength 32768
    */
-  bindings: string;
+  bindings?: string;
+  /**
+   * The entities whose changes the stream names, comma separated, each kind:ref (component or system, by name, uuid or dotted address; at most 32). A changed event says one moved: refetch its route. Give bindings, topics, or both
+   * @maxLength 8192
+   */
+  topics?: string;
+  /**
+   * The position the topics resume after: the last event id the client received. Unset, Last-Event-ID; unset too, the topics follow from now
+   * @maxLength 64
+   */
+  topics_cursor?: string;
   /**
    * Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position
    * @minimum 1
@@ -10387,6 +10415,12 @@ export type WatchViews200Item = {
   event: 'rows';
   /** The cursor after the event, the resume point; absent on reset */
   id?: string;
+} | {
+  data: ViewChangedEvent;
+  /** The event name */
+  event: 'changed';
+  /** The cursor after the event, the resume point; absent on reset */
+  id?: string;
 };
 
 export type HTTPStatusCode1xx = 100 | 101 | 102 | 103;
@@ -10396,7 +10430,7 @@ export type HTTPStatusCode4xx = 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | 
 export type HTTPStatusCode5xx = 500 | 501 | 502 | 503 | 504 | 505 | 507 | 511;
 export type HTTPStatusCodes = HTTPStatusCode1xx | HTTPStatusCode2xx | HTTPStatusCode3xx | HTTPStatusCode4xx | HTTPStatusCode5xx;
 
-const getHeaders = (...sources: (RequestInit['headers'] | Record<string, string | undefined>)[]) => {
+const getHeaders = (...sources: (RequestInit['headers'] | Record<string, string | number | boolean | bigint | readonly string[] | undefined>)[]) => {
   const seen = new Set<string>();
   const layers: [string, string | readonly string[]][][] = [];
   for (const source of sources.reverse()) {
@@ -10405,10 +10439,10 @@ const getHeaders = (...sources: (RequestInit['headers'] | Record<string, string 
       ? source.entries()
       : Symbol.iterator in source
         ? Array.from(source as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string])
-        : Object.entries<string | readonly string[] | undefined>(source);
+        : Object.entries<string | number | boolean | bigint | readonly string[] | undefined>(source);
     const layer: [string, string | readonly string[]][] = [];
     for (const [name, value] of entries) {
-      if (value !== undefined && !seen.has(name.toLowerCase())) layer.push([name, value]);
+      if (value !== undefined && !seen.has(name.toLowerCase())) layer.push([name, typeof value === 'object' ? value : String(value)]);
     }
     for (const [name] of layer) seen.add(name.toLowerCase());
     layers.push(layer);
@@ -28178,7 +28212,7 @@ export type watchViewsResponseError = (watchViewsResponseDefault) & {
 
 export type watchViewsResponse = (watchViewsResponseSuccess | watchViewsResponseError)
 
-export const getWatchViewsUrl = (params: WatchViewsParams,) => {
+export const getWatchViewsUrl = (params?: WatchViewsParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -28194,10 +28228,10 @@ export const getWatchViewsUrl = (params: WatchViewsParams,) => {
 }
 
 /**
- * Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most 16 watches open; past it the open is a 429.
+ * Streams the rows that land for every binding, and a changed notice for every topic a write moved, as Server-Sent Events, one connection for all of them (ADR-1830, ADR-2731). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. A topic (kind:ref, a component or a system) needs <kind>:read and resolves in scope at connect as a literal ref does, an out-of-scope one the same 404; a changed event names it when a write moved its state (its health recomputed, a slot or member changed), at most once each 250 milliseconds, and carries no data: the client refetches the route it reads. The topics resume after topics_cursor (else Last-Event-ID, else now); a position the tail no longer holds is a reset with topics set, and the client refetches what they show. An event bears the stream's position only once every changed notice before it has gone out, so a reconnect from any id misses no change. One user holds at most 16 watches open; past it the open is a 429. On server shutdown each stream ends with a final mark.
  * @summary Follow view bindings live over one SSE stream
  */
-export const watchViews = async (params: WatchViewsParams, options?: Parameters<typeof ogFetch>[1]): Promise<watchViewsResponse> => {
+export const watchViews = async (params?: WatchViewsParams, options?: Parameters<typeof ogFetch>[1]): Promise<watchViewsResponse> => {
 
   return ogFetch<watchViewsResponse>(getWatchViewsUrl(params),
   {

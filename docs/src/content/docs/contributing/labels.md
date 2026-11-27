@@ -159,6 +159,11 @@ labels. Adding a label means a new subsystem (`area:*`) or a new automation task
 `tier:*` and `risk:*` sets are closed, they are what the dispatcher's lint accepts; anything
 else belongs in a field.
 
+Two labels sit outside the taxonomy because a tool owns them: release-please marks its release
+PR `autorelease: pending` and, once tagged, `autorelease: tagged`, and reads them to find the PR
+to tag ([cutting a release](/contributing/release-ci/#cutting-a-release-manual)). Nobody applies
+them by hand.
+
 ## The board
 
 The [Omniglass project](https://github.com/orgs/hyperscaleav/projects/1) (org project #1) is

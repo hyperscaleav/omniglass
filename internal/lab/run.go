@@ -860,5 +860,5 @@ func (r *Runner) readyBanner(lab *Lab, cfg Config) {
 	}
 }
 
-// WalkthroughsURL is the lab guide's list of guided walkthroughs.
-const WalkthroughsURL = "https://docs.omniglass.hyperscaleav.com/start/first-ten-minutes/#walk-through-it"
+// WalkthroughsURL is the docs page listing the guided walkthroughs.
+const WalkthroughsURL = "https://docs.omniglass.hyperscaleav.com/start/walkthroughs/"

@@ -1,72 +1,72 @@
 name: release
 
-# The one release path, run from a release branch (#2139). Releases are never
-# cut on merge to main: on the cut, a release/<major>.<minor> branch is made
-# from main, and this workflow is dispatched on it by hand. A dispatch tags the
-# branch tip as the next candidate (v0.1.0-rc.1, then rc.2 after a cherry-pick)
-# and publishes it as a prerelease; once a candidate has passed the soak gate, a
-# dispatch with `final` tags that same commit v0.1.0. The version comes from the
-# branch name and the tags already cut (cmd/releaseversion), never from commit
-# subjects. Each run pushes the tag, creates the GitHub Release with notes
-# grouped by change type (cmd/releasenotes, #2142), builds and pushes the
-# release image, and attaches the binaries, each stamped with that image's
-# digest (#1257). A final release then comments "Released in" on the PRs it
-# ships and the issues they closed. Nothing is committed back; the tag is the
-# artifact.
+# The build half of a release (ADR-2652). release-please.yml tags the merge
+# commit of a release PR and creates the GitHub Release with that PR's notes,
+# then calls this workflow on the tag. It builds and pushes the release image,
+# attaches the cross-platform binaries, each stamped with that image's digest
+# (#1257), and comments "Released in" on the PRs the release ships and the
+# issues they closed. It never tags, never writes the notes, and commits
+# nothing; the tag and the Release already exist when it starts.
 #
-# Releasing is switched off until the repository variable RELEASES_ENABLED is
-# `true` (Settings, Secrets and variables, Actions, Variables). Until then a
-# dispatch may only dry-run; a real run fails at its first step, before any tag.
-#
-# The tag is pushed with a token from the release GitHub App when the variable
-# RELEASE_APP_CLIENT_ID and the secret RELEASE_APP_PRIVATE_KEY are set, the
-# App being the one bypass on the "v* tags: created by admins only" ruleset.
-# Otherwise it falls back to GITHUB_TOKEN, which that ruleset refuses (#1940).
+# A dispatch with a tag rebuilds an existing release whose build failed. Like
+# the call, it publishes only while the repository variable RELEASES_ENABLED is
+# `true`, and it refuses a tag with no GitHub Release.
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The release's tag, created by release-please"
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: "Plan only (print the next tag, publish nothing)"
-        type: boolean
-        default: false
-      final:
-        description: "Release the newest candidate as final, instead of cutting a new candidate"
-        type: boolean
-        default: false
+      tag:
+        description: "The tag of an existing release to build again (v0.1.0)"
+        type: string
+        required: true
 
 permissions:
-  contents: write       # create the GitHub Release (and push the tag, without the App)
+  contents: write       # attach the binaries to the Release
   packages: write       # push the release image to GHCR
-  issues: write         # a final release's "Released in" comments on issues
+  issues: write         # the "Released in" comments on issues
   pull-requests: write  # and on the PRs it ships
 
 concurrency:
-  group: release
+  group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     env:
+      TAG: ${{ inputs.tag }}
       # Every publishing step checks this.
-      PUBLISH: ${{ !inputs.dry_run && vars.RELEASES_ENABLED == 'true' }}
+      PUBLISH: ${{ vars.RELEASES_ENABLED == 'true' }}
     steps:
       - name: Refuse unless releases are enabled
-        if: ${{ !inputs.dry_run && vars.RELEASES_ENABLED != 'true' }}
+        if: vars.RELEASES_ENABLED != 'true'
         run: |
-          echo "::error::Releases are disabled: set the repository variable RELEASES_ENABLED to true to publish, or dispatch with dry_run."
+          echo "::error::Releases are disabled: set the repository variable RELEASES_ENABLED to true."
           exit 1
 
-      - name: Refuse unless dispatched on a release branch
-        if: ${{ !startsWith(github.ref, 'refs/heads/release/') }}
+      - name: Refuse a tag with no GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "::error::Releases are cut from a release/<major>.<minor> branch, not ${GITHUB_REF}. Branch from main and dispatch there."
-          exit 1
+          if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::${TAG} is not a release tag (v<major>.<minor>.<patch>)."
+            exit 1
+          fi
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json tagName > /dev/null || {
+            echo "::error::${TAG} has no GitHub Release; release-please creates it when a release PR merges."
+            exit 1
+          }
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0          # full history + tags for the version
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0          # full history + tags, for the PRs since the previous release
           persist-credentials: false
 
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
@@ -74,89 +74,22 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Work out the tag
-        id: version
-        env:
-          FINAL: ${{ inputs.final }}
+      # The PRs this release ships, for the "Released in" comments: every PR
+      # squash-merged since the previous release tag. The notes themselves are
+      # release-please's, already on the Release.
+      - name: List the PRs the release ships
+        id: prs
         run: |
-          go run ./cmd/releaseversion -branch "${GITHUB_REF_NAME}" -final="${FINAL}" | tee -a "${GITHUB_OUTPUT}"
-          {
-            echo "### Release plan"
-            echo
-            grep -E '^(tag|prerelease|previous)=' "${GITHUB_OUTPUT}" | sed 's/^/- /'
-            echo "- publish: ${PUBLISH}"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      # The notes cover the commits since the previous final release, so each
-      # candidate's notes are cumulative. A dry run shows them in the summary.
-      - name: Write the notes
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-          PREVIOUS: ${{ steps.version.outputs.previous }}
-        run: |
+          previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${TAG}^" 2>/dev/null || true)
           go run ./cmd/releasenotes -repo "${GITHUB_REPOSITORY}" -tag "${TAG}" \
-            -previous "${PREVIOUS}" -to "${GITHUB_SHA}" \
-            -prs-file "${RUNNER_TEMP}/prs.txt" > "${RUNNER_TEMP}/notes.md"
+            -previous "${previous}" -to "${TAG}" \
+            -prs-file "${RUNNER_TEMP}/prs.txt" > /dev/null
           {
+            echo "### Release ${TAG}"
             echo
-            echo "<details><summary>Release notes ($(wc -l < "${RUNNER_TEMP}/prs.txt") PRs)</summary>"
-            echo
-            cat "${RUNNER_TEMP}/notes.md"
-            echo
-            echo "</details>"
+            echo "- previous: ${previous:-none}"
+            echo "- PRs: $(wc -l < "${RUNNER_TEMP}/prs.txt")"
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      # The token is minted in a dry run too, so a dry run proves the App's
-      # client id, private key and contents permission before the first real
-      # tag push (#2147): a wrong one fails right here. Only a real push tests
-      # the App's bypass on the v* ruleset.
-      - name: Mint the release App token
-        id: app
-        if: vars.RELEASE_APP_CLIENT_ID != ''
-        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
-        with:
-          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          permission-contents: write
-
-      - name: Check the release App token
-        if: steps.app.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          repos=$(gh api --paginate /installation/repositories --jq '.repositories[].full_name')
-          if ! grep -qxF -- "${GITHUB_REPOSITORY}" <<<"${repos}"; then
-            echo "::error::The release App's token does not cover ${GITHUB_REPOSITORY}; install the App on it."
-            exit 1
-          fi
-          echo "- release App token: minted with contents write, covers ${GITHUB_REPOSITORY}" >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Warn when the release App is not configured
-        if: vars.RELEASE_APP_CLIENT_ID == ''
-        run: |
-          echo "::warning::RELEASE_APP_CLIENT_ID is unset: the tag push would use GITHUB_TOKEN, which the v* tags ruleset refuses."
-          echo "- release App token: not configured, the tag push would be refused" >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Push the tag
-        if: env.PUBLISH == 'true'
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-          TOKEN: ${{ steps.app.outputs.token || secrets.GITHUB_TOKEN }}
-        run: |
-          git tag "${TAG}" "${GITHUB_SHA}"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "${TOKEN}" | base64 -w0)" \
-            push "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${TAG}"
-
-      - name: Create the GitHub Release
-        if: env.PUBLISH == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-          PRERELEASE: ${{ steps.version.outputs.prerelease }}
-        run: |
-          args=(--verify-tag --notes-file "${RUNNER_TEMP}/notes.md" --title "${TAG}")
-          if [ "${PRERELEASE}" = "true" ]; then args+=(--prerelease --latest=false); fi
-          gh release create "${TAG}" "${args[@]}"
 
       # Build and push the release image before the binaries, so each binary
       # carries the image's digest and its `omniglass lab run` pulls exactly
@@ -181,9 +114,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           # Only the release tag: the commit's sha tag is image.yml's, built
-          # on the branch push.
+          # on the push to main.
           tags: |
-            type=raw,value=${{ steps.version.outputs.tag }}
+            type=raw,value=${{ inputs.tag }}
 
       - name: Read the Go version from go.mod
         id: gover
@@ -202,19 +135,29 @@ jobs:
           # The release version, which the image's
           # org.opencontainers.image.version label then carries too.
           build-args: |
-            VERSION=${{ steps.version.outputs.tag }}
+            VERSION=${{ inputs.tag }}
             GO_VERSION=${{ steps.gover.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       # Attach the cross-platform binaries to the Release just created, built
-      # inline for the same reason as the image. Shares .goreleaser.yaml with
+      # inline, for the same reason as the image. Shares .goreleaser.yaml with
       # goreleaser.yml's PR snapshot.
+      # goreleaser's before hook runs `make web`, which builds the console with
+      # pnpm, so pnpm is set up before Node.
+      - name: Set up pnpm (for the embedded console build)
+        if: env.PUBLISH == 'true'
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 10
+
       - name: Set up Node (for the embedded console build)
         if: env.PUBLISH == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Install syft (SBOM generator)
         if: env.PUBLISH == 'true'
@@ -227,21 +170,20 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.tag }}
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           # Stamped into each binary as main.imageDigest (.goreleaser.yaml).
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
 
-      # A final release, once everything is attached, comments on each PR it
-      # ships and each issue that PR closed (#2142). Candidates comment nothing.
+      # Once everything is attached, the release comments on each PR it ships
+      # and each issue that PR closed (#2142).
       # A hidden marker makes a rerun skip what it already commented, and a
       # failed comment only warns. Past MAX_COMMENTS PRs (the first release
       # ships the whole history) it skips the comments rather than post
       # hundreds and run into GitHub's limits on content creation.
       - name: Mark PRs and issues released
-        if: env.PUBLISH == 'true' && steps.version.outputs.prerelease == 'false'
+        if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
           MAX_COMMENTS: "100"
         run: |
           mapfile -t prs < "${RUNNER_TEMP}/prs.txt"

@@ -21,13 +21,15 @@ permissions:
   actions: read
   checks: read
 
-concurrency:
-  group: agent-build-${{ github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
   build:
     if: github.event.label.name == 'run:dev-gha' && vars.AGENT_CI_ENABLED == 'true'
+    # Job-level, not workflow-level: a workflow-level group queues every
+    # event, skipped ones too, and GitHub cancels all but one pending run,
+    # leaving cancelled runs (a red X) on the commit they file under.
+    concurrency:
+      group: agent-build-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
@@ -213,7 +215,7 @@ jobs:
       - name: Build the ticket
         id: agent
         if: steps.gate.outputs.decision == 'run'
-        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
+        uses: anthropics/claude-code-action@acfe7992852970efb4fee683d63d628e3e52df67 # v1.0.286
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}

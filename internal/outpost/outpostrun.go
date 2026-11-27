@@ -286,6 +286,13 @@ func runNowTask(ctx context.Context, out *telemetrySpool, outpost string, runner
 	var dps []collection.Sample
 	var faults []error
 	cost := measureRun(func() { dps, faults = collectDriverTask(ctx, runner, task, sessions) })
+	if establishingRun(dps, faults) {
+		// The endpoint's held session is still making its first connection
+		// (#2755): nothing was sent and nothing failed, so the run is held,
+		// as a scheduled one is, and lands no collection-failed.
+		report.heldPoll(task.EndpointID)
+		return collection.RunReply{Pending: true, Error: "the endpoint's session is still making its first connection; run the poll again once it is up"}
+	}
 	// A run now is a poll run like a scheduled one, so it counts in the
 	// endpoint's collection report (#1369), its CPU time too (#1870).
 	report.poll(task.EndpointID, cost, !landedData(dps) && len(faults) > 0)

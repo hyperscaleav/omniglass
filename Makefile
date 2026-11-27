@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs marketing-shots test-marketing-shots demo test-demos probe
+.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs marketing-shots test-marketing-shots demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image and exports this machine's own binary to
@@ -536,25 +536,11 @@ clean-testcontainers:
 	docker ps -aq --filter "label=org.testcontainers=true" --filter "ancestor=postgres:18" | xargs -r docker rm -f
 
 # ---- release ---------------------------------------------------------------
-# Releases are cut only by the release workflow (.github/workflows/release.yml),
-# dispatched on a release/<major>.<minor> branch, which builds the image and
-# stamps its digest into the binaries (#1257); there is no local publish target.
-# `release` cuts the next release branch with no judgment in it (#2711): it
-# reads the conventional commits on main since the newest release line branched,
-# previews the version, the commits that drove it and the release notes, and
-# asks before creating release/<major>.<minor> at main's tip on origin. Before
-# 1.0 a breaking change bumps the minor. A patch creates nothing; it lists the
-# fixes to cherry-pick onto the line's branch. DRY_RUN=1 previews only, YES=1
-# skips the question. It never dispatches the release workflow.
-release:
-	@go run ./cmd/release $(if $(DRY_RUN),-dry-run) $(if $(YES),-yes)
-
-# `release-plan` is the local preview: run from a release branch, it prints the
-# tag the next dispatch would cut, from the branch name and the tags (#2139).
-# FINAL=1 previews the final release of the newest candidate instead.
-release-plan:
-	@git fetch --quiet --tags origin
-	@go run ./cmd/releaseversion -branch "$$(git branch --show-current)" $(if $(FINAL),-final)
+# Releases are cut only by merging release-please's release PR on main
+# (.github/workflows/release-please.yml, ADR-2652), which tags the merge commit
+# and calls the release workflow (.github/workflows/release.yml) to build the
+# image and stamp its digest into the binaries (#1257); there is no local
+# publish or cut target.
 
 # Local dry build of the release matrix (all OS/arch archives + checksums), with
 # no tag and no publish, to validate .goreleaser.yaml. SBOM is skipped (needs

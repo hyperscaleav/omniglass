@@ -233,10 +233,15 @@ func runServer(ctx context.Context, version string, lab bool) error {
 		apiOpts = append(apiOpts, api.WithOmnibotModel(r.Positioned()))
 		log.Info("omnibot plays a recording", "path", c.OmnibotReplay)
 	}
+	// The open streams end with their position when the server shuts down,
+	// rather than holding Shutdown until its grace runs out (#2731).
+	streams := api.NewStreamShutdown()
+	apiOpts = append(apiOpts, api.WithStreamShutdown(streams))
 	srv := &http.Server{
 		Handler:           api.NewHandler(gw, apiOpts...),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	srv.RegisterOnShutdown(streams.Close)
 	log.Info("http api listening", "addr", ln.Addr().String())
 
 	// Catch the stop signals before reporting ready: a supervisor that stops

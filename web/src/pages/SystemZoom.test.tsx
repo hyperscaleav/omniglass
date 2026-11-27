@@ -1210,10 +1210,10 @@ describe("a configure select takes its value when its catalog lands (#782)", () 
 });
 
 // A monitoring console's system view moves as its members' health moves
-// (#940): the system's own reads poll at the leaf's cadence, so a member's
-// alarm opening lands as the degraded health and the alarm in Why without a
-// reload. Each read is one request a poll, and nothing it polls grows with
-// the fleet.
+// (#940): the system's own reads follow its topic on the tab's one live
+// stream (#2731), so a member's alarm opening lands as the degraded health
+// and the alarm in Why without a reload. A notice is one request per read,
+// and nothing it refetches grows with the fleet. Nothing on them polls.
 describe("the system view refreshes (#940)", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -1221,6 +1221,15 @@ describe("the system view refreshes (#940)", () => {
   });
 
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  // The page's stream: every /views:watch the hub opens, the test writing
+  // the server's events into the newest.
+  const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+  const watchResponse = () =>
+    new Response(new ReadableStream<Uint8Array>({ start: (c) => void streams.push(c) }), { status: 200, headers: { "content-type": "text/event-stream" } });
+  const notify = (event: string, data: unknown, id: string) =>
+    streams[streams.length - 1].enqueue(new TextEncoder().encode(`id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+  const changed = () => notify("changed", { topic: `system:${uuidFor("szp-sys")}`, kind: "system", id: uuidFor("szp-sys"), op: "update", v: 9 }, "boot.9");
 
   // Quiet: every slot staffed, nobody down, nothing raised.
   const calm = {
@@ -1251,21 +1260,23 @@ describe("the system view refreshes (#940)", () => {
   });
   const calmMembers = () => memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "healthy" });
 
-  it("polls its health and its members, so a member's alarm moves the health and Why without a reload, one request per read", async () => {
+  it("follows its topic, so a member's alarm moves the health and Why without a reload or a poll, one request per read", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const gets: string[] = [];
+    let alarmed = false;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
+      if (url.includes("/views:watch")) return watchResponse();
       gets.push(new URL(url).pathname);
-      if (new URL(url).pathname.endsWith("/health")) return json(moved());
-      if (url.endsWith("/members")) return json({ system: "boardroom", members: memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "outage" }) });
+      if (new URL(url).pathname.endsWith("/health")) return json(alarmed ? moved() : calm);
+      if (url.endsWith("/members")) return json({ system: "boardroom", members: memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": alarmed ? "outage" : "healthy" }) });
       if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
       if (url.endsWith("/views/fleet")) return json(view);
       return json({});
     });
     mount(undefined, calm, [], [], me, calmMembers());
-    // Before the poll: healthy, nothing in Why, the mic's light quiet.
+    // Before the notice: healthy, nothing in Why, the mic's light quiet.
     expect(screen.getByTestId("system-header").textContent).toContain("healthy");
     expect(screen.queryByTestId("alarm-strip")).toBeNull();
     // The Why slot is held while it is quiet, so the strip landing moves nothing (#2006).
@@ -1273,27 +1284,39 @@ describe("the system view refreshes (#940)", () => {
     const micLight = () => within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByRole("img").getAttribute("aria-label");
     expect(micLight()).toBe("healthy");
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    // The stream opens; what was read before it refreshes once, then the
+    // page waits on the stream, not a timer.
+    await vi.advanceTimersByTimeAsync(100);
+    notify("mark", { cursor: "boot.1" }, "boot.1");
+    await vi.advanceTimersByTimeAsync(100);
+    gets.length = 0;
+    await vi.advanceTimersByTimeAsync(30_000);
+    const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
+    expect(count("/health") + count("/members") + count("/slots")).toBe(0);
+    expect(screen.getByTestId("system-header").textContent).toContain("healthy");
+
+    alarmed = true;
+    changed();
+    await vi.advanceTimersByTimeAsync(300);
 
     expect(screen.getByTestId("system-header").textContent).toContain("degraded");
     expect(screen.getByTestId("alarm-strip").textContent).toContain("Reachability lost");
     expect(screen.queryByTestId("alarm-strip-clear")).toBeNull();
     expect(micLight()).toBe("outage");
-    const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
-    // Each of the system's own reads polled, as one request, not one per
-    // member or per slot.
-    for (const p of ["/health", "/members", "/metrics"]) {
+    // Each of the system's own reads refetched once, as one request, not one
+    // per member or per slot.
+    for (const p of ["/health", "/members", "/slots"]) {
       expect(count(p)).toBe(1);
     }
-    // Nothing the view polls grows with the fleet: no fleet view, no fleet-wide health results.
+    // Nothing the notice refetches grows with the fleet: no fleet view, no fleet-wide health results.
     expect(count("/views/fleet")).toBe(0);
     expect(count("/systems:health")).toBe(0);
   });
 
-  // Activity explains its health history with the members' alarms. Read per member,
-  // a poll is one request per member; read per system it is one request
-  // however big the room, so the poll's size is fixed.
-  it("polls Activity with a fixed number of requests, however many members the system has", async () => {
+  // Activity explains its health history with the members' alarms. Read per
+  // member, a refetch is one request per member; read per system it is one
+  // request however big the room, so its size is fixed.
+  it("refetches Activity on a notice with a fixed number of requests, however many members the system has", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
     const big = {
       ...view,
@@ -1305,6 +1328,7 @@ describe("the system view refreshes (#940)", () => {
     const gets: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = (input as Request).url;
+      if (url.includes("/views:watch")) return watchResponse();
       gets.push(new URL(url).pathname);
       if (new URL(url).pathname.endsWith("/health")) return json(calm);
       if (url.endsWith("/members")) return json({ members: memberRowsOf(big, uuidFor("szp-sys")) });
@@ -1317,33 +1341,40 @@ describe("the system view refreshes (#940)", () => {
     });
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`, calm, [], [], me, memberRowsOf(big, uuidFor("szp-sys")));
     r.qc.setQueryData([...FLEET_VIEW_KEY], big);
-    // The mount's own first reads are not a poll.
-    await vi.advanceTimersByTimeAsync(0);
+    // The mount's own first reads, and the stream's opening refresh, are not
+    // the notice's.
+    await vi.advanceTimersByTimeAsync(100);
+    notify("mark", { cursor: "boot.1" }, "boot.1");
+    await vi.advanceTimersByTimeAsync(100);
     gets.length = 0;
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    changed();
+    await vi.advanceTimersByTimeAsync(300);
 
     // No member is read on its own; the members' alarms are one read.
     expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
     expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
-    // The whole poll: health (the current report, and the same report over
-    // Activity's range, #2741), slots, members, alarms, events, logs. The
-    // metrics read belongs to Overview's metrics grid (#2424).
-    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/health", "/logs", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
+    // The whole refetch: health (the current report, and the same report over
+    // Activity's range, #2741), slots, members, alarms. The events and logs
+    // lists, and the metrics grid, follow in a later slice (#2731).
+    expect([...gets].sort()).toEqual(["/alarms", "/health", "/health", "/members", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
-  it("holds the poll while the tab is hidden", async () => {
+  it("holds what still polls while the tab is hidden", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({}));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      (input as Request).url.includes("/views:watch") ? watchResponse() : json({}),
+    );
+    const reads = () => fetchSpy.mock.calls.filter(([input]) => !(input as Request).url.includes("/views:watch")).length;
     focusManager.setFocused(false);
     try {
       mount(undefined, calm, [], [], me, calmMembers());
       // The mount's own first reads of whatever was not seeded are not a
       // poll; nothing after them is.
       await vi.advanceTimersByTimeAsync(0);
-      const atMount = fetchSpy.mock.calls.length;
+      const atMount = reads();
       await vi.advanceTimersByTimeAsync(20_000);
-      expect(fetchSpy.mock.calls.length).toBe(atMount);
+      expect(reads()).toBe(atMount);
     } finally {
       focusManager.setFocused(undefined);
     }
@@ -1381,6 +1412,9 @@ describe("the lab's system page load", () => {
         const u = new URL(req.url);
         const path = u.pathname.replace(/^\/api\/v1/, "");
         const query = u.search.replace(/instance=[^&]*/, "instance={instance}");
+        // The page's live stream is its one held connection, not a read
+        // the lab's load times.
+        if (path === "/views:watch") return new Promise<Response>(() => {});
         reads.add(
           (path.replace(id, "{system}").replace(/\/metrics\/[^/]+\/samples$/, "/metrics/{metric}/samples") + query),
         );

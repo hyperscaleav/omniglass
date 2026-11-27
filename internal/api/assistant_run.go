@@ -198,12 +198,10 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 		}
 		return &huma.StreamResponse{Body: func(hctx huma.Context) {
 			defer revoke()
-			hctx.SetHeader("Content-Type", "text/event-stream")
-			hctx.SetHeader("Cache-Control", "no-cache")
-			hctx.SetStatus(http.StatusOK)
+			defer startSSE(hctx, "no-cache")()
 			rctx, cancel := context.WithDeadline(hctx.Context(), exp)
 			defer cancel()
-			run := agui.NewRun(hctx.BodyWriter(), conv.Name, runID)
+			run := agui.NewRun(newSSEWriter(hctx.BodyWriter()), conv.Name, runID)
 			l.Events = run.Hear
 			run.Start()
 
