@@ -4733,7 +4733,7 @@ export type Keybindings = {
 };
 
 /**
- * The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded.
+ * The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded. A problem carries name, role, unplugged, loss_pct and, when it pins a path, pin_path and pin_value.
  */
 export type LabCalendarEntryPayload = {[key: string]: unknown};
 
@@ -4741,9 +4741,9 @@ export type LabCalendarEntry = {
   building: string;
   /** When it ends. */
   end: string;
-  /** What the entry is: meeting today; a scripted problem joins it (#2769). */
+  /** What the entry is: meeting, or a scripted problem (#2769). */
   kind: string;
-  /** The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded. */
+  /** The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded. A problem carries name, role, unplugged, loss_pct and, when it pins a path, pin_path and pin_value. */
   payload: LabCalendarEntryPayload;
   room: string;
   site: string;
@@ -17392,7 +17392,7 @@ export const getGetLabCalendarUrl = (params: GetLabCalendarParams,) => {
 }
 
 /**
- * The lab calendar (#2757) for a window: the meetings every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.
+ * The lab calendar (#2757) for a window: the meetings and scripted problems every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.
  * @summary What the lab's simulator intends in a window
  */
 export const getLabCalendar = async (params: GetLabCalendarParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLabCalendarResponse> => {

@@ -4657,7 +4657,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
 						Short:   "What the lab's simulator intends in a window",
-						Long:    "The lab calendar (#2757) for a window: the meetings every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.",
+						Long:    "The lab calendar (#2757) for a window: the meetings and scripted problems every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.",
 						Example: "  omniglass lab calendar list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
