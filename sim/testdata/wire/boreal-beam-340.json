@@ -1,0 +1,1505 @@
+{
+ "product": "boreal-beam-340",
+ "source": "recorded from the YAML profile before its deletion (#2832); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "manufacturer": "Boreal",
+    "model": "Beam 340",
+    "serial": "SN-1188C2F497"
+   },
+   "firmware": {
+    "version": "1.12.0"
+   },
+   "network": {
+    "hostname": "wire-boreal-beam-340"
+   }
+  },
+  "status": {
+   "device": {
+    "boot_epoch": 1793703600,
+    "power": "on",
+    "uptime": 3600
+   },
+   "network": {
+    "ipv4": {
+     "address": "127.0.0.1",
+     "mac": "02:1b:2e:e8:73:8c"
+    }
+   },
+   "projector": {
+    "input": "hdmi1",
+    "light_source_hours": 12480.5,
+    "shutter": "open",
+    "temperature": 36
+   },
+   "sim": {
+    "awake": false,
+    "busy": false,
+    "known": false,
+    "until": 0
+   }
+  }
+ },
+ "http": [
+  {
+   "Name": "the status document",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"Beam 340\",\n    \"serial\": \"SN-1188C2F497\",\n    \"firmware\": \"1.12.0\",\n    \"uptime\": 3600,\n    \"power\": \"on\"\n  },\n  \"projector\": {\n    \"light_source_hours\": 12480.5,\n    \"shutter\": \"open\",\n    \"input\": \"hdmi1\",\n    \"temperature\": 36\n  }\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "an unknown path",
+   "Method": "GET",
+   "Path": "/nope",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the root",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ]
+   },
+   "response": "ok\n",
+   "state_change": false
+  },
+  {
+   "Name": "power standby",
+   "Method": "POST",
+   "Path": "/api/projector/power",
+   "Body": "{\"power\": \"standby\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"power\": \"standby\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "standby",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "power on",
+   "Method": "POST",
+   "Path": "/api/projector/power",
+   "Body": "{\"power\": \"on\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"power\": \"on\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "power off is not a projector power",
+   "Method": "POST",
+   "Path": "/api/projector/power",
+   "Body": "{\"power\": \"off\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.device.power\",\"value\":\"off\",\"enum\":[\"on\",\"standby\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "power with no field",
+   "Method": "POST",
+   "Path": "/api/projector/power",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.device.power\",\"value\":\"\\u003cno value\\u003e\",\"enum\":[\"on\",\"standby\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "shutter closed",
+   "Method": "POST",
+   "Path": "/api/projector/shutter",
+   "Body": "{\"shutter\": \"closed\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"shutter\": \"closed\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "closed",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "shutter open",
+   "Method": "POST",
+   "Path": "/api/projector/shutter",
+   "Body": "{\"shutter\": \"open\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"shutter\": \"open\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "shutter refused",
+   "Method": "POST",
+   "Path": "/api/projector/shutter",
+   "Body": "{\"shutter\": \"ajar\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.projector.shutter\",\"value\":\"ajar\",\"enum\":[\"open\",\"closed\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "input hdmi2",
+   "Method": "POST",
+   "Path": "/api/projector/input",
+   "Body": "{\"input\": \"hdmi2\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"hdmi2\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi2",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "input hdmi1",
+   "Method": "POST",
+   "Path": "/api/projector/input",
+   "Body": "{\"input\": \"hdmi1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"hdmi1\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "input refused",
+   "Method": "POST",
+   "Path": "/api/projector/input",
+   "Body": "{\"input\": \"dp1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.projector.input\",\"value\":\"dp1\",\"enum\":[\"hdmi1\",\"hdmi2\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "shutter closed again",
+   "Method": "POST",
+   "Path": "/api/projector/shutter",
+   "Body": "{\"shutter\": \"closed\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"shutter\": \"closed\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "power": "on",
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "closed",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status document changed",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"Beam 340\",\n    \"serial\": \"SN-1188C2F497\",\n    \"firmware\": \"1.12.0\",\n    \"uptime\": 3600,\n    \"power\": \"on\"\n  },\n  \"projector\": {\n    \"light_source_hours\": 12480.5,\n    \"shutter\": \"closed\",\n    \"input\": \"hdmi1\",\n    \"temperature\": 36\n  }\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "reboot",
+   "Method": "POST",
+   "Path": "/api/admin/reboot",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"action\": \"reboot\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Boreal",
+      "model": "Beam 340",
+      "serial": "SN-1188C2F497"
+     },
+     "firmware": {
+      "version": "1.12.0"
+     },
+     "network": {
+      "hostname": "wire-boreal-beam-340"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "power": "on",
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:1b:2e:e8:73:8c"
+      }
+     },
+     "projector": {
+      "input": "hdmi1",
+      "light_source_hours": 12480.5,
+      "shutter": "open",
+      "temperature": 36
+     },
+     "sim": {
+      "awake": false,
+      "busy": false,
+      "known": false,
+      "until": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status document after a reboot",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"Beam 340\",\n    \"serial\": \"SN-1188C2F497\",\n    \"firmware\": \"1.12.0\",\n    \"uptime\": 0,\n    \"power\": \"on\"\n  },\n  \"projector\": {\n    \"light_source_hours\": 12480.5,\n    \"shutter\": \"open\",\n    \"input\": \"hdmi1\",\n    \"temperature\": 36\n  }\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "factory reset is not on a projector",
+   "Method": "POST",
+   "Path": "/api/admin/factory-reset",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  }
+ ],
+ "snmp": {
+  "rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Beam 340"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.1.1.1.0",
+    "type": "OctetString",
+    "value": "on"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.1.0",
+    "type": "OctetString",
+    "value": "12480.5"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.2.0",
+    "type": "OctetString",
+    "value": "open"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.3.0",
+    "type": "OctetString",
+    "value": "hdmi1"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.4.0",
+    "type": "Integer",
+    "value": "36"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.1.0",
+    "type": "OctetString",
+    "value": "1.12.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.2.0",
+    "type": "OctetString",
+    "value": "SN-1188C2F497"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.9.9.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   }
+  ],
+  "written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Beam 340"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.1.1.1.0",
+    "type": "OctetString",
+    "value": "standby"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.1.0",
+    "type": "OctetString",
+    "value": "12480.5"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.2.0",
+    "type": "OctetString",
+    "value": "closed"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.3.0",
+    "type": "OctetString",
+    "value": "hdmi2"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.4.0",
+    "type": "Integer",
+    "value": "36"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.1.0",
+    "type": "OctetString",
+    "value": "1.12.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.2.0",
+    "type": "OctetString",
+    "value": "SN-1188C2F497"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.9.9.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   }
+  ]
+ },
+ "walks": {
+  "1.3.6.1.2.1.1@rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Beam 340"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ],
+  "1.3.6.1.2.1.1@written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Beam 340"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ],
+  "1.3.6.1.4.1.55520@rest": [
+   {
+    "oid": "1.3.6.1.4.1.55520.1.1.1.0",
+    "type": "OctetString",
+    "value": "on"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.1.0",
+    "type": "OctetString",
+    "value": "1.12.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.2.0",
+    "type": "OctetString",
+    "value": "SN-1188C2F497"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.1.0",
+    "type": "OctetString",
+    "value": "12480.5"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.2.0",
+    "type": "OctetString",
+    "value": "open"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.3.0",
+    "type": "OctetString",
+    "value": "hdmi1"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.4.0",
+    "type": "Integer",
+    "value": "36"
+   }
+  ],
+  "1.3.6.1.4.1.55520@written": [
+   {
+    "oid": "1.3.6.1.4.1.55520.1.1.1.0",
+    "type": "OctetString",
+    "value": "standby"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.1.0",
+    "type": "OctetString",
+    "value": "1.12.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.5.2.0",
+    "type": "OctetString",
+    "value": "SN-1188C2F497"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.1.0",
+    "type": "OctetString",
+    "value": "12480.5"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.2.0",
+    "type": "OctetString",
+    "value": "closed"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.3.0",
+    "type": "OctetString",
+    "value": "hdmi2"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55520.6.4.0",
+    "type": "Integer",
+    "value": "36"
+   }
+  ]
+ },
+ "ticks": {
+  "light_source_aging": [
+   {
+    "status.projector.light_source_hours": 12480.5167
+   },
+   {
+    "status.projector.light_source_hours": 12480.5334
+   },
+   {
+    "status.projector.light_source_hours": 12480.5501
+   },
+   {
+    "status.projector.light_source_hours": 12480.5668
+   },
+   {
+    "status.projector.light_source_hours": 12480.5835
+   },
+   {
+    "status.projector.light_source_hours": 12480.6002
+   },
+   {
+    "status.projector.light_source_hours": 12480.6169
+   },
+   {
+    "status.projector.light_source_hours": 12480.6336
+   },
+   {
+    "status.projector.light_source_hours": 12480.6503
+   },
+   {
+    "status.projector.light_source_hours": 12480.667
+   },
+   {
+    "status.projector.light_source_hours": 12480.6837
+   },
+   {
+    "status.projector.light_source_hours": 12480.7004
+   },
+   {
+    "status.projector.light_source_hours": 12480.7171
+   },
+   {
+    "status.projector.light_source_hours": 12480.7338
+   },
+   {
+    "status.projector.light_source_hours": 12480.7505
+   },
+   {
+    "status.projector.light_source_hours": 12480.7672
+   },
+   {
+    "status.projector.light_source_hours": 12480.7839
+   },
+   {
+    "status.projector.light_source_hours": 12480.8006
+   },
+   {
+    "status.projector.light_source_hours": 12480.8173
+   },
+   {
+    "status.projector.light_source_hours": 12480.834
+   },
+   {
+    "status.projector.light_source_hours": 12480.8507
+   },
+   {
+    "status.projector.light_source_hours": 12480.8674
+   },
+   {
+    "status.projector.light_source_hours": 12480.8841
+   },
+   {
+    "status.projector.light_source_hours": 12480.9008
+   }
+  ],
+  "temperature_drift": [
+   {
+    "status.projector.temperature": 36.4
+   },
+   {
+    "status.projector.temperature": 36.4
+   },
+   {
+    "status.projector.temperature": 36.5
+   },
+   {
+    "status.projector.temperature": 36.8
+   },
+   {
+    "status.projector.temperature": 36.7
+   },
+   {
+    "status.projector.temperature": 35.7
+   },
+   {
+    "status.projector.temperature": 36.5
+   },
+   {
+    "status.projector.temperature": 35.5
+   },
+   {
+    "status.projector.temperature": 35.2
+   },
+   {
+    "status.projector.temperature": 35.4
+   },
+   {
+    "status.projector.temperature": 34.5
+   },
+   {
+    "status.projector.temperature": 34.9
+   },
+   {
+    "status.projector.temperature": 34.6
+   },
+   {
+    "status.projector.temperature": 34.3
+   },
+   {
+    "status.projector.temperature": 35.1
+   },
+   {
+    "status.projector.temperature": 35.1
+   },
+   {
+    "status.projector.temperature": 35.4
+   },
+   {
+    "status.projector.temperature": 36.1
+   },
+   {
+    "status.projector.temperature": 36.3
+   },
+   {
+    "status.projector.temperature": 35.5
+   },
+   {
+    "status.projector.temperature": 35.7
+   },
+   {
+    "status.projector.temperature": 35.6
+   },
+   {
+    "status.projector.temperature": 34.7
+   },
+   {
+    "status.projector.temperature": 35.3
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "start",
+    "path": "status.projector.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "start",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.known",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.awake",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.until",
+    "value": 0
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.device.power",
+    "value": "standby"
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.sim.known",
+    "value": true
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.sim.busy",
+    "value": true
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.sim.awake",
+    "value": true
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.sim.until",
+    "value": 1793696701
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.device.power",
+    "value": "off"
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.projector.input",
+    "value": "usbc"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.device.power",
+    "value": "standby"
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.sim.awake",
+    "value": false
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.projector.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.busy",
+    "value": true
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.awake",
+    "value": true
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.until",
+    "value": 1793699400
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.device.power",
+    "value": "standby"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.projector.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.sim.awake",
+    "value": false
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.projector.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.sim.busy",
+    "value": true
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.sim.awake",
+    "value": true
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.sim.until",
+    "value": 1793703768
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.busy",
+    "value": true
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.until",
+    "value": 1793704800
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.device.power",
+    "value": "standby"
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.sim.awake",
+    "value": false
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.sim.busy",
+    "value": true
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.sim.awake",
+    "value": true
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.sim.until",
+    "value": 1793708400
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.device.power",
+    "value": "standby"
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.sim.awake",
+    "value": false
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.sim.busy",
+    "value": true
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.sim.awake",
+    "value": true
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.sim.until",
+    "value": 1793711112
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.device.power",
+    "value": "standby"
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.sim.awake",
+    "value": false
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.device.power",
+    "value": "on"
+   },
+   {
+    "at": "start",
+    "path": "status.projector.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "start",
+    "path": "status.sim.busy",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.known",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.awake",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.until",
+    "value": 0
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.device.power",
+    "value": "off"
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.projector.input",
+    "value": "usbc"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.projector.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "13:46:00",
+    "path": "status.device.power",
+    "value": "standby"
+   }
+  ]
+ }
+}
