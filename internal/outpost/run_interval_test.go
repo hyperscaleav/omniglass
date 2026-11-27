@@ -71,7 +71,7 @@ func TestAPollRunsOnItsOwnIntervalBesideADeadDevice(t *testing.T) {
 	// samples is at most 35s and change.
 	const want = 4
 	var at []time.Time
-	deadline := time.Now().Add(55 * time.Second)
+	deadline := time.Now().Add(patience(55 * time.Second))
 	for time.Now().Before(deadline) {
 		series, err := s.gw.ListMetricSeries(s.ctx, "component", "sensor-live", "uptime", 0, 10)
 		if err != nil {

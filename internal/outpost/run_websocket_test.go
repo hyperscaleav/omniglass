@@ -66,10 +66,11 @@ func TestOutpostWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	// The polls are answered by their ids: the power state, from a get.
 	s.waitFor("bar-ws", ep.Name, "power-state", is(fmt.Sprint(bar.ReadPath("status.device.power"))), "the power state, polled over the socket")
 
-	// A change on the bar is pushed and lands within a second.
+	// A change on the bar is pushed: it lands inside the minute the volume
+	// poll waits, so it was not read by one.
 	setVolume(t, bar, 37)
-	if took := s.waitVolume("bar-ws", ep.Name, 37); took > time.Second {
-		t.Fatalf("the change landed %v after it happened, want within a second", took)
+	if took := s.waitVolume("bar-ws", ep.Name, 37); took > pushWindow {
+		t.Fatalf("the change landed %v after it happened, want it pushed within %v", took, pushWindow)
 	}
 
 	// A command rides the socket: the bar pushes the change, then answers
@@ -79,7 +80,7 @@ func TestOutpostWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 		t.Fatalf("issue set-volume: %v", err)
 	}
 	s.waitVolume("bar-ws", ep.Name, 42)
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(patience(10 * time.Second))
 	for s.commandStatus("set-volume") != "settled" && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
 	}

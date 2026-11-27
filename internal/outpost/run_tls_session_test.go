@@ -92,7 +92,7 @@ func TestOutpostTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 	s.waitFor("panel-1", ep.Name, "video-input", is("hdmi1"), "hdmi1, polled over tls")
 
 	// The worklist delivers the trusted key back as the pin.
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience(5 * time.Second))
 	for {
 		wl, err := s.gw.OutpostWorklist(s.ctx, "edge-tls")
 		if err != nil {

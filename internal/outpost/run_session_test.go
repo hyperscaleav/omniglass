@@ -130,7 +130,7 @@ func TestOutpostHoldsASessionThroughADeviceOutage(t *testing.T) {
 	}
 	waitValue := func(key, want string) {
 		t.Helper()
-		deadline := time.Now().Add(15 * time.Second)
+		deadline := time.Now().Add(patience(15 * time.Second))
 		for time.Now().Before(deadline) {
 			if latest(key) == want {
 				return
@@ -171,7 +171,7 @@ func TestOutpostHoldsASessionThroughADeviceOutage(t *testing.T) {
 	}
 
 	// The reasons ride the outpost's own logs.
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience(5 * time.Second))
 	for {
 		logs, err := gw.ListOutpostLogs(ctx, "edge-s", time.Hour, 200)
 		if err != nil {
@@ -198,7 +198,7 @@ func TestOutpostHoldsASessionThroughADeviceOutage(t *testing.T) {
 		t.Fatalf("outpost run: %v", err)
 	}
 	stopped = true
-	deadline = time.Now().Add(3 * time.Second)
+	deadline = time.Now().Add(patience(3 * time.Second))
 	for panel.TCPSession().SessionCount() != 0 {
 		if time.Now().After(deadline) {
 			t.Fatalf("the panel still holds %d sessions after outpost shutdown", panel.TCPSession().SessionCount())
@@ -310,21 +310,21 @@ func TestOutpostLandsPushedSamplesThroughARecover(t *testing.T) {
 		t.Fatalf("%s on %s[%s] = %q, want %q within %s", key, comp, ep.Name, latest(key), want, within)
 	}
 
-	waitValue("session-state", "up", 15*time.Second)
-	waitValue("video-input", "hdmi1", 15*time.Second) // the first tick's poll
+	waitValue("session-state", "up", patience(15*time.Second))
+	waitValue("video-input", "hdmi1", patience(15*time.Second)) // the first tick's poll
 
 	set("dp1")
-	waitValue("video-input", "dp1", time.Second) // pushed: nothing polls for an hour
+	waitValue("video-input", "dp1", pushWindow) // pushed: nothing polls for an hour
 
 	panel.StopTCPSession()
-	waitValue("session-state", "recovering", 15*time.Second)
+	waitValue("session-state", "recovering", patience(15*time.Second))
 	if err := panel.StartTCPSession(nvpPort); err != nil {
 		t.Fatalf("restart the panel's listener: %v", err)
 	}
-	waitValue("session-state", "up", 15*time.Second)
+	waitValue("session-state", "up", patience(15*time.Second))
 
 	set("hdmi3")
-	waitValue("video-input", "hdmi3", time.Second) // re-armed on recover
+	waitValue("video-input", "hdmi3", pushWindow) // re-armed on recover
 }
 
 // panelPort is the port the panel serves a protocol on (tcp for the NVP line
@@ -644,7 +644,7 @@ func TestOutpostRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	if got, err := lx.Exchange(ctx, victim.target, "SET INPUT dp1", 2*time.Second); err != nil || got != "INPUT dp1" {
 		t.Fatalf("SET INPUT dp1 on %s = %q, %v", victim.comp, got, err)
 	}
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(patience(15 * time.Second))
 	for countState(t, gw, victim, "recovering") == 0 || latest(victim) != "up" {
 		if time.Now().After(deadline) {
 			t.Fatalf("the victim's session-state = %q with %d recovering, want it recovered to up", latest(victim), countState(t, gw, victim, "recovering"))
@@ -691,7 +691,7 @@ func countState(t *testing.T, gw *storage.PG, h fleetSession, state string) int 
 // waitPanel waits until the panel holds n sessions.
 func waitPanel(t *testing.T, h fleetSession, n int) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience(5 * time.Second))
 	for h.panel.TCPSession().SessionCount() != n {
 		if time.Now().After(deadline) {
 			t.Fatalf("%s's panel holds %d sessions, want %d", h.comp, h.panel.TCPSession().SessionCount(), n)
@@ -704,7 +704,7 @@ func waitPanel(t *testing.T, h fleetSession, n int) {
 // carries reason.
 func waitOutpostLog(t *testing.T, gw *storage.PG, outpostName, message, reason string) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience(5 * time.Second))
 	for {
 		logs, err := gw.ListOutpostLogs(context.Background(), outpostName, time.Hour, 500)
 		if err != nil {

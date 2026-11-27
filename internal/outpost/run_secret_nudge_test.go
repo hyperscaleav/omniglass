@@ -88,9 +88,9 @@ func TestARotatedSecretReachesTheOutpostAtOnce(t *testing.T) {
 		<-ran
 	})
 
-	pollUntil(t, 20*time.Second, "the device was never asked with the first key", func() bool { return device.sent("before") })
+	pollUntil(t, patience(20*time.Second), "the device was never asked with the first key", func() bool { return device.sent("before") })
 	if _, err := s.gw.UpdateSecret(s.ctx, "", sec.ID, storage.SecretPatch{Fields: map[string]string{"key": "after"}}, s.all, s.all, true, true); err != nil {
 		t.Fatal(err)
 	}
-	pollUntil(t, time.Second, "a rotated secret did not reach an outpost pulling hourly within a second", func() bool { return device.sent("after") })
+	pollUntil(t, pushWindow, "a rotated secret did not reach an outpost pulling hourly", func() bool { return device.sent("after") })
 }

@@ -76,7 +76,7 @@ func TestSwitchingAnOutletOffHoldsWhatItFeeds(t *testing.T) {
 		map[string]any{"command_type": "outlet-off", "params": map[string]any{"outlet": 2}}, &cmd); code >= 300 {
 		t.Fatalf("issue outlet-off = %d", code)
 	}
-	for deadline := time.Now().Add(20 * time.Second); cmd.ExecutedAt == nil; {
+	for deadline := time.Now().Add(patience(20 * time.Second)); cmd.ExecutedAt == nil; {
 		if time.Now().After(deadline) {
 			t.Fatalf("outlet-off = %+v, want executed within 20s", cmd)
 		}

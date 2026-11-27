@@ -311,7 +311,14 @@ GO_PKGS_REST = $(filter-out $(GO_PKGS_STORAGE) $(GO_PKGS_DEVSEED),$(shell go lis
 # prints it, then the 20 slowest tests and every package's wall time at the end
 # of the log (the list the follow-up that makes the suite faster starts from).
 # It exits with go test's status.
-GO_TEST_SHARD = go run ./cmd/gotestreport -n 20 -- -p $(TEST_PARALLEL)
+#
+# -timeout is each package binary's ceiling, not a budget: go test's default of
+# ten minutes is a wall-clock window, and internal/bus's fleet test (it seeds the
+# 1,000-system corporate lab, about two minutes on a quiet machine) ran past it
+# on a starved runner with every assertion still holding (#1717). A hung test is
+# still caught, by its own deadline first.
+GO_TEST_TIMEOUT ?= 30m
+GO_TEST_SHARD = go run ./cmd/gotestreport -n 20 -- -p $(TEST_PARALLEL) -timeout $(GO_TEST_TIMEOUT)
 
 # The storage shard runs under a non-UTC zone (#2313): a path that reads the
 # host's local zone, or a test that assumes UTC, fails here and not only on a

@@ -42,7 +42,7 @@ func TestOutpostLyraMicsReadMuteLevelAndBattery(t *testing.T) {
 
 	metric := func(comp, ep, key string, ok func(float64) bool) {
 		t.Helper()
-		deadline := time.Now().Add(20 * time.Second)
+		deadline := time.Now().Add(patience(20 * time.Second))
 		for {
 			if v, has := s.metric(comp, ep, key); has && ok(v) {
 				return

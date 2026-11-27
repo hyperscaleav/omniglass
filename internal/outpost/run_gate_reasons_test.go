@@ -88,7 +88,7 @@ func TestAGoneDeviceHoldsItsPollsUntilItReturns(t *testing.T) {
 	}
 	backAt := time.Now().UTC()
 	s.waitFor("sensor-1", ep.Name, "endpoint-rejection", ungated, "the gate open again")
-	deadline := backAt.Add(5 * time.Second)
+	deadline := backAt.Add(patience(5 * time.Second))
 	for !s.latestAt("sensor-1", ep.Name, probekeys.PollDuration).After(backAt) {
 		if time.Now().After(deadline) {
 			t.Fatalf("no poll time landed within 5s of the device's return (latest %v); a held poll must not back off",

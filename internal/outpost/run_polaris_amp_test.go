@@ -50,7 +50,7 @@ func TestOutpostPolarisAmpReadsItsOperatingState(t *testing.T) {
 	s.waitFor("amp-1", ep.Name, "power-state", is("on"), "on at rest")
 	s.waitFor("amp-1", ep.Name, "protect-state", is("normal"), "normal at rest")
 	for _, key := range []string{"temperature", "fan-speed", "uptime"} {
-		deadline := time.Now().Add(20 * time.Second)
+		deadline := time.Now().Add(patience(20 * time.Second))
 		for {
 			// uptime reads 0 on a poll in the agent's first second.
 			if v, ok := s.metric("amp-1", ep.Name, key); ok && (v > 0 || key == "uptime") {

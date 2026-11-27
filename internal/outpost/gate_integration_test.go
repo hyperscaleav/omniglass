@@ -170,7 +170,7 @@ func TestExecuteDeliveryFailsFastOnAGatedEndpoint(t *testing.T) {
 
 func waitFor(t *testing.T, ok func() bool, what string) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(patience(3 * time.Second))
 	for !ok() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)

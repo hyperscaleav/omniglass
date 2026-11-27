@@ -48,7 +48,7 @@ func (s *gateStack) runOutpostProbing(name string, every, probeEvery time.Durati
 // waitMetric waits for the endpoint's latest key to satisfy ok.
 func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool, what string) float64 {
 	s.t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for time.Now().Before(deadline) {
 		if v, landed := s.metric(comp, instance, key); landed && ok(v) {
 			return v
@@ -64,7 +64,7 @@ func (s *gateStack) waitMetric(comp, instance, key string, ok func(float64) bool
 // window (one stamp), so two means read together describe the same runs.
 func (s *gateStack) sameWindow(comp, instance, a, b string) (float64, float64) {
 	s.t.Helper()
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for time.Now().Before(deadline) {
 		ma, errA := s.gw.LatestMetricInstance(s.ctx, comp, a, instance)
 		mb, errB := s.gw.LatestMetricInstance(s.ctx, comp, b, instance)

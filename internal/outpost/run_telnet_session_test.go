@@ -120,7 +120,7 @@ func TestOutpostTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	}
 	waitValue := func(key, want string) {
 		t.Helper()
-		deadline := time.Now().Add(15 * time.Second)
+		deadline := time.Now().Add(patience(15 * time.Second))
 		for time.Now().Before(deadline) {
 			if latest(key) == want {
 				return
@@ -144,7 +144,7 @@ func TestOutpostTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	}
 	waitLogs := func(message string, want int) {
 		t.Helper()
-		deadline := time.Now().Add(10 * time.Second)
+		deadline := time.Now().Add(patience(10 * time.Second))
 		for countLogs(message) < want && time.Now().Before(deadline) {
 			time.Sleep(50 * time.Millisecond)
 		}

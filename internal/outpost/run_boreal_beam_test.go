@@ -50,7 +50,7 @@ func TestOutpostBorealBeamReadsItsProjectorState(t *testing.T) {
 	// The light source ages only by the minute, so the first poll reads the
 	// profile's starting hours, give or take a tick.
 	start, _ := strconv.ParseFloat(fmt.Sprint(dev.ReadPath("status.projector.light_source_hours")), 64)
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for {
 		if h, ok := s.metric("projector-1", ep.Name, "light-source-hours"); ok && h >= start-0.1 && h <= start+0.1 {
 			break

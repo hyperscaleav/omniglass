@@ -48,7 +48,7 @@ func TestOutpostFerritePDUReadsOutletsCurrentAndVoltage(t *testing.T) {
 
 	metric := func(key string, ok func(float64) bool) float64 {
 		t.Helper()
-		deadline := time.Now().Add(20 * time.Second)
+		deadline := time.Now().Add(patience(20 * time.Second))
 		for {
 			if v, has := s.metric("power-1", ep.Name, key); has && ok(v) {
 				return v

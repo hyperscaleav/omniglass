@@ -73,7 +73,7 @@ func TestOutpostSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	if _, ok := s.metric("panel-good", good.Name, "tcp-open"); ok {
 		t.Fatal("an snmp endpoint landed tcp-open")
 	}
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for {
 		if _, ok := s.metric("panel-good", good.Name, "uptime"); ok {
 			break

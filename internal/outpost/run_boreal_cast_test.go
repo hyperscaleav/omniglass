@@ -39,7 +39,7 @@ func TestOutpostBorealCastReadsItsPlayback(t *testing.T) {
 	s.waitFor("player-1", ep.Name, "firmware-version", is(fmt.Sprint(dev.ReadPath("configuration.firmware.version"))), "the firmware")
 	s.waitFor("player-1", ep.Name, "playback-state", is("playing"), "playing at rest")
 	s.waitFor("player-1", ep.Name, "content-name", func(v string) bool { return v != "" }, "the item playing")
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(patience(20 * time.Second))
 	for {
 		if u, ok := s.metric("player-1", ep.Name, "storage-utilization"); ok && u > 0 && u < 1 {
 			break

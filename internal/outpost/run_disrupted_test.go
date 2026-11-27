@@ -64,7 +64,7 @@ func TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain(t *testing.T) {
 	}
 	// A reboot is fire-and-forget, settled at its issue; the device goes
 	// once the outpost has carried it.
-	for deadline := time.Now().Add(20 * time.Second); cmd.ExecutedAt == nil; {
+	for deadline := time.Now().Add(patience(20 * time.Second)); cmd.ExecutedAt == nil; {
 		if time.Now().After(deadline) {
 			t.Fatalf("reboot = %+v, want executed within 20s", cmd)
 		}
@@ -110,7 +110,7 @@ func TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain(t *testing.T) {
 	for _, ep := range []*storage.Endpoint{web, feed} {
 		s.waitFor("sensor-1", ep.Name, probekeys.EndpointRejection, ungated, "the gate open again")
 	}
-	deadline := backAt.Add(5 * time.Second)
+	deadline := backAt.Add(patience(5 * time.Second))
 	for !s.latestAt("sensor-1", web.Name, probekeys.PollDuration).After(backAt) {
 		if time.Now().After(deadline) {
 			t.Fatalf("no poll time landed within 5s of the device's return (latest %v)", s.latestAt("sensor-1", web.Name, probekeys.PollDuration))
