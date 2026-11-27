@@ -176,7 +176,9 @@ room. The simulator does not ask. **The sim is; Omniglass learns.** The simulato
 simulates (`sim/world`): the sites, the rooms with their standard and capacity, each room's planned
 devices, the services that speak for rooms, the meeting knobs per standard and the calendar seed. It
 reads that world from a file the lab wrote from the scenario, at the path in `OMNIGLASS_SIM_WORLD`,
-and never from the server or its database; Omniglass learns the world only by collecting from it.
+and never from the server or its database; Omniglass learns the world only by collecting from it. The one
+reader beside the simulators is a lab server's own ground-truth route, which reads the same file to
+serve [the calendar back](#reading-the-calendar-back) and feeds nothing it reads into detection.
 With the file, `sim run` (and `outpost run --simulate`) builds the [lab calendar](#the-lab-calendar)
 from the world's seed and knobs and installs it on the engine, so `meetingNow` reads a real room. With
 none there is no calendar and no room, as before.
@@ -515,6 +517,20 @@ Devices that read the calendar:
   nothing, the total is the outlets', and the energy counter accrues the total's draw each tick, so a
   busy room's rack reads more by evening than an idle one's. The mains voltage stays noise. A PDU
   whose room holds no calendar keeps its earlier random walk.
+
+#### Reading the calendar back
+
+The lab calendar is the ground truth a learner lays beside what Omniglass detected, so a lab server
+serves it: `GET /lab/calendar?start=&end=` (`omniglass lab calendar list`, #2770), gated by
+`simulation:read`, 404 on a server that is not a lab. It answers each entry's kind, window, site,
+building, room, system and an open `payload` (a meeting's origin, organizer, expected and actual
+headcount, outcome, slot and whether it is recorded), for rooms whose system is in the caller's system
+read scope, and `site`, `building`, `room` and `system` narrow it. A window is at most 31 days.
+
+The server does not ask a simulator and does not learn the calendar from collected data. It computes
+it with the functions the simulator uses, from the world file the lab's seed wrote into the data
+volume the server shares ([the world it holds](#the-world-it-holds)), so a route and a device in
+the same room cannot disagree. A lab with no world (no plan, the dev fleet) has an empty calendar.
 
 ### A simulated service posts from the start
 

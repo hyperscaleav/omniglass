@@ -3262,6 +3262,35 @@ omniglass healthz
 
 A working omniglass on Docker, to learn on
 
+### `omniglass lab calendar`
+
+Commands for the calendar resource
+
+#### `omniglass lab calendar list`
+
+What the lab's simulator intends in a window
+
+```
+omniglass lab calendar list [flags]
+```
+
+The lab calendar (#2757) for a window: the meetings every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--building` | string | (none) | Only rooms in this building. |
+| `--end` | string | (none) | End of the window (RFC 3339), after start and at most 31 days past it. |
+| `--room` | string | (none) | Only this room. |
+| `--site` | string | (none) | Only rooms at this site. |
+| `--start` | string | (none) | Start of the window (RFC 3339). |
+| `--system` | string | (none) | Only the room of this system, by name. |
+
+Example:
+
+```sh
+omniglass lab calendar list
+```
+
 ### `omniglass lab measure`
 
 Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the busiest ingest lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval

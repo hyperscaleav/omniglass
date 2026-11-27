@@ -63,3 +63,9 @@ refs: [2757, 2764, 2769, 2773]
     a second poll of the same driver, since an endpoint is named for its transport and a component holds one.
   - **Deferred.** The inversion of ADR-0142, where the simulator decides which devices exist and
     Omniglass discovers them, is a separate definition; the world file is the seam it would grow from.
+- **Amended (#2770): the server reads the world file for the ground-truth route.** A lab server serves
+  `GET /lab/calendar` (lab-only, `simulation:read`, limited to the caller's system read scope) by loading
+  the world files the seed wrote into the data volume it shares and computing the calendar with the
+  simulator's own functions, so it needs no new setting and cannot disagree with a device. It is a read
+  for display beside what Omniglass detected; nothing it reads enters collection or detection. A lab with
+  no plan has no file and an empty calendar.
