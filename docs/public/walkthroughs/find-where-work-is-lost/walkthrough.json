@@ -1,7 +1,7 @@
 {
   "id": "find-where-work-is-lost",
   "title": "Find where work is lost",
-  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
+  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch the outage land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
   "steps": [
     {
       "n": 1,
@@ -48,7 +48,7 @@
     {
       "n": 8,
       "kind": "click",
-      "caption": "Unplug it. Every poll of it now fails.",
+      "caption": "Unplug it. It goes dark, so nothing can reach it.",
       "still": "step-08.png"
     },
     {
@@ -66,7 +66,7 @@
     {
       "n": 11,
       "kind": "wait",
-      "caption": "The failed polls land on the panel's own component, as its poll failures.",
+      "caption": "The outage lands on the panel's own component. It reads down, and its polls are held, not run.",
       "still": "step-11.png"
     },
     {
@@ -78,7 +78,7 @@
     {
       "n": 13,
       "kind": "wait",
-      "caption": "Every hop still reads 0%. A failed poll is a device that did not answer, not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
+      "caption": "Every hop still reads 0%. A device that did not answer is not work the platform dropped. A hop that does lose a share is tinted, so it stands out.",
       "still": "step-13.png"
     },
     {
@@ -103,8 +103,8 @@
   "poster": "step-13.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 55.3,
-    "bytes": 919849,
-    "previewBytes": 653454
+    "seconds": 57.7,
+    "bytes": 1016391,
+    "previewBytes": 754518
   }
 }

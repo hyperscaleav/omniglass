@@ -148,7 +148,7 @@
     {
       "id": "find-where-work-is-lost",
       "title": "Find where work is lost",
-      "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
+      "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch the outage land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
       "lab": [],
       "setup": []
     },

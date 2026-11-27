@@ -212,9 +212,10 @@ platform component, where its delivery series live with their history.
 
 ::screenshot{#platform-health-hop}
 
-A failed poll is not lost work. A device that does not answer is a fact the outpost collects and hands
-on (it lands on that device's component, as its poll failures), so the outpost hop still reads 0 while
-a broken device fails every poll. A hop's loss is work the platform itself dropped.
+A device that does not answer is not lost work. It is a fact the outpost collects and hands on, and it
+lands on that device's component: its probe reads it down, its due polls are held and counted as held
+polls (a poll caught in flight as it went dark counts as a poll failure), so the outpost hop still
+reads 0 while a broken device answers nothing. A hop's loss is work the platform itself dropped.
 
 The path starts at the outpost's spool. The outpost hop's loss by cause (a spool cap, a bus refusal,
 a dropped self-log line, an encode failure) is not drawn here: each batch's ledger carries it, and a
@@ -540,9 +541,9 @@ figure from its tooltip onto its series on the server's platform component.
 
 ::walkthrough{#read-platform-health}
 
-Read where work is lost at 0, open a hop's explainer, break a simulated panel so every poll of it
-fails, watch the failures land on the panel while the outpost hop stays at 0, and follow the outpost's
-row in the outpost hop to its delivery series.
+Read where work is lost at 0, open a hop's explainer, break a simulated panel, watch the outage
+land on the panel (it reads down and its polls are held) while the outpost hop stays at 0, and follow
+the outpost's row in the outpost hop to its delivery series.
 
 ::walkthrough{#find-where-work-is-lost}
 
