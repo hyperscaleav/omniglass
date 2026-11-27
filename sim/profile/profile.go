@@ -625,6 +625,11 @@ type Schedule struct {
 	// Required for phase 1 behaviors. Empty disables the behavior
 	// (and is logged as a profile warning at load time).
 	Interval string `yaml:"interval"`
+	// OnStart ticks the behavior once as the device starts serving, before
+	// its first interval, so state derived from the lab calendar is right
+	// from the first request and not after the first timer (#2757). A
+	// behavior that reads a room off the calendar sets it.
+	OnStart bool `yaml:"on_start"`
 }
 
 // Override defines a state field override (e.g., drop a field for a reduced device).

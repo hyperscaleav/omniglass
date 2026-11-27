@@ -33,8 +33,6 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 	const systems = 20
 	// pageOfDevices is the device page the driver declares (ucc-rooms, 20 a page).
 	const pageOfDevices = 20
-	base, client := startCorporateLab(t, "meeting", systems)
-
 	m, err := scenario.Shipped("corporate")
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +72,44 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 	}
 	sort.Strings(covers)
 
+	// Rooms: each judged system carries the platform's call state and headcount
+	// as the calendar had it. The first rooms and the last, so the list's later
+	// pages (ten rooms a page) are walked too.
+	var judgedRooms []string
+	judgedRooms = append(judgedRooms, covers[:3]...)
+	judgedRooms = append(judgedRooms, covers[len(covers)-3:]...)
+
+	// The run is independent of the hour (#2757): the simulator's clock is
+	// offset so that it starts half a minute into a held, attended meeting of
+	// one judged room, whatever time it is really, so the in-meeting fan-out is
+	// always exercised and a room is never idle by the hour alone. The meeting
+	// is a day or more ahead of real time, so real time is never in it by luck.
+	const into = 30 * time.Second
+	var meetingRoom string
+	var meeting calendar.Entry
+	from := time.Now().Add(24 * time.Hour).Truncate(time.Hour)
+	for _, sys := range judgedRooms {
+		at, _ := w.PlaceSystem(sys)
+		for _, e := range cal.Entries(at.CalRoom(), from, from.Add(10*24*time.Hour), calendar.MeetingKinds) {
+			mt := caltest.M(e)
+			if mt.Origin != calendar.OriginBooked || mt.Outcome != calendar.OutcomeHeld || mt.Actual < 2 || e.End.Sub(e.Start) < 55*time.Minute {
+				continue
+			}
+			if len(cal.Entries(at.CalRoom(), e.Start.Add(-time.Hour), e.End.Add(time.Hour), calendar.ProblemKinds)) > 0 {
+				continue
+			}
+			if meetingRoom == "" || e.Start.Before(meeting.Start) {
+				meetingRoom, meeting = sys, e
+			}
+		}
+	}
+	if meetingRoom == "" {
+		t.Fatal("the plan's calendar holds no long, held, attended meeting in a judged room in the next ten days")
+	}
+	offset := time.Until(meeting.Start.Add(into)).Round(time.Second)
+	t.Logf("%s: the offset %v puts the simulator %v into a meeting of %d", meetingRoom, offset, into, caltest.M(meeting).Actual)
+	base, client := startCorporateLabWith(t, "meeting", systems, "--sim-clock-offset", offset.String())
+
 	get := func(path string, into any) error { return getJSON(ctx, client, base+"/api/v1"+path, into) }
 	type series struct {
 		Samples []struct {
@@ -96,7 +132,9 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 	}
 	// occupied says whether the calendar had somebody in the room at some
 	// instant in the window before ts, and the most who could have come then.
+	// The sample's time is real; the simulated world's is offset from it.
 	occupied := func(room calendar.Room, ts time.Time, window time.Duration) (could, couldNot bool, most int) {
+		ts = ts.Add(offset)
 		for at := ts.Add(-window); !at.After(ts); at = at.Add(5 * time.Second) {
 			if e, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(e).Outcome != calendar.OutcomeNoShow {
 				could = true
@@ -108,13 +146,8 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 		return
 	}
 
-	// Rooms: each judged system carries the platform's call state and headcount
-	// as the calendar had it. The first rooms and the last, so the list's later
-	// pages (ten rooms a page) are walked too.
-	var judgedRooms []string
-	judgedRooms = append(judgedRooms, covers[:3]...)
-	judgedRooms = append(judgedRooms, covers[len(covers)-3:]...)
 	states := 0
+	var activeSeen bool
 	for _, sys := range judgedRooms {
 		at, ok := w.PlaceSystem(sys)
 		if !ok {
@@ -130,6 +163,7 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 			case v == "idle" && !couldNot:
 				t.Fatalf("the platform fanned call-state idle to %s at %s while the calendar had the room in a meeting throughout the two minutes before", sys, s.TS)
 			}
+			activeSeen = activeSeen || (sys == meetingRoom && fmt.Sprint(s.Value) == "active")
 			states++
 		}
 		pc := read("/systems/" + url.PathEscape(sys) + "/metrics/participant-count/samples?hours=1")
@@ -139,6 +173,9 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 				t.Fatalf("the platform fanned participant-count %v to %s at %s, at most %d came", s.Value, sys, s.TS, most)
 			}
 		}
+	}
+	if !activeSeen {
+		t.Fatalf("the platform never fanned call-state active to %s, whose calendar has it in a meeting from before the lab came up", meetingRoom)
 	}
 
 	// Devices: each judged device's component carries the platform's status

@@ -117,6 +117,7 @@ behaviors:
   - name: room_recordings
     schedule:
       interval: 60s
+      on_start: true
     mutations:
       - path: status.recordings.in_progress
         value: '{{ $any := false }}{{ $n := 0 }}{{ range coveredRooms }}{{ if (roomPhaseOf .site .building .room).scheduled }}{{ $any = true }}{{ end }}{{ with (roomPhaseOf .site .building .room).meeting }}{{ if .recorded }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ end }}{{ if not coveredRooms }}{{ if hasCalendar }}{{ $any = true }}{{ end }}{{ with (roomPhase).meeting }}{{ if .recorded }}{{ $n = 1 }}{{ end }}{{ end }}{{ end }}{{ if $any }}{{ $n }}{{ else }}{{ round 0 (clamp 0.0 12.0 (randStep 1.5 .State.status.recordings.in_progress)) }}{{ end }}'

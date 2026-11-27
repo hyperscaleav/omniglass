@@ -89,6 +89,7 @@ behaviors:
   - name: bookings_sync
     schedule:
       interval: 30s
+      on_start: true
     mutations:
       - path: status.bookings.today
         value: '{{ if servedRooms }}{{ $n := 0 }}{{ range servedRooms }}{{ $n = add $n (roomBookings .site .building .room).today }}{{ end }}{{ $n }}{{ else }}{{ .State.status.bookings.today }}{{ end }}'
