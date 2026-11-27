@@ -9,8 +9,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -19,13 +17,9 @@ import (
 // to *at.
 func uccWorld(t *testing.T, at *time.Time) (*Device, *calendar.Calendar, map[string]calendar.Room) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	k := calTestKnobs()
 	cal := calendar.New(7, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(cal)
 	rooms := map[string]calendar.Room{}
 	w := &world.World{Version: world.Version}

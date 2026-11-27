@@ -10,8 +10,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -20,12 +18,8 @@ import (
 // display the one a meeting platform does not list. The ids are the world's.
 func uccDeviceWorld(t *testing.T, at *time.Time, problems ...calendar.ProblemSpec) (*Device, []world.Listing) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	k := calTestKnobs()
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	cal := calendar.New(7, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 	if len(problems) > 0 {
 		cal = cal.WithProblems(func(r calendar.Room) []calendar.ProblemSpec {

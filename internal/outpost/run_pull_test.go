@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
@@ -181,7 +183,7 @@ func TestATransientStorageErrorLeavesTheOutpostsSessionsUntouched(t *testing.T) 
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,

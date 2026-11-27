@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
 	"golang.org/x/crypto/ssh"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -60,7 +62,7 @@ func TestOutpostSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,

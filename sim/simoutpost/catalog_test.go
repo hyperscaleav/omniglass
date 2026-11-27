@@ -3,22 +3,22 @@ package simoutpost
 import (
 	"strings"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
+	"testing"
+
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
-	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
-// catalogOf is a profile store as the catalog the outpost reads.
+// catalogOf is a profile store as the catalog the outpost reads, beside the
+// shipped Go families.
 func catalogOf(t testing.TB, store *profile.Store) *spec.Catalog {
 	t.Helper()
-	cat, err := spec.NewCatalog(store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cat
+	return shipped.CatalogFrom(t, store)
 }
 
 // The outpost resolves a Go family's product to a profile name exactly as it

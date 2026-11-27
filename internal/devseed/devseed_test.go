@@ -3,13 +3,14 @@ package devseed_test
 import (
 	"bytes"
 	"context"
-	"github.com/hyperscaleav/omniglass/internal/secret"
-	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -1776,10 +1777,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cat, err := simdevice.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	for rows.Next() {
 		var id, product string
 		if err := rows.Scan(&id, &product); err != nil {
@@ -2115,10 +2113,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 
 	// The secret holds the community the panel's agent refuses, by the
 	// simulator's own profile, so the refusal is the agent's and not a guess.
-	cat, err := simdevice.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	panel, ok := cat.ForProduct("newtron-panel-7")
 	if !ok {
 		t.Fatal("the simulator serves no newtron-panel-7")

@@ -22,12 +22,16 @@ func Families() []spec.Spec { return families() }
 
 // Catalog is the shipped simulator catalog: the embedded YAML profiles and
 // every Go family.
-func Catalog() (*spec.Catalog, error) {
+func Catalog() (*spec.Catalog, error) { return CatalogWith() }
+
+// CatalogWith is the shipped catalog with extra families beside the shipped
+// ones: a test's own family, served the way a shipped one is.
+func CatalogWith(extra ...spec.Spec) (*spec.Catalog, error) {
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		return nil, fmt.Errorf("load the simulator profiles: %w", err)
 	}
-	cat, err := spec.NewCatalog(store, Families()...)
+	cat, err := spec.NewCatalog(store, append(Families(), extra...)...)
 	if err != nil {
 		return nil, fmt.Errorf("register the simulator families: %w", err)
 	}

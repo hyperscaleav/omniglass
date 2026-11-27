@@ -2,9 +2,10 @@ package devseed
 
 import (
 	"encoding/json"
-	simdevice "github.com/hyperscaleav/omniglass/sim/device"
-	"github.com/hyperscaleav/omniglass/sim/spec"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
@@ -31,10 +32,7 @@ func TestSimSecretsHoldWhatTheFacesDemand(t *testing.T) {
 	if err := json.Unmarshal(raw, &facts); err != nil {
 		t.Fatal(err)
 	}
-	cat, err := simdevice.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	byName := map[string]map[string]string{}
 	types := map[string]string{}
 	for _, s := range simSecrets {

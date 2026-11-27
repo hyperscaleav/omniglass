@@ -7,20 +7,14 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // loadRelayIn loads the shipped kestrel-relay-c1 placed in room over the lab
 // calendar, its behaviors compiled but not running, so a test ticks them.
 func loadRelayIn(t *testing.T, id string, room calendar.Room, seed int64) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	k := calTestKnobs()
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
 	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-relay-c1", Version: 1,
 		SiteCode: room.Site, Building: room.Building, Room: room.Room}
@@ -150,11 +144,7 @@ func TestTheRelaysOwnCallsYieldTheCalendar(t *testing.T) {
 
 // With no calendar the codec never takes a call by itself.
 func TestTheRelayWithNoCalendarStaysIdle(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "c", Hostname: "c", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-relay-c1", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}

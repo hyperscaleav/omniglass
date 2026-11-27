@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -26,7 +28,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
@@ -52,15 +53,11 @@ var familyVariants sync.Map // *profile.Store -> []spec.Spec
 // profiles, every shipped Go family, and the variants derived for the store.
 func catalogOf(t testing.TB, store *profile.Store) *spec.Catalog {
 	t.Helper()
-	fams := device.Families()
+	var variants []spec.Spec
 	if v, ok := familyVariants.Load(store); ok {
-		fams = append(fams, v.([]spec.Spec)...)
+		variants = v.([]spec.Spec)
 	}
-	cat, err := spec.NewCatalog(store, fams...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cat
+	return shipped.CatalogFrom(t, store, variants...)
 }
 
 // httpStack is one test's server, simulated components and outpost.

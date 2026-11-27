@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
@@ -75,7 +77,7 @@ func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*profile.
 	if shape != nil {
 		shape(store)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: nvpProfile(t, store), Version: 1}}

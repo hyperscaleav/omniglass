@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/bus"
@@ -147,7 +149,7 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	uccProfile := ""

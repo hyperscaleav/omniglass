@@ -26,15 +26,7 @@ import (
 // familyEngine serves the test family beside the shipped YAML profiles.
 func familyEngine(t *testing.T, fam spec.Spec) *Engine {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cat, err := spec.NewCatalog(store, fam)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngineOver(cat, profiles.Templates())
+	e := NewEngineOver(shippedCatalog(t, fam), profiles.Templates())
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	return e

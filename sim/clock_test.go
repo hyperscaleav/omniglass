@@ -8,8 +8,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // offsetEngine is calEngine's twin on the engine's own clock (#2800): the
@@ -126,11 +124,7 @@ func TestClockOffsetKeepsUptimeAndCollectionStampsReal(t *testing.T) {
 
 // With no clock set an engine reads real time, as it did before the offset.
 func TestEngineWithoutAClockReadsRealTime(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if d := time.Since(e.Now()); d < -time.Second || d > time.Second {
 		t.Fatalf("an engine with no clock reads %v from real time", d)
 	}

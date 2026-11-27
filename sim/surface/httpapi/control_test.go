@@ -190,3 +190,25 @@ func TestActionWritesTheDeviceClockAndItsDefaultsInOneChange(t *testing.T) {
 		t.Fatalf("res %s, writes %+v, state %v", res.Body, d.writes, d.state)
 	}
 }
+
+// A body the device could not read (not JSON, or JSON that is not an object)
+// is refused with a 400 that says so, and nothing is written: it is not the
+// same as an empty body, whose missing field is refused by name (#2845).
+func TestControlRefusesAnUnreadableBodyAndWritesNothing(t *testing.T) {
+	for name, raw := range map[string]string{"text": "power=on", "array": `["on"]`, "null": "null", "truncated": `{"power":`} {
+		d := newFake()
+		res := powerControl().Route().Handle(d, spec.HTTPRequest{Raw: []byte(raw)})
+		got, _ := res.Body.([]byte)
+		if res.Status != 400 || string(got) != `{"error":"the request body is not a JSON object"}` {
+			t.Errorf("%s: response = %d %s", name, res.Status, got)
+		}
+		if len(d.writes) != 0 {
+			t.Errorf("%s: an unreadable body wrote %+v", name, d.writes)
+		}
+	}
+	// An empty body is still a missing field, refused by name as before.
+	d := newFake()
+	if res := powerControl().Route().Handle(d, spec.HTTPRequest{Raw: []byte("  ")}); res.Status != 400 || !strings.Contains(string(res.Body.([]byte)), "validation failed") {
+		t.Errorf("a blank body: %d %s", res.Status, res.Body)
+	}
+}

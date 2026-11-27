@@ -2,8 +2,9 @@ package devseed
 
 import (
 	"context"
-	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
@@ -23,10 +24,7 @@ func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	cat, err := simdevice.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	drivers, err := gw.ListDrivers(ctx)
 	if err != nil {
 		t.Fatal(err)

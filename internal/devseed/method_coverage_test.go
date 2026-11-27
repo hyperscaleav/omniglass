@@ -2,10 +2,11 @@ package devseed_test
 
 import (
 	"fmt"
-	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/driver"
@@ -29,10 +30,7 @@ func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
 	}
 	ctx, _, gw := seededFleet(t)
 	all := scope.Set{All: true}
-	cat, err := simdevice.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	dev, err := devseed.LookupScenario("dev")
 	if err != nil {
 		t.Fatal(err)

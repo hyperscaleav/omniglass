@@ -39,11 +39,7 @@ var meridianInputs = []string{"hdmi1", "hdmi2", "hdmi3", "dp1"}
 func startMeridian(t *testing.T, name string) *Device {
 	t.Helper()
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: ip, ProfileName: name, Version: 1}}); err != nil {

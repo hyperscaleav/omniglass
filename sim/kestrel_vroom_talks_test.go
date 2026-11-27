@@ -24,7 +24,7 @@ func loadVRoom(t *testing.T, id string) *Device {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func loadVRoomIn(t *testing.T, id string, room calendar.Room, seed int64) (*Devi
 	}
 	k := calTestKnobs()
 	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(cal)
 	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1,
 		SiteCode: room.Site, Building: room.Building, Room: room.Room}

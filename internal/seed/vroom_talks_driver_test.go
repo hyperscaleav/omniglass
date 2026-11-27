@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+
 	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // shippedCatalog is the catalog a shipped driver validates against, read
@@ -156,11 +156,7 @@ func interpretAll(t *testing.T, cat shippedCatalog, fn *driver.BakedFunction, p 
 // corporate lab serves one.
 func vroomInACall(t *testing.T) *sim.Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "bar", Hostname: "hq-conf-1-videobar-1", LoopbackIP: "127.60.0.9", ProfileName: "kestrel-vroom", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -317,11 +313,7 @@ func TestKestrelAPIListenersLandParticipantsAndLogLines(t *testing.T) {
 // channel count on the status poll, and its identity on the identity poll.
 func TestPolarisDSPSNMPReadsTheDSPsLoadAndIdentity(t *testing.T) {
 	cat := loadShippedCatalog(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "dsp", Hostname: "hq-conf-1-dsp-1", LoopbackIP: "127.60.0.10", ProfileName: "polaris-dsp-16", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}

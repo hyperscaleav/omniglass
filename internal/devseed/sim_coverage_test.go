@@ -1,10 +1,11 @@
 package devseed_test
 
 import (
-	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -33,10 +34,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cat, err := simdevice.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	cov, err := profiles.LoadCoverage()
 	if err != nil {
 		t.Fatal(err)

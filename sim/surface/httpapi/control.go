@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -60,6 +61,12 @@ func (c Control) Route() spec.HTTPRoute {
 }
 
 func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
+	// A body that was sent but is not a JSON object cannot be read as fields:
+	// it is refused as such, not as a field that is missing, and nothing is
+	// written. An empty body is a request with every field missing.
+	if r.Body == nil && len(bytes.TrimSpace(r.Raw)) > 0 {
+		return unreadable()
+	}
 	var changes []surface.Change
 	var refused []refusedField
 	for _, f := range c.Fields {
@@ -149,6 +156,13 @@ func refusal(fields []refusedField) spec.HTTPResponse {
 		Error  string         `json:"error"`
 		Fields []refusedField `json:"fields"`
 	}{"validation failed", fields})
+	return spec.HTTPResponse{Status: 400, ContentType: "application/json", Body: body}
+}
+
+func unreadable() spec.HTTPResponse {
+	body, _ := json.Marshal(struct {
+		Error string `json:"error"`
+	}{"the request body is not a JSON object"})
 	return spec.HTTPResponse{Status: 400, ContentType: "application/json", Body: body}
 }
 

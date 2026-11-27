@@ -1,10 +1,11 @@
 package labfootprint
 
 import (
-	"github.com/hyperscaleav/omniglass/sim/device"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
@@ -110,10 +111,7 @@ func TestASweepPlanTakesEveryDriverOnceWithAReason(t *testing.T) {
 // every shipped driver exactly once, and each swept product is one the
 // simulator serves on that driver.
 func TestTheShippedSweepPlanCoversEverySeededDriver(t *testing.T) {
-	cat, err := device.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	polls := seed.ShippedDriverPolls()
 	products := seed.ShippedProducts()
 	targets, skips := ShippedDriverSweep()
