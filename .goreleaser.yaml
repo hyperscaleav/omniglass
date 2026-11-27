@@ -55,14 +55,16 @@ checksum:
 sboms:
   - artifacts: archive
 
-# The GitHub Release carries the workflow's grouped notes (cmd/releasenotes);
-# GoReleaser must not also emit a changelog into the release body.
+# The GitHub Release carries release-please's notes (ADR-2652); GoReleaser
+# must not also emit a changelog into the release body.
 changelog:
   disable: true
 
 release:
-  # The tagged GitHub Release already exists (release.yml created it with its
-  # notes). Keep it and its body; only add the binary archives + checksums.
+  # The tagged GitHub Release already exists (release-please created it with
+  # its notes, then called release.yml). Keep it and its body; only add the
+  # binary archives + checksums.
   mode: keep-existing
-  # A candidate (v0.1.0-rc.1) stays a prerelease; a final release does not.
+  # A tag with a prerelease suffix (v1.0.0-rc.1) stays a prerelease. None is
+  # cut before 1.0: candidates are deferred to it (ADR-2652).
   prerelease: auto
