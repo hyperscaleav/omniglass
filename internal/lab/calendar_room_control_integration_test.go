@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // Room control and switching follow the lab calendar (#2776): on a real
@@ -112,8 +113,8 @@ func TestIntegrationCorporateRoomControlFollowsTheCalendar(t *testing.T) {
 		return nil
 	}
 	held := func(at time.Time) (calendar.Entry, bool) {
-		e, ok := cal.Now(room, at)
-		if !ok || e.Meeting.Outcome == calendar.OutcomeNoShow {
+		e, ok := cal.Now(room, at, calendar.MeetingKinds)
+		if !ok || caltest.M(e).Outcome == calendar.OutcomeNoShow {
 			return calendar.Entry{}, false
 		}
 		return e, true

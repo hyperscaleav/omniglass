@@ -198,6 +198,8 @@ type Problem struct {
 	Impairment Impairment
 }
 
+func (Problem) kind() Kind { return KindProblem }
+
 // matchesDay says whether the cadence fires on the UTC day.
 func (p ProblemSpec) matchesDay(day time.Time) bool {
 	switch p.Cadence {
@@ -243,8 +245,7 @@ func (p ProblemSpec) entries(room Room, seed int64, from, to time.Time) []Entry 
 		start := day.Add(at).Add(p.offset(seed, room, day))
 		end := start.Add(p.For)
 		if end.After(from) && start.Before(to) {
-			out = append(out, Entry{Kind: KindProblem, Start: start, End: end, Room: room,
-				Problem: &Problem{Name: p.Name, Role: p.Scope.Role, Impairment: p.Impairment}})
+			out = append(out, ProblemEntry(start, end, room, Problem{Name: p.Name, Role: p.Scope.Role, Impairment: p.Impairment}))
 		}
 	}
 	return out
@@ -266,10 +267,10 @@ func (c *Calendar) WithProblems(problems func(Room) []ProblemSpec) *Calendar {
 // that scans many rooms can skip the scan on a calendar with none.
 func (c *Calendar) HasProblems() bool { return c != nil && c.problems != nil }
 
-// Problems is the room's problem entries overlapping [from, to), in start
-// order. A nil calendar has none.
-func (c *Calendar) Problems(room Room, from, to time.Time) []Entry {
-	if c == nil || c.problems == nil {
+// problemEntries is the room's problem entries overlapping [from, to), in
+// start order.
+func (c *Calendar) problemEntries(room Room, from, to time.Time) []Entry {
+	if c.problems == nil {
 		return nil
 	}
 	var out []Entry
@@ -280,29 +281,8 @@ func (c *Calendar) Problems(room Room, from, to time.Time) []Entry {
 	return out
 }
 
-// ProblemsNow is the problems active in the room at t: those whose window
-// holds t, opening at its start and closing at its end.
-func (c *Calendar) ProblemsNow(room Room, t time.Time) []Entry {
-	var out []Entry
-	for _, e := range c.Problems(room, t, t.Add(time.Nanosecond)) {
-		if !t.Before(e.Start) && t.Before(e.End) {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
-// All is every entry of the room overlapping [from, to), meetings and
-// problems together, in start order. Entries is the meetings alone, which the
-// readers of a meeting depend on.
-func (c *Calendar) All(room Room, from, to time.Time) []Entry {
-	out := append(c.Entries(room, from, to), c.Problems(room, from, to)...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
-	return out
-}
-
 // mapProblem adds a problem entry's fields to its template map.
-func mapProblem(m map[string]any, p *Problem) {
+func mapProblem(m map[string]any, p Problem) {
 	m["name"] = p.Name
 	m["role"] = p.Role
 	m["unplugged"] = p.Impairment.Unplugged

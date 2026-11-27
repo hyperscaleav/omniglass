@@ -157,8 +157,8 @@ func (d *Device) unpluggedSince(l world.Listing) (int64, bool) {
 		return 0, false
 	}
 	room := calendar.Room{Site: l.Site, Building: l.Building, Room: l.Room}
-	for _, e := range c.ProblemsNow(room, d.clock()) {
-		if e.Problem.Impairment.Unplugged && e.Problem.Role == l.Slot {
+	for _, e := range c.Active(room, d.clock(), calendar.ProblemKinds) {
+		if p, ok := e.AsProblem(); ok && p.Impairment.Unplugged && p.Role == l.Slot {
 			return e.Start.Unix(), true
 		}
 	}

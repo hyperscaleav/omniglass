@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // The Ferrite PDU's outlets follow the room's day (#2777): what a rack draws
@@ -23,7 +24,7 @@ const (
 // and in a call when a meeting someone attends is running.
 func wantOutlets(cal *calendar.Calendar, room calendar.Room, t time.Time) [4]int {
 	call := false
-	if e, ok := cal.Now(room, t); ok && e.Meeting.Outcome != calendar.OutcomeNoShow && e.Meeting.Actual > 0 {
+	if e, ok := cal.Now(room, t, calendar.MeetingKinds); ok && caltest.M(e).Outcome != calendar.OutcomeNoShow && caltest.M(e).Actual > 0 {
 		call = true
 	}
 	v, p, a := videoStandby, procStandby, ampStandby
@@ -61,11 +62,11 @@ func TestFerritePDUOutletsFollowTheRoomsDay(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	cal := calOf(seed, k)
 	var booked, walkIn, noShow int
-	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour)) {
+	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
 		switch {
-		case e.Meeting.Outcome == calendar.OutcomeNoShow:
+		case caltest.M(e).Outcome == calendar.OutcomeNoShow:
 			noShow++
-		case e.Meeting.Origin == calendar.OriginWalkIn:
+		case caltest.M(e).Origin == calendar.OriginWalkIn:
 			walkIn++
 		default:
 			booked++

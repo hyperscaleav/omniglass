@@ -74,8 +74,8 @@ func (x *problemExecutor) activeOn(d *sim.Device, now time.Time) []calendar.Entr
 		return nil
 	}
 	var out []calendar.Entry
-	for _, e := range x.cal.ProblemsNow(d.Room(), now) {
-		if e.Problem.Role == slot {
+	for _, e := range x.cal.Active(d.Room(), now, calendar.ProblemKinds) {
+		if p, ok := e.AsProblem(); ok && p.Role == slot {
 			out = append(out, e)
 		}
 	}
@@ -95,17 +95,21 @@ func (x *problemExecutor) reconcile(devices []*sim.Device, netOK bool) map[strin
 		want := x.activeOn(d, now)
 		specs := map[string]calendar.Pin{}
 		for _, e := range want {
-			imp := e.Problem.Impairment
+			prob, ok := e.AsProblem()
+			if !ok {
+				continue
+			}
+			imp := prob.Impairment
 			switch {
 			case imp.Pin != nil:
-				specs[pinPrefix+e.Problem.Name] = *imp.Pin
+				specs[pinPrefix+prob.Name] = *imp.Pin
 			default:
-				key := fmt.Sprintf("%s|%s|%d", e.Problem.Name, d.Hostname, e.Start.Unix())
+				key := fmt.Sprintf("%s|%s|%d", prob.Name, d.Hostname, e.Start.Unix())
 				if !netOK {
 					if !x.refused[key] {
 						x.refused[key] = true
 						x.log.Warn("a scripted problem needs the network and is not applied: the simulator lacks NET_ADMIN or --impairments",
-							"problem", e.Problem.Name, "device", d.Hostname, "role", e.Problem.Role)
+							"problem", prob.Name, "device", d.Hostname, "role", prob.Role)
 					}
 					continue
 				}

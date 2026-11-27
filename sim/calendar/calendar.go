@@ -11,10 +11,13 @@
 // #1749's stable device key has not landed in the code, and a room is the unit
 // meetings are about, not a device.
 //
-// An Entry carries its Kind and one payload pointer per kind: a Meeting, or a
-// scripted Problem (#2769), which comes from the scenario's script rather than
-// the knobs and is read through Problems, ProblemsNow and All. Entries, Now,
-// Next and Prev are the meetings alone.
+// An Entry is a sum type: its Kind and exactly one payload of that kind, a
+// Meeting or a scripted Problem (#2769, which comes from the scenario's script
+// rather than the knobs). A reader asks for the kinds it understands (Entries,
+// Active, Now, Next and Prev all take them) and opens the payload through the
+// typed accessors AsMeeting and AsProblem, which report false for another
+// kind, so a new kind cannot nil-deref a reader that does not know it. The
+// payload is not an exported field and the accessors return it by value.
 package calendar
 
 import (
@@ -39,6 +42,31 @@ type Kind string
 // KindMeeting is a meeting in a room. KindProblem, a scripted problem, is
 // the other kind (problem.go, #2769).
 const KindMeeting Kind = "meeting"
+
+// Kinds is the set of entry kinds a query reads. A caller states it; the empty
+// set reads nothing.
+type Kinds []Kind
+
+// Reads is the kind sets the readers name.
+var (
+	// MeetingKinds is the meetings alone, which the readers of a meeting use.
+	MeetingKinds = Kinds{KindMeeting}
+	// ProblemKinds is the scripted problems alone.
+	ProblemKinds = Kinds{KindProblem}
+	// AllKinds is every kind the calendar holds, for a reader of the whole
+	// calendar (the lab-only route).
+	AllKinds = Kinds{KindMeeting, KindProblem}
+)
+
+// has says whether k is in the set.
+func (ks Kinds) has(k Kind) bool {
+	for _, x := range ks {
+		if x == k {
+			return true
+		}
+	}
+	return false
+}
 
 // Origin says how a meeting came to be.
 type Origin string
@@ -78,15 +106,56 @@ type Meeting struct {
 	Recorded bool
 }
 
+// Payload is what an entry of a kind carries. It is sealed: Meeting and
+// Problem are the payloads there are, and a new kind adds its own beside them.
+type Payload interface{ kind() Kind }
+
+func (Meeting) kind() Kind { return KindMeeting }
+
 // Entry is one thing on the calendar: a kind, the window it occupies on the
-// simulator clock, the room it is scoped to, and the payload of its kind.
+// simulator clock, the room it is scoped to, and the one payload of its kind.
+// Build one with NewEntry, MeetingEntry or ProblemEntry; read the payload with
+// AsMeeting or AsProblem.
 type Entry struct {
 	Kind    Kind
 	Start   time.Time
 	End     time.Time
 	Room    Room
-	Meeting *Meeting
-	Problem *Problem
+	payload Payload
+}
+
+// NewEntry is an entry of the kind and payload, refused when they disagree: a
+// payload that is not of the kind, or none.
+func NewEntry(kind Kind, start, end time.Time, room Room, p Payload) (Entry, error) {
+	if p == nil {
+		return Entry{}, fmt.Errorf("a %q entry has no payload", kind)
+	}
+	if p.kind() != kind {
+		return Entry{}, fmt.Errorf("a %q entry cannot carry a %q payload", kind, p.kind())
+	}
+	return Entry{Kind: kind, Start: start, End: end, Room: room, payload: p}, nil
+}
+
+// MeetingEntry is a meeting entry; its kind and payload agree by construction.
+func MeetingEntry(start, end time.Time, room Room, m Meeting) Entry {
+	return Entry{Kind: KindMeeting, Start: start, End: end, Room: room, payload: m}
+}
+
+// ProblemEntry is a problem entry; its kind and payload agree by construction.
+func ProblemEntry(start, end time.Time, room Room, p Problem) Entry {
+	return Entry{Kind: KindProblem, Start: start, End: end, Room: room, payload: p}
+}
+
+// AsMeeting is the entry's meeting, and false for an entry of another kind.
+func (e Entry) AsMeeting() (Meeting, bool) {
+	m, ok := e.payload.(Meeting)
+	return m, ok && e.Kind == KindMeeting
+}
+
+// AsProblem is the entry's problem, and false for an entry of another kind.
+func (e Entry) AsProblem() (Problem, bool) {
+	p, ok := e.payload.(Problem)
+	return p, ok && e.Kind == KindProblem
 }
 
 // Jitter bounds: a booked meeting starts up to MaxEarlyStart before and
@@ -270,7 +339,7 @@ func generateDay(room Room, k Knobs, seed int64, day time.Time) []Entry {
 	var entries []Entry
 	prevEnd := open
 	for _, s := range slots {
-		m := &Meeting{
+		m := Meeting{
 			Origin:    OriginBooked,
 			Organizer: organizers[rng.Intn(len(organizers))],
 			Expected:  k.Attendance.Min + rng.Intn(k.Attendance.Max-k.Attendance.Min+1),
@@ -318,7 +387,7 @@ func generateDay(room Room, k Knobs, seed int64, day time.Time) []Entry {
 				m.Actual = 1
 			}
 		}
-		entries = append(entries, Entry{Kind: KindMeeting, Start: start, End: end, Room: room, Meeting: m})
+		entries = append(entries, MeetingEntry(start, end, room, m))
 		prevEnd = end
 	}
 
@@ -340,13 +409,15 @@ func generateDay(room Room, k Knobs, seed int64, day time.Time) []Entry {
 		if k.Attendance.Min > 1 {
 			who += rng.Intn(k.Attendance.Min)
 		}
-		entries = append(entries, Entry{Kind: KindMeeting, Start: start, End: end, Room: room, Meeting: &Meeting{
+		entries = append(entries, MeetingEntry(start, end, room, Meeting{
 			Origin: OriginWalkIn, Actual: who, Outcome: OutcomeHeld, SlotStart: start, SlotEnd: end,
-		}})
+		}))
 	}
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Start.Before(entries[j].Start) })
-	for _, e := range entries {
-		e.Meeting.Recorded = e.Meeting.Outcome != OutcomeNoShow && recordedDraw(seed, room, e.Meeting.SlotStart) < k.RecordingRate
+	for i, e := range entries {
+		m, _ := e.AsMeeting()
+		m.Recorded = m.Outcome != OutcomeNoShow && recordedDraw(seed, room, m.SlotStart) < k.RecordingRate
+		entries[i].payload = m
 	}
 	return entries
 }
@@ -367,18 +438,18 @@ func (e Entry) Map() map[string]any {
 		"kind": string(e.Kind), "start": e.Start.Unix(), "end": e.End.Unix(),
 		"site": e.Room.Site, "building": e.Room.Building, "room": e.Room.Room,
 	}
-	if e.Meeting != nil {
-		m["origin"] = string(e.Meeting.Origin)
-		m["organizer"] = e.Meeting.Organizer
-		m["expected"] = e.Meeting.Expected
-		m["actual"] = e.Meeting.Actual
-		m["outcome"] = string(e.Meeting.Outcome)
-		m["slot_start"] = e.Meeting.SlotStart.Unix()
-		m["slot_end"] = e.Meeting.SlotEnd.Unix()
-		m["recorded"] = e.Meeting.Recorded
+	if mt, ok := e.AsMeeting(); ok {
+		m["origin"] = string(mt.Origin)
+		m["organizer"] = mt.Organizer
+		m["expected"] = mt.Expected
+		m["actual"] = mt.Actual
+		m["outcome"] = string(mt.Outcome)
+		m["slot_start"] = mt.SlotStart.Unix()
+		m["slot_end"] = mt.SlotEnd.Unix()
+		m["recorded"] = mt.Recorded
 	}
-	if e.Problem != nil {
-		mapProblem(m, e.Problem)
+	if p, ok := e.AsProblem(); ok {
+		mapProblem(m, p)
 	}
 	return m
 }
@@ -397,10 +468,28 @@ func New(seed int64, knobs func(Room) (Knobs, bool)) *Calendar {
 	return &Calendar{seed: seed, knobs: knobs}
 }
 
-// Entries is the room's entries overlapping [from, to). A nil calendar has
-// none.
-func (c *Calendar) Entries(room Room, from, to time.Time) []Entry {
-	if c == nil || c.knobs == nil {
+// Entries is the room's entries of the kinds overlapping [from, to), in start
+// order (meetings before problems that start together). It is the one query
+// the calendar answers: a caller says which kinds it reads, and the empty set
+// reads nothing. A nil calendar has none.
+func (c *Calendar) Entries(room Room, from, to time.Time, kinds Kinds) []Entry {
+	if c == nil {
+		return nil
+	}
+	var out []Entry
+	if kinds.has(KindMeeting) {
+		out = append(out, c.meetings(room, from, to)...)
+	}
+	if kinds.has(KindProblem) {
+		out = append(out, c.problemEntries(room, from, to)...)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
+	return out
+}
+
+// meetings is the room's generated meetings overlapping [from, to).
+func (c *Calendar) meetings(room Room, from, to time.Time) []Entry {
+	if c.knobs == nil {
 		return nil
 	}
 	k, ok := c.knobs(room)
@@ -410,12 +499,22 @@ func (c *Calendar) Entries(room Room, from, to time.Time) []Entry {
 	return Generate(room, k, c.seed, from, to)
 }
 
-// Now is the entry running at t, if one is.
-func (c *Calendar) Now(room Room, t time.Time) (Entry, bool) {
-	for _, e := range c.Entries(room, t, t.Add(time.Nanosecond)) {
+// Active is the room's entries of the kinds running at t: those whose window
+// holds t, opening at its start and closing at its end.
+func (c *Calendar) Active(room Room, t time.Time, kinds Kinds) []Entry {
+	var out []Entry
+	for _, e := range c.Entries(room, t, t.Add(time.Nanosecond), kinds) {
 		if !t.Before(e.Start) && t.Before(e.End) {
-			return e, true
+			out = append(out, e)
 		}
+	}
+	return out
+}
+
+// Now is the first entry of the kinds running at t, if one is.
+func (c *Calendar) Now(room Room, t time.Time, kinds Kinds) (Entry, bool) {
+	if a := c.Active(room, t, kinds); len(a) > 0 {
+		return a[0], true
 	}
 	return Entry{}, false
 }
@@ -423,15 +522,15 @@ func (c *Calendar) Now(room Room, t time.Time) (Entry, bool) {
 // prevHorizon is how far Prev looks back for the last entry.
 const prevHorizon = 8
 
-// Prev is the last entry that has ended at or before t, within a week and a
-// day back.
-func (c *Calendar) Prev(room Room, t time.Time) (Entry, bool) {
+// Prev is the last entry of the kinds that has ended at or before t, within a
+// week and a day back.
+func (c *Calendar) Prev(room Room, t time.Time, kinds Kinds) (Entry, bool) {
 	to := t
 	for back := 1; back <= prevHorizon; back++ {
 		from := t.AddDate(0, 0, -back)
 		var last Entry
 		found := false
-		for _, e := range c.Entries(room, from, to) {
+		for _, e := range c.Entries(room, from, to, kinds) {
 			if !e.End.After(t) {
 				last, found = e, true
 			}
@@ -447,9 +546,10 @@ func (c *Calendar) Prev(room Room, t time.Time) (Entry, bool) {
 // nextHorizon is how far Next looks for the next entry.
 const nextHorizon = 8
 
-// Next is the first entry starting after t, within a week and a day.
-func (c *Calendar) Next(room Room, t time.Time) (Entry, bool) {
-	for _, e := range c.Entries(room, t, t.AddDate(0, 0, nextHorizon)) {
+// Next is the first entry of the kinds starting after t, within a week and a
+// day.
+func (c *Calendar) Next(room Room, t time.Time, kinds Kinds) (Entry, bool) {
+	for _, e := range c.Entries(room, t, t.AddDate(0, 0, nextHorizon), kinds) {
 		if e.Start.After(t) {
 			return e, true
 		}

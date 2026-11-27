@@ -79,7 +79,7 @@ func TestProblemWindowOpensAndClosesOnTheSecond(t *testing.T) {
 	}{
 		{open.Add(-time.Second), 0}, {open, 1}, {open.Add(89*time.Minute + 59*time.Second), 1}, {open.Add(90 * time.Minute), 0},
 	} {
-		if got := len(c.ProblemsNow(rm, tc.at)); got != tc.want {
+		if got := len(c.Active(rm, tc.at, ProblemKinds)); got != tc.want {
 			t.Errorf("at %v: %d problems active, want %d", tc.at.Format("15:04:05"), got, tc.want)
 		}
 	}
@@ -122,7 +122,7 @@ func TestProblemsAreTheSameWhateverTheWindow(t *testing.T) {
 }
 
 // A problem is its own kind beside the meetings, and a calendar with none is
-// untouched: Entries is meetings alone, All is everything in start order.
+// untouched: Entries of the meeting kind is meetings alone, of every kind is everything in start order.
 func TestACalendarCarriesProblemsBesideMeetings(t *testing.T) {
 	k := Knobs{BookingRate: 0.6, SlotMix: map[int]float64{30: 1}, Attendance: Range{Min: 2, Max: 4}, Hours: Hours{Start: 8, End: 18}}
 	knobs := func(Room) (Knobs, bool) { return k, true }
@@ -130,24 +130,26 @@ func TestACalendarCarriesProblemsBesideMeetings(t *testing.T) {
 	with := plain.WithProblems(func(Room) []ProblemSpec { return []ProblemSpec{spec(func(*ProblemSpec) {})} })
 
 	day := time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
-	if !reflect.DeepEqual(plain.Entries(rm, day, day.AddDate(0, 0, 1)), with.Entries(rm, day, day.AddDate(0, 0, 1))) {
+	if !reflect.DeepEqual(plain.Entries(rm, day, day.AddDate(0, 0, 1), MeetingKinds), with.Entries(rm, day, day.AddDate(0, 0, 1), MeetingKinds)) {
 		t.Fatal("problems moved the meetings")
 	}
-	all := with.All(rm, day, day.AddDate(0, 0, 1))
+	all := with.Entries(rm, day, day.AddDate(0, 0, 1), AllKinds)
 	var meetings, problems int
 	for i, e := range all {
 		if i > 0 && e.Start.Before(all[i-1].Start) {
-			t.Fatal("All is not in start order")
+			t.Fatal("every kind is not in start order")
 		}
 		switch e.Kind {
 		case KindMeeting:
 			meetings++
-			if e.Meeting == nil || e.Problem != nil {
+			_, isProblem := e.AsProblem()
+			if _, ok := e.AsMeeting(); !ok || isProblem {
 				t.Fatal("a meeting entry with the wrong payload")
 			}
 		case KindProblem:
 			problems++
-			if e.Problem == nil || e.Meeting != nil || e.Problem.Role != "main-display" || e.Problem.Name != "p" {
+			_, isMeeting := e.AsMeeting()
+			if p, ok := e.AsProblem(); !ok || isMeeting || p.Role != "main-display" || p.Name != "p" {
 				t.Fatalf("a problem entry with the wrong payload: %+v", e)
 			}
 		}
@@ -155,11 +157,11 @@ func TestACalendarCarriesProblemsBesideMeetings(t *testing.T) {
 	if meetings == 0 || problems != 1 {
 		t.Fatalf("%d meetings and %d problems in a day, want some and one", meetings, problems)
 	}
-	if got := plain.All(rm, day, day.AddDate(0, 0, 1)); len(got) != meetings {
+	if got := plain.Entries(rm, day, day.AddDate(0, 0, 1), AllKinds); len(got) != meetings {
 		t.Fatalf("a calendar with no problems holds %d entries, want %d", len(got), meetings)
 	}
 	var nilCal *Calendar
-	if nilCal.All(rm, day, day.AddDate(0, 0, 1)) != nil || nilCal.ProblemsNow(rm, day) != nil {
+	if nilCal.Entries(rm, day, day.AddDate(0, 0, 1), AllKinds) != nil || nilCal.Active(rm, day, AllKinds) != nil {
 		t.Fatal("a nil calendar holds entries")
 	}
 }

@@ -377,7 +377,11 @@ simulator and the server compute the same calendar without asking each other
 
 A calendar **entry** is a kind (`meeting`, or a scripted `problem`, below), a window on the
 simulator's clock, the room it is scoped to (the engine's room key: site, building, room), and a
-payload of its kind. A meeting's payload says whether it was **booked** or a **walk-in**, who
+payload of its kind, and exactly one: an entry is a sum type, built only with a kind and a payload that
+agree (a mismatch is refused), and read through typed accessors (`AsMeeting`, `AsProblem`) that report false
+for another kind, so a new kind cannot nil-deref a reader that does not know it. There is one query: the
+entries of a room over a window, filtered by the kinds the caller says it reads, in start order; `Now`,
+`Next` and `Prev` take the same kinds. A meeting's payload says whether it was **booked** or a **walk-in**, who
 organized it, how many were expected and how many came, how it went (**held**, **no-show**,
 **ended early**, **ended late**) and the slot it was booked on, which differs from when it ran.
 
@@ -547,9 +551,9 @@ problems exactly as it derives meetings, from the world and the seed, so a month
 from another process is the same month.
 
 A problem is a `problem` entry beside the meetings: its window, its room and a payload of `name`, `role` and
-the impairment (`unplugged`, `loss_pct` or a `pin` of a state path and a value). `Entries`, `Now`, `Next` and
-`Prev` stay the meetings alone, which every reader of a meeting depends on; `Problems`, `ProblemsNow` and `All`
-read the rest, and `problemsNow` reads the device's own room in a template.
+the impairment (`unplugged`, `loss_pct` or a `pin` of a state path and a value). A reader of a meeting asks for the
+meeting kind alone and so never meets a problem; the readers of problems ask for the problem kind, the
+lab-only route for every kind, and `problemsNow` reads the device's own room in a template.
 
 **One executor applies them.** The simulator's problem executor reads the calendar through the clock and, for
 each device a problem is active on (the room it sits in and the slot it fills), applies the impairment as the

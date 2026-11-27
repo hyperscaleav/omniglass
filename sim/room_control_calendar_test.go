@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -58,11 +59,11 @@ func pinnedDay(t *testing.T) (calendar.Knobs, int64, time.Time, *calendar.Calend
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	cal := calOf(seed, k)
 	var booked, walkIn, noShow, long int
-	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour)) {
+	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
 		switch {
-		case e.Meeting.Outcome == calendar.OutcomeNoShow:
+		case caltest.M(e).Outcome == calendar.OutcomeNoShow:
 			noShow++
-		case e.Meeting.Origin == calendar.OriginWalkIn:
+		case caltest.M(e).Origin == calendar.OriginWalkIn:
 			walkIn++
 		default:
 			booked++
@@ -189,7 +190,7 @@ func TestTouchPanelWakesAndChangesPageOverADay(t *testing.T) {
 				want = "sharing"
 				shares++
 			}
-		} else if now, ok := cal.Now(roomHQ, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
+		} else if now, ok := cal.Now(roomHQ, at, calendar.MeetingKinds); ok && caltest.M(now).Outcome == calendar.OutcomeNoShow {
 			noShowIdle++
 		}
 		if got := fmt.Sprint(d.ReadPath("status.panel.page")); got != want {
@@ -224,7 +225,7 @@ func TestSwitcherRoutesTheMeetingAndAgreesWithTheBar(t *testing.T) {
 			} else {
 				conf++
 			}
-		} else if now, ok := cal.Now(roomHQ, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
+		} else if now, ok := cal.Now(roomHQ, at, calendar.MeetingKinds); ok && caltest.M(now).Outcome == calendar.OutcomeNoShow {
 			noShow++
 		} else {
 			idle++

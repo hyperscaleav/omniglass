@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -142,11 +143,11 @@ func TestTheUCCPlatformsRoomsFollowTheLabCalendar(t *testing.T) {
 			if in {
 				wantMeeting = fmt.Sprintf("m-%d-%s", e.Start.Unix(), sys)
 				inCall++
-				if e.Meeting.Origin == calendar.OriginWalkIn {
+				if caltest.M(e).Origin == calendar.OriginWalkIn {
 					walkIn++
 				}
-				if r.Participants != e.Meeting.Actual || r.Start != e.Start.Unix() || r.Topic == "" {
-					t.Fatalf("at %s %s holds %+v, want %d people from %d with a topic", at.Format("15:04:05"), sys, r, e.Meeting.Actual, e.Start.Unix())
+				if r.Participants != caltest.M(e).Actual || r.Start != e.Start.Unix() || r.Topic == "" {
+					t.Fatalf("at %s %s holds %+v, want %d people from %d with a topic", at.Format("15:04:05"), sys, r, caltest.M(e).Actual, e.Start.Unix())
 				}
 			} else if r.Participants != 0 || r.Topic != "" || r.Start != 0 {
 				t.Fatalf("at %s %s reads %+v with nobody in it", at.Format("15:04:05"), sys, r)
@@ -154,9 +155,9 @@ func TestTheUCCPlatformsRoomsFollowTheLabCalendar(t *testing.T) {
 			if r.Meeting != wantMeeting {
 				t.Fatalf("at %s %s names meeting %q, want %q", at.Format("15:04:05"), sys, r.Meeting, wantMeeting)
 			}
-			if now, ok := cal.Now(room, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
+			if now, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(now).Outcome == calendar.OutcomeNoShow {
 				noShow++
-				if now.Meeting.Origin == calendar.OriginBooked && (r.Status != "available" || r.Booking.Start == 0) {
+				if caltest.M(now).Origin == calendar.OriginBooked && (r.Status != "available" || r.Booking.Start == 0) {
 					t.Fatalf("at %s %s holds a booked no-show and reads %+v, want available with its booking", at.Format("15:04:05"), sys, r)
 				}
 			}

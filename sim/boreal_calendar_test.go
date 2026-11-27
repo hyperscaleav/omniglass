@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -59,12 +60,12 @@ func borealEngine(t *testing.T, profileName string, seed int64, k calendar.Knobs
 // start for a walk-in) until five minutes after its end; a no-show wakes
 // nothing.
 func wantAwake(cal *calendar.Calendar, room calendar.Room, t time.Time) bool {
-	for _, e := range cal.Entries(room, t.Add(-time.Hour), t.Add(time.Hour)) {
-		if e.Meeting.Outcome == calendar.OutcomeNoShow {
+	for _, e := range cal.Entries(room, t.Add(-time.Hour), t.Add(time.Hour), calendar.MeetingKinds) {
+		if caltest.M(e).Outcome == calendar.OutcomeNoShow {
 			continue
 		}
 		lead := time.Duration(0)
-		if e.Meeting.Origin == calendar.OriginBooked {
+		if caltest.M(e).Origin == calendar.OriginBooked {
 			lead = meetingLead * time.Second
 		}
 		if !t.Before(e.Start.Add(-lead)) && t.Before(e.End.Add(meetingTail*time.Second)) {
@@ -113,11 +114,11 @@ func TestBorealEdgePowerFollowsTheRoomsMeetingsOverADay(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	cal := calOf(seed, k)
 	var booked, walkIn, noShow int
-	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour)) {
+	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
 		switch {
-		case e.Meeting.Outcome == calendar.OutcomeNoShow:
+		case caltest.M(e).Outcome == calendar.OutcomeNoShow:
 			noShow++
-		case e.Meeting.Origin == calendar.OriginWalkIn:
+		case caltest.M(e).Origin == calendar.OriginWalkIn:
 			walkIn++
 		default:
 			booked++

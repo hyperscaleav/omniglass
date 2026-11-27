@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -111,8 +112,8 @@ func loadVRoomIn(t *testing.T, id string, room calendar.Room, seed int64) (*Devi
 // held is the meeting the calendar has running in room at at, when somebody
 // is in it: a no-show holds its slot and nobody joins.
 func held(cal *calendar.Calendar, room calendar.Room, at time.Time) (calendar.Entry, bool) {
-	e, ok := cal.Now(room, at)
-	if !ok || e.Meeting.Outcome == calendar.OutcomeNoShow {
+	e, ok := cal.Now(room, at, calendar.MeetingKinds)
+	if !ok || caltest.M(e).Outcome == calendar.OutcomeNoShow {
 		return calendar.Entry{}, false
 	}
 	return e, true
@@ -127,18 +128,18 @@ func busyDay(t *testing.T, seed int64, day time.Time) (calendar.Room, []calendar
 	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 	for i := 1; i <= 60; i++ {
 		room := calendar.Room{Site: "hq", Building: "tower", Room: "r" + strconv.Itoa(i)}
-		es := cal.Entries(room, day, day.Add(24*time.Hour))
+		es := cal.Entries(room, day, day.Add(24*time.Hour), calendar.MeetingKinds)
 		var noShow, walkIn, backToBack, heldN int
 		for j, e := range es {
-			if e.Meeting.Outcome == calendar.OutcomeNoShow {
+			if caltest.M(e).Outcome == calendar.OutcomeNoShow {
 				noShow++
 				continue
 			}
 			heldN++
-			if e.Meeting.Origin == calendar.OriginWalkIn {
+			if caltest.M(e).Origin == calendar.OriginWalkIn {
 				walkIn++
 			}
-			if j > 0 && es[j-1].Meeting.Outcome != calendar.OutcomeNoShow && !es[j-1].End.Before(e.Start.Add(-time.Second)) && es[j-1].End.After(e.Start.Add(-time.Second)) {
+			if j > 0 && caltest.M(es[j-1]).Outcome != calendar.OutcomeNoShow && !es[j-1].End.Before(e.Start.Add(-time.Second)) && es[j-1].End.After(e.Start.Add(-time.Second)) {
 				backToBack++
 			}
 		}
@@ -196,7 +197,7 @@ func TestTheVRoomsDayFollowsTheLabCalendar(t *testing.T) {
 	var wantStarts, wantEnds []time.Time
 	var heldEntries int
 	for _, e := range entries {
-		if e.Meeting.Outcome == calendar.OutcomeNoShow {
+		if caltest.M(e).Outcome == calendar.OutcomeNoShow {
 			continue
 		}
 		heldEntries++
@@ -214,7 +215,7 @@ func TestTheVRoomsDayFollowsTheLabCalendar(t *testing.T) {
 		if on != inRoom {
 			t.Fatalf("at %s the bar's call is %v, the calendar has the room %v", at.Format("15:04"), on, inRoom)
 		}
-		if now, ok := cal.Now(room, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
+		if now, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(now).Outcome == calendar.OutcomeNoShow {
 			noShowTicks++
 		}
 		if !inRoom {
@@ -224,14 +225,14 @@ func TestTheVRoomsDayFollowsTheLabCalendar(t *testing.T) {
 			return
 		}
 		active++
-		if e.Meeting.Origin == calendar.OriginWalkIn {
+		if caltest.M(e).Origin == calendar.OriginWalkIn {
 			walkInTicks++
 		}
 		if want := "c" + strconv.FormatInt(e.Start.Unix(), 10); d.ReadPath("status.call.id") != want {
 			t.Fatalf("at %s the call is %v, want the meeting's %s", at.Format("15:04"), d.ReadPath("status.call.id"), want)
 		}
-		if int(n) < 1 || int(n) > e.Meeting.Actual {
-			t.Fatalf("at %s the call holds %v participants, the meeting had %d come", at.Format("15:04"), n, e.Meeting.Actual)
+		if int(n) < 1 || int(n) > caltest.M(e).Actual {
+			t.Fatalf("at %s the call holds %v participants, the meeting had %d come", at.Format("15:04"), n, caltest.M(e).Actual)
 		}
 	})
 	if noShowTicks == 0 || walkInTicks == 0 {
@@ -485,12 +486,12 @@ func TestTheVRoomsDialedCallTalksNowAndTheCalendarYields(t *testing.T) {
 	d, cal := loadVRoomIn(t, "hq-divisible-conference-1-videobar-1", room, 7)
 	var meeting calendar.Entry
 	for _, e := range entries {
-		if e.Meeting.Outcome != calendar.OutcomeNoShow && e.Start.After(day.Add(time.Hour)) && e.End.Sub(e.Start) >= 25*time.Minute {
+		if caltest.M(e).Outcome != calendar.OutcomeNoShow && e.Start.After(day.Add(time.Hour)) && e.End.Sub(e.Start) >= 25*time.Minute {
 			meeting = e
 			break
 		}
 	}
-	if meeting.Meeting == nil {
+	if !caltest.IsMeeting(meeting) {
 		t.Fatal("no held meeting of 25 minutes in the day")
 	}
 	from := meeting.Start.Add(-5 * time.Minute).Truncate(time.Minute)
@@ -585,20 +586,20 @@ func TestTheVRoomsHangUpOnAMeetingDoesNotRejoinIt(t *testing.T) {
 	d, cal := loadVRoomIn(t, "hq-divisible-conference-1-videobar-1", room, 7)
 	var meeting, next calendar.Entry
 	for i, e := range entries {
-		if e.Meeting.Outcome == calendar.OutcomeNoShow || e.End.Sub(e.Start) < 25*time.Minute {
+		if caltest.M(e).Outcome == calendar.OutcomeNoShow || e.End.Sub(e.Start) < 25*time.Minute {
 			continue
 		}
 		for _, n := range entries[i+1:] {
-			if n.Meeting.Outcome != calendar.OutcomeNoShow {
+			if caltest.M(n).Outcome != calendar.OutcomeNoShow {
 				meeting, next = e, n
 				break
 			}
 		}
-		if next.Meeting != nil {
+		if caltest.IsMeeting(next) {
 			break
 		}
 	}
-	if meeting.Meeting == nil || next.Meeting == nil {
+	if !caltest.IsMeeting(meeting) || !caltest.IsMeeting(next) {
 		t.Fatal("no two held meetings in the day")
 	}
 	at := tickUp(meeting.Start.Add(3 * time.Minute))
@@ -742,7 +743,7 @@ func TestTheVRoomRejoinsTheCalendarAfterARebootDuringADial(t *testing.T) {
 	d, cal := loadVRoomIn(t, "hq-divisible-conference-1-videobar-1", room, 7)
 	var meeting calendar.Entry
 	for _, e := range entries {
-		if e.Meeting.Outcome != calendar.OutcomeNoShow && e.End.Sub(e.Start) >= 25*time.Minute {
+		if caltest.M(e).Outcome != calendar.OutcomeNoShow && e.End.Sub(e.Start) >= 25*time.Minute {
 			meeting = e
 			break
 		}

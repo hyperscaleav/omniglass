@@ -14,6 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -97,9 +98,9 @@ func TestIntegrationCorporateMeetingPlatformFansOut(t *testing.T) {
 	// instant in the window before ts, and the most who could have come then.
 	occupied := func(room calendar.Room, ts time.Time, window time.Duration) (could, couldNot bool, most int) {
 		for at := ts.Add(-window); !at.After(ts); at = at.Add(5 * time.Second) {
-			if e, ok := cal.Now(room, at); ok && e.Meeting.Outcome != calendar.OutcomeNoShow {
+			if e, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(e).Outcome != calendar.OutcomeNoShow {
 				could = true
-				most = max(most, e.Meeting.Actual)
+				most = max(most, caltest.M(e).Actual)
 			} else {
 				couldNot = true
 			}
