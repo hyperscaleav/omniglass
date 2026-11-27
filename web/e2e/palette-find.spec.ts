@@ -21,8 +21,9 @@ test.describe("palette find", () => {
   test("a seeded system is found by name and Enter opens its page", async ({ page }) => {
     const stamp = Date.now();
     const loc = `e2e-hall-${stamp}`;
+    const locLabel = `E2E Hall ${stamp}`;
     const system = `e2e-boreal-${stamp}`;
-    expect((await page.request.post("/api/v1/locations", { data: { name: loc, location_type: "campus" } })).ok()).toBeTruthy();
+    expect((await page.request.post("/api/v1/locations", { data: { name: loc, label: locLabel, location_type: "campus" } })).ok()).toBeTruthy();
     const made = await page.request.post("/api/v1/systems", { data: { name: system, label: "Boreal Rack", location: loc } });
     expect(made.ok()).toBeTruthy();
     const id = (await made.json()).id as string;
@@ -37,7 +38,8 @@ test.describe("palette find", () => {
 
     const row = page.getByRole("option", { name: new RegExp(`^Systems: .*${system}`) });
     await expect(row).toBeVisible();
-    await expect(row).toContainText(loc);
+    // A system hit reads beside its location's label, the address a person reads (#2757).
+    await expect(row).toContainText(locLabel);
     // The first match is the default; Ask omnibot, last, is never it.
     await expect(page.locator("[role=option][data-first]")).toContainText(system);
 
