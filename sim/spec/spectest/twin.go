@@ -54,6 +54,10 @@ interfaces:
     protocol: tcp
     port: 5000
     persistent: true
+    commands:
+      - match: status
+        response: "power={{ .State.status.device.power }}"
+        doc: { summary: "The display's power" }
 defaults:
   status:
     device: { power: "on" }

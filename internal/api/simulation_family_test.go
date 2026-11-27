@@ -28,7 +28,7 @@ func TestSimulationRoutesDescribeAFamilyAsTheyDescribeItsYAMLTwin(t *testing.T) 
 			t.Fatalf("%s: no definition", p.YAML)
 		}
 		gs, ys := simSurface(g, 10000), simSurface(y, 10000)
-		if len(gs) != 2 || len(gs[0].Routes) != 2 || len(gs[1].Commands) != 1 {
+		if len(gs) != 3 || len(gs[0].Routes) != 2 || len(gs[1].Commands) != 1 {
 			t.Fatalf("%s: surface = %+v, want the http routes and the telnet command listed", p.Go, gs)
 		}
 		if !reflect.DeepEqual(gs, ys) {
