@@ -1291,6 +1291,13 @@
    "description": "People a counter detects in its field of view, as the device reports them."
   },
   {
+   "name": "room-sensor-temperature",
+   "data_type": "float",
+   "unit": "C",
+   "label": "Room Sensor Temperature",
+   "description": "Ambient temperature a device reads off its room's sensor, in degrees Celsius, as the device reports it."
+  },
+  {
    "name": "booking-count",
    "data_type": "int",
    "label": "Booking Count",
