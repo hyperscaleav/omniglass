@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 )
 
@@ -41,5 +42,48 @@ func TestReadProgressCountsAnImpairedDeviceBrokenOnPurpose(t *testing.T) {
 	want := Progress{Connected: true, Components: 3, Running: 3, Endpoints: 1, Up: 1, Planted: 4}
 	if p != want {
 		t.Errorf("progress = %+v, want %+v", p, want)
+	}
+}
+
+// The seed's notes ride back with its report, so the bring-up shows them: a
+// pusher the kept fleet lacks was a note in a log nobody read (#2194).
+func TestParseSeedResultCarriesTheSeedsNotes(t *testing.T) {
+	t.Parallel()
+	log := "note: this lab's fleet lacks the pusher sim-booking-service\n" +
+		FormatSeedResult(SeedResult{Outpost: true, Summary: "kept this lab's fleet from its last run"}) + "\n"
+	got := ParseSeedResult(log)
+	if !got.Outpost {
+		t.Fatalf("outpost not present in %+v", got)
+	}
+	if len(got.Notes) != 1 || got.Notes[0] != "this lab's fleet lacks the pusher sim-booking-service" {
+		t.Fatalf("notes = %q, want the one the seed printed", got.Notes)
+	}
+	if n := ParseSeedResult(FormatSeedResult(SeedResult{Outpost: true, Summary: "x"})).Notes; len(n) != 0 {
+		t.Fatalf("a seed with nothing to say carries notes %q", n)
+	}
+}
+
+// A pusher the server refuses is named, and one it accepts or one with no
+// token is not: the check reads the answer to the pusher's own first call.
+func TestUnauthenticatedPushersNamesThoseTheServerRefuses(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/auth/me", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer good":
+			w.WriteHeader(http.StatusOK)
+		case "Bearer busy":
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	got := unauthenticatedPushers(context.Background(), srv.Client(), srv.URL, []Pusher{
+		{Name: "zeta", Token: "stale"}, {Name: "ok", Token: "good"}, {Name: "webhook"}, {Name: "slow", Token: "busy"}, {Name: "alpha", Token: "other"},
+	})
+	if want := []string{"alpha", "zeta"}; !slices.Equal(got, want) {
+		t.Fatalf("unauthenticated pushers = %v, want %v", got, want)
 	}
 }

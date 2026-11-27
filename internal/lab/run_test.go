@@ -742,3 +742,71 @@ func TestReapRefusesALabWithNoRecordedStartTime(t *testing.T) {
 		t.Fatal("the reaper removed a lab whose owner it could not judge")
 	}
 }
+
+// A pusher the server refuses its token is named in the console as the lab
+// comes up, and the lab still comes up: one pusher without a valid token does
+// not hold the rest hostage (#2194).
+func TestRunNamesAPusherTheServerRefuses(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/healthz", func(w http.ResponseWriter, _ *http.Request) {})
+	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /api/v1/auth/me", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) })
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
+	})
+	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"endpoints":[{"reachability":{"value":"up"}}]}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	var out bytes.Buffer
+	cfg := testConfig()
+	cfg.Pushers = []Pusher{{Name: "sim-booking-service", Outpost: OutpostName, Token: "stale"}}
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "sim-booking-service cannot authenticate") {
+		t.Fatalf("the console does not name the pusher:\n%s", out.String())
+	}
+}
+
+// When the collection wait runs out, the error names a pusher the server
+// refused, so the timeout does not hide what was wrong (#2194).
+func TestRunTimeoutNamesAPusherTheServerRefused(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/healthz", func(w http.ResponseWriter, _ *http.Request) {})
+	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /api/v1/auth/me", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) })
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"},{"component_id":"c-2","status":"starting"}]}`)
+	})
+	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"endpoints":[{"reachability":{"value":"up"}}]}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	r := testRunner(eng, &bytes.Buffer{})
+	r.ReadyTimeout = 200 * time.Millisecond
+	cfg := testConfig()
+	cfg.Pushers = []Pusher{{Name: "sim-booking-service", Outpost: OutpostName, Token: "stale"}}
+	_, err := r.Run(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "sim-booking-service") || !errors.Is(err, errTimedOut) {
+		t.Fatalf("the timeout = %v, want it to name sim-booking-service and still be a timeout", err)
+	}
+}
+
+// The seed's notes are shown as the lab comes up.
+func TestRunShowsTheSeedsNotes(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	eng.seedLog = "note: this lab's fleet lacks the pusher x\n" + eng.seedLog
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), testConfig()); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "note       this lab's fleet lacks the pusher x") {
+		t.Fatalf("the seed's note is not shown:\n%s", out.String())
+	}
+}

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/lab"
@@ -110,6 +112,80 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 	}
 	if _, err := gw.AuthenticateBearer(ctx, first); !errors.Is(err, storage.ErrCredentialNotFound) {
 		t.Fatalf("the last run's token still authenticates: %v", err)
+	}
+}
+
+// A lab kept from a build that did not declare the pusher yet holds no user
+// for it (#2194). The next run must seed it, not skip it: the emulator on the
+// outpost pushes with the token minted for this run whatever the fleet holds,
+// and a token no stored credential matches is a 401 on every push. After the
+// kept seed the run's token authenticates the booking service, which holds the
+// pusher role on its one system and nothing else.
+func TestKeptLabSeedsThePusherItsFleetLacks(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	t.Setenv("OMNIGLASS_DSN", dsn)
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	_, outpostHash, _, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := func() ([]byte, string) {
+		t.Helper()
+		_, hash, prefix, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(outpostHash), false,
+			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0, false, false); err != nil {
+			t.Fatalf("lab seed: %v", err)
+		}
+		return hash, out.String()
+	}
+	seed()
+
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `delete from users where id = (select user_id from machine where name = 'sim-booking-service')`); err != nil {
+		t.Fatalf("make the fleet predate the pusher: %v", err)
+	}
+
+	hash, out := seed()
+	if !strings.Contains(out, "kept this lab's fleet") {
+		t.Fatalf("the second seed is not a kept lab's: %q", out)
+	}
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	pr, err := gw.AuthenticateBearer(ctx, hash)
+	if err != nil || pr.Machine == nil || pr.Machine.Name != "sim-booking-service" {
+		t.Fatalf("the kept lab's run token = %+v, %v; want the booking service to authenticate with it", pr, err)
+	}
+	var grants []string
+	rows, err := conn.Query(ctx, `
+		select r.name || ' ' || r.permissions::text || ' ' || g.scope_kind || ' ' || coalesce(l.name, '')
+		from machine s join user_grant g on g.user_id = s.user_id join role r on r.id = g.role_id
+		left join system y on y.id::text = g.scope_id::text left join location l on l.id = y.location_id
+		where s.name = 'sim-booking-service'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var g string
+		if err := rows.Scan(&g); err != nil {
+			t.Fatal(err)
+		}
+		grants = append(grants, g)
+	}
+	if want := devseed.PusherRole + " {telemetry:push} system boardroom-a"; len(grants) != 1 || grants[0] != want {
+		t.Fatalf("the seeded pusher's grants = %v, want [%s]", grants, want)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -123,7 +124,14 @@ type SeedResult struct {
 	Outpost bool
 	// Summary is the line the status shows.
 	Summary string
+	// Notes are what the seed had to say beside its report (SeedNotePrefix
+	// lines), shown with the bring-up so a person reads them: a pusher the
+	// kept fleet lacks, say (#2194).
+	Notes []string
 }
+
+// SeedNotePrefix starts a line the seed prints for the person bringing the lab up.
+const SeedNotePrefix = "note: "
 
 // SeedMarker prefixes the seed one-off's report line.
 const SeedMarker = "omniglass-lab-seed:"
@@ -138,9 +146,16 @@ func FormatSeedResult(r SeedResult) string {
 	return fmt.Sprintf("%s outpost=%s %s", SeedMarker, outpost, r.Summary)
 }
 
-// ParseSeedResult reads the seed's report from its log.
+// ParseSeedResult reads the seed's report from its log: the last report line,
+// and every note the seed printed.
 func ParseSeedResult(log string) SeedResult {
 	lines := strings.Split(log, "\n")
+	var notes []string
+	for _, l := range lines {
+		if note, ok := strings.CutPrefix(strings.TrimSpace(l), SeedNotePrefix); ok {
+			notes = append(notes, strings.TrimSpace(note))
+		}
+	}
 	for i := len(lines) - 1; i >= 0; i-- {
 		rest, ok := strings.CutPrefix(strings.TrimSpace(lines[i]), SeedMarker)
 		if !ok {
@@ -148,7 +163,36 @@ func ParseSeedResult(log string) SeedResult {
 		}
 		rest = strings.TrimSpace(rest)
 		outpost, summary, _ := strings.Cut(rest, " ")
-		return SeedResult{Outpost: outpost == "outpost=present", Summary: summary}
+		return SeedResult{Outpost: outpost == "outpost=present", Summary: summary, Notes: notes}
 	}
-	return SeedResult{Outpost: true, Summary: "seeded"}
+	return SeedResult{Outpost: true, Summary: "seeded", Notes: notes}
+}
+
+// unauthenticatedPushers is the pushers whose token the server refuses, by
+// name: each is asked who it is (GET /auth/me, the first call a pusher makes,
+// #1743) and a 401 names it. A pusher with no token holds none to try. An
+// answer that is neither 200 nor 401 (the server busy, a network error) names
+// no one: it says nothing about the token. Reads only. Sorted by pusher.
+func unauthenticatedPushers(ctx context.Context, c *http.Client, base string, pushers []Pusher) []string {
+	var bad []string
+	for _, p := range pushers {
+		if p.Token == "" {
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/api/v1/auth/me", nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Authorization", "Bearer "+p.Token)
+		resp, err := c.Do(req)
+		if err != nil {
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusUnauthorized {
+			bad = append(bad, p.Name)
+		}
+	}
+	sort.Strings(bad)
+	return bad
 }
