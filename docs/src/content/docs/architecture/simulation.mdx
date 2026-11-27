@@ -176,7 +176,9 @@ room. The simulator does not ask. **The sim is; Omniglass learns.** The simulato
 simulates (`sim/world`): the sites, the rooms with their standard and capacity, each room's planned
 devices, the services that speak for rooms, the meeting knobs per standard and the calendar seed. It
 reads that world from a file the lab wrote from the scenario, at the path in `OMNIGLASS_SIM_WORLD`,
-and never from the server or its database; Omniglass learns the world only by collecting from it.
+and never from the server or its database; Omniglass learns the world only by collecting from it. The one
+reader beside the simulators is a lab server's own ground-truth route, which reads the same file to
+serve [the calendar back](#reading-the-calendar-back) and feeds nothing it reads into detection.
 With the file, `sim run` (and `outpost run --simulate`) builds the [lab calendar](#the-lab-calendar)
 from the world's seed and knobs and installs it on the engine, so `meetingNow` reads a real room. With
 none there is no calendar and no room, as before.
