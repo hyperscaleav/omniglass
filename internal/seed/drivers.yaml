@@ -803,6 +803,14 @@ drivers:
           request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }
           emits:
             - { name: program-state, extract: { regex: "^PROGRAM (\\S+)$" } }
+        # The room's temperature, as the processor reads it off the room's
+        # sensor (#2757); the system's own room-temperature is carried up from
+        # it by the plan's calc rule.
+        - name: room-temperature
+          schedule: { every: 30s }
+          request: { line: "GET ROOMTEMP", reply: { prefix: "ROOMTEMP ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: room-temperature, extract: { regex: "^ROOMTEMP (-?\\d+(?:\\.\\d+)?)$" } }
       unmatched: log
       listeners:
         - *nvp_events_listener

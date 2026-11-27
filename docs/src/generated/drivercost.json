@@ -325,33 +325,32 @@
         "newtron-slate-nvp"
       ],
       "drivers": [
-        "newtron-core-nvp",
         "newtron-panel-nvp",
         "newtron-slate-nvp"
       ],
       "memory_per_task_kib": {
-        "median": 91.33375,
-        "min": 59.45692883895131,
+        "median": 129.58125,
+        "min": 91.33375,
         "max": 167.82875,
-        "n": 3
+        "n": 2
       },
       "memory_per_endpoint_kib": {
-        "median": 178.37078651685394,
+        "median": 175.24812500000002,
         "min": 167.82875,
         "max": 182.6675,
-        "n": 3
+        "n": 2
       },
       "cpu_per_run_ms": {
-        "median": 1.8104263133584706,
+        "median": 1.8338836648740395,
         "min": 1.6617940525295853,
         "max": 2.005973277218494,
-        "n": 3
+        "n": 2
       },
       "millicores_per_task": {
-        "median": 0.06034754377861569,
+        "median": 0.061129455495801316,
         "min": 0.05539313508431951,
         "max": 0.06686577590728313,
-        "n": 3
+        "n": 2
       }
     },
     {
@@ -591,17 +590,11 @@
       "polls": [
         "30s",
         "30s",
+        "30s",
         "30s"
       ],
-      "measured": true,
-      "step_tasks": 1600,
-      "memory_per_task_kib": 59.45692883895131,
-      "memory_per_endpoint_kib": 178.37078651685394,
-      "millicores_per_task": 0.06034754377861569,
-      "cpu_per_run_ms": 1.8104263133584706,
-      "thread_cpu_per_run_ms": 0.14369666406575113,
-      "thread_share": 0.07937172753481665,
-      "reason": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
+      "measured": false,
+      "reason": "its polls changed since the sweep; not yet measured at its polls"
     },
     {
       "driver": "newtron-nvp-ssh",

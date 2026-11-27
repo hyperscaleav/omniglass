@@ -3994,7 +3994,7 @@
    "label": "Newtron Core NVP",
    "version": "1.0.0",
    "transport": "tcp",
-   "polls": 3,
+   "polls": 4,
    "listeners": 3,
    "commands": 1
   },
