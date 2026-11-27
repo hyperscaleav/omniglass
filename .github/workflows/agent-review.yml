@@ -850,6 +850,7 @@ jobs:
           merge-multiple: true
 
       - name: Post one review with every lens's findings
+        id: post
         if: needs.plan.outputs.mode == 'review'
         env:
           GH_TOKEN: ${{ steps.reviewer.outputs.token || steps.app.outputs.token }}
@@ -872,6 +873,9 @@ jobs:
             script=head/scripts/agent-review.sh
           fi
           echo "posting as $POSTER"
+          # Threads to resolve, one "<thread id> <comment id>" a line, for a later
+          # step: the write token never meets the script this step runs.
+          : > "$RUNNER_TEMP/resolve.txt"
           # Open findings carry forward: the reviewer's unresolved threads still
           # count in this verdict. Reading them fails the check rather than
           # dropping them.
@@ -915,9 +919,7 @@ jobs:
               jq -c '{body}' <<<"$f" | gh api --method POST "repos/${REPO}/pulls/${NUMBER}/comments/${id}/replies" --input - --silent \
                 || echo "::warning::agent-review: could not reply on thread ${id}"
               if [ "$(jq -r '.resolve' <<<"$f")" = true ]; then
-                gh api graphql -F id="$(jq -r '.thread_id' <<<"$f")" \
-                    -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
-                  || echo "::warning::agent-review: could not resolve thread ${id}"
+                printf '%s %s\n' "$(jq -r '.thread_id' <<<"$f")" "$id" >> "$RUNNER_TEMP/resolve.txt"
               fi
             done
           fi
@@ -933,11 +935,44 @@ jobs:
                 -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
               | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
               | bash "$script" advisory-threads | jq -c '.[]' | while IFS= read -r t; do
-              gh api graphql -F id="$(jq -r '.thread_id' <<<"$t")" \
-                  -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
-                || echo "::warning::agent-review: could not resolve advisory thread $(jq -r '.comment_id' <<<"$t")"
+              printf '%s %s\n' "$(jq -r '.thread_id' <<<"$t")" "$(jq -r '.comment_id' <<<"$t")" >> "$RUNNER_TEMP/resolve.txt"
             done
           fi
+          echo "resolve=$(sort -u -k1,1 "$RUNNER_TEMP/resolve.txt" | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      # GitHub refuses resolveReviewThread to an App token without write
+      # access to the code, and the reviewer's token stays read-only on
+      # contents. This token only resolves threads, in steps of its own, apart
+      # from any script the review ran.
+      - name: Mint the thread-resolve token
+        id: resolver
+        if: steps.post.outputs.resolve != '' && steps.post.outputs.resolve != '0'
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # The fixed threads the recheck judged and the advisory threads, as the
+      # step above listed them. A failure leaves a thread open, which only
+      # keeps it counting.
+      - name: Resolve the fixed and advisory threads
+        if: steps.resolver.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.resolver.outputs.token }}
+        run: |
+          set -uo pipefail
+          # One call per thread: a fixed thread can also be listed as advisory.
+          sort -u -k1,1 "$RUNNER_TEMP/resolve.txt" | while read -r thread comment; do
+            [[ "$thread" =~ ^[A-Za-z0-9_=-]+$ && "$comment" =~ ^[0-9]+$ ]] \
+              || { echo "::warning::agent-review: skipping a malformed line"; continue; }
+            gh api graphql -F id="$thread" \
+                -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent \
+              || echo "::warning::agent-review: could not resolve thread ${comment}"
+          done
 
       # The new review supersedes the reviewer's earlier ones (#2253): each is
       # minimized as outdated, a Changes requested one is dismissed so the PR's
@@ -1082,9 +1117,24 @@ jobs:
         env:
           CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
 
+      # Resolving a thread needs write access to the code, which the
+      # reviewer's token does not get (see the agent-review job).
+      - name: Mint the thread-resolve token
+        id: resolver
+        if: steps.prompt.outputs.run == 'true'
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.AGENT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
       # One call, no tools, outside the checkout's settings: the thread is
       # content, never an instruction.
       - name: Answer on the thread
+        id: answer
         if: steps.prompt.outputs.run == 'true'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -1099,7 +1149,14 @@ jobs:
           body=$(jq -r .body <<<"$answer")
           [ -n "$body" ] || { echo "::warning::agent-review: no usable answer on the thread"; exit 0; }
           jq -c -n --arg b "$body" '{body: $b}' | gh api --method POST "repos/${REPO}/pulls/${NUMBER}/comments/${COMMENT_ID}/replies" --input - --silent
-          if [ "$(jq -r .resolve <<<"$answer")" = true ]; then
-            gh api graphql -F id="$THREAD" \
-              -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent
-          fi
+          echo "resolve=$(jq -r .resolve <<<"$answer")" >> "$GITHUB_OUTPUT"
+
+      # Its own step, so the write token is never in the model call's env.
+      - name: Resolve the thread
+        if: steps.answer.outputs.resolve == 'true'
+        env:
+          GH_TOKEN: ${{ steps.resolver.outputs.token }}
+          THREAD: ${{ steps.prompt.outputs.thread }}
+        run: |
+          gh api graphql -F id="$THREAD" \
+            -f query='mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id } } }' --silent
