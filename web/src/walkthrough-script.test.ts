@@ -22,7 +22,9 @@ import {
   stepFailure,
   stillName,
   validateWalkthrough,
+  countCopyIn,
 } from "../e2e/walkthroughlib.mjs";
+import { attentionPhrase } from "./lib/attention";
 
 // The walkthrough script format (#924) is data, so its validation is pure and
 // strict: a typo in a script fails before a browser starts, naming the file and
@@ -490,6 +492,38 @@ describe("the shipped walkthroughs", () => {
       expect(idProblem(f.slice(f.lastIndexOf("/") + 1, -".yaml".length))).toBeNull();
     });
   }
+});
+
+// A wait that names count-dependent copy passes or fails with how many things
+// the lab has flagged when the recording reaches it (#2708): "1 system needs
+// attention" never contains "need attention". The script format rejects such a
+// wait, so the failure is at validation, not a timeout on one lab in three.
+describe("waits on count-dependent copy", () => {
+  const wait = (target: unknown) => [{ goto: "/", caption: "a" }, { wait: target, caption: "b" }];
+  it("matches the attention phrase in each of its forms, so a rewording cannot slip past", () => {
+    for (const [systems, components] of [[0, 0], [1, 0], [0, 1], [2, 0], [1, 1], [3, 2]]) {
+      const phrase = attentionPhrase({ systems, components, total: systems + components });
+      expect(countCopyIn(phrase), phrase).toBe(true);
+    }
+  });
+  it("rejects a text or selector wait on the plural form, naming the step", () => {
+    expect(bad({ title: "T", steps: wait({ text: "need attention" }) })).toContain('w.yaml: step 2 (wait) waits on copy that changes with a count ("need attention")');
+    expect(bad({ title: "T", steps: wait({ selector: '[data-testid="explore-counts"] button:has-text("need attention")' }) })).toContain("step 2 (wait)");
+  });
+  it("rejects the singular form and a role name", () => {
+    expect(bad({ title: "T", steps: wait({ text: "1 system needs attention" }) })).toContain("waits on copy that changes with a count");
+    expect(bad({ title: "T", steps: wait({ role: "button", name: "Needs attention" }) })).toContain("waits on copy that changes with a count");
+  });
+  it("rejects it in a ready wait", () => {
+    expect(bad({ title: "T", ready: { goto: "/", wait: { text: "need attention" } }, steps: wait({ text: "ok" }) })).toContain("ready (wait) waits on copy that changes with a count");
+  });
+  it("lets a wait on a testid, an attribute or copy that does not change with a count through", () => {
+    expect(() => ok(wait({ selector: '[data-testid="explore-counts"] button[aria-pressed="true"]' }))).not.toThrow();
+    expect(() => ok(wait({ text: "Matches" }))).not.toThrow();
+  });
+  it("lets a click on the phrase through: only a wait races the lab's timing", () => {
+    expect(() => ok([{ click: 'button:has-text("need attention")', caption: "a" }, { wait: { text: "ok" }, caption: "b" }])).not.toThrow();
+  });
 });
 
 // The probe replays every walkthrough on one stack, in order (#1404), while the

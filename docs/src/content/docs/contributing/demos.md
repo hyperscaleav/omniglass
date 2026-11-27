@@ -152,6 +152,10 @@ Write it the way an operator would work:
 - **End every action on its result.** After a click, a hover, a typed value or a key press, wait for what
   the console shows in answer (the drawer open, the tooltip shown, the row added, the status changed). That wait is
   the assertion that makes the walkthrough a test.
+- **Wait on a testid, an attribute or a role, not on a number's wording.** Copy that agrees with a count
+  ("1 system needs attention", "2 systems need attention") reads differently as the lab's alarms fire on
+  their own clock, so a wait on one form passes on one lab and times out on the next. The script is rejected
+  at validation if a `wait` names that phrase; wait on the element's `data-testid` or state (`aria-pressed`) instead.
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
   (component, location, system), short enough to read in the caption bar.
 - **Mark the payoff.** `poster: true` on the step the walkthrough builds to makes its still the
