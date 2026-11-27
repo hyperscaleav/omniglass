@@ -110,9 +110,9 @@ func Spec() spec.Spec {
 			},
 			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
 		},
-		State:    stateFor(Rows[0]),
-		HTTP:     routes(),
-		Computed: []profile.Computed{{Path: pathUptime, Kind: "elapsed", Since: pathBootEpoch}},
+		State:   stateFor(Rows[0]),
+		HTTP:    routes(),
+		Elapsed: []spec.Elapsed{{Path: pathUptime, Since: pathBootEpoch}},
 		Ticks: []spec.Tick{
 			bind.PowerFollowsRoom(pathInput),
 			// The light source ages only while it is lit: a minute on adds a

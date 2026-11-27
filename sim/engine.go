@@ -330,10 +330,9 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// Installing seeds each elapsed anchor to "now" so uptime starts
 	// at ~0 and counts up on read. No StartBehaviors equivalent,
 	// there is nothing to run.
-	computed := def.ComputedList()
-	for i := range computed {
-		if err := dev.AddComputedFromProfile(&computed[i]); err != nil {
-			return nil, fmt.Errorf("registering computed field on %q: %w", snap.Hostname, err)
+	for _, el := range def.ElapsedList() {
+		if err := dev.AddElapsed(el); err != nil {
+			return nil, fmt.Errorf("registering elapsed field on %q: %w", snap.Hostname, err)
 		}
 	}
 

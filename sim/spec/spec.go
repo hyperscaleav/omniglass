@@ -263,10 +263,11 @@ type Spec struct {
 	// Surface builds the shared protocol surfaces the family serves (see
 	// SurfaceFunc).
 	Surface SurfaceFunc
-	// Behaviors and Computed are YAML-style, run by the engine's existing
-	// behavior machinery until the shared primitives replace them (#2830).
+	// Elapsed are the read-derived uptimes the device reports (see Elapsed).
+	Elapsed []Elapsed
+	// Behaviors are YAML-style, run by the engine's existing behavior
+	// machinery until the shared primitives replace them (#2830).
 	Behaviors []profile.Behavior
-	Computed  []profile.Computed
 }
 
 // validate refuses a family the engine could not serve faithfully.
@@ -283,6 +284,9 @@ func (s Spec) validate() error {
 			return fmt.Errorf("family %q lists product %q twice (or as its own name)", s.Name, m.Product)
 		}
 		seen[m.Product] = true
+	}
+	if err := validateElapsed(s.Name, s.Elapsed); err != nil {
+		return err
 	}
 	routes := map[string]bool{}
 	for _, r := range s.HTTP {

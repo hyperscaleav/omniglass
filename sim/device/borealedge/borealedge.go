@@ -152,7 +152,7 @@ func Spec() spec.Spec {
 		State: stateFor(base()),
 		HTTP:  routes(),
 		// Uptime is read-derived: now minus the boot anchor, never a timer.
-		Computed: []profile.Computed{{Path: pathUptime, Kind: "elapsed", Since: pathBootEpoch}},
+		Elapsed: []spec.Elapsed{{Path: pathUptime, Since: pathBootEpoch}},
 		Ticks: []spec.Tick{
 			bind.PowerFollowsRoom(pathInput),
 			bind.Drift("temperature_drift", bind.Seconds(60), pathTemperature, behave.Band{Lo: 34, Hi: 54, Step: 1}, behave.SigFigs(3)),

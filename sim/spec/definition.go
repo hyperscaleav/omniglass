@@ -33,10 +33,10 @@ type Definition interface {
 	InitialState() map[string]any
 	// Products is every product it simulates, its own name first.
 	Products() []string
-	// BehaviorList and ComputedList are the YAML-style behaviors and
-	// read-derived fields it runs (none, for a family that animates in Go).
+	// BehaviorList is the YAML-style behaviors it runs (none, for a family
+	// that animates in Go); ElapsedList is the read-derived uptimes it reports.
 	BehaviorList() []profile.Behavior
-	ComputedList() []profile.Computed
+	ElapsedList() []Elapsed
 	// PushFace and WebhookFace are the outbound faces it declares, nil when
 	// it has none.
 	PushFace() *profile.Push
@@ -75,10 +75,16 @@ func (d profileDef) Kind() Kind { return KindYAML }
 func (d profileDef) Identity() Identity {
 	return Identity{Manufacturer: d.p.Manufacturer, Model: d.p.Model, DeviceType: d.p.DeviceType, Summary: d.p.Doc.Summary}
 }
-func (d profileDef) Surfaces() []profile.Interface          { return d.p.Interfaces }
-func (d profileDef) InitialState() map[string]any           { return d.p.Defaults }
-func (d profileDef) BehaviorList() []profile.Behavior       { return d.p.Behaviors }
-func (d profileDef) ComputedList() []profile.Computed       { return d.p.Computed }
+func (d profileDef) Surfaces() []profile.Interface    { return d.p.Interfaces }
+func (d profileDef) InitialState() map[string]any     { return d.p.Defaults }
+func (d profileDef) BehaviorList() []profile.Behavior { return d.p.Behaviors }
+func (d profileDef) ElapsedList() []Elapsed {
+	var out []Elapsed
+	for _, c := range d.p.Computed {
+		out = append(out, Elapsed{Path: c.Path, Since: c.Since})
+	}
+	return out
+}
 func (d profileDef) PushFace() *profile.Push                { return d.p.Push }
 func (d profileDef) WebhookFace() *profile.WebhookSubscribe { return d.p.Webhook }
 func (d profileDef) Products() []string {
@@ -105,7 +111,7 @@ func (f *Family) Kind() Kind                             { return KindGo }
 func (f *Family) Identity() Identity                     { return f.s.Identity }
 func (f *Family) InitialState() map[string]any           { return f.s.State }
 func (f *Family) BehaviorList() []profile.Behavior       { return f.s.Behaviors }
-func (f *Family) ComputedList() []profile.Computed       { return f.s.Computed }
+func (f *Family) ElapsedList() []Elapsed                 { return f.s.Elapsed }
 func (f *Family) PushFace() *profile.Push                { return nil }
 func (f *Family) WebhookFace() *profile.WebhookSubscribe { return nil }
 

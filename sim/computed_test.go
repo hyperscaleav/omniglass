@@ -7,6 +7,7 @@ import (
 	"github.com/gosnmp/gosnmp"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // fixedClock returns a clock func reading a mutable time, so a test can
@@ -59,7 +60,7 @@ func TestComputedElapsedClampsAndUnsetAnchor(t *testing.T) {
 	}
 	d := newTestDevice(t, "d-1", state)
 	d.SetClock(fixedClock(&now))
-	d.computed = []computedEntry{{Path: "status.device.uptime", Kind: "elapsed", Since: "status.device.boot_epoch"}}
+	d.computed = []spec.Elapsed{{Path: "status.device.uptime", Since: "status.device.boot_epoch"}}
 
 	// clock (500) is behind anchor (1000): clamp to 0, never negative.
 	if got := d.ReadPath("status.device.uptime"); got != int64(0) {
@@ -112,7 +113,7 @@ func TestComputedSnapshotOverlay(t *testing.T) {
 	}
 	d := newTestDevice(t, "d-1", state)
 	d.SetClock(fixedClock(&now))
-	d.computed = []computedEntry{{Path: "status.device.uptime", Kind: "elapsed", Since: "status.device.boot_epoch"}}
+	d.computed = []spec.Elapsed{{Path: "status.device.uptime", Since: "status.device.boot_epoch"}}
 
 	snap := d.State()
 	dev := snap["status"].(map[string]any)["device"].(map[string]any)
@@ -135,7 +136,7 @@ func TestComputedSNMPUptime(t *testing.T) {
 	}
 	d := newTestDevice(t, "d-1", state)
 	d.SetClock(fixedClock(&now))
-	d.computed = []computedEntry{{Path: "status.device.uptime", Kind: "elapsed", Since: "status.device.boot_epoch"}}
+	d.computed = []spec.Elapsed{{Path: "status.device.uptime", Since: "status.device.boot_epoch"}}
 
 	v, err := d.snmpValue("1.3.6.1.2.1.1.3.0", "status.device.uptime", gosnmp.TimeTicks)
 	if err != nil {
