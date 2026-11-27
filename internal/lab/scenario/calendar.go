@@ -40,7 +40,7 @@ func (c *Calendar) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
-var meetingKnobKeys = []string{"booking_rate", "slot_mix", "no_show_rate", "ended_early_rate", "ended_late_rate", "attendance", "walk_in_rate", "hours"}
+var meetingKnobKeys = []string{"booking_rate", "slot_mix", "no_show_rate", "ended_early_rate", "ended_late_rate", "attendance", "walk_in_rate", "hours", "recording_rate"}
 
 // UnmarshalYAML reads a mapping of standard name to its meeting knobs, in
 // order, refusing a knob it does not know.

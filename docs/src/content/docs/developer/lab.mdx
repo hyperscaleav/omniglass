@@ -338,14 +338,14 @@ measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost
 - **a simulated component**, its simulator's share and the collection from it: about 0.9 MiB and a
   thousandth of a core.
 
-So `corporate` at 1,000 systems (18 sites, 3,040 components) needs about 3.5 GiB and 3.3 cores, and at
-3,000 (30 sites, 8,998 components) about 9.1 GiB and 9.3 cores, before Postgres's shared buffers (below).
+So `corporate` at 1,000 systems (18 sites, 3,064 components) needs about 3.5 GiB and 3.3 cores, and at
+3,000 (30 sites, 9,046 components) about 9.2 GiB and 9.4 cores, before Postgres's shared buffers (below).
 CPU, not memory, is what runs out first on most machines: the reference WSL setup of 12 GB on a
 12-core host fits 3,000 systems with little to spare. `--plan` ends with the decision for this machine:
 
 ```text
-Preflight: about 9.1 GiB of memory and 9.3 cores (the server and Postgres, an outpost for each of 30 sites, 8998 simulated components).
-Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
+Preflight: about 9.2 GiB of memory and 9.4 cores (the server and Postgres, an outpost for each of 30 sites, 9046 simulated components).
+Postgres's shared buffers, sized to this host and fleet, come to 439 MiB: about 9.6 GiB in all.
 This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
 ```
@@ -353,8 +353,8 @@ Decision: fits.
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3040 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
-  To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
+error: A scale lab of 1000 systems (18 sites, 3064 simulated components) needs about 3.5 GiB of memory and 3.3 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 438, the largest that fits, or give Docker more memory or CPUs.
 ```
 
 Both were forced with the hidden `--host-memory`, which plans against a memory limit of your
@@ -1217,6 +1217,7 @@ calendar:                       # what every room acts out on the simulator's cl
       attendance: { min: 3, max: 8 }
       walk_in_rate: 0.08        # the chance a free 15-minute cell holds a walk-in
       hours: { start: 8, end: 18 }   # UTC hours meetings fall in; omit for the whole day
+      recording_rate: 0.15      # the share of meetings that took place that are recorded
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
