@@ -608,17 +608,13 @@ components:
     location: boardroom-a
   # The room's rack power conditioner (#1368), a networked Ferrite PDU the
   # simulator answers over SNMP. It classifies as a power-device, which the
-  # standard's optional power slot accepts (#2777, so a scale lab can staff
-  # it), but this room leaves that slot empty. The PDU is in the room and
-  # accounted for, and nothing more, which is exactly the case membership
-  # exists to carry. It is also the one component that keeps a typed label:
-  # the operator calls it the power conditioner, not "Power Device 1".
+  # standard's optional power slot accepts (#2777), and it fills that slot
+  # (below): the room carries one PDU, never a second beside it. It is also the
+  # one component that keeps a typed label: the operator calls it the power
+  # conditioner, not "Power Device 1".
   - key: power
     product: ferrite-pdu-4c
     label: Power Conditioner
-    location: boardroom-a
-  - key: power-a
-    product: ferrite-pdu-4c
     location: boardroom-a
   # The lab's generic-SNMP device (#1372): an unclassified box on the generic
   # device product, so snmp-generic keeps a simulated device now that every
@@ -1452,16 +1448,13 @@ systems:
     location: dep-r3
 
 # Membership without a job. The audio rack staffs dsp and amplifier in both
-# halves (below, through assignment), but the power conditioner fills no slot
-# here (the standard's power slot stays empty): it is in the room, it is
-# accounted for, and no assignment names it. A
-# model that only knew about staffing would lose it. The depot's service stock
+# halves (below, through assignment); the rows below are in a system and
+# accounted for while no assignment names them. A
+# model that only knew about staffing would lose them. The depot's service stock
 # (the spare bars, mics, and displays racked in the bays) deliberately joins NO
 # system: stock relates to the bay it sits in, not to the bay's signage, so it
 # is roomed and unbound, like the lobby's uncommissioned endpoint above.
 members:
-  - system: boardroom-a
-    component: power
   # One service, two tops. No slot wants it, so it is membership and nothing
   # more, which is exactly what the many-valued binding is for.
   - system: auditorium-av
@@ -1523,7 +1516,7 @@ slot_assignments:
     component: codec-a
   - system: boardroom-a
     slot: power
-    component: power-a
+    component: power
   - system: boardroom-a
     slot: control-system
     component: cp-a
