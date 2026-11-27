@@ -144,7 +144,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	// The marketing captures (#2728) photograph a fleet that has been running.
 	cmd.Flags().BoolVar(&scale.healthHistory, "health-history", false, "a throwaway scale lab (not --keep): seed the scenario's health storyline, 30 days of made-up health and the alarms behind it, for a capture")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
+	// The simulator's clock offset (#2800): a lab test places "now" in a meeting.
+	cmd.Flags().DurationVar(&scale.simClockOffset, "sim-clock-offset", 0, "a scale lab: run the simulated world's clock this far ahead of real time (e.g. 36h, -90m), so \"now\" falls inside a chosen meeting of the lab calendar; the outpost's collection cadence and every timestamp omniglass stamps stay real")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered", "health-history", "sim-clock-offset"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -252,7 +254,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Project: project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: m.Name,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
-			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce, HealthHistory: f.scale.healthHistory,
+			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce, SimClockOffset: f.scale.simClockOffset, HealthHistory: f.scale.healthHistory,
 			ServerEnv: settingsEnv, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -330,6 +332,9 @@ type labScale struct {
 	// healthHistory seeds the scenario's health storyline (#2728) on a
 	// throwaway scale lab, for the marketing captures.
 	healthHistory bool
+	// simClockOffset runs the simulated world's clock this far ahead of real
+	// time (#2800), so a lab test stands the calendar's now inside a meeting.
+	simClockOffset time.Duration
 }
 
 // parseByteSize reads a size like 512m or 4g (binary units; a bare number is
@@ -407,6 +412,9 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	if f.scale.induce {
 		return fmt.Errorf("--induce-unregistered is a scale lab's (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
+	}
+	if f.scale.simClockOffset != 0 {
+		return fmt.Errorf("--sim-clock-offset moves a scale lab's calendar (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
 	}
 	if f.scale.healthHistory {
 		return fmt.Errorf("--health-history seeds a scale scenario's storyline (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)

@@ -68,7 +68,7 @@ func ParsePushers(s string) ([]Pusher, error) {
 // system its grant names, on its profile's cadence. A pusher whose profile
 // the catalog lacks or has no push face is refused, since it would never
 // push. The caller stops the engine.
-func startPushers(store *profile.Store, server string, ps []Pusher, w *world.World) (*sim.Engine, error) {
+func startPushers(store *profile.Store, server string, ps []Pusher, w *world.World, clock sim.Clock) (*sim.Engine, error) {
 	snaps := make([]sim.DeviceSnapshot, len(ps))
 	for i, p := range ps {
 		prof, ok := store.Devices[p.Profile]
@@ -82,6 +82,7 @@ func startPushers(store *profile.Store, server string, ps []Pusher, w *world.Wor
 	}
 	e := sim.NewEngine(store, profiles.Templates())
 	installWorld(e, w)
+	e.SetClock(clock)
 	if err := e.LoadDevices(snaps); err != nil {
 		return nil, err
 	}

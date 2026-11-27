@@ -1298,6 +1298,18 @@ simulator holds no calendar and no rooms. The world owns the names: the seed onb
 component under the name its world gives it (a scale lab's components are `hq-mr86-1-main-display-1`,
 not a `display-1` in every room), and a test seeds a plan and holds every seeded name and room to the world's.
 
+### Setting the simulator's clock
+
+A lab test that must see a room in a meeting does not wait for the corporate hours: `omniglass lab run
+--sim-clock-offset 36h` (a hidden flag of a scale lab, a Go duration, negative to run behind) sets
+`OMNIGLASS_SIM_CLOCK_OFFSET` on each site outpost, and its simulator runs the simulated world's clock that far
+ahead of real time. A test picks a meeting from the plan's own calendar (the same scenario resolved at the
+same size, the world of the site and the calendar it implies), sets the offset to land a minute into it and
+reads each device of the room over the console's fire API. The offset moves what the world reads and
+stamps in its own time, never the outpost's cadence or a timestamp the lab stamps
+([the simulator's clock](/architecture/simulation/#the-lab-calendar)). A speed factor, a simulated day in
+an hour, is #1362, and joins the same clock.
+
 ### How many sites
 
 `--systems N` first picks the number of sites. The **average repeated site** is the repeated
