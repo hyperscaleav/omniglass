@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
 // goHandlers is what a Go device family answers in Go (#2829), registered on
@@ -97,9 +99,9 @@ func (g goDevice) Write(path string, v any) error {
 	return nil
 }
 
-// serveGoRoute answers a matched route with its Go handler. The handler runs
+// serveFamilyRoute answers a matched route with its Go handler. The handler runs
 // without the device lock, reading and writing state through its handle.
-func (d *Device) serveGoRoute(w http.ResponseWriter, r *http.Request, h spec.HTTPHandler, rc requestContext) {
+func (d *Device) serveFamilyRoute(w http.ResponseWriter, r *http.Request, h spec.HTTPHandler, rc requestContext) {
 	req := spec.HTTPRequest{Method: rc.Method, Path: rc.Path, Query: rc.Query, Body: rc.Body}
 	if r.Body != nil {
 		req.Raw, _ = io.ReadAll(io.LimitReader(r.Body, requestBodyLimit))
@@ -142,7 +144,21 @@ func (d *Device) serveGoRoute(w http.ResponseWriter, r *http.Request, h spec.HTT
 	_, _ = w.Write(body)
 }
 
-// runGoCommand answers a matched command with its Go handler.
-func (d *Device) runGoCommand(ce commandEntry) CommandResult {
+// runFamilyCommand answers a matched command with its Go handler.
+func (d *Device) runFamilyCommand(ce commandEntry) CommandResult {
 	return CommandResult{Response: ce.Go(goDevice{d})}
+}
+
+// withSurfaceSubjects is an interface's declared subjects with a family
+// surface's appended, each as the profile subject the session compiles (its
+// token is the publish token, its Push the line).
+func withSurfaceSubjects(declared []profile.Subject, from []surface.Subject) []profile.Subject {
+	if len(from) == 0 {
+		return declared
+	}
+	out := append([]profile.Subject(nil), declared...)
+	for _, s := range from {
+		out = append(out, profile.Subject{Match: s.Match, Path: s.Path, PublishToken: s.Token, Push: s.Push})
+	}
+	return out
 }

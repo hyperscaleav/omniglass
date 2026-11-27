@@ -15,6 +15,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -202,6 +203,29 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// than the raw profile template.
 	dev.SetDefaults(defaults)
 
+	// A Go family answers in Go beside whatever its interfaces declare.
+	if g, ok := def.(spec.Served); ok {
+		if err := dev.addHandlers(g.Handlers(), model); err != nil {
+			return nil, fmt.Errorf("registering handlers on %q: %w", snap.Hostname, err)
+		}
+	}
+
+	// A family's shared protocol surfaces (sim/surface) are built for this
+	// device and attached before it serves; the subjects they declare join
+	// the persistent interface they are named for.
+	var famSubjects map[string][]surface.Subject
+	if g, ok := def.(spec.Served); ok && g.Handlers().Surface != nil {
+		sf := g.Handlers().Surface(goDevice{dev})
+		for _, c := range sf.Commanders {
+			dev.AttachCommands(c)
+		}
+		for _, r := range sf.Routes {
+			dev.AttachRoute(r)
+		}
+		dev.AttachOIDs(sf.OIDs...)
+		famSubjects = sf.Subjects
+	}
+
 	// Register routes, commands, and OID bindings from every interface
 	// the profile declares. Listeners are started later in StartAll; this
 	// step is pure state population.
@@ -251,6 +275,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 				}
 			}
 			if iface.Persistent {
+				iface.Subjects = withSurfaceSubjects(iface.Subjects, famSubjects[iface.Name])
 				cfg, err := CompileSessionConfig(&iface)
 				if err != nil {
 					return nil, fmt.Errorf("compiling session config for %q on %q: %w",
@@ -317,13 +342,6 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
 	}
 	dev.push = push
-
-	// A Go family answers in Go beside whatever its interfaces declare.
-	if g, ok := def.(spec.Served); ok {
-		if err := dev.addHandlers(g.Handlers(), model); err != nil {
-			return nil, fmt.Errorf("registering handlers on %q: %w", snap.Hostname, err)
-		}
-	}
 
 	e.installSeams(dev)
 	return dev, nil

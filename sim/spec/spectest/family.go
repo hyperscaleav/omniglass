@@ -11,6 +11,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -56,18 +58,43 @@ func Spec() spec.Spec {
 		Interfaces: []profile.Interface{
 			{Name: "api", Protocol: "http", Port: 8080, Doc: profile.Doc{Summary: "Display API"}},
 			{Name: "console", Protocol: "telnet", Port: 2323, Auth: profile.Auth{Permissive: true}},
+			{Name: "panel", Protocol: "tcp", Port: 5000, Persistent: true},
 		},
 		State: map[string]any{
-			"status":        map[string]any{"device": map[string]any{"power": "on"}},
+			"status": map[string]any{
+				"device": map[string]any{"power": "on"},
+				"video":  map[string]any{"input": "hdmi1"},
+				"room":   map[string]any{"scene": "idle"},
+			},
 			"configuration": map[string]any{"firmware": map[string]any{"version": "1.2.3"}, "device": map[string]any{"diagonal": 0}},
 		},
 		HTTP: []spec.HTTPRoute{
 			{Match: "GET /api/info", Summary: "The display and its state", Handle: info},
 			{Match: "POST /api/power", Summary: "Switch the display on or off", Example: `{"power":"off"}`, Handle: power},
 		},
+		Surface: panelSurface,
 		Commands: []spec.Command{{Match: "status", Summary: "The display's power", Handle: func(d spec.Device) string {
 			return fmt.Sprintf("power=%v\n", d.Read("status.device.power"))
 		}}},
+	}
+}
+
+// panelSurface serves the shared NVP room surface (sim/surface/nvp) on the
+// panel face: the family keeps no typed copy of its own, so the surface's
+// accessors read the device's state and the engine applies what a command
+// reports it changed.
+func panelSurface(d spec.Device) spec.Surface {
+	read := func(path string) func() string {
+		return func() string { v, _ := d.Read(path).(string); return v }
+	}
+	room := nvp.Room{
+		Inputs: nvp.DefaultInputs, Scenes: nvp.DefaultScenes,
+		Input: nvp.Field[string]{Get: read(nvp.PathInput), Set: func(string) {}},
+		Scene: nvp.Field[string]{Get: read(nvp.PathScene), Set: func(string) {}},
+	}
+	return spec.Surface{
+		Commanders: []surface.Commander{room},
+		Subjects:   map[string][]surface.Subject{"panel": nvp.Subjects()},
 	}
 }
 

@@ -133,7 +133,7 @@ func (f *Family) Surfaces() []profile.Interface {
 }
 
 func (f *Family) Handlers() Handlers {
-	return Handlers{HTTP: f.s.HTTP, Commands: f.s.Commands, Animate: f.s.Animate}
+	return Handlers{HTTP: f.s.HTTP, Commands: f.s.Commands, Animate: f.s.Animate, Surface: f.s.Surface}
 }
 func (f *Family) Products() []string {
 	out := []string{f.s.Name}

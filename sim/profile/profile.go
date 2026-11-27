@@ -238,6 +238,11 @@ type Subject struct {
 	Path         string `yaml:"path"`
 	PublishToken string `yaml:"publish_token"`
 	PushFormat   string `yaml:"push_format"`
+
+	// Push is the line a Go-declared subject pushes (sim/surface, #2831),
+	// a function of the new value in place of PushFormat's template. Never
+	// read from YAML.
+	Push func(value any) string `yaml:"-"`
 }
 
 // SessionLimits caps resource use on a Persistent interface. All

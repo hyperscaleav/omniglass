@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
 // Identity is what a definition says about the product it simulates.
@@ -154,11 +155,32 @@ type Command struct {
 // leaves it nil.
 type Animator func(d Device) (stop func())
 
+// Surface is the shared protocol surfaces (sim/surface, #2831) a family
+// serves for one device: the helpers in sim/surface/{nvp,snmp,httpapi} build
+// these from the device's typed state.
+type Surface struct {
+	// Commanders answer line-protocol commands, after the family's Commands.
+	Commanders []surface.Commander
+	// Routes are HTTP routes, tried before the family's HTTP routes.
+	Routes []surface.Route
+	// OIDs are SNMP scalars served beside the interface's OID map.
+	OIDs []surface.OID
+	// Subjects are the subscription subjects of a persistent interface, by
+	// the interface's name: each face declares its own set.
+	Subjects map[string][]surface.Subject
+}
+
+// SurfaceFunc builds a device's Surface. It runs once per device, as the
+// device is built, so the surfaces close over that device's state (a
+// surface's typed accessors read and write through d).
+type SurfaceFunc func(d Device) Surface
+
 // Handlers is what a family's protocol servers call.
 type Handlers struct {
 	HTTP     []HTTPRoute
 	Commands []Command
 	Animate  Animator
+	Surface  SurfaceFunc
 }
 
 // Spec is a Go device family: one API, its models as a table. A family
@@ -182,6 +204,9 @@ type Spec struct {
 	Commands []Command
 	// Animate is the behavior seam (see Animator).
 	Animate Animator
+	// Surface builds the shared protocol surfaces the family serves (see
+	// SurfaceFunc).
+	Surface SurfaceFunc
 	// Behaviors and Computed are YAML-style, run by the engine's existing
 	// behavior machinery until the shared primitives replace them (#2830).
 	Behaviors []profile.Behavior

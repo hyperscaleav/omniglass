@@ -50,8 +50,15 @@ interfaces:
       - match: status
         response: "power={{ .State.status.device.power }}"
         doc: { summary: "The display's power" }
+  - name: panel
+    protocol: tcp
+    port: 5000
+    persistent: true
 defaults:
-  status: { device: { power: "on" } }
+  status:
+    device: { power: "on" }
+    video: { input: hdmi1 }
+    room: { scene: idle }
   configuration:
     firmware: { version: "1.2.3" }
     device: { diagonal: 0 }

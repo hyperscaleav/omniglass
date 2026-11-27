@@ -15,6 +15,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
+	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
 )
 
 // familyEngine serves the test family beside the shipped YAML profiles.
@@ -258,5 +259,40 @@ func TestEngineSkipsASnapshotOfAnUnknownDefinition(t *testing.T) {
 	}
 	if n := len(e.Devices()); n != 0 {
 		t.Fatalf("serves %d devices, want none", n)
+	}
+}
+
+// A family serves a shared protocol surface (sim/surface/nvp, #2831) through
+// its Spec: a command reads the device's state, a SET reports the change and
+// the engine applies it as it applies a YAML command's mutation (version, diff
+// stream), and the surface's subjects join the panel face's session config.
+func TestGoFamilyServesASharedSurface(t *testing.T) {
+	e := familyEngine(t, spectest.Spec())
+	if err := e.Sync([]DeviceSnapshot{familySnap("tf-1", "127.88.27.1", "tf-display-55")}); err != nil {
+		t.Fatal(err)
+	}
+	d := deviceNamed(t, e, "tf-1")
+	var diffs []StateChange
+	d.DiffPublisher = func(c StateChange) { diffs = append(diffs, c) }
+
+	if r, ok, err := d.RunCommand("GET INPUT"); err != nil || !ok || r.Response != "INPUT hdmi1" {
+		t.Fatalf("GET INPUT = %q ok=%v err=%v", r.Response, ok, err)
+	}
+	if r, ok, err := d.RunCommand("SET INPUT dp1"); err != nil || !ok || r.Response != "INPUT dp1" {
+		t.Fatalf("SET INPUT = %q ok=%v err=%v", r.Response, ok, err)
+	}
+	if d.ReadPath("status.video.input") != "dp1" || len(diffs) != 1 || diffs[0].Diffs["status.video.input"] != "dp1" {
+		t.Fatalf("state %v diffs %+v: the reported change was not applied", d.ReadPath("status.video.input"), diffs)
+	}
+	if _, ok, _ := d.RunCommand("SET INPUT nonsense"); ok {
+		t.Fatal("a value the surface does not allow was served")
+	}
+	// The family's own command still answers beside the surface's.
+	if r, ok, _ := d.RunCommand("status"); !ok || r.Response != "power=on\n" {
+		t.Fatalf("status = %q ok=%v", r.Response, ok)
+	}
+	reg := d.TCPSession()
+	if reg == nil || len(reg.cfg.Subjects) != len(nvp.Subjects()) {
+		t.Fatalf("the panel's session config carries %v subjects, want the surface's %d", reg, len(nvp.Subjects()))
 	}
 }

@@ -150,7 +150,7 @@ func CompileSessionConfig(iface *profile.Interface) (*SessionConfig, error) {
 // sessionSubject is a Subject with its push template pre-compiled.
 type sessionSubject struct {
 	def      *profile.Subject
-	pushTmpl *template.Template
+	pushTmpl *template.Template // nil for a Go-declared subject (def.Push)
 	pathTmpl *template.Template // nil when Path is a literal
 }
 
@@ -158,14 +158,17 @@ func compileSessionSubject(s *profile.Subject) (*sessionSubject, error) {
 	if s.Match == "" {
 		return nil, fmt.Errorf("subject: match is required")
 	}
-	if s.PushFormat == "" {
-		return nil, fmt.Errorf("subject %q: push_format is required", s.Match)
+	out := &sessionSubject{def: s}
+	if s.Push == nil {
+		if s.PushFormat == "" {
+			return nil, fmt.Errorf("subject %q: push_format is required", s.Match)
+		}
+		t, err := template.New("push:" + s.Match).Funcs(templateFuncs).Parse(s.PushFormat)
+		if err != nil {
+			return nil, fmt.Errorf("subject %q push_format: %w", s.Match, err)
+		}
+		out.pushTmpl = t
 	}
-	t, err := template.New("push:" + s.Match).Funcs(templateFuncs).Parse(s.PushFormat)
-	if err != nil {
-		return nil, fmt.Errorf("subject %q push_format: %w", s.Match, err)
-	}
-	out := &sessionSubject{def: s, pushTmpl: t}
 	if strings.Contains(s.Path, "{{") {
 		pt, err := template.New("path:" + s.Match).Funcs(templateFuncs).Parse(s.Path)
 		if err != nil {
@@ -612,6 +615,9 @@ func (s *Session) emit(line []byte, sub *Subscription, value any) {
 }
 
 func (s *Session) renderPush(sub *Subscription, value any) ([]byte, error) {
+	if fn := sub.def.def.Push; fn != nil {
+		return []byte(s.registry.cfg.WrapOutbound(fn(value))), nil
+	}
 	data := struct {
 		Subject  string
 		Path     string
