@@ -923,15 +923,25 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		label    string
 		platform bool
 	}{
-		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar 1", platform: true},
-		{table: "component", place: "boardroom-a", name: "mic-2", label: "Ceiling Microphone 2", platform: true},
-		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: true},
+		// A component staffing a slot is numbered within it and bare when it is
+		// alone there (#2757), the way the scale lab's are: the seed writes
+		// that label itself, so the operator's words hold the pen.
+		{table: "component", place: "huddle", name: "display-1", label: "Display", platform: false},
+		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar", platform: false},
+		{table: "component", place: "boardroom-a", name: "mic-2", label: "Ceiling Microphone 2", platform: false},
+		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: false},
 		// Room B's panel is the first display in ITS room, so it reads
 		// display-1 too: the placement-scoped name index doing its job across
 		// the air wall.
-		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
+		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: false},
+		{table: "component", place: "auditorium", name: "display-1", label: "Display", platform: false},
+		// A component in no slot (a spare racked in a bay or a hall, a lobby
+		// display) is left to the shipped rule, which reads the number the
+		// platform minted into its name.
+		{table: "component", place: "bay-1", name: "videobar-1", label: "Video Bar 1", platform: true},
+		{table: "component", place: "bay-3", name: "display-2", label: "Display 2", platform: true},
+		{table: "component", place: "auditorium", name: "mic-2", label: "Ceiling Microphone 2", platform: true},
+		{table: "component", place: "lobby", name: "display-1", label: "Display 1", platform: true},
 		// The power conditioner: the rule would say "Power Device 1", so the
 		// operator's words win and keep the pen.
 		{table: "component", place: "boardroom-a", name: "power-1", label: "Power Conditioner", platform: false},
