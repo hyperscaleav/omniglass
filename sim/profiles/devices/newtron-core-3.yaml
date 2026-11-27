@@ -121,7 +121,7 @@ behaviors:
       - path: status.room.temperature_c
         value: '{{ round 1 (randStep 0.1 .State.status.room.climate_c) }}'
       - path: status.room.climate_c
-        value: '{{ $c := .State.status.room.climate_c }}{{ $t := 21.5 }}{{ if hasCalendar }}{{ $r := roomPhase }}{{ if $r.in_use }}{{ $t = add 21.5 (clamp 0.0 4.0 (mul 0.25 $r.attendees)) }}{{ end }}{{ round 3 (add $c (mul 0.2 (sub $t $c))) }}{{ else }}21.5{{ end }}'
+        value: '{{ $r := .State.status.room }}{{ $c := $r.climate_c }}{{ $t := $r.setpoint_c }}{{ if hasCalendar }}{{ $p := roomPhase }}{{ if $p.in_use }}{{ $t = add $r.setpoint_c (clamp 0.0 4.0 (mul $r.load_c_per_person $p.attendees)) }}{{ end }}{{ round 3 (add $c (mul 0.2 (sub $t $c))) }}{{ else }}{{ $r.setpoint_c }}{{ end }}'
 
 defaults:
   status:
@@ -137,6 +137,10 @@ defaults:
       # reading is taken from (see room_climate).
       temperature_c: 21.5
       climate_c: 21.5
+      # The setpoint the room settles at, and the warmth each person in a held
+      # meeting adds toward it (to at most 4 C).
+      setpoint_c: 21.5
+      load_c_per_person: 0.25
     diagnostics:
       log: ""
     video:
