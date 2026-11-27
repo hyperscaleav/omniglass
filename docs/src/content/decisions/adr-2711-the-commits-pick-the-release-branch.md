@@ -6,7 +6,7 @@ summary: "make release reads the conventional commits squash-merged on main sinc
 refs: [2711, 2139, 2142]
 ---
 
-- **Date:** 2026-11-25 | **Status:** Accepted | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual)
+- **Date:** 2026-11-25 | **Status:** Superseded by [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10) | **Pages:** [release and CI](/contributing/release-ci/#cutting-a-release-manual)
 - **Superseded by** [ADR-2652](#adr-2652-release-please-cuts-every-release-from-main-and-the-soak-gates-10): release-please reads the same conventional commits and cuts every release from `main`, with no release branch, so `make release` and the cherry-pick list are retired.
 - **Decision:** (#2711, asked for by the architect: cutting a release should take no thought.) Refines item 4 of
   [ADR-2139](/architecture/decisions/#adr-2139-releases-are-cut-from-a-release-branch):

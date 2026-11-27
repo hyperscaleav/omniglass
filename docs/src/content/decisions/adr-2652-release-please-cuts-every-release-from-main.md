@@ -98,11 +98,13 @@ refs: [2652, 2139, 2711, 1988, 1940, 2142]
     hand, a manual step every release.
   - **Rebuilding every version in one deployment.** The root build would grow with every release,
     and a version's docs would be rebuilt by today's toolchain rather than kept as published.
-- **Follow-up (not built here):** the release-please workflow, its config and manifest, and
-  `version.txt`; `release.yml` run from it on a created release instead of dispatched on a
-  branch; `make release`, `make release-plan`, `cmd/release`, `cmd/releaseversion` and their
-  packages removed, and the release page rewritten to match; the release App with pull-request
-  write and its bypass on the tag ruleset (#1940); the release PR exempted from the lints that
-  read a human PR's body; the notice in each release's notes; the versioned docs build, the Pages
+- **Built with it:** the release-please workflow, its config and manifest, and `version.txt`;
+  `release.yml` called from it on a created release instead of dispatched on a branch;
+  `make release`, `make release-plan`, `cmd/release`, `cmd/releaseversion` and their packages
+  removed, and the release page rewritten to match. The release App already holds pull-request and
+  issue write and its bypass on the tag ruleset, and the release PR's footer carries the demo and
+  regression-test tags, so the lints that read a human PR's body pass it unchanged.
+- **Follow-up (not built here):** the notice in each release's notes (#2787); the dead
+  `release/**` triggers (#2788); turning releasing on (#1940); the versioned docs build, the Pages
   Function, `/versions.json` and the picker; and a release binary's console linking its own
   line's docs.

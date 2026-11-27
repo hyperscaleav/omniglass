@@ -54,8 +54,8 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
   each page's frontmatter, so the pinned browser's captures are byte-stable and the
   tolerance is zero).
 
-Three more PR workflows: **`image.yml`** publishes the multi-arch container image on `main` and
-release pushes (see [Container image](/deployment/container-image/) and [Fast iteration](#fast-iteration-on-a-pr) below), **`preview-comment.yml`** reacts to the
+Three more PR workflows: **`image.yml`** publishes the multi-arch container image on `main`
+pushes (see [Container image](/deployment/container-image/) and [Fast iteration](#fast-iteration-on-a-pr) below), **`preview-comment.yml`** reacts to the
 `run:preview` label (see [PR previews](/developer/pr-previews/)), and **`demo.yml`**
 reacts to the `run:demo` label, recording the [demos](/contributing/demos/) the PR body tags
 (each on a runner of its own) to the PR's evidence ref, keeping one comment listing every demo and
@@ -81,7 +81,7 @@ with `gen-drift.yml`); the script is the whole policy and is tested in `scripts/
 | workflows, the Dockerfile, the Makefile, `scripts/**`, or any path no area claims | everything |
 
 A draft runs the unit jobs its files call for and no image, `e2e` or `smoke-lab`; marking it ready
-for review (`ready_for_review`) runs everything. `main` pushes, release pushes and merge queue entries
+for review (`ready_for_review`) runs everything. `main` pushes and merge queue entries
 run everything. The image is built once, by the `build` job, with the BuildKit GitHub Actions cache, and
 handed to `e2e` and `smoke-lab` as one artifact (the image under both its tags, and the host binary); they
 load it and run with `SKIP_BUILD=1` (see the Makefile's `all`), so nothing on a PR push builds the image twice. `docs-shots.yml`
@@ -93,14 +93,14 @@ reports skipped rather than never appearing, and each workflow listens for `read
 the draft's current head once the PR is marked ready. A draft that wants them now takes the `run:test`
 label ([labels](/contributing/labels/#runtask-triggers)): adding it starts them, and a push while it stays
 on runs them as on a ready PR. Any other label starts none of them. `pr-title` and `demo-tag` are metadata checks
-and run on a draft. The merge queue and pushes to `main` and release branches run all of it. CodeQL is the
+and run on a draft. The merge queue and pushes to `main` run all of it. CodeQL is the
 repository's default setup, not a workflow here, so a draft guard cannot be written for it in this tree.
 
 Skipped work still reports, so a required check never waits forever: `e2e`, `smoke-lab` and `gen-drift`
 always run and pass in seconds when nothing needs them (and fail if the build or the change lookup
 failed), and `test` counts a skipped shard as a pass only when the change lookup succeeded. Publishing
 is off the PR path: the arm64 smoke runs on pushes and queue entries, the multi-arch push on `main`
-and release pushes only, and a PR gets one amd64 image (`pr-<n>` and its head sha) only with the
+pushes only, and a PR gets one amd64 image (`pr-<n>` and its head sha) only with the
 `run:preview` label.
 
 The agents follow the same rule. `agent-review` waits for the `test`, `e2e`, `smoke-lab` and `gen-drift`
@@ -124,7 +124,7 @@ queue entry has its own ref, so the workflows' `github.ref` concurrency groups g
 run of its own. Three lints have nothing to read there: `pr-title.yml`, `demo-tag.yml` and `regression-test.yml` checked
 the PR's title and body before it could be queued, so on `merge_group` their `lint` job passes
 without reading a PR. `image.yml` runs only the arm64 smoke in the queue and publishes no image, since
-a queue entry's commit may never land; the publish runs on `main` and release pushes. A queue entry runs
+a queue entry's commit may never land; the publish runs on `main` pushes. A queue entry runs
 every job in full: the path selection below applies to a PR push only.
 
 A guard test, `internal/build/merge_group_guard_test.go`, reads `.github/workflows/` and fails when
