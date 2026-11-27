@@ -1530,9 +1530,6 @@ slot_assignments:
     slot: camera
     component: cam-a
   - system: boardroom-a
-    slot: recorder
-    component: recording-service
-  - system: boardroom-a
     slot: wireless-mic
     component: wmic-a
   - system: boardroom-a
@@ -1586,9 +1583,6 @@ slot_assignments:
   - system: boardroom-b
     slot: camera
     component: cam-b
-  - system: boardroom-b
-    slot: recorder
-    component: recording-service
   - system: boardroom-b
     slot: wireless-mic
     component: wmic-b

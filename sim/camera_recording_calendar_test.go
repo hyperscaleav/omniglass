@@ -1,8 +1,13 @@
 package sim
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
+	"net/http/httptest"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -454,5 +459,108 @@ func TestRecordingServiceCoveringRoomsWithNoCalendarKeepsItsDrift(t *testing.T) 
 	}
 	if !moved {
 		t.Fatal("with no calendar the service stopped drifting")
+	}
+}
+
+// The recording service is one account-wide cloud component: its recordings
+// list is a paged list with one record per covered room, named by the system
+// the room belongs to, each carrying that room's own recordings in progress and
+// queue (ADR-1282), so a driver's walk fans them out to the rooms' systems.
+func TestRecordingServiceListsOneRecordPerCoveredRoomPaged(t *testing.T) {
+	k := gazeKnobs()
+	const seed = 77
+	covers := recRooms(7)
+	w, cal := recWorld(k, seed, covers, "rec-1")
+	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	// A minute in which some covered room is recording and another has a
+	// finished recording queued, found from the calendar alone.
+	var at time.Time
+	for at = day; at.Before(day.Add(24 * time.Hour)); at = at.Add(time.Minute) {
+		in, q := recWant(cal, covers, at)
+		if in > 0 && q > 0 {
+			break
+		}
+	}
+	if !at.Before(day.Add(24 * time.Hour)) {
+		t.Fatal("the day never has one room recording while another has a recording queued")
+	}
+	d := calDevice(t, "recording-service", "rec-1", calendar.Room{}, cal, w, &at)
+	d.TickBehavior("room_recordings")
+
+	type rec struct {
+		ID         string `json:"id"`
+		InProgress int    `json:"in_progress"`
+		QueueDepth int    `json:"queue_depth"`
+	}
+	var got []rec
+	token, pages := "", 0
+	for {
+		r := httptest.NewRequest(http.MethodGet, "/api/recordings?page_size=3&next_page_token="+token, nil)
+		r.Header.Set("X-Recording-Key", "recording-lab-key")
+		resp := serve(d, r)
+		if resp.Code != 200 {
+			t.Fatalf("GET /api/recordings = %d %s", resp.Code, resp.Body)
+		}
+		var page struct {
+			Recordings []rec  `json:"recordings"`
+			Next       string `json:"next_page_token"`
+		}
+		if err := json.Unmarshal(resp.Body.Bytes(), &page); err != nil {
+			t.Fatalf("%v: %s", err, resp.Body)
+		}
+		if len(page.Recordings) > 3 {
+			t.Fatalf("a page of %d records, want at most the 3 asked", len(page.Recordings))
+		}
+		got = append(got, page.Recordings...)
+		pages++
+		if page.Next == "" {
+			break
+		}
+		token = page.Next
+	}
+	if pages != 3 {
+		t.Fatalf("%d pages of 3 for 7 rooms, want 3", pages)
+	}
+	var ids []string
+	byID := map[string]rec{}
+	for _, r := range got {
+		ids = append(ids, r.ID)
+		byID[r.ID] = r
+	}
+	if len(got) != len(covers) || !sort.StringsAreSorted(ids) {
+		t.Fatalf("records %v, want one per covered room in order", ids)
+	}
+	recording, queued := 0, 0
+	for _, c := range covers {
+		in, q := recWant(cal, []world.Cover{c}, at)
+		r, ok := byID[c.System]
+		if !ok {
+			t.Fatalf("no record for room %s", c.System)
+		}
+		if r.InProgress != in || r.QueueDepth != q {
+			t.Fatalf("%s: %d in progress, queue %d, the calendar says %d and %d", c.System, r.InProgress, r.QueueDepth, in, q)
+		}
+		recording, queued = recording+in, queued+q
+	}
+	if recording == 0 || queued == 0 {
+		t.Fatalf("the records carry %d recording and %d queued, want both", recording, queued)
+	}
+	// The account's own work is still the sum of its rooms.
+	if int(num(t, d, "status.recordings.in_progress")) != recording || int(num(t, d, "status.recordings.queue_depth")) != queued {
+		t.Fatalf("the account reports %v in progress and %v queued, its rooms %d and %d", d.ReadPath("status.recordings.in_progress"), d.ReadPath("status.recordings.queue_depth"), recording, queued)
+	}
+}
+
+// A service with no calendar lists no room: the fan-out has nothing to carry,
+// and its own counters drift as they always did.
+func TestRecordingServiceWithNoRoomsListsNone(t *testing.T) {
+	at := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	d := calDevice(t, "recording-service", "rec-1", calendar.Room{}, nil, nil, &at)
+	d.TickBehavior("room_recordings")
+	r := httptest.NewRequest(http.MethodGet, "/api/recordings", nil)
+	r.Header.Set("X-Recording-Key", "recording-lab-key")
+	resp := serve(d, r)
+	if resp.Code != 200 || !strings.Contains(strings.Join(strings.Fields(resp.Body.String()), ""), `"recordings":[]`) {
+		t.Fatalf("a roomless service answers %d %s, want an empty list", resp.Code, resp.Body)
 	}
 }

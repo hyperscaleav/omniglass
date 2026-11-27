@@ -104,32 +104,31 @@
       ],
       "drivers": [
         "kestrel-gaze-api",
-        "kestrel-relay-api",
-        "recording-service-api"
+        "kestrel-relay-api"
       ],
       "memory_per_task_kib": {
-        "median": 6.5875,
+        "median": 5.030625000000001,
         "min": 3.47375,
-        "max": 48.41875,
-        "n": 3
+        "max": 6.5875,
+        "n": 2
       },
       "memory_per_endpoint_kib": {
-        "median": 13.895,
+        "median": 13.535,
         "min": 13.175,
-        "max": 96.8375,
-        "n": 3
+        "max": 13.895,
+        "n": 2
       },
       "cpu_per_run_ms": {
-        "median": 5.48409804887775,
+        "median": 6.027651143525384,
         "min": 5.0743377372085,
         "max": 6.980964549842269,
-        "n": 3
+        "n": 2
       },
       "millicores_per_task": {
-        "median": 0.182803268295925,
+        "median": 0.20092170478417948,
         "min": 0.16914459124028333,
         "max": 0.23269881832807562,
-        "n": 3
+        "n": 2
       }
     },
     {
@@ -142,32 +141,31 @@
       ],
       "drivers": [
         "kestrel-gaze-api",
-        "kestrel-relay-api",
-        "recording-service-api"
+        "kestrel-relay-api"
       ],
       "memory_per_task_kib": {
-        "median": 6.5875,
+        "median": 5.030625000000001,
         "min": 3.47375,
-        "max": 48.41875,
-        "n": 3
+        "max": 6.5875,
+        "n": 2
       },
       "memory_per_endpoint_kib": {
-        "median": 13.895,
+        "median": 13.535,
         "min": 13.175,
-        "max": 96.8375,
-        "n": 3
+        "max": 13.895,
+        "n": 2
       },
       "cpu_per_run_ms": {
-        "median": 5.48409804887775,
+        "median": 6.027651143525384,
         "min": 5.0743377372085,
         "max": 6.980964549842269,
-        "n": 3
+        "n": 2
       },
       "millicores_per_task": {
-        "median": 0.018280326829592502,
+        "median": 0.02009217047841795,
         "min": 0.016914459124028336,
         "max": 0.02326988183280756,
-        "n": 3
+        "n": 2
       }
     },
     {
@@ -710,17 +708,11 @@
       "product": "recording-service",
       "polls": [
         "30s",
+        "30s",
         "30s"
       ],
-      "measured": true,
-      "step_tasks": 1600,
-      "memory_per_task_kib": 48.41875,
-      "memory_per_endpoint_kib": 96.8375,
-      "millicores_per_task": 0.182803268295925,
-      "cpu_per_run_ms": 5.48409804887775,
-      "thread_cpu_per_run_ms": 0.4779903481249993,
-      "thread_share": 0.08715933666116962,
-      "reason": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
+      "measured": false,
+      "reason": "its polls changed since the sweep; not yet measured at its polls"
     },
     {
       "driver": "scheduling-service-api",

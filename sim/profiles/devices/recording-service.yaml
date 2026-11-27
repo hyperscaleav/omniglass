@@ -15,6 +15,14 @@
 # in progress and the queue of those just finished, waiting to be written, are
 # read off the calendar. Without one it drifts on its own as it always did.
 #
+# It is one account-wide cloud service (#2757), the way a real recording
+# platform is: placed once for the fleet and covering every room it records,
+# not a box in each. GET /api/recordings lists the rooms it covers as a paged
+# list (ADR-2789), one record each (ADR-1282): its id is the system the room
+# belongs to, with that room's recordings in progress and queue depth. A driver
+# walks the pages once and each record's values land on the system its room id
+# is bound to. The account's own counters stay the sum of its rooms.
+#
 # Its one face is an HTTPS JSON API behind an api key header
 # (X-Recording-Key), the way a software service is watched: a health route
 # and a work route to poll, and a live feed that names a recording the
@@ -62,6 +70,12 @@ interfaces:
         template: api/recording-service/work.json.gotempl
         doc: { summary: "Recordings in progress, storage used, queue depth and the last failure", tags: [api, data] }
 
+      # Every covered room as a paged list, one record each: the room's id (the
+      # system's name) with its own recordings in progress and queue depth.
+      - match: "GET /api/recordings"
+        template: api/recording-service/recordings.json.gotempl
+        doc: { summary: "Every room the service covers with its recordings, one record each, paged", tags: [api, recordings, fan-out] }
+
       # A recording fails: the failure is recorded and named on the live feed
       # with the recording's id and why. The id and the reason are the
       # caller's to choose, so a test or a demo names the recording it fails.
@@ -108,6 +122,12 @@ behaviors:
         value: '{{ $any := false }}{{ $n := 0 }}{{ range coveredRooms }}{{ if (roomPhaseOf .site .building .room).scheduled }}{{ $any = true }}{{ end }}{{ with (roomPhaseOf .site .building .room).meeting }}{{ if .recorded }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ end }}{{ if not coveredRooms }}{{ if hasCalendar }}{{ $any = true }}{{ end }}{{ with (roomPhase).meeting }}{{ if .recorded }}{{ $n = 1 }}{{ end }}{{ end }}{{ end }}{{ if $any }}{{ $n }}{{ else }}{{ round 0 (clamp 0.0 12.0 (randStep 1.5 .State.status.recordings.in_progress)) }}{{ end }}'
       - path: status.recordings.queue_depth
         value: '{{ $any := false }}{{ $n := 0 }}{{ range coveredRooms }}{{ if (roomPhaseOf .site .building .room).scheduled }}{{ $any = true }}{{ end }}{{ if (roomPhaseOf .site .building .room).recording_pending }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ if not coveredRooms }}{{ if hasCalendar }}{{ $any = true }}{{ end }}{{ if (roomPhase).recording_pending }}{{ $n = 1 }}{{ end }}{{ end }}{{ if $any }}{{ $n }}{{ else }}{{ round 0 (clamp 0.0 40.0 (randStep 4.0 .State.status.recordings.queue_depth)) }}{{ end }}'
+      # The covered rooms, one record each, named by the system the room belongs
+      # to (the room id the lab's installer binds, ADR-1282), with that room's
+      # own recording and queue off its room phase. With no room to cover the
+      # records stay as they were (none).
+      - path: status.recordings.rooms
+        value: '{{ if servedRooms }}{ {{- $sep := "" }}{{ range servedRooms }}{{ $ph := roomPhaseOf .site .building .room }}{{ $n := 0 }}{{ with $ph.meeting }}{{ if .recorded }}{{ $n = 1 }}{{ end }}{{ end }}{{ $q := 0 }}{{ if $ph.recording_pending }}{{ $q = 1 }}{{ end }}{{ $sep }}{{ marshal (or .system .room) }}: {"in_progress": {{ $n }}, "queue_depth": {{ $q }}}{{ $sep = "," }}{{ end }} }{{ else }}{{ marshal .State.status.recordings.rooms }}{{ end }}'
 
   - name: storage_drift
     schedule:
@@ -125,6 +145,7 @@ defaults:
     recordings:
       in_progress: 4
       queue_depth: 3
+      rooms: {}
       last_failure:
         id: ""
         reason: ""

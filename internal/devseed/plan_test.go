@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -434,8 +435,8 @@ func TestSeedPlanSeedsTheMeetingPlatformItsWebhookRoomsAndDevices(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Senders != len(wantSite) || res.Services != 2 {
-		t.Errorf("result = %d senders and %d services, want %d and 2", res.Senders, res.Services, len(wantSite))
+	if res.Senders != len(wantSite) || res.Services != 3 {
+		t.Errorf("result = %d senders and %d services, want %d and 3", res.Senders, res.Services, len(wantSite))
 	}
 
 	// One ucc-webhook endpoint, on the platform component at the headquarters,
@@ -520,6 +521,75 @@ func TestSeedPlanSeedsTheMeetingPlatformItsWebhookRoomsAndDevices(t *testing.T) 
 		if devices[l.ID] != l.Name {
 			t.Errorf("device %s is bound to component %q, want %s", l.ID, devices[l.ID], l.Name)
 		}
+	}
+}
+
+// SeedPlan binds the fleet's one recording service (#2757) as an installer
+// does: a component at the headquarters, every system of every site by its name
+// on recording-room-id, and no slot of any standard names a recorder, so a
+// room's recordings land on its system from the account's one component.
+func TestSeedPlanBindsTheRecordingServiceToEveryRoom(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	p := corporatePlan(t, 20)
+	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	var profile string
+	for _, ps := range p.Sites[0].Pushers {
+		if ps.Service && strings.HasSuffix(ps.Name, "-recording-1") {
+			profile = ps.Profile
+		}
+	}
+	if profile == "" {
+		t.Fatal("the plan places no recording service at the headquarters")
+	}
+	var comp, site string
+	var n int
+	if err := conn.QueryRow(ctx, `
+		select c.id::text, l.name from component c
+		join location l on l.id = c.location_id
+		join product pr on pr.id = c.product_id
+		where pr.name = $1`, profile).Scan(&comp, &site); err != nil {
+		t.Fatalf("want exactly one recording service component: %v", err)
+	}
+	if site != p.Sites[0].Name {
+		t.Errorf("the recording service sits at %s, want the headquarters %s", site, p.Sites[0].Name)
+	}
+	rows, err := conn.Query(ctx, `
+		select b.value, coalesce(s.name, '') from identity_binding b
+		join property_type pt on pt.id = b.property_type_id
+		left join system s on s.id = b.system_id
+		where b.conduit_id = $1::uuid and pt.name = 'recording-room-id' and b.owner_kind = 'system'`, comp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	bound := map[string]string{}
+	for rows.Next() {
+		var v, owner string
+		if err := rows.Scan(&v, &owner); err != nil {
+			t.Fatal(err)
+		}
+		bound[v] = owner
+	}
+	for _, st := range p.Sites {
+		for _, sys := range st.Systems {
+			n++
+			if bound[sys.Name] != sys.Name {
+				t.Errorf("room %s is bound to %q, want the system of that name", sys.Name, bound[sys.Name])
+			}
+		}
+	}
+	if len(bound) != n {
+		t.Errorf("the service binds %d rooms, want all %d systems of the fleet", len(bound), n)
+	}
+	var slots int
+	if err := conn.QueryRow(ctx, `select count(*) from system_slot where name = 'recorder'`).Scan(&slots); err != nil {
+		t.Fatal(err)
+	}
+	if slots != 0 {
+		t.Errorf("%d systems carry a recorder slot, want none: the service is the account's one component", slots)
 	}
 }
 

@@ -1063,7 +1063,10 @@ drivers:
       # the X-Recording-Key header: its own account of its health and
       # version from the health route, the work it carries from the work
       # route, and a recording that fails as an event the moment the live
-      # feed names it.
+      # feed names it. The account is one component for the whole fleet
+      # (#2757): its recordings list names every room it covers as a record
+      # (ADR-1282), so each room's recordings in progress and queue depth land
+      # on the system bound to that room id on this component (the conduit).
       transport: https
       inputs:
         - { name: host, kind: string, required: true }
@@ -1100,6 +1103,28 @@ drivers:
             - { name: queue-depth, extract: { jsonpath: queue_depth } }
             # The service reports a percentage; the canon stores the ratio.
             - { name: storage-utilization, extract: { jsonpath: storage_used_percent }, transform: { scale: 0.01 } }
+        - name: recordings
+          schedule: { every: 30s }
+          # The recordings list pages (#2789): each answer carries the cursor of
+          # the next page in next_page_token, sent back as the query parameter
+          # of the same name, until an answer carries none; one poll walks
+          # every page and fans every room out. Ten rooms a page, so a small
+          # lab's list is visibly paged; 400 pages hold a four-thousand-room
+          # account.
+          request:
+            path: /api/recordings
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 10
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 400
+          records: recordings
+          identity: { key: recording-room-id, extract: { jsonpath: id } }
+          emits:
+            - { name: active-recording-count, extract: { jsonpath: in_progress } }
+            - { name: queue-depth, extract: { jsonpath: queue_depth } }
   - id: newtron-panel-web
     label: Newtron Panel Web
     version: "1.0.0"

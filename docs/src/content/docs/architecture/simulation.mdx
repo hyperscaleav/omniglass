@@ -539,9 +539,13 @@ Devices that read the calendar:
 - **PTZ camera and recording service** (#2775): the Gaze camera reports the people actually in its
   room (nobody in a no-show), frames the group when a meeting starts (tracking on, a tighter shot for
   fewer people) and returns to its home preset when it ends, holding still while the room is empty. The
-  recording service carries a recording in progress for each recorded meeting in the rooms it covers
-  (else its own room) and queues it for ten minutes after it ends. A room with no calendar keeps the
-  old drift. The recording failure feed stays route-driven.
+  recording service (#2757) is one account-wide cloud component, placed once through the manifest's
+  `services:` block and covering every room, with no recorder slot in any standard. It carries a
+  recording in progress for each recorded meeting in the rooms it covers (else its own room) and queues
+  it for ten minutes after it ends, and lists the rooms as a token-paged recordings list, one record
+  per room, which its driver walks and fans out to each room's system by the room id the lab's
+  installer bound, as the scheduling platform's rooms do. A service with no calendar keeps the old drift and lists
+  no room. The recording failure feed stays route-driven.
 - **Room control and switching** (#2776): the room is started and ended for its meetings. The Newtron
   control processor holds the room's system power (`status.control.room_power`, read as `GET ROOMPOWER`) on
   from (by default) two minutes before a booked meeting someone attends (at the start of a walk-in) to five minutes after

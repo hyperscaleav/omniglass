@@ -811,7 +811,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 			seen[sys] = true
 		}
 	}
-	if want := []Count{{"booking-service", len(p.Sites)}, {m.Services[0].Profile.Name, 1}, {m.Services[1].Profile.Name, 1}}; !reflect.DeepEqual(p.Pushers, want) {
+	if want := []Count{{"booking-service", len(p.Sites)}, {m.Services[0].Profile.Name, 1}, {m.Services[1].Profile.Name, 1}, {m.Services[2].Profile.Name, 1}}; !reflect.DeepEqual(p.Pushers, want) {
 		t.Errorf("plan pushers = %v, want %v", p.Pushers, want)
 	}
 	var b bytes.Buffer
@@ -868,6 +868,47 @@ func TestCorporateDeclaresOneMeetingPlatformForTheWholeFleet(t *testing.T) {
 	}
 }
 
+// The corporate scenario declares one recording service for the whole fleet
+// (#2757), a polled cloud service like the scheduling and meeting platforms:
+// placed once at the headquarters covering every system of every site, and no
+// standard carries a recorder of its own.
+func TestCorporateDeclaresOneRecordingServiceForTheWholeFleet(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile string
+	for _, d := range m.Services {
+		if d.Name.Name == "recording" {
+			profile = d.Profile.Name
+		}
+	}
+	if profile == "" {
+		t.Fatal("the corporate manifest declares no recording service")
+	}
+	var placed []PusherPlan
+	for i, s := range p.Sites {
+		for _, ps := range s.Pushers {
+			if ps.Profile != profile {
+				continue
+			}
+			if i != 0 || !ps.Service || ps.Webhook {
+				t.Errorf("site %s carries %s (service %v, webhook %v), want one polled service at the headquarters", s.Name, ps.Name, ps.Service, ps.Webhook)
+			}
+			placed = append(placed, ps)
+		}
+	}
+	if len(placed) != 1 || len(placed[0].Systems) != p.Totals.Systems {
+		t.Fatalf("recording services placed %v, want one covering all %d systems", placed, p.Totals.Systems)
+	}
+	for _, st := range m.Standards {
+		if _, ok := st.Products["recorder"]; ok {
+			t.Errorf("standard %s names a recorder product, want the recording service to be the account's one component", st.Name.Name)
+		}
+	}
+}
+
 // A webhook sender is a component the site's simulator serves beside the
 // site's own (#1747), so the count a site's bring-up waits for includes it,
 // while a token pusher, which is no component, adds nothing.
@@ -881,7 +922,7 @@ func TestASiteSimulatesItsWebhookSendersBesideItsComponents(t *testing.T) {
 	for i, s := range p.Sites {
 		want := s.Totals.Components
 		if i == 0 {
-			want += 2 // the headquarters also runs the fleet's scheduling service (#2765) and its meeting platform (#2790)
+			want += 3 // the headquarters also runs the fleet's scheduling service (#2765), its meeting platform (#2790) and its recording service (#2757)
 		}
 		if got := s.Simulated(); got != want {
 			t.Errorf("site %s simulates %d components, want %d: its %d and the fleet's services if it is the headquarters", s.Name, got, want, s.Totals.Components)

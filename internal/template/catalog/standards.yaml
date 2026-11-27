@@ -192,9 +192,6 @@ templates:
         - name: camera
           label: Camera
           accepted_types: [camera]
-        - name: recorder
-          label: Recorder
-          accepted_types: [generic-service]
         - name: codec
           label: Codec
           accepted_types: [codec]
