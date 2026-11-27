@@ -23,4 +23,4 @@ refusal was a sentence with no way forward ("still owns 2 endpoints", none liste
   as links, each with its own two-step Delete, and retries in place. No cascade was added. A rule's
   Delete moved from More actions to the blade's destructive slot, where every other Delete sits.
 
-Walkthrough: `delete-what-you-made`.
+Walkthroughs: `delete-what-you-made` (the component) and `delete-a-location-that-holds-a-system` (the location), split in #2813 so each fits the 60 second budget.

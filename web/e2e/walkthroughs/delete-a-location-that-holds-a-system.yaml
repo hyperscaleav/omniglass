@@ -1,0 +1,36 @@
+# Delete a location that still holds a system, from the console alone (#2463). The
+# setup makes a pop-up site off camera: a location and a system placed in it. The
+# delete is refused while the system is still placed there, and the confirm names
+# it, with its own Delete, so the cleanup never leaves the dialog. The component's
+# own refusal is delete-what-you-made, whose site this one shares (a create that
+# already exists counts as made, so either runs first): the two together ran past
+# the 60 second budget (#2813), and a demo that will not fit is two demos.
+title: Delete a location that holds a system
+description: Delete a location that still holds a system, clearing the system from the same confirm dialog.
+setup:
+  - post: /locations
+    body: { name: pop-up-site, label: Pop-up site, location_type: campus }
+  - post: /systems
+    body: { name: pop-up-kiosk, label: Pop-up kiosk, location: pop-up-site }
+steps:
+  - goto: /locations/pop-up-site?tab=configure
+    caption: A site made for a pop-up event. It holds one system, so its address opens the system, with the site's own section first.
+  - click: '[data-testid="configure-face-location"] >> role=button[name="More actions"]'
+    caption: The site's own actions menu.
+  - click: 'role=button[name="Delete"s]'
+    caption: Its Delete.
+  - click: '[role=alertdialog] footer >> role=button[name="Delete location"]'
+    caption: Confirm.
+  - wait: { selector: '[data-testid="delete-blockers"] a:has-text("Pop-up kiosk")' }
+    caption: Refused. The kiosk system is still placed here. It links to its own page, in case it should move rather than go.
+    hold: 1500
+  - click: '[data-testid="delete-blockers"] >> role=button[name=/^Delete system/]'
+    caption: This one goes too.
+  - click: '[data-testid="delete-blockers"] >> role=button[name=/^Confirm delete system/]'
+    caption: The system is deleted by its own delete.
+  - click: '[role=alertdialog] footer >> role=button[name="Delete location"]'
+    caption: And the site, from the same dialog.
+  - wait: { role: tree, name: Locations }
+    caption: Everything the pop-up needed is gone, and nothing needed the API.
+    hold: 1500
+    poster: true
