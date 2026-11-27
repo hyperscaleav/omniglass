@@ -1265,7 +1265,18 @@ drivers:
       polls:
         - name: rooms
           schedule: { every: 30s }
-          request: { path: /api/rooms }
+          # The room list pages (#2789): each answer carries the cursor of the
+          # next page in next_page_token, sent back as the query parameter of
+          # the same name, until an answer carries none; one poll walks every
+          # page and fans every room out.
+          request:
+            path: /api/rooms
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 100
+              cursor_from: next_page_token
+              cursor_param: next_page_token
           records: rooms
           identity: { key: ucc-room-id, extract: { jsonpath: id } }
           emits:

@@ -68,6 +68,8 @@ type HTTPAnswer struct {
 	RetryAfter   string
 	Credentialed bool
 	Location     string
+	// Header is the answer's headers by canonical name, first value each.
+	Header map[string]string
 }
 
 // HTTPFetcher sends one http request, faked in unit tests. err is a request
@@ -210,7 +212,7 @@ func (f httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, 
 			credentialed = answered
 		}
 		return HTTPAnswer{Status: resp.StatusCode, Body: body, RetryAfter: resp.Header.Get("Retry-After"),
-			Credentialed: credentialed, Location: resp.Header.Get("Location")}, nil
+			Credentialed: credentialed, Location: resp.Header.Get("Location"), Header: firstValues(resp.Header)}, nil
 	}
 }
 
@@ -527,4 +529,15 @@ func Authenticated(a HTTPAnswer, judged error) (verdict string, ok bool) {
 		return "yes", true
 	}
 	return "", false
+}
+
+// firstValues is a response's headers, the first value of each.
+func firstValues(h http.Header) map[string]string {
+	out := make(map[string]string, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			out[k] = v[0]
+		}
+	}
+	return out
 }

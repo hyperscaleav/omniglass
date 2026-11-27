@@ -43,6 +43,9 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Pins the shipped UCC drivers to the simulated platform's own
 		// answer, so naming the shipped product is what it tests (#1282).
 		"internal/seed/ucc_drivers_test.go": true,
+		// Polls the shipped ucc-rooms driver against the simulated platform's
+		// pages and fans them out to bound owners (#2789).
+		"internal/bus/fanout_paged_test.go": true,
 		// The outpost rename carries the seeded platform rows by name, so
 		// naming the shipped platform product is what it tests (#2059).
 		"internal/storage/outpost_rename_migration_test.go": true,

@@ -123,7 +123,7 @@ func (r Request) BodyFormatOf() string {
 // hasHTTPFields reports a request carrying any field only http reads.
 func (r Request) hasHTTPFields() bool {
 	return r.Method != "" || r.Path != "" || len(r.Query) > 0 || len(r.Headers) > 0 || len(r.Body) > 0 ||
-		r.BodyFormat != "" || r.Format != "" || len(r.Namespaces) > 0
+		r.BodyFormat != "" || r.Format != "" || len(r.Namespaces) > 0 || r.Paginate != nil
 }
 
 // validateHTTPFieldsOff refuses http's request fields on another transport:
@@ -168,6 +168,25 @@ func validateHTTPRequest(what string, r Request, command bool, ss *SessionSpec) 
 	for prefix, uri := range r.Namespaces {
 		if prefix == "" || uri == "" || strings.ContainsAny(prefix, ": \t") {
 			return fmt.Errorf("driver: %s namespace %q = %q: a prefix is a name and its uri is not empty", what, prefix, uri)
+		}
+	}
+	if r.Paginate != nil {
+		if command {
+			return fmt.Errorf("driver: %s declares paginate, which walks a list a poll reads; a command sends one request", what)
+		}
+		if err := r.Paginate.validate(what); err != nil {
+			return err
+		}
+		for _, name := range []string{r.Paginate.SizeParam, r.Paginate.CursorParam, r.Paginate.PageParam} {
+			if _, dup := r.Query[name]; dup && name != "" {
+				return fmt.Errorf("driver: %s paginate parameter %q is also a declared query parameter", what, name)
+			}
+		}
+		if _, dup := r.Headers[r.Paginate.CursorHeader]; dup && r.Paginate.CursorHeader != "" {
+			return fmt.Errorf("driver: %s paginate header %q is also a declared header", what, r.Paginate.CursorHeader)
+		}
+		if r.MethodOf() != "GET" {
+			return fmt.Errorf("driver: %s paginate walks a list with query parameters, so its method is GET", what)
 		}
 	}
 	for name := range r.Query {

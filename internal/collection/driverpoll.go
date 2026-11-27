@@ -178,6 +178,55 @@ func (r *Runner) fetchHTTPPoll(ctx context.Context, t DriverPollTask) (driver.Pa
 		}
 		x.TLS = t.TLS
 	}
+	if pg := t.Fn.Request.Paginate; pg != nil {
+		return r.fetchPagedPoll(ctx, t, x, pg, name)
+	}
+	body, _, proven, err := r.fetchHTTPPage(ctx, t, x, name)
+	if err != nil {
+		return driver.Payload{}, proven, []error{err}
+	}
+	return driver.HTTPPayload(body, t.Fn.Request), proven, nil
+}
+
+// fetchPagedPoll walks a paged list (#2789): every page's request is the
+// declared one plus the page's cursor or number, and the records of all
+// pages come back as the one answer the function reads. A failed page fails
+// the poll with its number and lands nothing.
+func (r *Runner) fetchPagedPoll(ctx context.Context, t DriverPollTask, x HTTPExchange, pg *driver.Pagination, name string) (driver.Payload, []Sample, []error) {
+	endpoint := fmt.Sprintf("driver poll %s %s %s", name, x.Request.MethodOf(), x.Request.Path)
+	var proven []Sample
+	merged, err := pg.Walk(endpoint, t.Fn.Records, func(pr driver.PageRequest) (driver.Page, error) {
+		px := x
+		px.Request.Query = make(map[string]string, len(x.Request.Query)+len(pr.Query))
+		for k, v := range x.Request.Query {
+			px.Request.Query[k] = v
+		}
+		for k, v := range pr.Query {
+			px.Request.Query[k] = v
+		}
+		if len(pr.Header) > 0 {
+			px.Request.Headers = make(map[string]string, len(x.Request.Headers)+len(pr.Header))
+			for k, v := range x.Request.Headers {
+				px.Request.Headers[k] = v
+			}
+			for k, v := range pr.Header {
+				px.Request.Headers[k] = v
+			}
+		}
+		body, hdr, samples, err := r.fetchHTTPPage(ctx, t, px, name)
+		if proven == nil {
+			proven = samples
+		}
+		return driver.Page{Body: body, Header: hdr}, err
+	})
+	if err != nil {
+		return driver.Payload{}, proven, []error{fmt.Errorf("collection: %w", err)}
+	}
+	return driver.HTTPPayload(merged, t.Fn.Request), proven, nil
+}
+
+// fetchHTTPPage sends one request and judges its answer.
+func (r *Runner) fetchHTTPPage(ctx context.Context, t DriverPollTask, x HTTPExchange, name string) ([]byte, map[string]string, []Sample, error) {
 	ans, sx, err := r.DoHTTP(ctx, x, t.Secrets)
 	if err != nil {
 		// A login the component refused proves the credential wrong, as a
@@ -186,7 +235,7 @@ func (r *Runner) fetchHTTPPoll(ctx context.Context, t DriverPollTask) (driver.Pa
 		if terr, ok := AsTerminal(err); ok && terr.Class == driver.ClassAuth {
 			proven = authenticatedSample("no", terr.Error())
 		}
-		return driver.Payload{}, proven, []error{fmt.Errorf("collection: driver poll %s: %w", name, err)}
+		return nil, nil, proven, fmt.Errorf("collection: driver poll %s: %w", name, err)
 	}
 	judged := JudgeHTTPAnswer(ans, sx)
 	var proven []Sample
@@ -198,9 +247,9 @@ func (r *Runner) fetchHTTPPoll(ctx context.Context, t DriverPollTask) (driver.Pa
 		proven = authenticatedSample(verdict, reason)
 	}
 	if judged != nil {
-		return driver.Payload{}, proven, []error{fmt.Errorf("collection: driver poll %s: %w", name, judged)}
+		return nil, nil, proven, fmt.Errorf("collection: driver poll %s: %w", name, judged)
 	}
-	return driver.HTTPPayload(ans.Body, t.Fn.Request), proven, nil
+	return ans.Body, ans.Header, proven, nil
 }
 
 // authenticatedSample is the endpoint-authenticated rung's sample.
