@@ -13,6 +13,7 @@ import (
 // with its summary and example), the same behaviors, the same products and
 // profile listing entry, bar the names that tell the two apart.
 func TestSimulationRoutesDescribeAFamilyAsTheyDescribeItsYAMLTwin(t *testing.T) {
+	t.Parallel()
 	cat, err := spectest.Catalog()
 	if err != nil {
 		t.Fatal(err)

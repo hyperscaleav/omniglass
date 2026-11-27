@@ -11,6 +11,7 @@ import (
 // The dev seed plans a Go family's component exactly as it plans the YAML
 // twin's (#2829): the same address and endpoint for each product.
 func TestPlanDevicesPlansAFamilyProductAsItPlansItsYAMLTwin(t *testing.T) {
+	t.Parallel()
 	cat, err := spectest.Catalog()
 	if err != nil {
 		t.Fatal(err)
@@ -36,6 +37,7 @@ func TestPlanDevicesPlansAFamilyProductAsItPlansItsYAMLTwin(t *testing.T) {
 // A Go family's product that declares no webhook is refused as a sender the way
 // the YAML twin's is: a sender is a profile with a named webhook driver.
 func TestSenderPlansRefuseAFamilyProductAsTheyRefuseItsYAMLTwin(t *testing.T) {
+	t.Parallel()
 	cat, err := spectest.Catalog()
 	if err != nil {
 		t.Fatal(err)
