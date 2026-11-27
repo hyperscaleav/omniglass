@@ -6,6 +6,7 @@
   "skip-changelog": true,
   "include-component-in-tag": false,
   "bootstrap-sha": "11e95be269122deb854bb0c439d6bb4fb705be7a",
+  "last-release-sha": "d9136d717f40ec490e8a0a7616889dff97876a1c",
   "pull-request-header": "Merging this PR is the release: it tags the merge commit and publishes the Release, its image and its binaries (ADR-2652).",
   "pull-request-footer": "demo: none (a release PR changes only the version files)\nregression-test: none (a release PR changes only the version files)",
   "changelog-sections": [

@@ -32,7 +32,7 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
   throwaway lab, covering the CRUD round-trips plus one smoke per console route from the
   route manifest, so a PR cannot merge with a route that errors in a real browser. All of these
   jobs also run on `main` after merge (and on a push to a `release/**` branch, a trigger left
-  from the release branches ADR-2652 retired).
+  from the release branches ADR-2652 retired, removed in #2788).
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and a release's
   notes group it by its type. A malformed title would muddy the history and land in the
@@ -189,6 +189,13 @@ range (`cmd/releasenotes` renders its own format, close to release-please's but 
 go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0 -previous v0.0.0
 ```
 
+**The first release's notes start late.** Everything since `v0.0.0` is over 650 PRs, more notes
+than a GitHub Release body holds (125,000 characters), and a Release that cannot be created leaves
+release-please stuck on an untagged release PR. So `last-release-sha` in the config starts the notes
+at the tip of `main` on the day release-please landed; the history before it is in git, not in any
+Release. Every later release starts from its own previous tag, which is newer, so the setting does
+nothing after the first.
+
 **A release comments** "Released in" with a link to the Release on each PR it ships and each
 issue that PR closed, once per release. A release that ships more than 100 PRs, as the first
 does, skips the comments and says so in the run's summary.
@@ -212,7 +219,8 @@ a release whose image or binaries failed is built again by dispatching **release
 
 Until `1.0`, Omniglass is pre-production software: breaking changes can land in any release,
 without notice, and it is not for production use. The README and the docs home page say so, and
-every release's notes will too; the notice comes off in the PR that cuts `1.0`.
+every release's notes will too once #2787 writes it into the Release; the notice comes off in
+the PR that cuts `1.0`.
 
 ## The soak gate
 
