@@ -210,6 +210,12 @@ jobs:
       # Attach the cross-platform binaries to the Release just created, built
       # inline for the same reason as the image. Shares .goreleaser.yaml with
       # goreleaser.yml's PR snapshot.
+      # goreleaser's before hook runs make web, which installs web/ with pnpm (#2709).
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        if: env.PUBLISH == 'true'
+        with:
+          version: 10
+
       - name: Set up Node (for the embedded console build)
         if: env.PUBLISH == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
