@@ -18,6 +18,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
@@ -635,5 +636,18 @@ func TestParityHTTPStatusDocument(t *testing.T) {
 	}
 	if orders[httpapi.ModelFirst] < 3 || orders[httpapi.UptimeFirst] < 3 {
 		t.Fatalf("each key order needs three profiles behind it: %v", orders)
+	}
+}
+
+// A Go route that leaves its status unset answers 200, as a handler that
+// writes a body does; net/http panics on a zero status.
+func TestGoRouteWithNoStatusAnswersOK(t *testing.T) {
+	dev := NewDevice("g", "g", net.ParseIP("127.0.0.1"), "p", 1, nil)
+	dev.AttachRoute(surface.Route{Method: "GET", Path: "/x", Serve: func() surface.Response {
+		return surface.Response{Body: []byte("hi")}
+	}})
+	code, _, body := serveGET(t, dev, "/x")
+	if code != 200 || string(body) != "hi" {
+		t.Fatalf("got %d %q", code, body)
 	}
 }

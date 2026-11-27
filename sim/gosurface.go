@@ -75,6 +75,9 @@ func (d *Device) serveGoRoute(w http.ResponseWriter, r *http.Request) bool {
 		if resp.ContentType != "" {
 			w.Header().Set("Content-Type", resp.ContentType)
 		}
+		if resp.Status == 0 {
+			resp.Status = http.StatusOK
+		}
 		w.WriteHeader(resp.Status)
 		_, _ = w.Write(resp.Body)
 		return true
