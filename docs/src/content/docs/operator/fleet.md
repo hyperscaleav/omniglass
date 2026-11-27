@@ -85,6 +85,19 @@ screenshots:
         selector: "role=tab[name='Activity']"
       - action: click
         selector: "[data-testid=stretch-0] button"
+      # The lab opens with the room commissioning for about a second before
+      # it reads healthy, a stretch the list keeps or drops by whether it
+      # outlasted half a second (stretchesOf), which follows the host's speed,
+      # so the list held one row on a fast host and two on a slow one and
+      # everything below it moved with that (#2707). Only the ongoing stretch
+      # (stretch-0, ongoing first) is the shot, so the rest are taken out of
+      # both renders, and the capture refuses a list that still shows other
+      # than one row.
+      - action: hide
+        selector: "[data-testid=stretch-list] > li:not([data-testid=stretch-0])"
+      - action: expect-count
+        selector: "[data-testid=stretch-list] > li"
+        count: 1
     alt: "The Activity tab, statuspage style: the 30-day uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
@@ -92,6 +105,11 @@ screenshots:
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
       - "text=/\\u2192/ >> xpath=ancestor::li[1]"
       - ".og-statestrip"
+      # The alarm markers under the strip sit at the raise's share of the
+      # window, which runs from the lab's first record to now, so the
+      # marker's x follows the lab's age at capture (#2802). The row holds
+      # still (full width, fixed height), the markers inside it do not.
+      - "[aria-label='Alarm raises on this timeline']"
       # The logs under the health history render seed-run stamps.
       - "[data-testid=logs-tab]"
       # A rule's event lands when its sustain passes after the seed (#2434),
