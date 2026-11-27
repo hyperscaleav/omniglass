@@ -15,6 +15,7 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 | --- | --- |
 | `sim/` | The engine: devices, faces per protocol, behavior, faults, state, observation. |
 | `sim/profiles/` | Device profiles as data (`devices/`, `surfaces/`, `templates/`), embedded into the binary. |
+| `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. |
 | `sim/profile/` | The profile model: parse, validate, resolve includes. |
 | `sim/fleet/` | Deterministic naming and enrichment of fleet members. |
 | `sim/impair/` | Network impairment (firewall table and qdisc) for a simulated device. |

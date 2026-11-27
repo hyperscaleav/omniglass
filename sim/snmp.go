@@ -236,46 +236,12 @@ func (d *Device) buildOIDEntries(sorted []string, port int, community string) []
 			OID:  oid,
 			Type: asn1Type,
 			OnGet: func() (interface{}, error) {
-				start := time.Now()
-				val, err := d.snmpValue(oid, statePath, asn1Type)
-				if d.RequestPublisher != nil {
-					status := 200
-					if err != nil {
-						status = 500
-					}
-					// Method="GET" is conservative, gosnmp routes both
-					// GET and GETNEXT through OnGet (GETNEXT is a successor
-					// lookup that resolves to a specific OID, which is
-					// what reaches us). Distinguishing here would require
-					// a deeper hook into the SNMP server pipeline that
-					// the library doesn't expose.
-					//
-					// LocalAddr carries the raw listener address because
-					// gosnmp doesn't expose the peer through OnGet; source
-					// labelling is left to the hit consumer.
-					d.RequestPublisher(RequestEvent{
-						DeviceID:   d.DeviceID,
-						Hostname:   d.Hostname,
-						Protocol:   "snmp",
-						Method:     "GET",
-						Port:       port,
-						Path:       oid,
-						Status:     status,
-						LocalAddr:  listenerAddr,
-						DurationMs: time.Since(start).Milliseconds(),
-						Details: map[string]any{
-							"oid":        oid,
-							"value":      val,
-							"asn1_type":  asn1Type.String(),
-							"state_path": statePath,
-							"community":  community,
-						},
-					})
-				}
-				return val, err
+				return d.reportOID(oid, statePath, asn1Type, port, community, listenerAddr,
+					func() (interface{}, error) { return d.snmpValue(oid, statePath, asn1Type) })
 			},
 		})
 	}
+	items = append(items, d.goOIDEntries(port, community, listenerAddr)...)
 	return items
 }
 
@@ -411,3 +377,41 @@ func (snmpLogger) Errorf(format string, args ...interface{}) {
 	slog.Error("snmp: " + fmt.Sprintf(format, args...))
 }
 func (snmpLogger) Errorln(args ...interface{}) { slog.Error("snmp: " + fmt.Sprint(args...)) }
+
+// reportOID answers one OID read through get and publishes the request
+// event; the one path a mapped OID and a Go-declared OID both take.
+func (d *Device) reportOID(oid, statePath string, asn1Type gosnmp.Asn1BER, port int, community, listenerAddr string,
+	get func() (interface{}, error)) (interface{}, error) {
+	start := time.Now()
+	val, err := get()
+	if d.RequestPublisher != nil {
+		status := 200
+		if err != nil {
+			status = 500
+		}
+		// Method="GET" is conservative, gosnmp routes both GET and GETNEXT
+		// through OnGet (GETNEXT is a successor lookup that resolves to a
+		// specific OID, which is what reaches us). LocalAddr carries the raw
+		// listener address because gosnmp doesn't expose the peer through
+		// OnGet; source labelling is left to the hit consumer.
+		d.RequestPublisher(RequestEvent{
+			DeviceID:   d.DeviceID,
+			Hostname:   d.Hostname,
+			Protocol:   "snmp",
+			Method:     "GET",
+			Port:       port,
+			Path:       oid,
+			Status:     status,
+			LocalAddr:  listenerAddr,
+			DurationMs: time.Since(start).Milliseconds(),
+			Details: map[string]any{
+				"oid":        oid,
+				"value":      val,
+				"asn1_type":  asn1Type.String(),
+				"state_path": statePath,
+				"community":  community,
+			},
+		})
+	}
+	return val, err
+}

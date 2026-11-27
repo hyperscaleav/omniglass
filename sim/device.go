@@ -29,6 +29,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -305,6 +306,12 @@ type Device struct {
 	routes   []routeEntry
 	commands []commandEntry
 
+	// The Go-declared surfaces (sim/surface, #2831), attached before the
+	// device serves; see gosurface.go.
+	goCommands []surface.Commander
+	goRoutes   []surface.Route
+	goOIDs     []surface.OID
+
 	// behaviorMu guards the behaviors slice, the overrides slice, and
 	// every entry's stop/done channels. Separate from mu (which guards
 	// state) so a long applyMutations under mu doesn't block
@@ -456,6 +463,9 @@ func (d *Device) CommandList() []string {
 	out := make([]string, 0, len(d.commands))
 	for _, c := range d.commands {
 		out = append(out, c.Match)
+	}
+	for _, c := range d.goCommands {
+		out = append(out, c.Commands()...)
 	}
 	return out
 }
@@ -1331,6 +1341,10 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 
 	reqCtx := parseRequestContext(r)
 
+	if d.serveGoRoute(rec, r) {
+		return
+	}
+
 	for _, route := range d.routes {
 		if r.Method != route.Method || r.URL.Path != route.Path {
 			continue
@@ -1954,7 +1968,7 @@ func (d *Device) RunCommand(cmd string) (result CommandResult, ok bool, err erro
 		result.Response = buf.String()
 		return result, true, nil
 	}
-	return CommandResult{}, false, nil
+	return d.runGoCommand(cmd)
 }
 
 // parseMatch splits "GET /path" into method and path.
