@@ -3,7 +3,7 @@ title: "The lab calendar is derived, not stored, and a scripted source feeds it 
 date: 2026-11-26
 status: Accepted
 summary: "A lab's meetings are one calendar every simulated room acts out, a pure function of the scenario's calendar block, a seed and a window, so every simulator and the server compute the same one with nothing stored or shipped; services that span rooms read it by room key; a scripted problem source joins it on the same clock as a second entry kind."
-refs: [2757, 2764, 2769, 2773, 2798]
+refs: [2757, 2764, 2769, 2773, 2797, 2798]
 ---
 
 - **Date:** 2026-11-26 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/)
@@ -93,3 +93,16 @@ refs: [2757, 2764, 2769, 2773, 2798]
   `GET /lab/calendar` payload are unchanged on the wire (a golden of a pinned day, recorded before the
   change, holds it). A guard test (`internal/build`) keeps payload pointers, entry literals and the
   `caltest` helper out of non-test code outside `sim/calendar`.
+- **Amended (#2797): one room phase, derived once.** Timing rules were worked out again in about a dozen
+  profile templates (`roomInUse 120 300`, "attended", "in a call", "sharing"), so retuning one silently split
+  a room. `calendar.StateAt` is now the one primitive: a room's phase (idle, waking, in-meeting, sharing,
+  cooldown, impaired) and the facts its devices read, a pure function of the calendar like the rest. The wake
+  lead, cooldown tail, recording tail and sharing stretch are knobs of `calendar.meetings` per standard
+  (`wake_lead_seconds`, `cooldown_seconds`, `recording_tail_seconds`, `sharing`), defaulting to the values the
+  profiles carried, so no reading moved. The engine memoizes the state per room per second; templates read it
+  through `roomPhase`, `roomPhaseOf` and `ownerPhase`; `roomInUse` and `meetingSharing` are retired, and a
+  guard test fails if a profile does arithmetic on a meeting's time. An impairment is read from the calendar's
+  problem entries and shows as the `impaired` phase, but `impaired` takes the phase label only: `in_use`,
+  `call_active` and `sharing` still follow the meetings, because a problem is something done to a device, not
+  a reason for the room to stop meeting. The sharing stretch is whole numbers (parts of a meeting), not
+  fractions, so it is exact at every second.

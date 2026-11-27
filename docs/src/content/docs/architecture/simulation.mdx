@@ -387,7 +387,8 @@ organized it, how many were expected and how many came, how it went (**held**, *
 
 The scenario declares meetings in its `calendar.meetings` block, a set of knobs per standard
 (`booking_rate`, `slot_mix`, `no_show_rate`, `ended_early_rate`, `ended_late_rate`, `attendance`,
-`walk_in_rate`, `hours`, `recording_rate`); a bad block is refused at load naming the field
+`walk_in_rate`, `hours`, `recording_rate`, and the room's timing, `wake_lead_seconds`,
+`cooldown_seconds`, `recording_tail_seconds` and `sharing`, [below](#the-room-phase)); a bad block is refused at load naming the field
 ([the lab guide](/developer/lab/#scale-lab-scenarios)). Each room's day is generated whole from its
 seed, its room key and the UTC day, so a day reads the same whichever window asks for it, across
 runs and across engines:
@@ -418,6 +419,42 @@ by its key with `roomMeetingNow` and `roomMeetingNext`; `meetingPrev` and `roomM
 **room key**, not by system: the calendar is keyed by room, and a push's `.Owner` is a system, so a
 service resolves its owner to the room key before it reads, through
 [the world the simulator holds](#the-world-it-holds).
+
+#### The room phase
+
+Every device in a room reads **one derived room state**, not timing rules worked out again in its own
+profile (#2797, [ADR-2757](/architecture/decisions/#adr-2757-the-lab-calendar-is-derived-not-stored-and-a-scripted-source-feeds-it-problems)).
+`calendar.StateAt(room, instant)` is a pure function of the calendar, so a control processor, a touch
+panel, a display, a bar and a PDU in one room cannot disagree. It gives a **phase**, one of:
+
+| Phase | The room is |
+| --- | --- |
+| `idle` | in none of the others |
+| `waking` | in the lead before a booked meeting someone will attend (a walk-in has none) |
+| `in-meeting` | in a meeting someone attends |
+| `sharing` | in a running meeting that is sharing content |
+| `cooldown` | in the tail after a meeting that took place |
+| `impaired` | under a scripted problem (read through the calendar's problem entries) |
+
+and the facts readers need: `occupancy` (the phase the meetings alone give, so a reading that holds
+whatever goes wrong reads it), `in_use` (waking, in a meeting, sharing or cooling down), `call_active`,
+`attendees`, `sharing`, `scheduled`, `impaired`, `building_open`, `use_until`, `recording_pending`, `meeting`
+(the running meeting, a no-show included) and `has_calendar`. A no-show holds its slot with nobody in it
+and wakes and cools nothing. `impaired` outranks the other phases in `phase`, and moves nothing else: a
+panel under an impairment still reads the meeting beneath it.
+
+The wake lead, the cooldown tail, the recording tail and the sharing stretch are declared once per
+standard in the `calendar.meetings` knobs (`wake_lead_seconds` 120, `cooldown_seconds` 300,
+`recording_tail_seconds` 600, `sharing` the middle third, `{min_minutes: 30, parts: 3, from_part: 1,
+to_part: 2}` of a meeting), validated at load like the others, and unset they read those values. A
+profile carries none of them: a guard test fails the build if one writes arithmetic on a meeting's time, or
+calls the retired `roomInUse` or `meetingSharing`. A template reads the phase with `roomPhase` (its own
+room), `roomPhaseOf site building room` (a service that speaks for many) and `ownerPhase owner`, each a map
+with every key present, so `{{ if (roomPhase).in_use }}` is the whole rule.
+
+The engine computes a room's state **once per room per second** through one memo, however many devices read
+it (the booked-meetings reading of the scheduling surfaces rides the same memo), keyed by the calendar and
+world it was read through and the device clock's second.
 
 Devices that read the calendar:
 
@@ -515,16 +552,16 @@ Devices that read the calendar:
   the conferencing input while a meeting is held, the lectern laptop through the sharing stretch and the empty
   input between meetings and through a no-show, so it is on a real source exactly when the video bar in the
   room is in a call; an operator's route inside a meeting holds until the meeting asks for another. The
-  extender carries a signal exactly while a meeting is held, its link staying the cable's. `roomInUse` and
-  `meetingSharing` are the two readings the room's devices share. A device whose room has no calendar keeps
-  its previous state. The bar's and the codec's content sharing is the same stretch (`meetingSharing`), so
+  extender carries a signal exactly while a meeting is held, its link staying the cable's. The room phase's `in_use` and
+  `sharing` are the two readings the room's devices share. A device whose room has no calendar keeps
+  its previous state. The bar's and the codec's content sharing is the same stretch (the phase's `sharing`), so
   the switcher is on the laptop input exactly while the bar shares; a bar in a room with no calendar, or
   in a call someone dialed, keeps its own random draw. An operator's share or stop holds until the calendar's sharing next changes.
 - **Rack power** (#2777): the Ferrite PDU's outlet load is a pure function of the calendar, not a
   walk. Its outlets map to the room's gear by a fixed table in the profile (outlet 1 the video chain
   of display, bar and codec, outlet 2 the DSP and the control processor, outlet 3 the amplifier,
   outlet 4 nothing plugged in), so no new function and no look at another device: the gear is awake
-  by the displays' rule above (`roomInUse`, shared with the control processor) and each outlet reads a level for it (the video outlet and the
+  by the displays' rule above (the phase's `in_use`, shared with the control processor) and each outlet reads a level for it (the video outlet and the
   amplifier rise again while a meeting has somebody in the room). A switched-off outlet draws
   nothing, the total is the outlets', and the energy counter accrues the total's draw each tick, so a
   busy room's rack reads more by evening than an idle one's. The mains voltage stays noise. A PDU

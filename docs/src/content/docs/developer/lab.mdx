@@ -1224,6 +1224,12 @@ calendar:                       # what every room acts out on the simulator's cl
       walk_in_rate: 0.08        # the chance a free 15-minute cell holds a walk-in
       hours: { start: 8, end: 18 }   # UTC hours meetings fall in; omit for the whole day
       recording_rate: 0.15      # the share of meetings that took place that are recorded
+      # How the room around its meetings behaves, read by every device in it through the room
+      # phase. All optional; omitted, they read the values shown.
+      wake_lead_seconds: 120    # a room wakes this long before a booked meeting someone attends
+      cooldown_seconds: 300     # and stays in use this long after a meeting that took place
+      recording_tail_seconds: 600   # a recorded meeting's recording is processed this long after
+      sharing: { min_minutes: 30, parts: 3, from_part: 1, to_part: 2 }   # a meeting this long shares from part 1 to part 2 of 3
   problems:                     # what goes wrong on a schedule (#2769), scripted and not drawn
     - name: tuesday-display-dark
       cadence: weekly           # daily; weekly (with weekday); monthly (with day, or nth and weekday)

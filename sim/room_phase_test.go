@@ -98,7 +98,7 @@ func TestRoomPhaseFuncsReadEveryKeyAndTheNoCalendarFallback(t *testing.T) {
 	if got := stampBehavior(t, d, `{{ (roomPhaseOf "hq" "tower" "tower-1-01").phase }}`); got != "in-meeting" {
 		t.Errorf("roomPhaseOf = %q (every room of this calendar has the same knobs, a seeded day apiece)", got)
 	}
-	if got := stampBehavior(t, d, `{{ (ownerPhase "nobody").has_calendar }}`); got != "false" {
+	if got := fmt.Sprint(stampBehavior(t, d, `{{ (ownerPhase "nobody").has_calendar }}`)); got != "false" {
 		t.Errorf("an owner the world does not name reads has_calendar %v", got)
 	}
 	e.SetCalendar(nil)
@@ -226,11 +226,11 @@ func TestRoomPhaseReadsTheBuildingOpen(t *testing.T) {
 	e, ds := phaseRoomEngine(t, phaseDayKnobs(), &at, "boreal-edge-86")
 	e.SetWorld(&world.World{})
 	d := ds["boreal-edge-86"]
-	if got := stampBehavior(t, d, `{{ (roomPhase).building_open }}`); got != "true" {
+	if got := fmt.Sprint(stampBehavior(t, d, `{{ (roomPhase).building_open }}`)); got != "true" {
 		t.Errorf("08:40 inside hours 8 to 14: %v", got)
 	}
 	at = phaseAt(15, 0, 0)
-	if got := stampBehavior(t, d, `{{ (roomPhase).building_open }}`); got != "false" {
+	if got := fmt.Sprint(stampBehavior(t, d, `{{ (roomPhase).building_open }}`)); got != "false" {
 		t.Errorf("15:00 outside hours: %v", got)
 	}
 }
