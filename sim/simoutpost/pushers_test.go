@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -95,7 +96,7 @@ func TestStartPushersRunsEachPusherWithItsToken(t *testing.T) {
 	e, err := startPushers(store, ts.URL, []Pusher{
 		{Name: "a-booking-1", Profile: "booking-service", Token: "tok-a"},
 		{Name: "b-booking-1", Profile: "booking-service", Token: "tok-b"},
-	})
+	}, nil, sim.Clock{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestStartPushersRefusesAProfileThatCannotPush(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range []string{"no-such-profile", "generic-device"} {
-		if _, err := startPushers(store, "http://127.0.0.1:1", []Pusher{{Name: "x", Profile: p, Token: "t"}}); err == nil || !strings.Contains(err.Error(), p) {
+		if _, err := startPushers(store, "http://127.0.0.1:1", []Pusher{{Name: "x", Profile: p, Token: "t"}}, nil, sim.Clock{}); err == nil || !strings.Contains(err.Error(), p) {
 			t.Errorf("profile %s: %v, want refused naming it", p, err)
 		}
 	}

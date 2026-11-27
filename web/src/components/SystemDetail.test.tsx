@@ -148,6 +148,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("a system's blade is titled by its name and its address (#2757)", () => {
+  it("titles the blade by the system's label with its location's label beside it, the blade having no path", async () => {
+    mountBlade();
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getByText("Boardroom", { selector: "[data-system-label]" })).toBeTruthy();
+    expect(within(blade).getByText("Boardroom A", { selector: "[data-system-address]" })).toBeTruthy();
+  });
+});
+
 describe("one body in two hosts", () => {
   it("the blade renders every section, on every tab, that the page renders", async () => {
     mountPage();

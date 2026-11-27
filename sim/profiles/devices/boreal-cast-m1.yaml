@@ -3,13 +3,18 @@
 #
 # Boreal is the lab's fictional display manufacturer. The Cast M1 is the
 # small media player behind a lobby or corridor sign: it holds a playlist
-# on local storage and plays it to the display it drives, all day. What
+# on local storage and plays it to the display it drives, through the building's day. What
 # an operator watches it for is whether it is playing, what it is
 # playing, and whether its storage is filling up.
 #
 # Its one face is an HTTP JSON API behind an api key header
 # (X-Boreal-Key), the way signage players are integrated with a content
 # management system: no SNMP, no command line.
+#
+# In a lab with a calendar (#2757, #2768) the player follows the building's
+# day, not its meetings: it plays through the hours its building's rooms
+# declare for their meetings (`buildingHours`) and stops outside them, starting the playlist
+# over at opening. The playlist's pace and the storage fill stay noise.
 
 name: boreal-cast-m1
 manufacturer: Boreal
@@ -76,6 +81,25 @@ computed:
 # Storage fills slowly as content syncs down, between bounds. A scenario
 # timeline can stop playback or fill the disk later.
 behaviors:
+  # A sign follows the building's day, not its meetings (#2768): it plays
+  # while the hours its building is open say so and stops outside
+  # them. The change at opening and closing is the edge, so an operator's
+  # pause holds until the next one; a player whose room has no hours to read
+  # plays on. Opening starts the playlist again from its first item.
+  - name: building_day
+    schedule:
+      interval: 60s
+      on_start: true
+    mutations:
+      - path: status.playback.state
+        value: '{{ $was := .State.status.sim.open }}{{ $cur := .State.status.playback.state }}{{ with buildingHours }}{{ if eq .open $was }}{{ $cur }}{{ else if .open }}playing{{ else }}stopped{{ end }}{{ else }}{{ $cur }}{{ end }}'
+      - path: status.playback.index
+        value: '{{ $was := .State.status.sim.open }}{{ $i := .State.status.playback.index }}{{ with buildingHours }}{{ if and .open (not $was) }}0{{ else }}{{ $i }}{{ end }}{{ else }}{{ $i }}{{ end }}'
+      - path: status.playback.content
+        value: '{{ $i := printf "%v" .State.status.playback.index }}{{ if eq $i "0" }}Welcome loop{{ else if eq $i "1" }}Wayfinding{{ else if eq $i "2" }}Today''s events{{ else }}Safety notice{{ end }}'
+      - path: status.sim.open
+        value: '{{ $was := .State.status.sim.open }}{{ with buildingHours }}{{ .open }}{{ else }}{{ $was }}{{ end }}'
+
   - name: playlist_advance
     schedule:
       interval: 90s
@@ -101,6 +125,8 @@ defaults:
       state: playing
       index: 0
       content: "Welcome loop"
+    sim:
+      open: true
     storage:
       used_percent: 41.5
       total_gb: 64

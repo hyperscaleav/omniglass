@@ -28,6 +28,27 @@ describe("search hits", () => {
     expect(fleetHref("locations", "a/b")).toBe("/locations/a%2Fb");
   });
 
+  // A system is its name and its address (#2757): the hit reads the label, and
+  // the detail beside it the location the system sits at, in the location's
+  // own words, not the path of names it falls back to.
+  it("reads a system hit as its name with the address of its location beside it", () => {
+    const r = searchHits({
+      locations: [],
+      systems: [
+        { id: uuidFor("s1"), name: "hq-conf-1", label: "Curie", location_path: "hq / hq-tower / hq-tower-12-01", location: "Hq Tower 12 01" },
+        { id: uuidFor("s2"), name: "dev-board", label: "Boardroom A", location_path: "dev / boardroom-a", location: "Boardroom A" },
+        { id: uuidFor("s3"), name: "loose", location_path: "" },
+      ],
+      components: [],
+      catalog: [],
+    });
+    expect(r.map((h) => [h.label, h.detail])).toEqual([
+      ["Curie (hq-conf-1)", "Hq Tower 12 01"],
+      ["Boardroom A (dev-board)", "dev / boardroom-a"],
+      ["loose", undefined],
+    ]);
+  });
+
   it("opens a catalog entry at its drawer address and drops a kind the console has no drawer for", () => {
     const d = hits.find((h) => h.group === "Catalog")!;
     expect(d.command?.entity).toEqual({ kind: "driver", address: "boreal-edge-snmp" });

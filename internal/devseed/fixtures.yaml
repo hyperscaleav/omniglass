@@ -545,6 +545,57 @@ components:
   - key: sched-b
     product: newtron-slate-5
     location: boardroom-b
+  - key: census-a
+    product: tessellate-census-c1
+    location: boardroom-a
+  - key: proj-a
+    product: boreal-beam-340
+    location: boardroom-a
+  - key: cam-a
+    product: kestrel-gaze-p2
+    location: boardroom-a
+  - key: cp-a
+    product: newtron-core-3
+    location: boardroom-a
+  - key: sw-a
+    product: meridian-mx-84
+    location: boardroom-a
+  - key: ext-a
+    product: meridian-xl-1
+    location: boardroom-a
+  - key: codec-a
+    product: kestrel-relay-c1
+    location: boardroom-a
+  - key: wmic-a
+    product: lyra-hx-1
+    location: boardroom-a
+  - key: census-b
+    product: tessellate-census-c1
+    location: boardroom-b
+  - key: proj-b
+    product: boreal-beam-340
+    location: boardroom-b
+  - key: cam-b
+    product: kestrel-gaze-p2
+    location: boardroom-b
+  - key: power-b
+    product: ferrite-pdu-4c
+    location: boardroom-b
+  - key: cp-b
+    product: newtron-core-3
+    location: boardroom-b
+  - key: sw-b
+    product: meridian-mx-84
+    location: boardroom-b
+  - key: ext-b
+    product: meridian-xl-1
+    location: boardroom-b
+  - key: codec-b
+    product: kestrel-relay-c1
+    location: boardroom-b
+  - key: wmic-b
+    product: lyra-hx-1
+    location: boardroom-b
   # The divisible pair's ONE audio rack, physically in room A, serving both
   # sides through zones: the same two components satisfy both sides' dsp and
   # amplifier slots (the shared-component quorum case, #802; the old "shared
@@ -556,11 +607,11 @@ components:
     product: polaris-amp-4100
     location: boardroom-a
   # The room's rack power conditioner (#1368), a networked Ferrite PDU the
-  # simulator answers over SNMP. It classifies as a power-device, a type no
-  # slot's accepted_types names, so no slot can want it. It is in the room and
-  # accounted for, and nothing more, which is exactly the case membership
-  # exists to carry. It is also the one component that keeps a typed label:
-  # the operator calls it the power conditioner, not "Power Device 1".
+  # simulator answers over SNMP. It classifies as a power-device, which the
+  # standard's optional power slot accepts (#2777), and it fills that slot
+  # (below): the room carries one PDU, never a second beside it. It is also the
+  # one component that keeps a typed label: the operator calls it the power
+  # conditioner, not "Power Device 1".
   - key: power
     product: ferrite-pdu-4c
     label: Power Conditioner
@@ -1397,15 +1448,13 @@ systems:
     location: dep-r3
 
 # Membership without a job. The audio rack staffs dsp and amplifier in both
-# halves (below, through assignment), but the power conditioner fills no declared
-# slot at all: it is in the room, it is accounted for, and no slot wants it. A
-# model that only knew about staffing would lose it. The depot's service stock
+# halves (below, through assignment); the rows below are in a system and
+# accounted for while no assignment names them. A
+# model that only knew about staffing would lose them. The depot's service stock
 # (the spare bars, mics, and displays racked in the bays) deliberately joins NO
 # system: stock relates to the bay it sits in, not to the bay's signage, so it
 # is roomed and unbound, like the lobby's uncommissioned endpoint above.
 members:
-  - system: boardroom-a
-    component: power
   # One service, two tops. No slot wants it, so it is membership and nothing
   # more, which is exactly what the many-valued binding is for.
   - system: auditorium-av
@@ -1457,6 +1506,33 @@ slot_assignments:
     slot: scheduling-panel
     component: sched-a
   - system: boardroom-a
+    slot: people-counter
+    component: census-a
+  - system: boardroom-a
+    slot: projection
+    component: proj-a
+  - system: boardroom-a
+    slot: codec
+    component: codec-a
+  - system: boardroom-a
+    slot: power
+    component: power
+  - system: boardroom-a
+    slot: control-system
+    component: cp-a
+  - system: boardroom-a
+    slot: video-switcher
+    component: sw-a
+  - system: boardroom-a
+    slot: display-endpoint
+    component: ext-a
+  - system: boardroom-a
+    slot: camera
+    component: cam-a
+  - system: boardroom-a
+    slot: wireless-mic
+    component: wmic-a
+  - system: boardroom-a
     slot: dsp
     component: div-dsp
   - system: boardroom-a
@@ -1483,6 +1559,33 @@ slot_assignments:
   - system: boardroom-b
     slot: scheduling-panel
     component: sched-b
+  - system: boardroom-b
+    slot: people-counter
+    component: census-b
+  - system: boardroom-b
+    slot: projection
+    component: proj-b
+  - system: boardroom-b
+    slot: codec
+    component: codec-b
+  - system: boardroom-b
+    slot: power
+    component: power-b
+  - system: boardroom-b
+    slot: control-system
+    component: cp-b
+  - system: boardroom-b
+    slot: video-switcher
+    component: sw-b
+  - system: boardroom-b
+    slot: display-endpoint
+    component: ext-b
+  - system: boardroom-b
+    slot: camera
+    component: cam-b
+  - system: boardroom-b
+    slot: wireless-mic
+    component: wmic-b
   - system: boardroom-b
     slot: dsp
     component: div-dsp
@@ -2321,6 +2424,12 @@ sim_endpoints:
     driver: kestrel-ws
     label: Bar control socket
     inputs: { login: sim-kestrel-login }
+  # The people counter's raw-TCP band, the one that answers its head-count
+  # (#2757), beside its http API.
+  - component: census-a
+    driver: tessellate-census-feed
+    label: People counter feed
+    inputs: {}
   # The display's web admin over http digest.
   - component: panel-a
     driver: boreal-edge-web
@@ -2365,6 +2474,12 @@ sim_components:
   # webhooks, the conduit the bindings below fan out from.
   - key: ucc-platform
     product: ucc-platform
+    location: hq
+  # The room-booking platform's scheduling service (#2765): one component for
+  # the account, polled by scheduling-service-api, so the dev fleet runs the
+  # driver the way the lab's scale plan does.
+  - key: scheduling-service
+    product: scheduling-service
     location: hq
 
 # The fan-out's identity bindings (#1282, ADR-1282): each room id the

@@ -21,12 +21,12 @@ turns:
         arguments: {name: hq-mr86-1}
   - think: 2.1s
     reasoning: >-
-      Down, with the main-display slot short and display-1 impaired. Check
+      Down, with the main-display slot short and hq-mr86-1-main-display-1 impaired. Check
       whether the display still answers on any protocol before guessing at a
       cause.
     tool_calls:
       - name: get-component-reachability
-        arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+        arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}
   - think: 3.8s
     reasoning: >-
       Ping and SNMP went dark together, so this is power or the network drop,
@@ -46,12 +46,12 @@ conversations:
     turns: &triage
       - tool_calls:
           - name: get-component
-            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}
           - name: list-component-alarms
-            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}
       - tool_calls:
           - name: get-component-reachability
-            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}
+            arguments: {name: hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}
       - text: >-
           The display's High alarm is active: it stopped answering ping and SNMP at
           the same moment, so the device is dark, not misconfigured. Its room is

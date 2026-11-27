@@ -942,11 +942,23 @@ describe("the system card's header says each thing once (#872)", () => {
 });
 
 describe("the location is context, the system the subject (#872)", () => {
-  it("titles a sole system's view by its location and ends the path at the location's parent", () => {
+  // The room's name is the system's label and the room's address its location
+  // (#2757): a sole system's page is titled by the name with the address
+  // beside it, and the path still ends at the location's parent, so the
+  // address is named once.
+  it("titles a sole system's view by its name with its location as the address, and ends the path at the location's parent", () => {
     mount();
-    expect(pageHeader()?.title).toBe("Boardroom A");
+    const h1 = within(screen.getByTestId("header-line-1")).getByRole("heading", { level: 1 });
+    expect(within(h1).getByText("Boardroom", { selector: "[data-system-label]" })).toBeTruthy();
+    expect(within(h1).getByText("Boardroom A", { selector: "[data-system-address]" })).toBeTruthy();
     expect(screen.queryByTestId("breadcrumb")?.textContent ?? "").not.toContain("Boardroom A");
     expect(within(screen.getByTestId("header-line-1")).getByRole("link", { name: "Systems" })).toBeTruthy();
+  });
+
+  it("says a system named for its room once", async () => {
+    const r = mount();
+    r.qc.setQueryData([...FLEET_VIEW_KEY], { ...view, systems: (view.systems ?? []).map((s) => (s.id === uuidFor("szp-sys") ? { ...s, label: "Boardroom A" } : s)) });
+    await waitFor(() => expect(within(screen.getByTestId("header-line-1")).getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A"));
   });
 
   it("shows the location as a card naming its type, without repeating its name", () => {

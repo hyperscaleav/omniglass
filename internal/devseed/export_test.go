@@ -74,3 +74,8 @@ type PlannedSender = plannedSender
 // PlanSenders plans a scenario plan's webhook senders against the shipped
 // simulator profiles and drivers, with no database.
 func PlanSenders(p *scenario.Plan) ([]PlannedSender, error) { return shippedSenders(rowsOf(p)) }
+
+// SlotLabels exposes the slot numbering to the label tests.
+func SlotLabels(doc Doc, typeLabels map[string]string) map[string]string {
+	return slotLabels(doc, typeLabels)
+}

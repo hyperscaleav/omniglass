@@ -23,7 +23,8 @@ import (
 // off its own grant (GET /auth/me), and posts each one's batch through
 // POST /telemetry:push on its profile's cadence. The batch is the profile's
 // body template rendered per system over the device's state and clock, so a
-// pusher is a profile, not code: the booking service is the first.
+// pusher is a profile, not code: the booking service is the first, and reads
+// the lab calendar (ownerBookings) for what it reports.
 
 // pushTimeout bounds one call to the server, so a server that accepts and
 // never answers does not stall the face past its next tick.
@@ -123,12 +124,15 @@ func clockOffset(s string) (time.Duration, error) {
 }
 
 // pushFuncs are the template functions a push body renders with.
-func pushFuncs() template.FuncMap {
+func pushFuncs(extra template.FuncMap) template.FuncMap {
 	funcs := template.FuncMap{}
 	for name, fn := range templateFuncs {
 		funcs[name] = fn
 	}
 	funcs["bookingsAt"] = bookingsAt
+	for name, fn := range extra {
+		funcs[name] = fn
+	}
 	return funcs
 }
 
@@ -141,7 +145,7 @@ type pushData struct {
 }
 
 // compilePush compiles a profile's push face. Nil when it declares none.
-func compilePush(name string, p *profile.Push) (*pushFace, error) {
+func compilePush(name string, p *profile.Push, extra template.FuncMap) (*pushFace, error) {
 	if p == nil {
 		return nil, nil
 	}
@@ -149,7 +153,7 @@ func compilePush(name string, p *profile.Push) (*pushFace, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := template.New(name + ".push").Funcs(pushFuncs()).Option("missingkey=zero").Parse(p.Body)
+	body, err := template.New(name + ".push").Funcs(pushFuncs(extra)).Option("missingkey=zero").Parse(p.Body)
 	if err != nil {
 		return nil, fmt.Errorf("push.body: %w", err)
 	}
@@ -231,9 +235,12 @@ func (d *Device) PushOnce(ctx context.Context) error {
 
 func (d *Device) pushOwners(ctx context.Context, server, token string, owners []string) error {
 	if owners == nil {
-		read, err := grantedSystems(ctx, server, token)
-		if err != nil {
-			return err
+		read := d.worldSystems()
+		if len(read) == 0 {
+			var err error
+			if read, err = grantedSystems(ctx, server, token); err != nil {
+				return err
+			}
 		}
 		owners = read
 		d.push.mu.Lock()
@@ -261,6 +268,29 @@ func (d *Device) pushOwners(ctx context.Context, server, token string, owners []
 	default:
 		return fmt.Errorf("%w (and %d more of %d systems)", first, failed-1, len(owners))
 	}
+}
+
+// worldSystems is the systems the world says this device speaks for, by name.
+// A grant names a system by its uuid, which the simulator does not hold (the
+// sim is; Omniglass learns), so a pusher the world covers pushes for the
+// names the world gives and lets the server resolve each inside its grant, and
+// a body can resolve its owner to a room (ownerBookings). With no world, or
+// one that does not name the device, it is empty and the grant says.
+func (d *Device) worldSystems() []string {
+	w := d.world()
+	if w == nil {
+		return nil
+	}
+	var out []string
+	for _, s := range w.Services {
+		if s.Name != d.Hostname {
+			continue
+		}
+		for _, c := range s.Covers {
+			out = append(out, c.System)
+		}
+	}
+	return out
 }
 
 // pushOwner renders and pushes one system's batch.

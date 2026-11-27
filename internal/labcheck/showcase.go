@@ -79,28 +79,35 @@ type Fire struct {
 // floor holds whatever the room's schedule puts in the warm-up. A device
 // answer outside 2xx, or an error the simulator reports, is an error.
 func FireOnShowcase(ctx context.Context, c *http.Client, base, system, product string, op Fire) error {
+	_, err := FireOnShowcaseBody(ctx, c, base, system, product, op)
+	return err
+}
+
+// FireOnShowcaseBody is FireOnShowcase returning what the device answered, so
+// a gate can read a route's document off the live simulator.
+func FireOnShowcaseBody(ctx context.Context, c *http.Client, base, system, product string, op Fire) (string, error) {
 	r := reader{ctx: ctx, c: c, base: base}
 	_, id, err := r.member(system, product)
 	if err != nil {
-		return err
+		return "", err
 	}
 	body, err := json.Marshal(op)
 	if err != nil {
-		return err
+		return "", err
 	}
 	path := "/components/" + url.PathEscape(id) + "/simulation:fire"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1"+path, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("POST %s: %s", path, resp.Status)
+		return "", fmt.Errorf("POST %s: %s", path, resp.Status)
 	}
 	var res struct {
 		Status int    `json:"status"`
@@ -108,12 +115,12 @@ func FireOnShowcase(ctx context.Context, c *http.Client, base, system, product s
 		Error  string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return err
+		return "", err
 	}
 	if res.Error != "" || res.Status/100 != 2 {
-		return fmt.Errorf("%s %s on %s answered %d %s%s", op.Method, op.Path, system, res.Status, res.Body, res.Error)
+		return "", fmt.Errorf("%s %s on %s answered %d %s%s", op.Method, op.Path, system, res.Status, res.Body, res.Error)
 	}
-	return nil
+	return res.Body, nil
 }
 
 // member is the name and id of system's member on product.

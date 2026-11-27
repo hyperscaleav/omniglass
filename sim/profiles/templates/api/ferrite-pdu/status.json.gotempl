@@ -7,7 +7,8 @@
   },
   "GlobalMeasure": {
     "VoltageMv": {{ .State | get "status" | get "mains" | get "voltage_mv" }},
-    "TotalCurrent": {{ .State | get "status" | get "load" | get "total_current_ma" }}
+    "TotalCurrent": {{ .State | get "status" | get "load" | get "total_current_ma" }},
+    "EnergyMwh": {{ .State | get "status" | get "load" | get "energy_mwh" }}
   },
   "Outputs": [
 {{- range $i, $o := .State.status.outlets }}{{ if $i }},{{ end }}

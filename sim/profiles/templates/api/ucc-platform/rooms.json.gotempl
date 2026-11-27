@@ -1,10 +1,24 @@
+{{- /* Token paging, as a cloud rooms API pages: page_size caps the page, the
+   answer's next_page_token names the last room of the page and is sent back as
+   next_page_token, empty on the last page. No page_size answers the default page.
+   A room is available (nobody in a meeting), in-meeting or offline; its meeting is
+   always present, empty when there is none, and its booking is the booked slot
+   that holds it now, which a no-show leaves in place while the room reads available. */ -}}
+{{- $rooms := .State | get "status" | get "rooms" -}}
+{{- $p := pageKeys $rooms .Request.Query.next_page_token .Request.Query.page_size -}}
 {
   "rooms": [
   {{- $sep := "" }}
-  {{- range $id, $r := (.State | get "status" | get "rooms") }}{{ $sep }}
+  {{- range $id := $p.keys }}{{ $r := index $rooms $id }}{{ $sep }}
     {{/* @field status.rooms.*.state string "idle or in-call" */}}
-    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "state": {{ marshal (or (index $r "state") "idle") }}, "meeting": {{ marshal (or (index $r "meeting") "") }}, "participants": {{ or (index $r "participants") 0 }}}
+    {{- $st := or (index $r "state") "idle" }}
+    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "address": {{ marshal (or (index $r "address") "") }}, "status": {{ if eq $st "in-call" }}"in-meeting"{{ else if eq $st "offline" }}"offline"{{ else }}"available"{{ end }},
+     "meeting": {"id": {{ marshal (or (index $r "meeting") "") }}, "topic": {{ marshal (or (index $r "topic") "") }}, "start": {{ whole (index $r "start") }}, "participants": {{ whole (index $r "participants") }}},
+     "booking": {{ with index $r "booking" }}{{ marshal . }}{{ else }}{"topic": "", "start": 0, "end": 0}{{ end }},
+     "next": {{ with index $r "next" }}{{ marshal . }}{{ else }}{"topic": "", "start": 0}{{ end }}}
   {{- $sep = "," }}
   {{- end }}
-  ]
+  ],
+  "page_size": {{ len $p.keys }},
+  "next_page_token": {{ marshal $p.next }}
 }

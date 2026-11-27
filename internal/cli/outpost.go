@@ -102,12 +102,20 @@ func newOutpostRunCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
+				world, err := simoutpost.LoadWorld(config.Get(simoutpost.WorldEnv))
+				if err != nil {
+					return err
+				}
+				clockOffset, err := simoutpost.LoadClockOffset(config.Get(simoutpost.ClockOffsetEnv))
+				if err != nil {
+					return err
+				}
 				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 				defer stop()
 				return simoutpost.RunWithOutpost(ctx, outpostCfg, simoutpost.Config{
 					ServerURL: serverURL, Name: name, Token: token,
 					PortOffset: portOffset, Poll: poll, Impairments: impairments,
-					Pushers: pushers,
+					Pushers: pushers, World: world, ClockOffset: clockOffset,
 				})
 			}
 			wl, err := outpost.Run(cmd.Context(), outpostCfg)

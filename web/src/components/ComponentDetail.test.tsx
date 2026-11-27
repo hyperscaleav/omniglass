@@ -324,7 +324,7 @@ describe("a nested open stacks on the ambient stack", () => {
     const r = mountBlade("/web/explore");
     const blade = await screen.findByRole("dialog");
     const serves = await within(blade).findByTestId("leaf-memberships");
-    fireEvent.click(within(serves).getByRole("button", { name: "Boardroom System" }));
+    fireEvent.click(within(serves).getByRole("button", { name: /^Boardroom System/ }));
     await waitFor(() => expect(r.controller().stack().map((x) => x.kind)).toEqual(["component", "system"]));
   });
 });

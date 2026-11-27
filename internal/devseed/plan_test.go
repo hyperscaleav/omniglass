@@ -7,11 +7,14 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
@@ -47,9 +50,15 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 	if wantSystems != 20 || wantComponents != p.Totals.Components {
 		t.Fatalf("plan has %d systems and %d slot fills, want 20 and %d components", wantSystems, wantComponents, p.Totals.Components)
 	}
-	// Each platform (#1747) is a component of its own, staffing no slot.
-	senders, _ := senderSites(p)
-	wantComponents += len(senders)
+	// Each platform (#1747) and each polled service (#2765, #2790) is a
+	// component of its own, staffing no slot.
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			if ps.IsComponent() {
+				wantComponents++
+			}
+		}
+	}
 	if res.Systems != wantSystems || res.Components != wantComponents || res.Slots != wantSlots {
 		t.Fatalf("result = %d systems, %d components, %d slots; want %d, %d, %d", res.Systems, res.Components, res.Slots, wantSystems, wantComponents, wantSlots)
 	}
@@ -354,8 +363,8 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	want := map[string][]string{}
 	for _, site := range p.Sites {
 		for _, ps := range site.Pushers {
-			if ps.Webhook {
-				continue // a platform posts as its component, holding no grant (#1747)
+			if ps.IsComponent() {
+				continue // a platform or a service speaks as its component, holding no grant (#1747)
 			}
 			want[ps.Name] = append([]string(nil), ps.Systems...)
 			sort.Strings(want[ps.Name])
@@ -411,27 +420,32 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	}
 }
 
-// SeedPlan seeds each planned platform (#1747) as a component at its site
-// holding one webhook endpoint (server hosted, so on no outpost), signing with a
-// secret of its own minted for this seed, and bound to every system of its
-// site by name, so its posts land on the system each names.
-func TestSeedPlanSeedsEachPlatformItsWebhookAndRooms(t *testing.T) {
+// SeedPlan seeds the fleet's one meeting platform (#1747, #2790) as a
+// component at the headquarters holding one webhook endpoint (server hosted,
+// so on no outpost), signing with a secret minted for this seed, and bound as
+// an installer binds it: every system of every site by its name on
+// ucc-room-id, and every component a meeting platform lists by the world's
+// device id on ucc-device-id, so its posts and its lists land on the system or
+// component each id names.
+func TestSeedPlanSeedsTheMeetingPlatformItsWebhookRoomsAndDevices(t *testing.T) {
 	t.Parallel()
 	ctx, gw, conn := openSeededGateway(t)
 	p := corporatePlan(t, 20)
-	wantSite, systems := senderSites(p)
+	wantSite, _ := senderSites(p)
 	res, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Senders != len(wantSite) {
-		t.Errorf("result = %d senders, want %d", res.Senders, len(wantSite))
+	if res.Senders != len(wantSite) || res.Services != 3 {
+		t.Errorf("result = %d senders and %d services, want %d and 3", res.Senders, res.Services, len(wantSite))
 	}
 
-	// One ucc-webhook endpoint per platform component, at its site, on no
-	// outpost, with a token minted and a signing secret no other endpoint holds.
-	rows, err := conn.Query(ctx, `
-		select c.id::text, l.name, e.outpost_id is null, e.inputs->>'signing-key', t.name,
+	// One ucc-webhook endpoint, on the platform component at the headquarters,
+	// on no outpost, with a token minted and a signing secret of its own.
+	var comp, site, secretName, secretType string
+	var noOutpost, tokened bool
+	if err := conn.QueryRow(ctx, `
+		select c.id::text, l.name, e.outpost_id is null, e.inputs->>'signing-key', coalesce(t.name, ''),
 		       exists (select 1 from webhook_token w where w.endpoint_id = e.id)
 		from endpoint e
 		join driver d on d.id = e.driver_id
@@ -439,61 +453,144 @@ func TestSeedPlanSeedsEachPlatformItsWebhookAndRooms(t *testing.T) {
 		join location l on l.id = c.location_id
 		left join secret s on s.name = e.inputs->>'signing-key'
 		left join secret_type t on t.id = s.secret_type
-		where d.name = 'ucc-webhook'`)
-	if err != nil {
-		t.Fatal(err)
+		where d.name = 'ucc-webhook'`).Scan(&comp, &site, &noOutpost, &secretName, &secretType, &tokened); err != nil {
+		t.Fatalf("want exactly one ucc-webhook endpoint: %v", err)
 	}
-	conduitSite := map[string]string{}
-	secrets := map[string]bool{}
-	for rows.Next() {
-		var comp, site, secretName string
-		var noOutpost, tokened bool
-		var secretType *string
-		if err := rows.Scan(&comp, &site, &noOutpost, &secretName, &secretType, &tokened); err != nil {
-			t.Fatal(err)
-		}
-		conduitSite[comp] = site
-		if !noOutpost || !tokened || secretType == nil || *secretType != "hmac-key" || secrets[secretName] {
-			t.Errorf("platform at %s: no outpost %v, token %v, secret %q of type %v (seen before %v); want no outpost, a token, its own hmac-key",
-				site, noOutpost, tokened, secretName, secretType, secrets[secretName])
-		}
-		secrets[secretName] = true
-	}
-	rows.Close()
-	if len(conduitSite) != len(wantSite) {
-		t.Fatalf("%d platform webhook endpoints, want %d", len(conduitSite), len(wantSite))
+	if site != p.Sites[0].Name || !noOutpost || !tokened || secretType != "hmac-key" {
+		t.Errorf("platform at %s: no outpost %v, token %v, secret %q of type %q; want the headquarters, no outpost, a token, an hmac-key", site, noOutpost, tokened, secretName, secretType)
 	}
 
-	// Each platform binds every system of its site, by name, on ucc-room-id.
-	got := map[string][]string{}
-	rows, err = conn.Query(ctx, `
-		select b.conduit_id::text, b.value, s.name, pt.name
+	// Its bindings: each system by name on ucc-room-id, each listed component by
+	// the world's device id on ucc-device-id.
+	rooms, devices := map[string]string{}, map[string]string{}
+	rows, err := conn.Query(ctx, `
+		select pt.name, b.value, b.owner_kind, coalesce(s.name, c.name)
 		from identity_binding b
-		join system s on s.id = b.system_id
 		join property_type pt on pt.id = b.property_type_id
-		order by s.name`)
+		left join system s on s.id = b.system_id
+		left join component c on c.id = b.component_id
+		where b.conduit_id = $1::uuid`, comp)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for rows.Next() {
-		var conduit, value, sys, key string
-		if err := rows.Scan(&conduit, &value, &sys, &key); err != nil {
+		var key, value, kind, owner string
+		if err := rows.Scan(&key, &value, &kind, &owner); err != nil {
 			t.Fatal(err)
 		}
-		if value != sys || key != "ucc-room-id" {
-			t.Errorf("binding %s=%s owned by %s, want ucc-room-id named for its system", key, value, sys)
+		switch {
+		case (key == "ucc-room-id" || key == "sched-room-id") && kind == "system":
+			rooms[value] = owner
+		case key == "ucc-device-id" && kind == "component":
+			devices[value] = owner
+		default:
+			t.Errorf("binding %s=%s owned by a %s %s, want a room on a system or a device on a component", key, value, kind, owner)
 		}
-		got[conduitSite[conduit]] = append(got[conduitSite[conduit]], sys)
 	}
 	rows.Close()
-	for site, want := range systems {
-		g := append([]string(nil), got[site]...)
-		w := append([]string(nil), want...)
-		sort.Strings(g)
-		sort.Strings(w)
-		if fmt.Sprint(g) != fmt.Sprint(w) {
-			t.Errorf("site %s binds %v, want %v", site, g, w)
+	var fleet []string
+	for _, st := range p.Sites {
+		for _, sys := range st.Systems {
+			fleet = append(fleet, sys.Name)
 		}
+	}
+	if len(rooms) != len(fleet) {
+		t.Errorf("the platform binds %d rooms, want all %d systems of the fleet", len(rooms), len(fleet))
+	}
+	for _, sys := range fleet {
+		if rooms[sys] != sys {
+			t.Errorf("room %s is bound to %q, want the system of that name", sys, rooms[sys])
+		}
+	}
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := scenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	worlds, err := scenario.SiteWorlds(m, cat, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := worlds[scenario.SiteOutpost(p.Sites[0].Name)].Listed(p.Sites[0].Name + "-meeting-1")
+	if len(listed) == 0 || len(devices) != len(listed) {
+		t.Fatalf("the platform binds %d devices, its world lists %d", len(devices), len(listed))
+	}
+	for _, l := range listed {
+		if devices[l.ID] != l.Name {
+			t.Errorf("device %s is bound to component %q, want %s", l.ID, devices[l.ID], l.Name)
+		}
+	}
+}
+
+// SeedPlan binds the fleet's one recording service (#2757) as an installer
+// does: a component at the headquarters, every system of every site by its name
+// on recording-room-id, and no slot of any standard names a recorder, so a
+// room's recordings land on its system from the account's one component.
+func TestSeedPlanBindsTheRecordingServiceToEveryRoom(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	p := corporatePlan(t, 20)
+	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	var profile string
+	for _, ps := range p.Sites[0].Pushers {
+		if ps.Service && strings.HasSuffix(ps.Name, "-recording-1") {
+			profile = ps.Profile
+		}
+	}
+	if profile == "" {
+		t.Fatal("the plan places no recording service at the headquarters")
+	}
+	var comp, site string
+	var n int
+	if err := conn.QueryRow(ctx, `
+		select c.id::text, l.name from component c
+		join location l on l.id = c.location_id
+		join product pr on pr.id = c.product_id
+		where pr.name = $1`, profile).Scan(&comp, &site); err != nil {
+		t.Fatalf("want exactly one recording service component: %v", err)
+	}
+	if site != p.Sites[0].Name {
+		t.Errorf("the recording service sits at %s, want the headquarters %s", site, p.Sites[0].Name)
+	}
+	rows, err := conn.Query(ctx, `
+		select b.value, coalesce(s.name, '') from identity_binding b
+		join property_type pt on pt.id = b.property_type_id
+		left join system s on s.id = b.system_id
+		where b.conduit_id = $1::uuid and pt.name = 'recording-room-id' and b.owner_kind = 'system'`, comp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	bound := map[string]string{}
+	for rows.Next() {
+		var v, owner string
+		if err := rows.Scan(&v, &owner); err != nil {
+			t.Fatal(err)
+		}
+		bound[v] = owner
+	}
+	for _, st := range p.Sites {
+		for _, sys := range st.Systems {
+			n++
+			if bound[sys.Name] != sys.Name {
+				t.Errorf("room %s is bound to %q, want the system of that name", sys.Name, bound[sys.Name])
+			}
+		}
+	}
+	if len(bound) != n {
+		t.Errorf("the service binds %d rooms, want all %d systems of the fleet", len(bound), n)
+	}
+	var slots int
+	if err := conn.QueryRow(ctx, `select count(*) from system_slot where name = 'recorder'`).Scan(&slots); err != nil {
+		t.Fatal(err)
+	}
+	if slots != 0 {
+		t.Errorf("%d systems carry a recorder slot, want none: the service is the account's one component", slots)
 	}
 }
 
@@ -550,5 +647,345 @@ func TestSeedPlanInducesNothingByDefault(t *testing.T) {
 	}
 	if n := inducedTasks(t, ctx, conn); n != 0 {
 		t.Errorf("%d tasks carry the induced key by default", n)
+	}
+}
+
+// The world owns component names (#2773): the seed onboards every planned
+// component under exactly the name its site's world gives it, in the room the
+// world puts it in. Seed a plan, then read each outpost's sim device list, the
+// list a simulator pulls: every device it names is a device of its site's
+// world, placed by an exact lookup of its name, and the platform minted no name
+// of its own for a component of the plan.
+func TestSeedPlanOnboardsEveryComponentUnderTheWorldsName(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := scenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := corporatePlan(t, 20)
+	outpostOf := func(site string) string { return "edge-" + site }
+	var names []string
+	for _, s := range p.Sites {
+		names = append(names, outpostOf(s.Name))
+	}
+	planOutposts(t, ctx, gw, names...)
+	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{Endpoints: true, OutpostFor: outpostOf}); err != nil {
+		t.Fatal(err)
+	}
+	worlds, err := scenario.SiteWorlds(m, cat, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := conn.Query(ctx, `select c.id::text, c.name, l.name, c.name_generated from component c join location l on l.id = c.location_id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type seeded struct {
+		name, room string
+		generated  bool
+	}
+	byID := map[string]seeded{}
+	for rows.Next() {
+		var id string
+		var c seeded
+		if err := rows.Scan(&id, &c.name, &c.room, &c.generated); err != nil {
+			t.Fatal(err)
+		}
+		byID[id] = c
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := 0
+	for _, w := range worlds {
+		for _, r := range w.Sites[0].Rooms {
+			want += len(r.Devices)
+		}
+		for _, svc := range w.Services {
+			if svc.Webhook || svc.Polled {
+				want++
+			}
+		}
+	}
+	if len(byID) != want {
+		t.Fatalf("the plan seeded %d components, the worlds name %d", len(byID), want)
+	}
+	for id, c := range byID {
+		if c.generated {
+			t.Errorf("component %s (%s) carries a platform-minted name, the world's is owed", id, c.name)
+		}
+	}
+	listed := 0
+	for _, s := range p.Sites {
+		w := worlds[outpostOf(s.Name)]
+		devices, err := gw.OutpostSimDevices(ctx, outpostOf(s.Name), scope.Set{All: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range devices {
+			listed++
+			c := byID[d.ComponentID]
+			if c.name != d.Name {
+				t.Fatalf("the list names %s, the component is %s", d.Name, c.name)
+			}
+			place, ok := w.PlaceDevice(d.Name)
+			if !ok {
+				// A webhook sender sits at its site, in no room: it is a service.
+				if c.room == s.Name && w.Covered(d.Name) != nil {
+					continue
+				}
+				t.Fatalf("%s lists %s (%s in %s), which its world does not name", outpostOf(s.Name), d.Name, d.Product, c.room)
+			}
+			if place.Room != c.room || place.Site != s.Name {
+				t.Fatalf("%s: the seed put %s in %s, the world in %s/%s", outpostOf(s.Name), d.Name, c.room, place.Site, place.Room)
+			}
+		}
+	}
+	if listed == 0 {
+		t.Fatal("no outpost listed a device")
+	}
+}
+
+// A component's label tells its siblings apart (#2757): the world names a
+// component `<system>-<slot>-<n>`, a name the operator typed as far as the
+// platform is concerned, so the platform's label rule finds no number of its
+// own and two displays of one room would both read "Display". The seed gives a
+// slot's components their ordinal in the label, as a dev fleet's read
+// "Display 1" and "Display 2", and leaves the name as the world gave it. A
+// slot holding one component reads bare. An account-wide service reads as the
+// manifest labels it, not as its component type's "Generic Service".
+func TestSeedPlanLabelsComponentsWithTheirOrdinalAndServicesByManifest(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := corporatePlan(t, 20)
+	if _, err := devseed.SeedPlan(ctx, gw, "", p, devseed.PlanOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := conn.Query(ctx, `select c.name, coalesce(c.label, '') from component c`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := map[string]string{}
+	for rows.Next() {
+		var name, label string
+		if err := rows.Scan(&name, &label); err != nil {
+			t.Fatal(err)
+		}
+		labels[name] = label
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	multi := 0
+	for _, site := range p.Sites {
+		for _, s := range site.Systems {
+			seen := map[string]string{}
+			for _, fill := range s.Slots {
+				for n := 1; n <= fill.Count; n++ {
+					name := scenario.ComponentName(s.Name, fill.Slot, n)
+					label, ok := labels[name]
+					if !ok {
+						t.Fatalf("component %s was not seeded under the world's name", name)
+					}
+					if other, dup := seen[label]; dup && fill.Count > 1 {
+						t.Errorf("%s and %s of %s both read %q, want the ordinal to tell them apart", other, name, s.Name, label)
+					}
+					seen[label] = name
+					if fill.Count > 1 {
+						multi++
+						if want := fmt.Sprintf(" %d", n); !strings.HasSuffix(label, want) {
+							t.Errorf("%s reads %q, want its slot's ordinal %q at the end", name, label, want)
+						}
+					} else if strings.HasSuffix(label, " 1") {
+						t.Errorf("%s is the only one of its slot and reads %q, want it bare", name, label)
+					}
+				}
+			}
+		}
+	}
+	if multi == 0 {
+		t.Fatal("the corporate plan has no slot of several components to judge the ordinal on")
+	}
+	for _, svc := range m.Services {
+		if svc.Label == "" {
+			t.Errorf("service %s declares no label", svc.Name.Name)
+		}
+		name := fmt.Sprintf("%s-%s-1", p.Sites[0].Name, svc.Name.Name)
+		if got := labels[name]; got != svc.Label {
+			t.Errorf("service %s reads %q, want the manifest's %q", name, got, svc.Label)
+		}
+	}
+}
+
+// A corporate room's occupancy-count follows its people counter (#2757). The
+// standard declares occupancy-count on the system, and nothing but a rule can
+// carry a member's reading up to it: the counter's raw-TCP feed reports
+// people-count on the component, and the plan seeds the one calc rule that
+// reads it from the system's slot-bound members. Land a count on a conference
+// room's counter and the room's own occupancy-count follows it, by that rule.
+func TestSeedPlanRoomOccupancyFollowsItsPeopleCounter(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	if _, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 20), devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	const system = "hq-divisible-conference-1"
+	var counter, sysID string
+	if err := conn.QueryRow(ctx, `select c.id::text, s.id::text from component c, system s where c.name = $1 and s.name = $2`,
+		scenario.ComponentName(system, "people-counter", 1), system).Scan(&counter, &sysID); err != nil {
+		t.Fatalf("the plan seeds no people counter in %s: %v", system, err)
+	}
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: counter, Key: "people-count", Value: 7, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.DrainCalcPending(ctx, 1000); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName != "occupancy-count" {
+			continue
+		}
+		if !m.IsSampled || string(m.Value) != "7" || m.SourceRule != "room-occupancy" {
+			t.Fatalf("%s occupancy-count = %s (sampled %v, by rule %q), want the counter's 7 by room-occupancy", system, m.Value, m.IsSampled, m.SourceRule)
+		}
+		return
+	}
+	t.Fatalf("%s declares no occupancy-count", system)
+}
+
+// A video bar counts people too (#2757): its camera reports people-count, so
+// a huddle room, which has a bar and no separate counter, fills its
+// occupancy-count by the same one rule, with no rule of its own.
+func TestSeedPlanHuddleOccupancyFollowsItsVideoBar(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	plan := corporatePlan(t, 20)
+	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	var system string
+	for _, sp := range plan.Sites {
+		for _, sys := range sp.Systems {
+			if sys.Standard == "huddle-room" && system == "" {
+				system = sys.Name
+			}
+		}
+	}
+	if system == "" {
+		t.Fatal("the corporate plan holds no huddle room")
+	}
+	var bar, sysID string
+	if err := conn.QueryRow(ctx, `select c.id::text, s.id::text from component c, system s where c.name = $1 and s.name = $2`,
+		scenario.ComponentName(system, "conf-bar", 1), system).Scan(&bar, &sysID); err != nil {
+		t.Fatalf("the plan seeds no video bar in %s: %v", system, err)
+	}
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: bar, Key: "people-count", Value: 4, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.DrainCalcPending(ctx, 1000); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName != "occupancy-count" {
+			continue
+		}
+		if !m.IsSampled || string(m.Value) != "4" || m.SourceRule != "room-occupancy" {
+			t.Fatalf("%s occupancy-count = %s (sampled %v, by rule %q), want the bar's 4 by room-occupancy", system, m.Value, m.IsSampled, m.SourceRule)
+		}
+		return
+	}
+	t.Fatalf("%s declares no occupancy-count", system)
+}
+
+// A corporate room's room-temperature follows its control processor (#2757).
+// The standard declares room-temperature on the system, and the processor
+// reports it on its component, so the plan seeds the one calc rule that
+// carries it up: the same primitive as the room's occupancy, with no second
+// mechanism. Land a reading on a conference room's processor and the room's
+// own room-temperature follows it, by that rule.
+func TestSeedPlanRoomTemperatureFollowsItsControlProcessor(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	if _, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 20), devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	const system = "hq-divisible-conference-1"
+	var processor, sysID string
+	if err := conn.QueryRow(ctx, `select c.id::text, s.id::text from component c, system s where c.name = $1 and s.name = $2`,
+		scenario.ComponentName(system, "control-system", 1), system).Scan(&processor, &sysID); err != nil {
+		t.Fatalf("the plan seeds no control processor in %s: %v", system, err)
+	}
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: processor, Key: "room-sensor-temperature", Value: 23.4, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.DrainCalcPending(ctx, 1000); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName != "room-temperature" {
+			continue
+		}
+		if !m.IsSampled || string(m.Value) != "23.4" || m.SourceRule != "room-temperature" {
+			t.Fatalf("%s room-temperature = %s (sampled %v, by rule %q), want the processor's 23.4 by room-temperature", system, m.Value, m.IsSampled, m.SourceRule)
+		}
+		return
+	}
+	t.Fatalf("%s declares no room-temperature", system)
+}
+
+// The counter's feed rides the counter's own second face: a corporate
+// conference room's people counter has the http API's endpoint and the raw-TCP
+// feed's, the one that reports the head-count (#2757).
+func TestSeedPlanWiresThePeopleCountersFeed(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	if _, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 20), devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	name := scenario.ComponentName("hq-divisible-conference-1", "people-counter", 1)
+	rows, err := conn.Query(ctx, `select d.name from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component where c.name = $1 order by 1`, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, d)
+	}
+	rows.Close()
+	if want := []string{"tessellate-census-feed", "tessellate-census-http"}; !slices.Equal(got, want) {
+		t.Errorf("%s has endpoints on drivers %v, want %v", name, got, want)
 	}
 }

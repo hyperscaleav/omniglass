@@ -111,6 +111,8 @@ func TestOutpostRunIsReachable(t *testing.T) {
 		{[]string{"outpost", "enroll"}, "enroll"},
 		{[]string{"outpost", "simulation"}, "simulation"},
 		{[]string{"sim", "run"}, "run"},
+		{[]string{"lab", "run"}, "run"},
+		{[]string{"lab", "calendar", "list"}, "list"},
 	} {
 		cmd, _, err := root.Find(tc.args)
 		if err != nil {

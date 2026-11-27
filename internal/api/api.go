@@ -88,6 +88,8 @@ type options struct {
 	// lab marks a server `omniglass lab` started (#1195); /auth/status
 	// reports it so the console shows the lab banner.
 	lab bool
+	// labCalendar is what GET /lab/calendar reads (#2770); nil is an empty one.
+	labCalendar LabCalendarSource
 	// reportEvery is the server's own collection report window (#1369),
 	// overriding the platform's: a test's. Zero reads the platform's.
 	reportEvery time.Duration
@@ -477,6 +479,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSimFleetRoutes(api, a, gw, o.simHub)
 	registerSimSystemRoutes(api, a, gw, o.simHub)
 	registerImpairmentRoutes(api, a, gw)
+	registerLabCalendarRoutes(api, a, gw, o.labCalendar)
 	registerEventTypeRoutes(api, a, gw)
 	registerSeverityLevelRoutes(api, a, gw)
 	registerEventRuleRoutes(api, a, gw)

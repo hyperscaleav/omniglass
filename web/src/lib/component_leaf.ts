@@ -4,7 +4,8 @@
 // means the component or the path, not collection, and that sentence is why
 // outposts need no zoom of their own.
 
-import { locationIndex, type FleetView } from "./fleet";
+import { locationIndex, type FleetSystem, type FleetView } from "./fleet";
+import { systemAddress } from "./system_name";
 import { sortAlarms, type Alarm } from "./alarms";
 import type { SeverityLevel } from "./severity";
 import type { EffectiveMetricBody, EffectivePropertyBody } from "../api/api.gen";
@@ -83,30 +84,29 @@ export type MembershipRow = {
 
 export function membershipRows(members: Member[], view: FleetView): MembershipRow[] {
   const byId = new Map((view.systems ?? []).map((s) => [s.id, s]));
-  const byName = new Map<string, { id: string; label: string }[]>();
+  const byName = new Map<string, FleetSystem[]>();
   for (const s of view.systems ?? []) {
     const list = byName.get(s.name);
-    const entry = { id: s.id, label: entityLabel(s) };
-    if (list) list.push(entry);
-    else byName.set(s.name, [entry]);
+    if (list) list.push(s);
+    else byName.set(s.name, [s]);
   }
+  const rooms = locationIndex(view);
+  // A system named for its room (the field's commonest naming) would
+  // read "Huddle Room  Huddle Room": the room only tells rows apart when
+  // it says something the label does not (the one rule, lib/system_name.ts).
+  const whereOf = (s: FleetSystem) => systemAddress(s, s.location ? rooms.get(s.location) : undefined);
   return members.map((m) => {
     // The wire carries the uuid (system_id); resolve by it, and fall back to
     // the bare name only when the wire lacks it and the name is unique.
     const direct = m.system_id ? byId.get(m.system_id) : undefined;
     if (direct) {
-      const room = direct.location ? locationIndex(view).get(direct.location) : undefined;
-      const label = entityLabel(direct);
-      // A system named for its room (the field's commonest naming) would
-      // read "Huddle Room  Huddle Room": the room only tells rows apart when
-      // it says something the label does not.
-      const where = room && entityLabel(room) !== label ? entityLabel(room) : undefined;
-      return { system: m.system, label, where, primary: m.primary, systemId: direct.id };
+      return { system: m.system, label: entityLabel(direct), where: whereOf(direct), primary: m.primary, systemId: direct.id };
     }
     const hits = byName.get(m.system) ?? [];
     return {
       system: m.system,
-      label: hits.length === 1 ? hits[0].label : m.system,
+      label: hits.length === 1 ? entityLabel(hits[0]) : m.system,
+      where: hits.length === 1 ? whereOf(hits[0]) : undefined,
       primary: m.primary,
       systemId: m.system_id ?? (hits.length === 1 ? hits[0].id : null),
     };

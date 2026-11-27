@@ -1,0 +1,15 @@
+{{- $rooms := .State | get "status" | get "recordings" | get "rooms" -}}
+{{- $p := pageKeys $rooms .Request.Query.next_page_token .Request.Query.page_size -}}
+{
+  "recordings": [
+  {{- $sep := "" }}
+  {{- range $id := $p.keys }}{{ $r := index $rooms $id }}{{ $sep }}
+    {{/* @field status.recordings.rooms.*.in_progress number "recordings in progress in the room now" */}}
+    {{/* @field status.recordings.rooms.*.queue_depth number "finished recordings in the room waiting to be written" */}}
+    {"id": {{ marshal $id }}, "in_progress": {{ whole (index $r "in_progress") }}, "queue_depth": {{ whole (index $r "queue_depth") }}}
+  {{- $sep = "," }}
+  {{- end }}
+  ],
+  "page_size": {{ len $p.keys }},
+  "next_page_token": {{ marshal $p.next }}
+}

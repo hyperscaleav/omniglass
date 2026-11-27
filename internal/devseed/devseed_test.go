@@ -923,15 +923,25 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		label    string
 		platform bool
 	}{
-		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar 1", platform: true},
-		{table: "component", place: "boardroom-a", name: "mic-2", label: "Ceiling Microphone 2", platform: true},
-		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: true},
+		// A component staffing a slot is numbered within it and bare when it is
+		// alone there (#2757), the way the scale lab's are: the seed writes
+		// that label itself, so the operator's words hold the pen.
+		{table: "component", place: "huddle", name: "display-1", label: "Display", platform: false},
+		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar", platform: false},
+		{table: "component", place: "boardroom-a", name: "mic-2", label: "Ceiling Microphone 2", platform: false},
+		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: false},
 		// Room B's panel is the first display in ITS room, so it reads
 		// display-1 too: the placement-scoped name index doing its job across
 		// the air wall.
-		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
+		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: false},
+		{table: "component", place: "auditorium", name: "display-1", label: "Display", platform: false},
+		// A component in no slot (a spare racked in a bay or a hall, a lobby
+		// display) is left to the shipped rule, which reads the number the
+		// platform minted into its name.
+		{table: "component", place: "bay-1", name: "videobar-1", label: "Video Bar 1", platform: true},
+		{table: "component", place: "bay-3", name: "display-2", label: "Display 2", platform: true},
+		{table: "component", place: "auditorium", name: "mic-2", label: "Ceiling Microphone 2", platform: true},
+		{table: "component", place: "lobby", name: "display-1", label: "Display 1", platform: true},
 		// The power conditioner: the rule would say "Power Device 1", so the
 		// operator's words win and keep the pen.
 		{table: "component", place: "boardroom-a", name: "power-1", label: "Power Conditioner", platform: false},
@@ -1031,14 +1041,14 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		// from its physical home in A, so both halves name dsp-1 and amp-1.
 		{room: "boardroom-a", want: map[string]string{
 			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
-			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1", "codec": "codec-1", "power": "power-1", "control-system": "processor-1", "video-switcher": "switcher-1", "display-endpoint": "extender-1", "camera": "camera-1", "wireless-mic": "mic-3",
 		}},
 		// B's own devices are the first OF THEIR OWN ROOM (the
 		// placement-scoped index at work, not duplicates), while the rack's
 		// names stay the ones it minted in A.
 		{room: "boardroom-b", want: map[string]string{
 			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
-			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1", "codec": "codec-1", "power": "power-1", "control-system": "processor-1", "video-switcher": "switcher-1", "display-endpoint": "extender-1", "camera": "camera-1", "wireless-mic": "mic-3",
 		}},
 	} {
 		rows, err := conn.Query(ctx, `
@@ -1078,20 +1088,57 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		}
 	}
 
-	// The power conditioner is a member of the first half and fills nothing,
-	// which is the case an assignment cannot produce.
-	var unstaffed int
+	// Boardroom A carries one power conditioner and it fills the power slot: no
+	// second box beside it, so the room's page never reads "1 component is not in
+	// a slot" next to a staffed power slot. The membership-only case this room
+	// once carried (a PDU in the room, accounted for, filling no slot) is held by
+	// the rows that still do exactly that: the huddle's touch panel, the
+	// auditorium's touch panel and house spare mic, and the recording service in
+	// the auditorium and the briefing room (TestSeededMembershipWithoutASlot).
+	var unslotted int
 	if err := conn.QueryRow(ctx, `
 		select count(*) from system_member m
 		join system s on s.id = m.system_id
+		join location l on l.id = s.location_id
 		join component c on c.id = m.component_id
-		where s.name = 'board-meeting' and c.name = 'power-1'
+		where l.name = 'boardroom-a'
 		  and not exists (select 1 from system_slot_assignment a
-		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unstaffed); err != nil {
-		t.Fatalf("read the unstaffed member: %v", err)
+		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unslotted); err != nil {
+		t.Fatalf("read the unslotted members: %v", err)
 	}
-	if unstaffed != 1 {
-		t.Errorf("the power conditioner is a member of board-meeting filling no slot in %d rows, want 1", unstaffed)
+	if unslotted != 0 {
+		t.Errorf("boardroom A carries %d members filling no slot, want 0 (its one power conditioner is in the power slot)", unslotted)
+	}
+}
+
+// TestSeededMembershipWithoutASlot holds the many-valued membership case the
+// fixtures keep on purpose: a component that is a member of a system and fills
+// none of its slots (a service two tops depend on, a panel and a spare mic in
+// the room and accounted for). Boardroom A's power conditioner used to stand in
+// for it; it now fills the power slot, so these rows are what hold the case.
+func TestSeededMembershipWithoutASlot(t *testing.T) {
+	t.Parallel()
+	ctx, conn, _ := seededFleet(t)
+	for _, tc := range []struct{ room, label string }{
+		{"auditorium", "Fleet Recording Service"},
+		{"briefing", "Fleet Recording Service"},
+		{"huddle", ""},
+		{"auditorium", ""},
+	} {
+		var n int
+		if err := conn.QueryRow(ctx, `
+			select count(*) from system_member m
+			join system s on s.id = m.system_id
+			join location l on l.id = s.location_id
+			join component c on c.id = m.component_id
+			where l.name = $1 and ($2 = '' or c.label = $2)
+			  and not exists (select 1 from system_slot_assignment a
+			    where a.system_id = m.system_id and a.component_id = m.component_id)`, tc.room, tc.label).Scan(&n); err != nil {
+			t.Fatalf("read %s members: %v", tc.room, err)
+		}
+		if n == 0 {
+			t.Errorf("%s holds no member filling no slot (label %q), want one", tc.room, tc.label)
+		}
 	}
 }
 
@@ -1606,7 +1653,7 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 	mr := map[string]int{"video-bar": 1, "main-display": 1, "touch-control": 1, "scheduling-panel": 1}
 	quorums := map[string]map[string]int{
 		"mr55": mr, "mr65": mr, "mr75": mr, "mr86": mr, "mr98": mr,
-		"divisible-conference": {"video-bar": 1, "main-display": 2, "room-mic": 2, "dsp": 1, "amplifier": 1, "touch-control": 1, "scheduling-panel": 1},
+		"divisible-conference": {"video-bar": 1, "main-display": 2, "room-mic": 2, "dsp": 1, "amplifier": 1, "touch-control": 1, "scheduling-panel": 1, "people-counter": 1, "projection": 1},
 		"classroom":            {"class-display": 1, "instructor-mic": 1, "touch-control": 1},
 		"training-room": {
 			"front-display": 2, "ceiling-mic": 2, "presenter-mic": 1, "podium-mic": 1,

@@ -70,8 +70,18 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed the plan: %v", err)
 	}
-	if res.Pushers == 0 || res.Senders != len(plan.Sites) {
-		t.Fatalf("the corporate plan seeded %d pushers and %d webhook senders, want pushers and one sender a site", res.Pushers, res.Senders)
+	// Each cloud platform is one account-wide component for the whole fleet
+	// (#2757), so the senders are the plan's webhook platforms, not one a site.
+	wantSenders := 0
+	for _, site := range plan.Sites {
+		for _, p := range site.Pushers {
+			if p.Webhook {
+				wantSenders++
+			}
+		}
+	}
+	if res.Pushers == 0 || wantSenders == 0 || res.Senders != wantSenders {
+		t.Fatalf("the corporate plan seeded %d pushers and %d webhook senders, want pushers and its %d platforms", res.Pushers, res.Senders, wantSenders)
 	}
 
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, f.gw)
@@ -94,8 +104,8 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 	pushes := 0
 	for _, site := range plan.Sites {
 		for _, p := range site.Pushers {
-			if p.Webhook {
-				continue // a webhook sender signs its posts: below
+			if p.IsComponent() {
+				continue // a webhook sender signs its posts, a polled service is collected: below
 			}
 			tok, hash, prefix, err := auth.NewBearerToken()
 			if err != nil {
@@ -168,7 +178,9 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 		rooms += len(h.Identities)
 		operate(t, d, "/api/rooms/report", "{}")
 	}
-	if rooms != plan.Totals.Systems {
+	// The account's service seed binds its devices' ids beside every room's
+	// (#2790), so the platforms hold at least one identity for each system.
+	if rooms < plan.Totals.Systems {
 		t.Fatalf("the platforms speak for %d rooms, want every one of the plan's %d systems", rooms, plan.Totals.Systems)
 	}
 	f.waitPushReceipts(t, srv, pushes+len(hooks))
@@ -209,8 +221,8 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 		}
 		stored += r.Outcomes[delivery.Stored]
 	}
-	if len(hookRows) == 0 || stored < uint64(rooms) {
-		t.Fatalf("the reports' window reads %+v, want push-lane rows storing at least one state for each of %d rooms", hookRows, rooms)
+	if len(hookRows) == 0 || stored < uint64(plan.Totals.Systems) {
+		t.Fatalf("the reports' window reads %+v, want push-lane rows storing at least one state for each of %d systems", hookRows, plan.Totals.Systems)
 	}
 }
 

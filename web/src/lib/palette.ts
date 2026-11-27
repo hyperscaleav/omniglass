@@ -6,7 +6,7 @@ import type { Command } from "../components/CommandPalette";
 // (GET /search) and what the person opened recently are laid out in the palette's
 // groups here; the fetching, debouncing and rendering live elsewhere.
 
-export type SearchEntity = { id: string; name: string; label?: string; location_path?: string; system?: string };
+export type SearchEntity = { id: string; name: string; label?: string; location_path?: string; system?: string; location?: string };
 export type SearchCatalog = { kind: string; name: string; label?: string; detail?: string };
 export type SearchResult = {
   locations: SearchEntity[];
@@ -38,6 +38,10 @@ export const fleetHref = (kind: "locations" | "systems" | "components", id: stri
 
 // What tells two same-named hits apart: where it sits, and the system it is in.
 export function entityDetail(e: SearchEntity): string | undefined {
+  // A system's address is its location's own label (#2757), read beside its
+  // name; where that is the name already (a system named for its room) the
+  // path of names tells same-named hits apart as it always did.
+  if (e.location && e.location !== entityLabel(e)) return e.location;
   const parts = [e.location_path, e.system ? `in ${e.system}` : ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : undefined;
 }

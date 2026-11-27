@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sort"
@@ -32,6 +33,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // newLabCmd is `omniglass lab`: a working omniglass on Docker with one
@@ -142,7 +144,9 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().BoolVar(&scale.induce, "induce-unregistered", false, "a scale lab: make one simulated device answer a property key no driver registers, so its samples are refused (refused-unregistered)")
 	// The marketing captures (#2728) photograph a fleet that has been running.
 	cmd.Flags().BoolVar(&scale.healthHistory, "health-history", false, "a throwaway scale lab (not --keep): seed the scenario's health storyline, 30 days of made-up health and the alarms behind it, for a capture")
-	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
+	// The simulator's clock offset (#2800): a lab test places "now" in a meeting.
+	cmd.Flags().DurationVar(&scale.simClockOffset, "sim-clock-offset", 0, "a scale lab: run the simulated world's clock this far ahead of real time (e.g. 36h, -90m), so \"now\" falls inside a chosen meeting of the lab calendar; the outpost's collection cadence and every timestamp omniglass stamps stay real")
+	for _, name := range []string{"ephemeral", "ready-file", "while-pid", "no-outpost", "platform-history", "sso", "cadence", "host-memory", "ready-timeout", "induce-unregistered", "health-history", "sim-clock-offset"} {
 		_ = cmd.Flags().MarkHidden(name)
 	}
 	return cmd
@@ -250,7 +254,7 @@ func runLabScenario(ctx context.Context, out io.Writer, m *labscenario.Manifest,
 			Project: project, Listen: f.listen, Port: f.port, Image: choice.Ref, Scenario: m.Name,
 			Systems: plan.Totals.Systems, SiteOutposts: outposts, Pushers: pushers,
 			Owner: lab.CurrentOwner(host), WorkDir: wd,
-			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce, HealthHistory: f.scale.healthHistory,
+			Ephemeral: !f.keep, Cadence: cadence, InduceUnregistered: f.scale.induce, SimClockOffset: f.scale.simClockOffset, HealthHistory: f.scale.healthHistory,
 			ServerEnv: settingsEnv, OmnibotKey: omnibotKey, OmnibotReplay: f.omnibotReplay,
 		},
 		Image: choice, Fresh: f.fresh, Hold: true, ReadyFile: f.script.readyFile, WhilePID: f.script.whilePID,
@@ -328,6 +332,9 @@ type labScale struct {
 	// healthHistory seeds the scenario's health storyline (#2728) on a
 	// throwaway scale lab, for the marketing captures.
 	healthHistory bool
+	// simClockOffset runs the simulated world's clock this far ahead of real
+	// time (#2800), so a lab test stands the calendar's now inside a meeting.
+	simClockOffset time.Duration
 }
 
 // parseByteSize reads a size like 512m or 4g (binary units; a bare number is
@@ -405,6 +412,9 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 	}
 	if f.scale.induce {
 		return fmt.Errorf("--induce-unregistered is a scale lab's (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
+	}
+	if f.scale.simClockOffset != 0 {
+		return fmt.Errorf("--sim-clock-offset moves a scale lab's calendar (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
 	}
 	if f.scale.healthHistory {
 		return fmt.Errorf("--health-history seeds a scale scenario's storyline (%s); %q is a seeded fleet", strings.Join(labscenario.Names(), ", "), f.scenario)
@@ -573,6 +583,14 @@ func newLabSeedCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// The simulators read the world their plan resolves to (#2773): one
+			// file per site outpost, beside the omnibot recording in the data
+			// volume the outposts mount read-only.
+			if systems > 0 {
+				if err := writeLabWorlds(scenario, systems, filepath.Join(cfg().DataDir, filepath.Base(lab.WorldDir))); err != nil {
+					return err
+				}
+			}
 			// The server reads the lab's omnibot recording as it starts (#2121),
 			// a seeded lab's or a scale lab's (#2298), and plays it whenever no
 			// live model is configured.
@@ -593,6 +611,30 @@ func newLabSeedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&replay, "omnibot-replay", lab.DefaultOmnibotReplay, "the omnibot recording to write for the server to play")
 	cmd.Flags().BoolVar(&ssoDemo, "sso", false, "configure single sign-on against the lab's Dex and link its demo person (#2362)")
 	return cmd
+}
+
+// writeLabWorlds resolves a scale lab's scenario at its size to each site's
+// world and writes them under dir (#2773): the sim is, and a world file is how
+// the simulator beside each outpost learns it, not from the server.
+func writeLabWorlds(scenario string, systems int, dir string) error {
+	m, err := labscenario.Shipped(scenario)
+	if err != nil {
+		return err
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		return err
+	}
+	plan, err := labscenario.Resolve(m, cat, systems)
+	if err != nil {
+		return err
+	}
+	worlds, err := labscenario.SiteWorlds(m, cat, plan)
+	if err != nil {
+		return err
+	}
+	_, err = lab.WriteWorlds(dir, worlds)
+	return err
 }
 
 // runLabSeed is the lab's seed one-off, in the trusted direct-DB lane like
@@ -928,8 +970,8 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 			return fmt.Errorf("lab seed: %s carries no token hash for the outpost %s", lab.SiteOutpostTokenHashesEnv, outpost)
 		}
 		for _, p := range site.Pushers {
-			if p.Webhook {
-				continue // a webhook sender signs its posts, and needs no bearer token
+			if p.IsComponent() {
+				continue // a webhook sender signs its posts, a polled service is read: neither needs a bearer token
 			}
 			if _, ok := pushers[p.Name]; !ok {
 				return fmt.Errorf("lab seed: %s carries no token for the pusher %s", lab.PusherTokensEnv, p.Name)
@@ -949,7 +991,11 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 		if !keep {
 			return errors.New("lab seed: a throwaway scale lab seeds an empty database, and this one holds data; start it again with --keep to keep that data, or with --fresh to start over")
 		}
-		return reenrollKeptScaleLab(ctx, out, gw, plan, hashes, pushers, user, pwHash)
+		worlds, err := labscenario.SiteWorlds(m, cat, plan)
+		if err != nil {
+			return err
+		}
+		return reenrollKeptScaleLab(ctx, out, gw, plan, worlds, hashes, pushers, user, pwHash)
 	}
 	if err := bootstrapLabOwner(ctx, gw, user, pwHash); err != nil {
 		return err
@@ -1005,7 +1051,7 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 // scenario and is refused, naming --fresh. Then each site outpost is enrolled
 // with this run's hash, each pusher given this run's token, the login is
 // reset, and nothing is seeded.
-func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway, plan *labscenario.Plan, hashes map[string]string, pushers map[string]lab.PusherToken, user, pwHash string) error {
+func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway, plan *labscenario.Plan, worlds map[string]*world.World, hashes map[string]string, pushers map[string]lab.PusherToken, user, pwHash string) error {
 	all := scope.Set{All: true}
 	notThisPlan := func(why string) error {
 		return fmt.Errorf("lab seed: this kept scale lab's fleet is not scenario %s at %d systems (%s); "+
@@ -1038,6 +1084,15 @@ func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway
 		// A webhook sender (#1747) is a component on its site's outpost too.
 		if len(devices) != site.Simulated() {
 			return notThisPlan(fmt.Sprintf("%s simulates %d components, the plan's site %d", outpost, len(devices), site.Simulated()))
+		}
+		// The world names every component (#2773): a fleet kept from before
+		// that holds names the world does not, and its simulator would place
+		// none of them in a room.
+		w := worlds[outpost]
+		for _, d := range devices {
+			if _, placed := w.PlaceDevice(d.Name); !placed && w.Covered(d.Name) == nil {
+				return notThisPlan(fmt.Sprintf("%s simulates %s, which the plan's world does not name", outpost, d.Name))
+			}
 		}
 	}
 	for _, site := range plan.Sites {

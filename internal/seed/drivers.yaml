@@ -519,6 +519,9 @@ drivers:
             - { name: content-sharing-state, extract: { jsonpath: app.local_presentation }, transform: { map: { "true": sharing, "false": idle } } }
             - { name: camera-state, extract: { jsonpath: video.camera_on }, transform: { map: { "true": "on", "false": "off" } } }
             - { name: video-resolution, extract: { jsonpath: video.resolution } }
+            # The camera's count of the people in the room (#2757): the
+            # room's occupancy-count reads it by a calc rule.
+            - { name: people-count, extract: { jsonpath: video.people_count } }
             - { name: cpu-utilization, extract: { jsonpath: device.cpu_load }, transform: { scale: 0.01 } }
             - { name: temperature, extract: { jsonpath: device.temperature } }
             - { name: fan-speed, extract: { jsonpath: device.fan_rpm } }
@@ -803,6 +806,14 @@ drivers:
           request: { line: "GET PROGRAM", reply: { prefix: "PROGRAM ", error: { prefix: "-ERR" } } }
           emits:
             - { name: program-state, extract: { regex: "^PROGRAM (\\S+)$" } }
+        # The room's temperature, as the processor reads it off the room's
+        # sensor (#2757); the system's own room-temperature is carried up from
+        # it by the plan's room-temperature calc rule.
+        - name: room-sensor-temperature
+          schedule: { every: 30s }
+          request: { line: "GET ROOMTEMP", reply: { prefix: "ROOMTEMP ", error: { prefix: "-ERR" } } }
+          emits:
+            - { name: room-sensor-temperature, extract: { regex: "^ROOMTEMP (-?\\d+(?:\\.\\d+)?)$" } }
       unmatched: log
       listeners:
         - *nvp_events_listener
@@ -1018,6 +1029,36 @@ drivers:
           request: { path: /api/occupancy }
           emits:
             - { name: occupancy-state, extract: { jsonpath: vacant }, transform: { map: { "true": vacant, "false": occupied } } }
+  - id: tessellate-census-feed
+    label: Tessellate Census Feed
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Tessellate Census's raw-TCP control band on 5000 (#2757): the only
+      # place the live head-count is exposed, as the device's own HTTP API
+      # carries the vacant flag alone. One line asks, `COUNT?`, and one line
+      # answers, `#COUNT=<n>`; the sensor's welcome banner and its pushes are
+      # other lines and are left unread.
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "5000" }
+      polls:
+        - name: count
+          schedule: { every: 30s }
+          request: { line: "COUNT?", reply: { prefix: "#COUNT=" } }
+          emits:
+            - { name: people-count, extract: { regex: "^#COUNT=(\\d+)$" } }
+      # The poll rides a held session (#816), which the standing listener is what
+      # makes the outpost hold: a one-shot exchange would read the sensor's
+      # welcome banner as its answer. The sensor also pushes the count on each
+      # change once subscribed, which lands the same key.
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE COUNT"]
+          match: { prefix: "#COUNT=" }
+          emits:
+            - { name: people-count, extract: { regex: "^#COUNT=(\\d+)$" } }
   - id: boreal-cast-api
     label: Boreal Cast API
     version: "1.0.0"
@@ -1063,7 +1104,10 @@ drivers:
       # the X-Recording-Key header: its own account of its health and
       # version from the health route, the work it carries from the work
       # route, and a recording that fails as an event the moment the live
-      # feed names it.
+      # feed names it. The account is one component for the whole fleet
+      # (#2757): its recordings list names every room it covers as a record
+      # (ADR-1282), so each room's recordings in progress and queue depth land
+      # on the system bound to that room id on this component (the conduit).
       transport: https
       inputs:
         - { name: host, kind: string, required: true }
@@ -1100,6 +1144,28 @@ drivers:
             - { name: queue-depth, extract: { jsonpath: queue_depth } }
             # The service reports a percentage; the canon stores the ratio.
             - { name: storage-utilization, extract: { jsonpath: storage_used_percent }, transform: { scale: 0.01 } }
+        - name: recordings
+          schedule: { every: 30s }
+          # The recordings list pages (#2789): each answer carries the cursor of
+          # the next page in next_page_token, sent back as the query parameter
+          # of the same name, until an answer carries none; one poll walks
+          # every page and fans every room out. Ten rooms a page, so a small
+          # lab's list is visibly paged; 400 pages hold a four-thousand-room
+          # account.
+          request:
+            path: /api/recordings
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 10
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 400
+          records: recordings
+          identity: { key: recording-room-id, extract: { jsonpath: id } }
+          emits:
+            - { name: active-recording-count, extract: { jsonpath: in_progress } }
+            - { name: queue-depth, extract: { jsonpath: queue_depth } }
   - id: newtron-panel-web
     label: Newtron Panel Web
     version: "1.0.0"
@@ -1234,6 +1300,26 @@ drivers:
           emits:
             - { name: call-ended, message: { value: "Meeting ended" } }
             - { name: call-state, extract: { jsonpath: event }, transform: { map: { room.meeting.ended: idle } } }
+        # A participant joins or leaves a room's meeting (#2790): the post names
+        # the room by id and the headcount after, which lands as the room's
+        # participant count.
+        - name: room-participant-joined
+          match: { header: { name: X-UCC-Event, equals: room.participant.joined } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: participant-count, extract: { jsonpath: participants } }
+        - name: room-participant-left
+          match: { header: { name: X-UCC-Event, equals: room.participant.left } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: participant-count, extract: { jsonpath: participants } }
+        # A device's status on the platform changes (#2790): the post names the
+        # device by its id, which lands on the component bound to it.
+        - name: device-status-changed
+          match: { header: { name: X-UCC-Event, equals: device.status.changed } }
+          identity: { key: ucc-device-id, extract: { jsonpath: device_id } }
+          emits:
+            - { name: platform-state, extract: { jsonpath: status } }
         # The batched report names every room at once: one record per room.
         - name: rooms-state
           match: { header: { name: X-UCC-Event, equals: rooms.state } }
@@ -1241,17 +1327,67 @@ drivers:
           identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
           emits:
             - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
-  - id: ucc-rooms
-    label: UCC Rooms
+  - id: scheduling-service-api
+    label: Scheduling Service Rooms
     version: "1.0.0"
     spec:
       version: 1
-      # The account-wide meeting platform's room list (#1282): one poll of
-      # GET /api/rooms reads every room on the account, one record per room,
-      # each naming its room by id, so each room's call state and
-      # participant count land on the system or component bound to that id
-      # on this component (the conduit). The platform answers over https on
+      # The room-booking platform's room list (#2765, ADR-1282): one poll of
+      # GET /api/rooms reads every room the account serves, one record per
+      # room, each naming its room by id, so each room's booking state and the
+      # bookings left in its day land on the system or component bound to that
+      # id on this component (the conduit). The platform answers over https on
       # 443, its key pinned on first use, every request carrying its token.
+      transport: https
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "443" }
+        - { name: tls-mode, kind: string, default: pin }
+        - { name: token, kind: secret, secret_type: api-key, required: true }
+      session:
+        credential: token
+        scheme: api-key
+        api_key: { in: header, name: X-Sched-Token }
+      polls:
+        - name: rooms
+          schedule: { every: 30s }
+          # The room list pages (#2789): each answer carries the cursor of the
+          # next page in next_page_token, sent back as the query parameter of
+          # the same name, until an answer carries none; one poll walks every
+          # page and fans every room out. Ten rooms a page, so a small lab's
+          # list is visibly paged; 400 pages hold a four-thousand-room account.
+          request:
+            path: /api/rooms
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 10
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 400
+          records: rooms
+          identity: { key: sched-room-id, extract: { jsonpath: id } }
+          emits:
+            - { name: booking-state, extract: { jsonpath: state } }
+            - { name: booking-count, extract: { jsonpath: remaining } }
+  - id: ucc-rooms
+    label: UCC Rooms and Devices
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The account-wide meeting platform's room list (#1282, #2790): one poll
+      # of GET /api/rooms reads every room on the account, one record per room,
+      # each naming its room by id, with the room's status (available, in a
+      # meeting, offline) and the meeting it holds, so each room's call state
+      # and participant count land on the system bound to that id on this
+      # component (the conduit). A second poll reads GET /api/devices the same
+      # way, one record per device naming it by the id the platform gives it
+      # (not the room's), so each device's status on the platform and the
+      # firmware it reports land on the component bound to that id. An endpoint
+      # is named for its transport and the account is one component, so both
+      # lists are one driver's polls on its one https endpoint. The platform
+      # answers over https on 443, its key pinned on first use, every request
+      # carrying its token.
       transport: https
       inputs:
         - { name: host, kind: string, required: true }
@@ -1265,9 +1401,38 @@ drivers:
       polls:
         - name: rooms
           schedule: { every: 30s }
-          request: { path: /api/rooms }
+          # The room list pages (#2789): each answer carries the cursor of the
+          # next page in next_page_token, sent back as the query parameter of
+          # the same name, until an answer carries none; one poll walks every
+          # page and fans every room out.
+          request:
+            path: /api/rooms
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 10
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 400
           records: rooms
           identity: { key: ucc-room-id, extract: { jsonpath: id } }
           emits:
-            - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
-            - { name: participant-count, extract: { jsonpath: participants } }
+            - { name: call-state, extract: { jsonpath: status }, transform: { map: { in-meeting: active, available: idle, offline: idle } } }
+            - { name: participant-count, extract: { jsonpath: meeting.participants } }
+        - name: devices
+          schedule: { every: 30s }
+          request:
+            path: /api/devices
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 20
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 600
+              max_records: 50000
+          records: devices
+          identity: { key: ucc-device-id, extract: { jsonpath: id } }
+          emits:
+            - { name: platform-state, extract: { jsonpath: status } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }

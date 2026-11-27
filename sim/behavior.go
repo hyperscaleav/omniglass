@@ -19,8 +19,10 @@ import (
 // so randStep / drift behaviors are deterministic per device. The
 // stop channel is closed by StopBehaviors to wind the runner down.
 type behaviorEntry struct {
-	Name      string
-	Interval  time.Duration
+	Name     string
+	Interval time.Duration
+	// OnStart ticks the behavior once as it starts, before its phase offset.
+	OnStart   bool
 	Mutations []mutation
 	// Emit, when non-nil, makes the behavior POST an outbound webhook
 	// after its mutations apply each tick (best-effort, off the tick
@@ -72,7 +74,7 @@ func (d *Device) AddBehaviorFromProfile(b *profile.Behavior) error {
 	}
 
 	d.ensureRand()
-	funcs := behaviorFuncs(d.rand, d.clock)
+	funcs := d.behaviorFuncs()
 	muts, err := compileBehaviorMutationList(b.Mutations, funcs)
 	if err != nil {
 		return fmt.Errorf("behavior %q: %w", b.Name, err)
@@ -89,6 +91,7 @@ func (d *Device) AddBehaviorFromProfile(b *profile.Behavior) error {
 	d.behaviors = append(d.behaviors, behaviorEntry{
 		Name:      b.Name,
 		Interval:  interval,
+		OnStart:   b.Schedule.OnStart,
 		Mutations: muts,
 		Emit:      emit,
 		Events:    evs,
@@ -106,9 +109,13 @@ func (d *Device) AddBehaviorFromProfile(b *profile.Behavior) error {
 // staggers behaviors across devices so a 1000-device fleet with the
 // same uptime-tick behavior won't all fire at the same wall clock
 // instant, useful for keeping the event log readable.
+//
+// A behavior that declares schedule.on_start ticks once, here and before
+// StartBehaviors returns, so what it derives from the lab calendar is the
+// room's from the device's first request (#2757).
 func (d *Device) StartBehaviors() {
+	var first []*behaviorEntry
 	d.behaviorMu.Lock()
-	defer d.behaviorMu.Unlock()
 	for i := range d.behaviors {
 		b := &d.behaviors[i]
 		if b.stop != nil {
@@ -116,8 +123,15 @@ func (d *Device) StartBehaviors() {
 		}
 		b.stop = make(chan struct{})
 		b.done = make(chan struct{})
+		if b.OnStart {
+			first = append(first, b)
+		}
 		offset := time.Duration(behaviorPhaseOffset(d.DeviceID, b.Name, int64(b.Interval)))
 		go d.runBehavior(b, offset)
+	}
+	d.behaviorMu.Unlock()
+	for _, b := range first {
+		d.tickBehavior(b)
 	}
 }
 

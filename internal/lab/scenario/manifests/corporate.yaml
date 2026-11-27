@@ -24,6 +24,7 @@ sites:
 standards:
   - name: huddle-room
     system_type: huddle
+    room_name: Huddle
     products:
       main-display: boreal-edge-55
       conf-bar: kestrel-vroom
@@ -54,20 +55,32 @@ standards:
     control: [main-display]
   - name: divisible-conference
     system_type: conference
+    room_name: Auditorium
     products:
       video-bar: kestrel-vroom
+      camera: kestrel-gaze-p2
+      codec: kestrel-relay-c1
       main-display: boreal-edge-86
       room-mic: lyra-arc-a2
+      wireless-mic: lyra-hx-1
       dsp: polaris-dsp-16
       amplifier: polaris-amp-4100
+      control-system: newtron-core-3
+      video-switcher: meridian-mx-84
+      display-endpoint: meridian-xl-1
+      power: ferrite-pdu-4c
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
+      people-counter: tessellate-census-c1
+      projection: boreal-beam-340
     # The conference rooms' video bars talk over two protocols (#2754): the
     # https API and the websocket control socket the touch panel drives,
-    # each its own endpoint on the bar.
-    control: [video-bar]
+    # each its own endpoint on the bar. The people counter's raw-TCP control
+    # band is the one that answers the head-count (#2757), beside its http API.
+    control: [video-bar, people-counter]
   - name: ds55
     system_type: sign
+    room_name: Signage
     products:
       panel: boreal-edge-55
       player: boreal-cast-m1
@@ -77,6 +90,7 @@ archetypes:
     label: Headquarters
     headquarters: true
     typical_systems: 250
+    room_names: [scientists]
     buildings:
       - { name: tower, floors: 30 }
       - { name: annex, floors: 10 }
@@ -91,6 +105,7 @@ archetypes:
     label: Regional Office
     weight: 1
     typical_systems: 80
+    room_names: [peaks, rivers, parks]
     buildings:
       - { name: main, floors: 8 }
     systems:
@@ -103,6 +118,7 @@ archetypes:
     label: Branch Office
     weight: 2
     typical_systems: 25
+    room_names: [lakes, bridges, parks, rivers]
     buildings:
       - { name: main, floors: 3 }
     systems:
@@ -116,20 +132,31 @@ archetypes:
 # of the site's systems. The lab seeds its telemetry:push user and mints
 # its token per run, so every corporate lab pushes and lab measure reads the
 # push lane.
-#
-# And one meeting platform account a site (#1747), a webhook sender: systems
-# omitted, so it speaks for every one of the site's systems. The lab seeds
-# its webhook endpoint, mints the endpoint's signing key per run and binds
-# each room to its system, so the account's signed posts land on the push
-# lane beside the booking service's.
 pushers:
   - name: booking
     profile: booking-service
     per_site: 1
     systems: 4
-  - name: ucc
+
+# Polled cloud services (#2765, #2790, #2757): one account for the whole fleet,
+# placed once at the headquarters and covering every room it books, holds or
+# records, not a box in each. The simulator reads the rooms (and, for the
+# meeting platform, the devices) it covers off its world and reports their
+# booked, held and recorded meetings off the lab calendar, a paged list each. The meeting platform is also a webhook sender
+# (#1747): the lab seeds its webhook endpoint, mints the endpoint's signing key
+# per run, and binds each room to its system and each device to its component
+# as an installer would, so the account's signed posts land on the system or
+# component their ids name.
+services:
+  - name: scheduling
+    profile: scheduling-service
+    label: Scheduling Platform
+  - name: meeting
     profile: ucc-platform
-    per_site: 1
+    label: Meeting Platform
+  - name: recording
+    profile: recording-service
+    label: Recording Service
 
 # The past a lab seeded with --health-history carries (#2728, ADR-2726): every
 # system healthy for the 30 days before the lab started, except the showcase
@@ -144,7 +171,7 @@ health_history:
   days: 30
   stretches:
     - system: hq-mr86-1
-      component: display-1
+      component: hq-mr86-1-main-display-1
       rule: reachability-lost
       instance: snmp
       severity: high
@@ -153,7 +180,7 @@ health_history:
       days_ago: 23
       minutes: 47
     - system: hq-mr86-1
-      component: display-1
+      component: hq-mr86-1-main-display-1
       rule: reachability-lost
       instance: snmp
       severity: high
@@ -162,7 +189,7 @@ health_history:
       days_ago: 9
       minutes: 18
     - system: hq-mr65-59
-      component: videobar-1
+      component: hq-mr65-59-video-bar-1
       rule: reachability-lost
       instance: https
       severity: high
@@ -170,3 +197,100 @@ health_history:
       health: degraded
       days_ago: 16
       minutes: 25
+
+# What every room acts out on the simulator's clock (#2757): its meetings, as
+# knobs per standard. The lab calendar is derived from these and a seed, never
+# stored, so every node computes the same one. A huddle room is booked less
+# and for shorter than a boardroom; a conference room fills most of its day.
+# Times are UTC; hours bounds the day meetings fall in. The signage has none.
+calendar:
+  meetings:
+    huddle-room:
+      booking_rate: 0.30
+      slot_mix: { 15: 3, 30: 5, 60: 1 }
+      no_show_rate: 0.15
+      ended_early_rate: 0.20
+      ended_late_rate: 0.08
+      attendance: { min: 2, max: 4 }
+      walk_in_rate: 0.12
+      hours: { start: 8, end: 18 }
+      recording_rate: 0.05
+    mr65:
+      booking_rate: 0.40
+      slot_mix: { 15: 1, 30: 5, 60: 3 }
+      no_show_rate: 0.12
+      ended_early_rate: 0.18
+      ended_late_rate: 0.10
+      attendance: { min: 3, max: 8 }
+      walk_in_rate: 0.08
+      hours: { start: 8, end: 18 }
+      recording_rate: 0.15
+    mr75:
+      booking_rate: 0.45
+      slot_mix: { 15: 1, 30: 4, 60: 4 }
+      no_show_rate: 0.10
+      ended_early_rate: 0.15
+      ended_late_rate: 0.12
+      attendance: { min: 4, max: 12 }
+      walk_in_rate: 0.06
+      hours: { start: 8, end: 18 }
+      recording_rate: 0.2
+    mr86:
+      booking_rate: 0.50
+      slot_mix: { 30: 3, 60: 5 }
+      no_show_rate: 0.08
+      ended_early_rate: 0.12
+      ended_late_rate: 0.15
+      attendance: { min: 6, max: 16 }
+      walk_in_rate: 0.04
+      hours: { start: 8, end: 18 }
+      recording_rate: 0.3
+    divisible-conference:
+      booking_rate: 0.60
+      slot_mix: { 30: 2, 60: 6 }
+      no_show_rate: 0.06
+      ended_early_rate: 0.10
+      ended_late_rate: 0.18
+      attendance: { min: 8, max: 30 }
+      walk_in_rate: 0.02
+      hours: { start: 8, end: 18 }
+      recording_rate: 0.5
+
+  # What goes wrong on a schedule (#2769): recurring problems, scripted and not
+  # drawn. Each says when (a cadence, a UTC time and a duration; spread starts
+  # each room's occurrence a seeded few minutes later, so a fleet does not break
+  # at one instant), where (a scope: standards, a site or its kind, or named
+  # rooms, and the role the problem lands on, a slot and never a product) and
+  # what it does. The simulator applies each when its window opens and clears it
+  # when it closes; Omniglass is told nothing and learns of it by collecting.
+  problems:
+    # The boardrooms' displays go dark on Tuesday afternoons: pinned off, so the
+    # panel stops answering as a switched-off display does.
+    - name: tuesday-display-dark
+      cadence: weekly
+      weekday: tuesday
+      at: "14:00"
+      for: 2h
+      spread: 30m
+      scope: { standard: mr86, role: main-display }
+      impairment:
+        pin: { path: status.device.power, value: "off" }
+    # The conference rooms' wireless microphone packs read dead every Thursday
+    # afternoon, a battery pinned to empty.
+    - name: weekly-dead-mic-battery
+      cadence: weekly
+      weekday: thursday
+      at: "15:00"
+      for: 3h
+      scope: { standard: divisible-conference, role: wireless-mic }
+      impairment:
+        pin: { path: status.mic.battery_percent, value: "0" }
+    # The conference rooms' codecs take a firmware window every night: unplugged,
+    # dark on every protocol, and offline on the meeting platform's devices list.
+    - name: nightly-codec-firmware
+      cadence: daily
+      at: "03:00"
+      for: 20m
+      spread: 30m
+      scope: { standard: divisible-conference, role: codec }
+      impairment: { unplugged: true }

@@ -18,6 +18,11 @@ type FleetSearchResult struct {
 	Locations  []Location
 	Systems    []System
 	Components []Component
+	// SystemPlaces is the label (the name where it has none) of the location
+	// each system hit sits at, by location id: the address a system is named
+	// with (#2757). Read through the location scope, so a location the caller
+	// cannot read is not in it.
+	SystemPlaces map[string]string
 }
 
 // likePattern turns typed text into a LIKE pattern matching it anywhere, with
@@ -51,7 +56,47 @@ func (p *PG) SearchFleet(ctx context.Context, text string, limit int, locRead, s
 	if out.Components, err = scopedSearch(ctx, p, componentConfig, compRead, text, limit); err != nil {
 		return nil, err
 	}
+	if out.SystemPlaces, err = p.searchSystemPlaces(ctx, out.Systems, locRead); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// searchSystemPlaces reads the label of each location the system hits sit at,
+// through the caller's location read scope.
+func (p *PG) searchSystemPlaces(ctx context.Context, systems []System, read scope.Set) (map[string]string, error) {
+	var ids []string
+	seen := map[string]bool{}
+	for _, s := range systems {
+		if s.LocationID != nil && !seen[*s.LocationID] {
+			seen[*s.LocationID] = true
+			ids = append(ids, *s.LocationID)
+		}
+	}
+	if len(ids) == 0 || read.Empty() {
+		return nil, nil
+	}
+	args, ok := scopedListArgs(locationTable, read)
+	if !ok {
+		return nil, nil
+	}
+	args = append(args, ids)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(
+		`select v.id::text, coalesce(nullif(btrim(v.label), ''), v.name) from (%s) v where v.id = any($%d::uuid[])`,
+		scopedListSQL(locationTable, "id, name, label", read), len(args)), args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read the locations of system hits: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, label string
+		if err := rows.Scan(&id, &label); err != nil {
+			return nil, fmt.Errorf("storage: scan a system hit's location: %w", err)
+		}
+		out[id] = label
+	}
+	return out, rows.Err()
 }
 
 // scopedSearch is scopedList narrowed to a name search and a limit: the ids are

@@ -13,6 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -61,7 +62,7 @@ func TestTheEmulatorsBookingServiceLandsItsBookings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := startPushers(store, apiSrv.URL, []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Token: tok}})
+	e, err := startPushers(store, apiSrv.URL, []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Token: tok}}, nil, sim.Clock{})
 	if err != nil {
 		t.Fatalf("startPushers: %v", err)
 	}

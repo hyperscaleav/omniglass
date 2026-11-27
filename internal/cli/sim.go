@@ -38,7 +38,8 @@ func newSimCmd() *cobra.Command {
 		Long: "Serves each component placed on the outpost whose product has a simulator profile and whose " +
 			"endpoints target a loopback address, on that address, and reports every request it answers " +
 			"to the server. Re-pulls the device list on an interval, so devices added or removed on the " +
-			"server start or stop without a restart.",
+			"server start or stop without a restart. With a world file (env OMNIGLASS_SIM_WORLD), the simulator " +
+			"holds the world it simulates: the lab calendar and each device's room, from the scenario and not from the server.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if serverURL == "" {
 				serverURL = config.Get("OMNIGLASS_SERVER")
@@ -56,12 +57,20 @@ func newSimCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			world, err := simoutpost.LoadWorld(config.Get(simoutpost.WorldEnv))
+			if err != nil {
+				return err
+			}
+			clockOffset, err := simoutpost.LoadClockOffset(config.Get(simoutpost.ClockOffsetEnv))
+			if err != nil {
+				return err
+			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			return simoutpost.Run(ctx, simoutpost.Config{
 				ServerURL: serverURL, Name: name, Token: token,
 				PortOffset: portOffset, Poll: poll, Impairments: impairments,
-				Pushers: pushers,
+				Pushers: pushers, World: world, ClockOffset: clockOffset,
 			})
 		},
 	}

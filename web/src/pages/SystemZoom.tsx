@@ -10,6 +10,8 @@ import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
+import { systemAddress } from "../lib/system_name";
+import SystemName from "../components/SystemName";
 import { systemCrumbs, systemsAtLocation } from "../lib/detail";
 import { describeError } from "../lib/format";
 
@@ -17,8 +19,9 @@ import { describeError } from "../lib/format";
 // address (the breadcrumb, a name-shaped address resolving to the uuid, the
 // miss and ambiguity faces) around SystemDetail, the one body the fleet blade
 // renders too (#2423). Systems are the unit Omniglass monitors, so a sole
-// system's page wears its location's name, and its path ends at the
-// location's parent, so the room is named once. The page owns a blade stack,
+// system's page is titled by its name with its location's label beside it as
+// the address, and its path ends at the location's parent, so the room is
+// named once. The page owns a blade stack,
 // so every member the body opens stacks here.
 export default function SystemZoom() {
   const params = useParams<{ id: string }>();
@@ -41,10 +44,14 @@ export default function SystemZoom() {
 
   const locationId = () => system()?.location ?? null;
   const location = createMemo(() => (locationId() ? (view.data?.locations ?? []).find((l) => l.id === locationId()) : undefined));
-  // A sole system is the room: the view wears the location's name. A shared
-  // location keeps its own view, so a system there wears its own.
+  // A sole system is the room: its page is titled by the system's name (what a
+  // company calls the room) with the location's label beside it as the address
+  // (#2757), and the path ends at the location's parent so the room is named
+  // once. A shared location keeps its own view and names it in the path, so a
+  // system there wears its name alone.
   const sole = createMemo(() => (view.data && locationId() ? systemsAtLocation(view.data, locationId()!).length === 1 : false));
-  const title = () => (sole() && location() ? entityLabel(location()!) : system() ? entityLabel(system()!) : "System");
+  const address = () => (sole() && system() ? systemAddress(system()!, location()) : undefined);
+  const title = () => (system() ? (address() ? <SystemName label={entityLabel(system()!)} address={address()} /> : entityLabel(system()!)) : "System");
 
   const crumbs = createMemo(() => [{ key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(id())}` }, ...(view.data ? systemCrumbs(view.data, id()) : []).map((c) => ({ key: c.id, label: c.label, href: `/locations/${c.id}` }))]);
 

@@ -10,10 +10,37 @@
 # system its room id is bound to and an unbound room lands in the
 # conduit's inbox.
 #
+# Designed to the shape of a real cloud meeting platform's Rooms and Devices
+# admin APIs, under our own names (#2790): two token-paged lists, one record per
+# room and one per device, and a webhook for what happens to either.
+#
+#   GET /api/rooms    , a room's id, name, status (available, in-meeting,
+#                       offline), the meeting it holds (id, topic, start,
+#                       participants), the booking that holds it now and the
+#                       next booked one
+#   GET /api/devices  , a device's id, name, the room it sits in, its type
+#                       (codec, bar, controller, scheduling-panel, camera,
+#                       microphone), status (online, offline), firmware and
+#                       last-seen time
+#
 # Course datapoints (HTTP, token auth):
 #   status.rooms.<id>.state    , idle or in-call
 #   status.rooms.<id>.meeting  , the meeting in progress, empty when idle
 #   status.rooms.<id>.participants , people in the meeting
+#
+# The sim is; Omniglass learns (#2757). The account is one component for the
+# whole fleet and speaks for every room the world covers, and lists every
+# device of those rooms the world says a meeting platform manages. The ids are
+# the world's (a room is its system's name, a device has the stable id the
+# world gives it); the lab seed binds each id to its system or component as an
+# installer would, and an id nobody bound lands in the conduit's unbound inbox.
+# The rooms the world places read off the lab calendar (#2767): a
+# room is in a call exactly when its meeting (the room of the system its id
+# names) has somebody in it, the meeting is named by its start and the room,
+# participants are who came, a booked meeting nobody came to leaves the room
+# available but still booked, and the platform posts room.meeting.started and
+# room.meeting.ended at each boundary. A room or a device the world does not name
+# (the dev fixture's, an id a demo invents) keeps the state its routes gave it.
 #
 # Auth: header token (X-UCC-Token). public_paths exempts the dashboard.
 
@@ -24,11 +51,13 @@ device_type: cloud-service
 slug_prefix: ucc-plat
 
 doc:
-  summary: "Account-wide meeting platform: every room's call state over one API and one webhook"
+  summary: "Account-wide meeting platform: every room's and device's state over one API and one webhook"
   description: |
     The meeting platform's account-wide admin plane. One API key reads
-    every room's meeting state (GET /api/rooms), and one webhook
-    subscription posts each room's meeting start and end, and a batched
+    every room's meeting state (GET /api/rooms) and every device's status
+    (GET /api/devices), each a token-paged list, and one webhook
+    subscription posts each room's meeting start and end, its participants
+    joining and leaving, a device's status changing, and a batched
     state report naming several rooms at once. HTTP + ICMP only.
   tags: [cloud, ucc, service, fan-out]
 
@@ -54,7 +83,11 @@ interfaces:
 
       - match: "GET /api/rooms"
         template: api/ucc-platform/rooms.json.gotempl
-        doc: { summary: "Every room on the account with its meeting state", tags: [api, rooms] }
+        doc: { summary: "Every room on the account with its meeting state, a page at a time", tags: [api, rooms, paged] }
+
+      - match: "GET /api/devices"
+        template: api/ucc-platform/devices.json.gotempl
+        doc: { summary: "Every device on the account with its status and firmware, a page at a time", tags: [api, devices, paged] }
 
       # The webhook subscription (#1024): where the platform posts its room
       # events and how each post is signed.
@@ -96,6 +129,8 @@ interfaces:
           # meeting id or count never leaves a room reading in a call.
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.meeting', value: "{{ .Request.Body.id }}", pattern: "^[A-Za-z0-9-]{1,32}$" }
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 1 }}', pattern: "^[0-9]{1,3}$" }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.topic', value: '{{ or .Request.Body.topic "" }}', pattern: "^[A-Za-z0-9 .,'-]{0,64}$" }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.start', value: "{{ now }}" }
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.state{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}{{ guard "^[0-9]{1,3}$" (or .Request.Body.participants 1) }}', value: in-call }
         emit:
           url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
@@ -119,10 +154,58 @@ interfaces:
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.state', value: idle }
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.meeting', value: "" }
           - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: 0 }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.topic', value: "" }
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.start', value: 0 }
         emit:
           url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
           body: '{"event":"room.meeting.ended","room_id":"{{ .Request.Body.room }}","ts":{{ now }}}'
           headers: { X-UCC-Event: room.meeting.ended }
+          sign: *ucc-sign
+
+      # A participant joins or leaves a room's meeting: the headcount after is
+      # the room's, and the platform posts room.participant.joined or
+      # room.participant.left naming the room.
+      - match: "POST /api/rooms/participants/join"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "A participant joins a room's meeting (posts room.participant.joined)", tags: [api, meeting, webhook] }
+        example: |
+          {"room": "zr-huddle-north", "participants": 4}
+        mutations:
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 1 }}', pattern: "^[0-9]{1,3}$" }
+        emit:
+          url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+          body: '{"event":"room.participant.joined","room_id":{{ marshal .Request.Body.room }},"participants":{{ whole (or .Request.Body.participants 1) }},"ts":{{ now }}}'
+          headers: { X-UCC-Event: room.participant.joined }
+          sign: *ucc-sign
+
+      - match: "POST /api/rooms/participants/leave"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "A participant leaves a room's meeting (posts room.participant.left)", tags: [api, meeting, webhook] }
+        example: |
+          {"room": "zr-huddle-north", "participants": 2}
+        mutations:
+          - { path: 'status.rooms.{{ segment .Request.Body.room }}.participants', value: '{{ or .Request.Body.participants 0 }}', pattern: "^[0-9]{1,3}$" }
+        emit:
+          url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+          body: '{"event":"room.participant.left","room_id":{{ marshal .Request.Body.room }},"participants":{{ whole (or .Request.Body.participants 0) }},"ts":{{ now }}}'
+          headers: { X-UCC-Event: room.participant.left }
+          sign: *ucc-sign
+
+      # A device's status on the platform changes: the platform keeps what it
+      # last heard for a device the world does not name, and posts
+      # device.status.changed naming the room and the device by id.
+      - match: "POST /api/devices/status"
+        template: api/ucc-platform/ack.json.gotempl
+        doc: { summary: "A device's status changes (posts device.status.changed)", tags: [api, devices, webhook] }
+        example: |
+          {"device": "zd-spare-bar", "room": "zr-boardroom-b", "status": "offline"}
+        mutations:
+          - { path: 'status.devices.{{ segment .Request.Body.device }}.status', value: "{{ .Request.Body.status }}", enum: [online, offline] }
+          - { path: 'status.devices.{{ segment .Request.Body.device }}.last_seen', value: "{{ now }}" }
+        emit:
+          url: '{{ .State | get "configuration" | get "webhook" | get "target_url" }}'
+          body: '{"event":"device.status.changed","room_id":{{ marshal .Request.Body.room }},"device_id":{{ marshal .Request.Body.device }},"status":{{ marshal .Request.Body.status }},"ts":{{ now }}}'
+          headers: { X-UCC-Event: device.status.changed }
           sign: *ucc-sign
 
       # The batched report: one post naming every room on the account and
@@ -141,11 +224,38 @@ interfaces:
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }
 
-# The account's periodic digest (#1747): every thirty seconds it posts the
-# same batched rooms.state report the report route posts, so a scale lab's
-# account is heard on its own. Before the account is subscribed its target
-# is empty and nothing is sent.
+# The account's behaviors (#1747, #2767). rooms_calendar, every 15 seconds,
+# reads each room the world places off the lab calendar into status.rooms and
+# tells the server when a meeting begins or ends: one post a tick, an ended
+# before a started when a meeting follows another, in room-id order when
+# several fall due together. Before the account is subscribed, and for a room
+# it has just learned, it posts nothing and takes the room's state as it
+# stands, so a lab does not announce every meeting already running; the batched
+# report below tells the whole state. status.sim is the simulator's: told is
+# the meeting each room was last told of ("-" for none) and announce is what
+# this tick posts.
 behaviors:
+  - name: rooms_calendar
+    schedule:
+      interval: 15s
+      on_start: true
+    mutations:
+      - path: status.rooms
+        value: '{ {{- $sep := "" }}{{ range servedRooms }}{{ if .system }}{{ $id := .system }}{{ $b := roomBookings .site .building .room }}{{ $in := false }}{{ $mid := "" }}{{ $part := 0 }}{{ $mstart := 0 }}{{ $mtopic := "" }}{{ with roomMeetingNow .site .building .room }}{{ if ne .outcome "no-show" }}{{ $in = true }}{{ $mid = printf "m-%d-%s" .start $id }}{{ $part = .actual }}{{ $mstart = .start }}{{ $mtopic = meetingTopic . }}{{ end }}{{ end }}{{ $bt := "" }}{{ $bs := 0 }}{{ $be := 0 }}{{ with $b.now }}{{ $bt = meetingTopic . }}{{ $bs = .slot_start }}{{ $be = .slot_end }}{{ end }}{{ $nt := "" }}{{ $ns := 0 }}{{ with $b.next }}{{ $nt = meetingTopic . }}{{ $ns = .slot_start }}{{ end }}{{ $sep }}{{ marshal $id }}: {"name": {{ marshal (or .label .room) }}, "address": {{ marshal .room }}, "state": {{ if roomOffline $id }}"offline"{{ else if $in }}"in-call"{{ else }}"idle"{{ end }}, "meeting": {{ marshal $mid }}, "participants": {{ $part }}, "topic": {{ marshal $mtopic }}, "start": {{ $mstart }}, "booking": {"topic": {{ marshal $bt }}, "start": {{ $bs }}, "end": {{ $be }}}, "next": {"topic": {{ marshal $nt }}, "start": {{ $ns }}}}{{ $sep = "," }}{{ end }}{{ end }}{{ range $id, $r := (.State | get "status" | get "rooms") }}{{ if not (ownerRoom $id) }}{{ $sep }}{{ marshal $id }}: {"name": {{ marshal (or (index $r "name") $id) }}, "address": {{ marshal (or (index $r "address") "") }}, "state": {{ marshal (or (index $r "state") "idle") }}, "meeting": {{ marshal (or (index $r "meeting") "") }}, "participants": {{ or (index $r "participants") 0 }}, "topic": {{ marshal (or (index $r "topic") "") }}, "start": {{ or (index $r "start") 0 }}, "booking": {"topic": "", "start": 0, "end": 0}, "next": {"topic": "", "start": 0}}{{ $sep = "," }}{{ end }}{{ end }} }'
+      - path: status.sim.announce
+        value: '{{ $told := .State.status.sim.told }}{{ $out := `{"kind":"","room":"","meeting":""}` }}{{ if .State | get "configuration" | get "webhook" | get "target_url" }}{{ range $id, $r := (.State | get "status" | get "rooms") }}{{ if and (ownerRoom $id) (eq $out `{"kind":"","room":"","meeting":""}`) }}{{ $t := index $told $id }}{{ if $t }}{{ if and (ne $t "-") (or (eq $r.state "idle") (ne $r.meeting $t)) }}{{ $out = printf `{"kind":"ended","room":%s,"meeting":%s}` (marshal $id) (marshal $t) }}{{ else if and (eq $t "-") (eq $r.state "in-call") }}{{ $out = printf `{"kind":"started","room":%s,"meeting":%s}` (marshal $id) (marshal $r.meeting) }}{{ end }}{{ end }}{{ end }}{{ end }}{{ end }}{{ $out }}'
+      - path: status.sim.told
+        value: '{{ $s := .State.status.sim }}{{ $sub := .State | get "configuration" | get "webhook" | get "target_url" }}{{ $sep := "" }}{ {{- range $id, $r := (.State | get "status" | get "rooms") }}{{ if ownerRoom $id }}{{ $sep }}{{ marshal $id }}: {{ $v := index $s.told $id }}{{ if and $sub $v }}{{ if eq $s.announce.room $id }}{{ if eq $s.announce.kind "started" }}{{ marshal $r.meeting }}{{ else }}"-"{{ end }}{{ else }}{{ marshal $v }}{{ end }}{{ else if eq $r.state "in-call" }}{{ marshal $r.meeting }}{{ else }}"-"{{ end }}{{ $sep = "," }}{{ end }}{{ end }} }'
+    emit:
+      url: '{{ $a := .State.status.sim.announce }}{{ if $a.kind }}{{ .State | get "configuration" | get "webhook" | get "target_url" }}{{ end }}'
+      body: '{"event":"room.meeting.{{ .State.status.sim.announce.kind }}","room_id":"{{ .State.status.sim.announce.room }}","meeting":"{{ .State.status.sim.announce.meeting }}","ts":{{ now }}}'
+      headers: { X-UCC-Event: 'room.meeting.{{ .State.status.sim.announce.kind }}' }
+      sign: *ucc-sign
+
+  # The account's periodic digest (#1747): every thirty seconds it posts the
+  # same batched rooms.state report the report route posts, so a scale lab's
+  # account is heard on its own. Before the account is subscribed its target
+  # is empty and nothing is sent.
   - name: rooms_report
     schedule:
       interval: 30s
@@ -180,12 +290,23 @@ defaults:
   status:
     device:
       boot_epoch: 0
+    # What the calendar behavior has told the server: the meeting each placed
+    # room was last told of ("-" for none), and this tick's post.
+    sim:
+      told: {}
+      announce: { kind: "", room: "", meeting: "" }
     rooms:
       zr-boardroom-a: { name: "Boardroom A", state: idle, meeting: "", participants: 0 }
       zr-huddle-north: { name: "Huddle North", state: in-call, meeting: "m-1001", participants: 3 }
       zr-briefing-av: { name: "Briefing", state: idle, meeting: "", participants: 0 }
       zr-auditorium-av: { name: "Auditorium", state: idle, meeting: "", participants: 0 }
       zr-boardroom-b: { name: "Boardroom B", state: in-call, meeting: "m-1002", participants: 2 }
+    # Devices the platform lists that no room of the world places: zd-spare-bar
+    # is one nobody bound, so its values land in the conduit's unbound inbox
+    # until an operator binds it.
+    devices:
+      zd-spare-bar: { name: "Spare video bar", room_id: zr-boardroom-b, type: bar, status: online, firmware: "2.6.1", last_seen: 0 }
+      zd-annex-codec: { name: "Annex codec", room_id: zr-annex-2, type: codec, status: offline, firmware: "2.6.1", last_seen: 0 }
   configuration:
     device:
       serial: ""

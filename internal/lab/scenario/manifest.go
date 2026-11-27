@@ -41,9 +41,18 @@ type Manifest struct {
 	// a webhook face (a signed-webhook sender, #1747), how many a site, and
 	// how many of the site's systems each is scoped to.
 	Pushers []Pusher `yaml:"pushers"`
+	// Services are the polled cloud services the scenario has (#2765): one
+	// account for the whole fleet, not a box in each room or a service a
+	// site. Each is a component of a product the simulator serves, placed
+	// once at the headquarters and covering every system of the plan, so the
+	// simulator knows which rooms it speaks for.
+	Services []Service `yaml:"services"`
 	// HealthHistory is the past a lab seeded with --health-history carries
 	// (#2728); nil when the scenario declares none.
 	HealthHistory *HealthHistory `yaml:"health_history"`
+	// Calendar is what every simulated room acts out on the simulator's
+	// clock (#2757); nil when the scenario declares none.
+	Calendar *Calendar `yaml:"calendar"`
 }
 
 // Pusher is one outside actor a scenario places at every site, PerSite of
@@ -72,6 +81,28 @@ func (p *Pusher) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
+// Service is one polled cloud service a scenario places once: the name its
+// component is made from and the product it is, which the simulator serves.
+type Service struct {
+	Name    Ref `yaml:"name"`
+	Profile Ref `yaml:"profile"`
+	// Label is what the service's component reads as in a console (#2757),
+	// "Meeting Platform" rather than its component type's "Generic Service".
+	// Empty leaves the platform's own label.
+	Label string `yaml:"label"`
+	Line  int    `yaml:"-"`
+}
+
+// UnmarshalYAML decodes a service and keeps its line.
+func (s *Service) UnmarshalYAML(n *yaml.Node) error {
+	type plain Service
+	if err := decodeKnown(n, (*plain)(s), "name", "profile", "label"); err != nil {
+		return err
+	}
+	s.Line = n.Line
+	return nil
+}
+
 // SiteBounds are the fewest and the most sites the scenario resolves to,
 // whatever the size: the site count grows with the size and is clamped here.
 type SiteBounds struct {
@@ -92,7 +123,11 @@ type Standard struct {
 	// it, so a demo can fix a fault from the console. Few, by design: a
 	// control face is one more endpoint polling every such device.
 	Control []Ref `yaml:"control"`
-	Line    int   `yaml:"-"`
+	// RoomName is what a room of this standard is called when it is known by
+	// what it is ("Huddle", "Auditorium"): numbered within its site, a lone one
+	// unnumbered. Empty leaves its rooms to the site's naming theme (#2757).
+	RoomName string `yaml:"room_name"`
+	Line     int    `yaml:"-"`
 }
 
 // Archetype is one kind of site, each site a campus with its own outpost (one
@@ -109,7 +144,11 @@ type Archetype struct {
 	TypicalSystems int        `yaml:"typical_systems"`
 	Buildings      []Building `yaml:"buildings"`
 	Systems        Ratios     `yaml:"systems"`
-	Line           int        `yaml:"-"`
+	// RoomNames are the naming themes (RoomThemes) its sites take, a headquarters
+	// its first and the repeated sites each the next, in turn: a company names
+	// its rooms after something, one theme a site (#2757).
+	RoomNames []Ref `yaml:"room_names"`
+	Line      int   `yaml:"-"`
 }
 
 // Building is one building of a site and how many floors it has.
@@ -164,7 +203,7 @@ func (rs *Ratios) UnmarshalYAML(n *yaml.Node) error {
 // UnmarshalYAML decodes a standard and keeps its line.
 func (s *Standard) UnmarshalYAML(n *yaml.Node) error {
 	type plain Standard
-	if err := decodeKnown(n, (*plain)(s), "name", "system_type", "products", "control"); err != nil {
+	if err := decodeKnown(n, (*plain)(s), "name", "system_type", "products", "control", "room_name"); err != nil {
 		return err
 	}
 	s.Line = n.Line
@@ -174,7 +213,7 @@ func (s *Standard) UnmarshalYAML(n *yaml.Node) error {
 // UnmarshalYAML decodes an archetype and keeps its line.
 func (a *Archetype) UnmarshalYAML(n *yaml.Node) error {
 	type plain Archetype
-	if err := decodeKnown(n, (*plain)(a), "name", "label", "headquarters", "weight", "typical_systems", "buildings", "systems"); err != nil {
+	if err := decodeKnown(n, (*plain)(a), "name", "label", "headquarters", "weight", "typical_systems", "buildings", "systems", "room_names"); err != nil {
 		return err
 	}
 	a.Line = n.Line
@@ -235,7 +274,7 @@ func Parse(file string, data []byte) (*Manifest, error) {
 	}
 	m := &Manifest{}
 	type plain Manifest
-	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "health_history"); err != nil {
+	if err := decodeKnown(root.Content[0], (*plain)(m), "name", "label", "description", "sites", "standards", "archetypes", "pushers", "services", "health_history", "calendar"); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	m.File = file

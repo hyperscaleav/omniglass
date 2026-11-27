@@ -15,6 +15,13 @@
 # expires them all by firing POST /api/admin/sessions/expire, as a reboot
 # would, so a collector's re-login can be watched. Beside the digest
 # (Boreal), basic (Kestrel) and header (Polaris) variants.
+#
+# The panel follows its room's meetings off the lab calendar (#2757, #2776): it
+# wakes two minutes before a booked meeting someone attends (at the start of
+# a walk-in) and sleeps five minutes after it ends, and its active page is the
+# call while the meeting is held, sharing through the stretch a laptop is
+# shared, and idle otherwise, a no-show included. A panel whose room has no
+# calendar is left as it was.
 
 name: newtron-panel-7
 manufacturer: Newtron
@@ -293,6 +300,17 @@ interfaces:
     protocol: icmp
     doc: { summary: "ICMP ping reachability", tags: [monitoring] }
 
+behaviors:
+  - name: room_meeting
+    schedule:
+      interval: 30s
+      on_start: true
+    mutations:
+      - path: status.panel.awake
+        value: '{{ if hasCalendar }}{{ (roomPhase).in_use }}{{ else }}{{ .State.status.panel.awake }}{{ end }}'
+      - path: status.panel.page
+        value: '{{ if hasCalendar }}{{ $p := roomPhase }}{{ if $p.call_active }}{{ if $p.sharing }}sharing{{ else }}in-call{{ end }}{{ else }}idle{{ end }}{{ else }}{{ .State.status.panel.page }}{{ end }}'
+
 # Read-derived fields, computed on every read rather than written by a
 # timer. uptime = now - boot_epoch (seconds). No goroutine, no event:
 # reading uptime never floods the event stream the way a per-tick
@@ -310,6 +328,10 @@ defaults:
     panel:
       brightness: 85
       occupancy: false
+      # Whether the panel is awake, and its active page: idle, in-call or
+      # sharing.
+      awake: false
+      page: "idle"
     room:
       scene: "idle"
       source: "none"

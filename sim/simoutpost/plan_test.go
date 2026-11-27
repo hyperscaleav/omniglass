@@ -59,7 +59,7 @@ func TestPlanServesKnownProductsOnLoopback(t *testing.T) {
 		{ComponentID: "c3", Name: "far", Product: "sim-display", Address: "10.20.4.12"},
 		{ComponentID: "c4", Name: "named", Product: "sim-display", Address: "display.lan"},
 		{ComponentID: "c5", Name: "bare", Product: "sim-display", Address: ""},
-	}, profileFor)
+	}, profileFor, nil)
 	if len(snaps) != 2 {
 		t.Fatalf("snapshots = %+v, want dsp and small", snaps)
 	}

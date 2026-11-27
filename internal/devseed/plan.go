@@ -2,11 +2,14 @@ package devseed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/template"
 )
@@ -56,7 +59,9 @@ type PlanResult struct {
 	// Endpoints, which is the simulated fleet's), its own signing secret and
 	// a binding per system it speaks for.
 	Senders int
-	Phases  []PlanPhase
+	// Services is the polled services seeded (#2765), each with an identity binding per room it covers.
+	Services int
+	Phases   []PlanPhase
 	// Induced is the device InduceUnregistered attached, nil when off.
 	Induced *Induced
 }
@@ -69,12 +74,49 @@ type locationRow struct{ Key, Name, Label, Type, Parent string }
 type systemRow struct{ Key, Name, Label, Standard, SystemType, Room string }
 
 // componentRow is one component of a plan: a product placed in a room of Site,
-// filling Slot of System. Its name is the platform's to mint. A webhook
+// filling Slot of System. Its Name is the plan's own (the world's, #2773):
+// the seed onboards the component under exactly that name. A webhook
 // sender's component (#1747) is placed at its site and fills no slot.
 type componentRow struct {
-	Key, Product, Site, Room, System, Slot string
+	Key, Name, Product, Site, Room, System, Slot string
 	// Control wires the device's control face too (scenario.SlotFill.Control).
 	Control bool
+	// Platform is the kind a meeting platform lists the component as, "" when
+	// it lists none (scenario.SlotFill.Platform, #2790).
+	Platform string
+	// Label is the label the component is created with ("" lets the platform
+	// make it): a polled service's, from its manifest entry (#2757).
+	Label string
+	// Ordinal is the component's place among a slot of several (1-based), 0
+	// for a slot of one. A name the world gave carries no number the platform
+	// owns, so the seed puts the ordinal in the label itself (#2757).
+	Ordinal int
+}
+
+// label is the label the seed creates the component with, "" to let the
+// platform make it: the manifest's for a service, else the component type's
+// label and the slot ordinal when the slot holds several, as the platform's own
+// rule reads for a name it minted (#2757). typeLabels is the label of each
+// product's component type.
+func (c componentRow) label(typeLabels map[string]string) string {
+	if c.Label != "" {
+		return c.Label
+	}
+	if base := typeLabels[c.Product]; c.Ordinal > 0 && base != "" {
+		return fmt.Sprintf("%s %d", base, c.Ordinal)
+	}
+	return ""
+}
+
+// componentTypeLabelsByProduct is the label of the component type each shipped
+// product is classified under.
+func componentTypeLabelsByProduct() map[string]string {
+	types := seed.ShippedComponentTypeLabels()
+	out := map[string]string{}
+	for _, p := range seed.ShippedProducts() {
+		out[p.Name] = types[p.ComponentType]
+	}
+	return out
 }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
@@ -86,6 +128,21 @@ type planRows struct {
 	Systems    []systemRow
 	Components []componentRow
 	Senders    []senderRow
+	// Services are the polled services (#2765): components with no slot and no webhook.
+	Services []serviceRow
+}
+
+// pusherComponents is how many components are a sender or a service rather
+// than a slot's: one that is both counts once.
+func (r planRows) pusherComponents() int {
+	seen := map[int]bool{}
+	for _, s := range r.Senders {
+		seen[s.Comp] = true
+	}
+	for _, s := range r.Services {
+		seen[s.Comp] = true
+	}
+	return len(seen)
 }
 
 // rowsOf flattens a plan. Pure.
@@ -114,19 +171,29 @@ func rowsOf(p *scenario.Plan) planRows {
 			})
 			for _, fill := range s.Slots {
 				for n := 1; n <= fill.Count; n++ {
-					r.Components = append(r.Components, componentRow{
-						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Product: fill.Product,
-						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control,
+					ordinal := 0
+					if fill.Count > 1 {
+						ordinal = n
+					}
+					r.Components = append(r.Components, componentRow{Ordinal: ordinal,
+						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Name: scenario.ComponentName(s.Name, fill.Slot, n), Product: fill.Product,
+						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control, Platform: fill.Platform,
 					})
 				}
 			}
 		}
 		for _, ps := range site.Pushers {
-			if !ps.Webhook {
+			if !ps.IsComponent() {
 				continue
 			}
-			r.Components = append(r.Components, componentRow{Key: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
-			r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+			r.Components = append(r.Components, componentRow{Key: ps.Name, Name: ps.Name, Label: ps.Label, Product: ps.Profile, Site: site.Name, Room: site.Name})
+			comp := len(r.Components) - 1
+			if ps.Webhook {
+				r.Senders = append(r.Senders, senderRow{Comp: comp, Systems: ps.Systems, Service: ps.Service})
+			}
+			if ps.Service {
+				r.Services = append(r.Services, serviceRow{Comp: comp, Systems: ps.Systems})
+			}
 		}
 	}
 	return r
@@ -163,7 +230,7 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	if err != nil {
 		return res, err
 	}
-	res.Locations, res.Systems, res.Components, res.Slots = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-len(rows.Senders)
+	res.Locations, res.Systems, res.Components, res.Slots = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-rows.pusherComponents()
 	n, err := seedPlanPushers(ctx, gw, actorID, p, sysIDs)
 	if err != nil {
 		return res, err
@@ -174,6 +241,10 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 		return res, err
 	}
 	run.done("senders")
+	if res.Services, err = seedPlanServices(ctx, gw, actorID, rows, compIDs, sysIDs); err != nil {
+		return res, err
+	}
+	run.done("services")
 	if opts.Endpoints {
 		n, induced, err := seedPlanEndpoints(ctx, gw, actorID, rows, compIDs, opts, run)
 		if err != nil {
@@ -194,8 +265,8 @@ func seedPlanPushers(ctx context.Context, gw storage.Gateway, actorID string, p 
 	n := 0
 	for _, site := range p.Sites {
 		for _, ps := range site.Pushers {
-			if ps.Webhook {
-				continue // a sender speaks as its component (seedPlanSenders)
+			if ps.IsComponent() {
+				continue // a sender speaks as its component (seedPlanSenders); a service is polled
 			}
 			for _, sys := range ps.Systems {
 				id, ok := sysIDs[sys]
@@ -244,9 +315,10 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 	}
 	run.done("systems")
 	compIDs := make([]string, 0, len(rows.Components))
+	typeLabels := componentTypeLabelsByProduct()
 	for _, c := range rows.Components {
 		prod, loc := c.Product, locIDs[c.Room]
-		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{ProductName: &prod, LocationName: &loc}, all, all, all, all)
+		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{Name: c.Name, Label: c.label(typeLabels), ProductName: &prod, LocationName: &loc}, all, all, all, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
@@ -262,5 +334,53 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		}
 	}
 	run.done("slots")
+	if err := seedRoomRules(ctx, gw, actorID); err != nil {
+		return nil, nil, err
+	}
+	run.done("rules")
 	return sysIDs, compIDs, nil
+}
+
+// roomRules are the calc rules that carry a member's reading up to its room
+// (#2757): a standard declares a metric on the system, a device reports it on
+// its component, and a rule reads it from every member the system's slots hold
+// and writes one value as the room's own. Seeded with the plan, as the plan's
+// components are, and inert in a room with no such member.
+// It is a function, not a shared value: creating a rule writes the resolved
+// key ids back into its inputs, which would carry one database's ids to the next.
+func roomRules() []storage.CalcRuleSpec {
+	return []storage.CalcRuleSpec{
+		{
+			Name: "room-occupancy", Label: "Room occupancy",
+			Description: "A room's occupancy-count is the most people any of its people counters reports.",
+			OwnerKind:   "system",
+			Inputs:      []rules.CalcInput{{Alias: "c", Key: "people-count"}},
+			Reduce:      rules.CalcReduce{Expr: "max(c)"},
+			OutputKey:   "occupancy-count",
+		},
+		{
+			Name: "room-temperature", Label: "Room temperature",
+			Description: "A room's room-temperature is the average of what its members read, the control processor's sensor being the lab's.",
+			OwnerKind:   "system",
+			Inputs:      []rules.CalcInput{{Alias: "c", Key: "room-sensor-temperature"}},
+			Reduce:      rules.CalcReduce{Expr: "avg(c)"},
+			OutputKey:   "room-temperature",
+		},
+	}
+}
+
+// seedRoomRules seeds each of roomRules once; a plan seeded again finds them
+// and leaves them as they are.
+func seedRoomRules(ctx context.Context, gw storage.Gateway, actorID string) error {
+	for _, spec := range roomRules() {
+		if _, err := gw.GetCalcRule(ctx, spec.Name); err == nil {
+			continue
+		} else if !errors.Is(err, storage.ErrCalcRuleNotFound) {
+			return fmt.Errorf("devseed: look up calc rule %q: %w", spec.Name, err)
+		}
+		if _, err := gw.CreateCalcRule(ctx, actorID, spec, scope.Set{All: true}); err != nil && !errors.Is(err, storage.ErrCalcRuleExists) {
+			return fmt.Errorf("devseed: create calc rule %q: %w", spec.Name, err)
+		}
+	}
+	return nil
 }

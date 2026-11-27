@@ -50,6 +50,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **event rule** | A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity. | `/event-rules` | `rule` |  |
 | **event type** | A kind of discrete occurrence in the catalog, what an event is typed by. | `/event-types` | `event_type` |  |
 | **firing** | One stretch of a rule's criteria holding on a component, from the moment it fires until it clears. |  |  | condition |
+| **lab calendar** | The meetings every simulated room holds, derived from the scenario and a seed rather than stored, so every simulator and the server compute the same one. |  |  |  |
 | **location type** | What kind of location a location is, and which kinds it may sit under. | `/location-types` | `location_type` |  |
 | **metric type** | A numeric signal in the catalog, the series a sample measures, with its unit and precision. | `/metric-types` | `metric_type` |  |
 | **notification target** | Where a notification goes, a webhook, a mailbox, a user group or a person. | `/notification-targets` | `notification_target` |  |

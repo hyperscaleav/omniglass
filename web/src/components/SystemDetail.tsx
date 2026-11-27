@@ -71,7 +71,7 @@ import Tooltip from "./ui/Tooltip";
 // components as rows, the standard's map, the data. Activity is the history,
 // the events and the logs; Configure is the one form.
 //
-// A sole system's view is titled by its location, and its path ends at the
+// A sole system's view is titled by its name with its location as the address, and its path ends at the
 // location's parent, so the room is named once. A location shared by several
 // systems keeps its own view and stays in the path. A location with locations
 // beneath it lists them under the system, as the outline rooted there.
@@ -147,7 +147,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
 
   const locationId = () => system()?.location ?? null;
   const location = createMemo(() => (locationId() ? (view.data?.locations ?? []).find((l) => l.id === locationId()) : undefined));
-  // A sole system is the room: the view wears the location's name. A shared
+  // A sole system is the room: the view names it by its own name and the address (#2757). A shared
   // location keeps its own view, so a system there wears its own.
   const sole = createMemo(() => (view.data && locationId() ? systemsAtLocation(view.data, locationId()!).length === 1 : false));
   const hasBeneath = createMemo(() => (view.data && locationId() ? (childrenIndex(view.data).get(locationId()!) ?? []).length > 0 : false));

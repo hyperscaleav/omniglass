@@ -5,7 +5,10 @@ import Button from "./Button";
 import Eyebrow from "./Eyebrow";
 import { ArrowRight, Check, Plus, RefreshCw, X } from "./icons";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
-import { SYSTEMS_KEY, listSystems } from "../lib/systems";
+import { SYSTEMS_KEY, listSystems, type System } from "../lib/systems";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { systemAddress, systemWithAddress } from "../lib/system_name";
+import SystemName from "./SystemName";
 import { entityLabel } from "../lib/entities";
 import { useMe } from "../lib/auth";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
@@ -79,6 +82,9 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
   createEffect(() => setLive(hasContent(bindingsQ.data, unboundQ.data)));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
+  // A system is named with the address of the room it sits at (#2757).
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const placeOf = (s: System) => (s.location_id ? (locations.data ?? []).find((l) => l.id === s.location_id) : undefined);
 
   const bindings = createMemo(() => bindingsQ.data?.bindings ?? []);
   const unbound = createMemo(() => unboundQ.data?.identities ?? []);
@@ -94,6 +100,13 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
     const rows: { id: string; name: string; label?: string }[] = b.owner_kind === "system" ? (systems.data ?? []) : (components.data ?? []);
     const hit = rows.find((r) => r.id === b.owner_id);
     return hit ? entityLabel(hit) : b.owner_name;
+  };
+  // A system owner's address: the label of its location, when that says more
+  // than its own label does.
+  const ownerAddress = (b: IdentityBinding) => {
+    if (b.owner_kind !== "system") return undefined;
+    const hit = (systems.data ?? []).find((r) => r.id === b.owner_id);
+    return hit ? systemAddress(hit, placeOf(hit)) : undefined;
   };
   const ownerHref = (b: IdentityBinding) => (b.owner_kind === "system" ? `/systems/${b.owner_id}` : `/components/${b.owner_id}`);
   // An unbind writes onto the owner as well as the conduit, so it shows only
@@ -221,7 +234,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                               <td class="text-base-content/40"><ArrowRight size={13} /></td>
                               <td>
                                 <span class="inline-flex items-baseline gap-2">
-                                  <A href={ownerHref(b())} class="hover:underline">{ownerLabel(b())}</A>
+                                  <A href={ownerHref(b())} class="min-w-0 hover:underline"><Show when={b().owner_kind === "system"} fallback={ownerLabel(b())}><SystemName label={ownerLabel(b())} address={ownerAddress(b())} /></Show></A>
                                   <span class="text-[11px] text-base-content/45">{b().owner_kind}</span>
                                 </span>
                               </td>
@@ -320,7 +333,7 @@ export default function IdentitiesPanel(props: { component: string; canUpdate: b
                                           <option value="">Pick a system or component…</option>
                                           <Show when={choices().systems.length > 0}>
                                             <optgroup label="Systems">
-                                              <For each={choices().systems}>{(s) => <option value={`system:${s.id}`}>{entityLabel(s)}</option>}</For>
+                                              <For each={choices().systems}>{(s) => <option value={`system:${s.id}`}>{systemWithAddress(s, placeOf(s))}</option>}</For>
                                             </optgroup>
                                           </Show>
                                           <Show when={choices().components.length > 0}>

@@ -6,6 +6,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/sim/simoutpost"
+	"time"
 
 	"fmt"
 	"slices"
@@ -1162,6 +1163,65 @@ func TestPlanEnvSecretsGoToTheServerAlone(t *testing.T) {
 	for _, svc := range s.Services() {
 		if svc.Name != s.Server.Name && slices.Contains(svc.Env, key) {
 			t.Fatalf("%s is handed the server's secret", svc.Name)
+		}
+	}
+}
+
+// A scale lab's outposts each load the world file its seed wrote for them
+// (#2773), through a read-only mount of the data volume; the lab with no plan
+// has no world, so its outpost is told of none and mounts nothing.
+func TestPlanScaleLabGivesEachSiteOutpostItsWorldFile(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range s.Outposts {
+		if want := simoutpost.WorldEnv + "=" + WorldFile(n.Name); !slices.Contains(n.Env, want) {
+			t.Errorf("outpost %s env %v lacks %s", n.Name, n.Env, want)
+		}
+		if want := (Mount{Volume: "omniglass-scale_data", Target: dataDir, ReadOnly: true}); !slices.Equal(n.Mounts, []Mount{want}) {
+			t.Errorf("outpost %s mounts %v, want only %v", n.Name, n.Mounts, want)
+		}
+	}
+	dev, err := Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range dev.Outpost.Env {
+		if strings.HasPrefix(e, simoutpost.WorldEnv+"=") {
+			t.Errorf("the lab with no plan names a world: %s", e)
+		}
+	}
+	if len(dev.Outpost.Mounts) != 0 {
+		t.Errorf("the lab with no plan mounts %v into its outpost", dev.Outpost.Mounts)
+	}
+}
+
+// A lab told to offset the simulator's clock (#2800) hands each site outpost
+// the offset, and a lab not told hands it none, so the simulated world runs on
+// real time as it did.
+func TestPlanScaleLabGivesEachSiteOutpostTheClockOffset(t *testing.T) {
+	o := scaleOptions()
+	o.SimClockOffset = 36*time.Hour + 5*time.Minute
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := simoutpost.ClockOffsetEnv + "=36h5m0s"
+	for _, n := range s.Outposts {
+		if !slices.Contains(n.Env, want) {
+			t.Errorf("outpost %s env %v lacks %s", n.Name, n.Env, want)
+		}
+	}
+	plain, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range plain.Outposts {
+		for _, e := range n.Env {
+			if strings.HasPrefix(e, simoutpost.ClockOffsetEnv+"=") {
+				t.Errorf("outpost %s is told an offset it was not asked for: %s", n.Name, e)
+			}
 		}
 	}
 }

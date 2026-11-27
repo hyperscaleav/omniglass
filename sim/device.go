@@ -27,7 +27,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // requestBodyLimit caps how much of an inbound request body we will
@@ -268,6 +270,22 @@ type Device struct {
 	// now is the clock source. Defaults to time.Now in NewDevice; tests
 	// swap it via SetClock to make elapsed computed fields deterministic.
 	now func() time.Time
+
+	// room is where the device sits and calSrc reaches the engine's lab
+	// calendar (#2757); both stay zero on a device standing alone.
+	room   calendar.Room
+	calSrc func() *calendar.Calendar
+	// worldSrc reaches the engine's world (#2773), nil on a device standing
+	// alone.
+	worldSrc func() *world.World
+	// arbSrc reaches the engine's impairment arbiter (#2799), nil on a device
+	// standing alone.
+	arbSrc func() *Arbiter
+	// memo is the engine's memo of room readings (#2797), nil on a device
+	// standing alone, which keeps its own.
+	memo        *roomMemo
+	ownMemo     *roomMemo
+	ownMemoOnce sync.Once
 
 	mu    sync.RWMutex
 	state map[string]any
@@ -822,6 +840,17 @@ var templateFuncs = template.FuncMap{
 		}
 		return "", nil
 	},
+	// add sums two integers, for a counter a list template keeps.
+	"add": func(a, b int) int { return a + b },
+	// atoi reads a request value (a query parameter) as a non-negative
+	// integer, 0 when absent or malformed: a list route's page_size.
+	"atoi": func(v any) int {
+		n, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(v)))
+		if err != nil || n < 0 {
+			return 0
+		}
+		return n
+	},
 	// get retrieves a key from a map. Pipeline-friendly: {{ .State | get "status" | get "device" | get "power" }}
 	"get": func(key string, m any) any {
 		switch v := m.(type) {
@@ -981,6 +1010,20 @@ func (d *Device) SetClock(now func() time.Time) {
 	d.now = now
 }
 
+// routeFuncs is the FuncMap a route or a command compiles against: the
+// package's templateFuncs with `now` on the device's clock, so a stamp a
+// request writes (a reboot's boot_epoch, a webhook's ts) is in the same time
+// the device's uptime and calendar reads are, whatever the engine's clock
+// offset (#2800).
+func (d *Device) routeFuncs() template.FuncMap {
+	funcs := make(template.FuncMap, len(templateFuncs))
+	for name, fn := range templateFuncs {
+		funcs[name] = fn
+	}
+	funcs["now"] = func() int64 { return d.clock().Unix() }
+	return funcs
+}
+
 // clock returns the device's clock, defaulting to time.Now for devices
 // constructed without going through NewDevice (older test fixtures).
 func (d *Device) clock() time.Time {
@@ -1115,22 +1158,23 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 		return err
 	}
 
-	tmpl, err := template.New(tmplPath).Funcs(templateFuncs).Parse(tmplContent)
+	funcs := d.routeFuncs()
+	tmpl, err := template.New(tmplPath).Funcs(funcs).Funcs(d.listingFuncs()).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
 	}
 
-	muts, err := compileMerged(mutate, items)
+	muts, err := compileMergedWith(mutate, items, funcs)
 	if err != nil {
 		return fmt.Errorf("compiling mutations for %q: %w", match, err)
 	}
 
-	evs, err := compileNamedEvents("route "+strconv.Quote(match), events, templateFuncs)
+	evs, err := compileNamedEvents("route "+strconv.Quote(match), events, funcs)
 	if err != nil {
 		return err
 	}
 
-	em, err := compileEmit(emit, templateFuncs)
+	em, err := compileEmit(emit, funcs)
 	if err != nil {
 		return fmt.Errorf("route %q: %w", match, err)
 	}
@@ -1770,11 +1814,12 @@ func hexNybble(c byte) (byte, error) {
 
 func (d *Device) addCommand(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation,
 	action, subjectTmpl, tokenTmpl, intervalTmpl string) error {
-	tmpl, err := template.New(tmplPath).Funcs(templateFuncs).Parse(tmplContent)
+	funcs := d.routeFuncs()
+	tmpl, err := template.New(tmplPath).Funcs(funcs).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
 	}
-	muts, err := compileMerged(mutate, items)
+	muts, err := compileMergedWith(mutate, items, funcs)
 	if err != nil {
 		return fmt.Errorf("compiling mutations for %q: %w", match, err)
 	}
@@ -1785,19 +1830,19 @@ func (d *Device) addCommand(match, tmplPath, tmplContent string, mutate map[stri
 		Action:    action,
 	}
 	if subjectTmpl != "" {
-		entry.Subject, err = template.New(match + ".subject").Funcs(templateFuncs).Parse(subjectTmpl)
+		entry.Subject, err = template.New(match + ".subject").Funcs(funcs).Parse(subjectTmpl)
 		if err != nil {
 			return fmt.Errorf("parsing subject template for %q: %w", match, err)
 		}
 	}
 	if tokenTmpl != "" {
-		entry.Token, err = template.New(match + ".token").Funcs(templateFuncs).Parse(tokenTmpl)
+		entry.Token, err = template.New(match + ".token").Funcs(funcs).Parse(tokenTmpl)
 		if err != nil {
 			return fmt.Errorf("parsing token template for %q: %w", match, err)
 		}
 	}
 	if intervalTmpl != "" {
-		entry.IntervalMs, err = template.New(match + ".interval_ms").Funcs(templateFuncs).Parse(intervalTmpl)
+		entry.IntervalMs, err = template.New(match + ".interval_ms").Funcs(funcs).Parse(intervalTmpl)
 		if err != nil {
 			return fmt.Errorf("parsing interval_ms template for %q: %w", match, err)
 		}

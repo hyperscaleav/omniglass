@@ -316,9 +316,12 @@ func TestResolvePlacesEverySystemInAUniqueRoom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names, labels, rooms := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	// A name and an address are unique across the plan; a label (the room's name,
+	// as a company gives it) is unique within its site, as two buildings may
+	// each have a "Huddle 1" (#2757).
+	names, rooms := map[string]bool{}, map[string]bool{}
 	for _, s := range p.allSystems() {
-		for what, seen := range map[string]map[string]bool{s.Name: names, s.Label: labels, s.Room: rooms} {
+		for what, seen := range map[string]map[string]bool{s.Name: names, s.Room: rooms} {
 			if seen[what] {
 				t.Fatalf("%q is planned twice", what)
 			}
@@ -785,7 +788,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 	for _, s := range p.Sites {
 		var booking []PusherPlan
 		for _, ps := range s.Pushers {
-			if !ps.Webhook {
+			if !ps.IsComponent() {
 				booking = append(booking, ps)
 			}
 		}
@@ -811,7 +814,7 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 			seen[sys] = true
 		}
 	}
-	if want := []Count{{"booking-service", len(p.Sites)}, {declaredProfile(t, m, "ucc"), len(p.Sites)}}; !reflect.DeepEqual(p.Pushers, want) {
+	if want := []Count{{"booking-service", len(p.Sites)}, {m.Services[0].Profile.Name, 1}, {m.Services[1].Profile.Name, 1}, {m.Services[2].Profile.Name, 1}}; !reflect.DeepEqual(p.Pushers, want) {
 		t.Errorf("plan pushers = %v, want %v", p.Pushers, want)
 	}
 	var b bytes.Buffer
@@ -823,54 +826,88 @@ func TestCorporateDeclaresABookingServiceASite(t *testing.T) {
 	}
 }
 
-// declaredProfile is the emulator profile a manifest's pusher of that name
-// declares. A test reads the profile from the manifest rather than naming it,
-// since a meeting platform's profile shares its name with a seeded product.
-func declaredProfile(t *testing.T, m *Manifest, name string) string {
-	t.Helper()
-	for _, d := range m.Pushers {
-		if d.Name.Name == name {
-			return d.Profile.Name
-		}
-	}
-	t.Fatalf("the manifest declares no pusher %s", name)
-	return ""
-}
-
-// The corporate scenario declares one meeting platform account a site
-// (#1747): its profile's webhook face makes it a signed-webhook sender, not
-// a token pusher, and with systems omitted its rooms are every system of its
-// site.
-func TestCorporateDeclaresAMeetingPlatformASite(t *testing.T) {
+// The corporate scenario declares one meeting platform account for the whole
+// fleet (#2790), a polled service that is also a signed-webhook sender: its
+// profile's webhook face makes it one, and it is placed once at the
+// headquarters covering every system of every site, none anywhere else.
+func TestCorporateDeclaresOneMeetingPlatformForTheWholeFleet(t *testing.T) {
 	m, cat := corporate(t)
 	p, err := Resolve(m, cat, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	platform := declaredProfile(t, m, "ucc")
-	if cat.Sender == nil || !cat.Sender(platform) {
-		t.Fatalf("the corporate manifest's ucc pusher declares profile %s, which the catalog names no webhook sender", platform)
+	var platform string
+	for _, d := range m.Services {
+		if d.Name.Name == "meeting" {
+			platform = d.Profile.Name
+		}
 	}
-	for _, s := range p.Sites {
-		var platforms []PusherPlan
+	if platform == "" {
+		t.Fatal("the corporate manifest declares no meeting service")
+	}
+	if cat.Sender == nil || !cat.Sender(platform) {
+		t.Fatalf("the corporate manifest's meeting service declares profile %s, which the catalog names no webhook sender", platform)
+	}
+	var found []PusherPlan
+	for i, s := range p.Sites {
 		for _, ps := range s.Pushers {
 			if ps.Webhook {
-				platforms = append(platforms, ps)
+				if i != 0 {
+					t.Errorf("site %s carries the webhook sender %s, want the headquarters only", s.Name, ps.Name)
+				}
+				found = append(found, ps)
 			}
 		}
-		if len(platforms) != 1 {
-			t.Fatalf("site %s has %d webhook senders, want one meeting platform", s.Name, len(platforms))
+	}
+	if len(found) != 1 {
+		t.Fatalf("the plan places %d webhook senders, want the one meeting platform", len(found))
+	}
+	ps := found[0]
+	if ps.Name != p.Sites[0].Name+"-meeting-1" || ps.Profile != platform || !ps.Service {
+		t.Errorf("sender = %s (%s, service %v), want %s-meeting-1 (%s), a polled service as well", ps.Name, ps.Profile, ps.Service, p.Sites[0].Name, platform)
+	}
+	if got, want := len(ps.Systems), p.Totals.Systems; got != want {
+		t.Errorf("the platform speaks for %d rooms, want all %d of the fleet", got, want)
+	}
+}
+
+// The corporate scenario declares one recording service for the whole fleet
+// (#2757), a polled cloud service like the scheduling and meeting platforms:
+// placed once at the headquarters covering every system of every site, and no
+// standard carries a recorder of its own.
+func TestCorporateDeclaresOneRecordingServiceForTheWholeFleet(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile string
+	for _, d := range m.Services {
+		if d.Name.Name == "recording" {
+			profile = d.Profile.Name
 		}
-		ps := platforms[0]
-		if ps.Name != s.Name+"-ucc-1" || ps.Profile != platform {
-			t.Errorf("site %s sender = %s (%s), want %s-ucc-1 (%s)", s.Name, ps.Name, ps.Profile, s.Name, platform)
+	}
+	if profile == "" {
+		t.Fatal("the corporate manifest declares no recording service")
+	}
+	var placed []PusherPlan
+	for i, s := range p.Sites {
+		for _, ps := range s.Pushers {
+			if ps.Profile != profile {
+				continue
+			}
+			if i != 0 || !ps.Service || ps.Webhook {
+				t.Errorf("site %s carries %s (service %v, webhook %v), want one polled service at the headquarters", s.Name, ps.Name, ps.Service, ps.Webhook)
+			}
+			placed = append(placed, ps)
 		}
-		var want []string
-		for _, sys := range s.Systems {
-			want = append(want, sys.Name)
-		}
-		if !reflect.DeepEqual(ps.Systems, want) {
-			t.Errorf("sender %s rooms = %d systems, want every one of the site's %d", ps.Name, len(ps.Systems), len(want))
+	}
+	if len(placed) != 1 || len(placed[0].Systems) != p.Totals.Systems {
+		t.Fatalf("recording services placed %v, want one covering all %d systems", placed, p.Totals.Systems)
+	}
+	for _, st := range m.Standards {
+		if _, ok := st.Products["recorder"]; ok {
+			t.Errorf("standard %s names a recorder product, want the recording service to be the account's one component", st.Name.Name)
 		}
 	}
 }
@@ -885,9 +922,13 @@ func TestASiteSimulatesItsWebhookSendersBesideItsComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 	total := 0
-	for _, s := range p.Sites {
-		if got, want := s.Simulated(), s.Totals.Components+1; got != want {
-			t.Errorf("site %s simulates %d components, want its %d and its one meeting platform", s.Name, got, s.Totals.Components)
+	for i, s := range p.Sites {
+		want := s.Totals.Components
+		if i == 0 {
+			want += 3 // the headquarters also runs the fleet's scheduling service (#2765), its meeting platform (#2790) and its recording service (#2757)
+		}
+		if got := s.Simulated(); got != want {
+			t.Errorf("site %s simulates %d components, want %d: its %d and the fleet's services if it is the headquarters", s.Name, got, want, s.Totals.Components)
 		}
 		total += s.Simulated()
 	}
@@ -1012,7 +1053,8 @@ standards:
 // The corporate lab's second faces (#2649, #2754): every mr86 system's
 // main-display fill is marked for its control face (the boardroom display
 // takes commands), every divisible-conference system's video-bar fill for
-// its control socket (the bar talks over two protocols), and no other fill
+// its control socket (the bar talks over two protocols), every people-counter
+// fill for its raw-TCP head-count band (#2757), and no other fill
 // of any system is.
 func TestCorporateControlsOnlyTheBoardroomDisplaysAndConferenceBars(t *testing.T) {
 	m, cat := corporate(t)
@@ -1025,8 +1067,9 @@ func TestCorporateControlsOnlyTheBoardroomDisplaysAndConferenceBars(t *testing.T
 		for _, f := range s.Slots {
 			display := s.Standard == "mr86" && f.Slot == "main-display"
 			bar := s.Standard == "divisible-conference" && f.Slot == "video-bar"
-			if f.Control != (display || bar) {
-				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, display || bar)
+			counter := s.Standard == "divisible-conference" && f.Slot == "people-counter"
+			if f.Control != (display || bar || counter) {
+				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, display || bar || counter)
 			}
 			if display {
 				boardrooms++
@@ -1120,5 +1163,99 @@ func TestShippedCorporateHealthHistoryNamesItsRooms(t *testing.T) {
 	}
 	if missing := plan.MissingStorylineSystems(m.HealthHistory); len(missing) > 0 {
 		t.Errorf("the storyline names systems a 1000-system plan lacks: %v", missing)
+	}
+}
+
+// A scenario's polled service is one account for the whole fleet (#2765): one
+// component at the headquarters, however many sites, covering every system of
+// every site, and no other site carries one.
+func TestCorporatePlacesOneSchedulingServiceForTheWholeFleet(t *testing.T) {
+	m, cat := corporate(t)
+	p, err := Resolve(m, cat, 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Sites) < 3 {
+		t.Fatalf("a 300-system plan has %d sites", len(p.Sites))
+	}
+	var found []PusherPlan
+	for i, s := range p.Sites {
+		for _, ps := range s.Pushers {
+			if !ps.Service {
+				continue
+			}
+			if i != 0 {
+				t.Errorf("site %s carries the polled service %s, want the headquarters only", s.Name, ps.Name)
+			}
+			if ps.Profile == m.Services[0].Profile.Name {
+				found = append(found, ps)
+			}
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("the plan places %d scheduling services, want one", len(found))
+	}
+	if got, want := len(found[0].Systems), p.Totals.Systems; got != want {
+		t.Errorf("the service covers %d systems, want all %d", got, want)
+	}
+	w, err := SiteWorld(m, cat, p, p.Sites[0].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var covers int
+	for _, svc := range w.Services {
+		if svc.Name == found[0].Name {
+			covers = len(svc.Covers)
+		}
+	}
+	if covers != p.Totals.Systems {
+		t.Errorf("the headquarters' world covers %d rooms for the service, want %d", covers, p.Totals.Systems)
+	}
+	other, err := SiteWorld(m, cat, p, p.Sites[1].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, svc := range other.Services {
+		if svc.Name == found[0].Name {
+			t.Errorf("site %s's world holds the account's service", p.Sites[1].Name)
+		}
+	}
+}
+
+// A service entry may carry the label its component reads as (#2757); the plan
+// hands it on, and the shipped corporate account-wide services each declare one.
+func TestServicesCarryTheirLabelIntoThePlan(t *testing.T) {
+	m, err := Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := Resolve(m, cat, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{}
+	for _, s := range m.Services {
+		if s.Label == "" {
+			t.Errorf("service %s declares no label", s.Name.Name)
+		}
+		want[fmt.Sprintf("%s-%s-1", plan.Sites[0].Name, s.Name.Name)] = s.Label
+	}
+	got := map[string]string{}
+	for _, p := range plan.Sites[0].Pushers {
+		if p.Service {
+			got[p.Name] = p.Label
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("plan has services %v, manifest has %v", got, want)
+	}
+	for n, l := range want {
+		if got[n] != l {
+			t.Errorf("service %s planned with label %q, want %q", n, got[n], l)
+		}
 	}
 }

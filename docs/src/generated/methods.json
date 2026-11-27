@@ -67,6 +67,15 @@
       "label": "Bar control socket"
     },
     {
+      "method": "tessellate-census-feed",
+      "kind": "driver",
+      "transport": "tcp",
+      "component": "census-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
+      "label": "People counter feed"
+    },
+    {
       "method": "boreal-edge-web",
       "kind": "driver",
       "transport": "http",
@@ -121,11 +130,6 @@
     }
   ],
   "gaps": [
-    {
-      "method": "kestrel-relay-api",
-      "issue": "#1446",
-      "why": "no Relay C1 is placed in the dev fleet yet"
-    },
     {
       "method": "push-listener",
       "issue": "#1148",

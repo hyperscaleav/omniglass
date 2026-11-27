@@ -517,6 +517,12 @@
    "description": "Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it."
   },
   {
+   "name": "platform-state",
+   "data_type": "string",
+   "label": "Platform State",
+   "description": "Whether the cloud platform that manages a device hears from it (online) or has lost it (offline), as the platform lists it."
+  },
+  {
    "name": "program-state",
    "data_type": "string",
    "label": "Program State",
@@ -605,6 +611,24 @@
    "data_type": "string",
    "label": "UCC room id",
    "description": "The id a unified-communications service gives one of the rooms it reports on. A driver on the service's component reads it off each record, and an identity binding on that component ties each id to the system or component it names."
+  },
+  {
+   "name": "ucc-device-id",
+   "data_type": "string",
+   "label": "UCC device id",
+   "description": "The id a unified-communications service gives one of the devices it lists. A driver on the service's component reads it off each record, and an identity binding on that component ties each id to the component it names."
+  },
+  {
+   "name": "sched-room-id",
+   "data_type": "string",
+   "label": "Scheduling room id",
+   "description": "The id a room-booking platform gives one of the rooms it serves. A driver on the service's component reads it off each record, and an identity binding on that component ties each id to the system or component it names."
+  },
+  {
+   "name": "recording-room-id",
+   "data_type": "string",
+   "label": "Recording room id",
+   "description": "The id a recording service gives one of the rooms it records. A driver on the service's component reads it off each record, and an identity binding on that component ties each id to the system it names."
   }
  ],
  "metric_types": [
@@ -1259,6 +1283,19 @@
    "data_type": "int",
    "label": "Occupancy Count",
    "description": "People detected in the space by the room's occupancy source."
+  },
+  {
+   "name": "people-count",
+   "data_type": "int",
+   "label": "People Count",
+   "description": "People a counter detects in its field of view, as the device reports them."
+  },
+  {
+   "name": "room-sensor-temperature",
+   "data_type": "float",
+   "unit": "C",
+   "label": "Room Sensor Temperature",
+   "description": "Ambient temperature a device reads off its room's sensor, in degrees Celsius, as the device reports it."
   },
   {
    "name": "booking-count",
@@ -2743,7 +2780,7 @@
    "kind": "standard_template",
    "name": "divisible-conference",
    "label": "Divisible Conference",
-   "description": "One side of a combinable space: two displays and two room microphones each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.",
+   "description": "One side of a combinable space: two displays, two room microphones and a wireless microphone each, with one DSP, amplifier and power conditioner rack shared by both sides, the shared-component quorum case.",
    "standard": {
     "slots": [
      {
@@ -2751,6 +2788,20 @@
       "label": "Video Bar",
       "accepted_types": [
        "video-bar"
+      ]
+     },
+     {
+      "name": "camera",
+      "label": "Camera",
+      "accepted_types": [
+       "camera"
+      ]
+     },
+     {
+      "name": "codec",
+      "label": "Codec",
+      "accepted_types": [
+       "codec"
       ]
      },
      {
@@ -2770,6 +2821,13 @@
       ]
      },
      {
+      "name": "wireless-mic",
+      "label": "Wireless Microphone",
+      "accepted_types": [
+       "wireless-mic"
+      ]
+     },
+     {
       "name": "dsp",
       "label": "DSP",
       "accepted_types": [
@@ -2784,6 +2842,34 @@
       ]
      },
      {
+      "name": "control-system",
+      "label": "Control System",
+      "accepted_types": [
+       "control-processor"
+      ]
+     },
+     {
+      "name": "video-switcher",
+      "label": "Video Switcher",
+      "accepted_types": [
+       "presentation-switcher"
+      ]
+     },
+     {
+      "name": "display-endpoint",
+      "label": "Display Endpoint",
+      "accepted_types": [
+       "av-extender"
+      ]
+     },
+     {
+      "name": "power",
+      "label": "Power Conditioner",
+      "accepted_types": [
+       "power-device"
+      ]
+     },
+     {
       "name": "touch-control",
       "label": "Touch Control",
       "accepted_types": [
@@ -2795,6 +2881,20 @@
       "label": "Scheduling Panel",
       "accepted_types": [
        "scheduling-panel"
+      ]
+     },
+     {
+      "name": "people-counter",
+      "label": "People Counter",
+      "accepted_types": [
+       "occupancy-sensor"
+      ]
+     },
+     {
+      "name": "projection",
+      "label": "Projection",
+      "accepted_types": [
+       "projector"
       ]
      }
     ],
@@ -3901,7 +4001,7 @@
    "label": "Newtron Core NVP",
    "version": "1.0.0",
    "transport": "tcp",
-   "polls": 3,
+   "polls": 4,
    "listeners": 3,
    "commands": 1
   },
@@ -3957,6 +4057,14 @@
    "polls": 2
   },
   {
+   "id": "tessellate-census-feed",
+   "label": "Tessellate Census Feed",
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 1,
+   "listeners": 1
+  },
+  {
    "id": "boreal-cast-api",
    "label": "Boreal Cast API",
    "version": "1.0.0",
@@ -3968,7 +4076,7 @@
    "label": "Recording Service API",
    "version": "1.0.0",
    "transport": "https",
-   "polls": 2,
+   "polls": 3,
    "listeners": 1
   },
   {
@@ -3991,14 +4099,21 @@
    "label": "UCC Webhooks",
    "version": "1.0.0",
    "transport": "webhook",
-   "listeners": 5
+   "listeners": 8
   },
   {
-   "id": "ucc-rooms",
-   "label": "UCC Rooms",
+   "id": "scheduling-service-api",
+   "label": "Scheduling Service Rooms",
    "version": "1.0.0",
    "transport": "https",
    "polls": 1
+  },
+  {
+   "id": "ucc-rooms",
+   "label": "UCC Rooms and Devices",
+   "version": "1.0.0",
+   "transport": "https",
+   "polls": 2
   }
  ],
  "products": [
@@ -4269,6 +4384,14 @@
    "label": "Shinra Recording Service",
    "vendor_id": "shinra-cloud",
    "driver_id": "recording-service-api",
+   "component_type": "generic-service",
+   "kind": "service"
+  },
+  {
+   "id": "scheduling-service",
+   "label": "Shinra Scheduling Platform",
+   "vendor_id": "shinra-cloud",
+   "driver_id": "scheduling-service-api",
    "component_type": "generic-service",
    "kind": "service"
   },

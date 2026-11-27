@@ -179,7 +179,7 @@ the scale lab runs the same judgment against a lab of any size.
 One device is also held to a **showcase floor**, the most a single device says: on a 20-system
 corporate lab (the smallest with a divisible conference room), `make test-lab` holds the headquarters
 conference room's video bar to 20 metrics, 8 properties, an event it caught itself and a log line
-within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754). The room's schedule may
+within five minutes of the lab coming up (`labcheck.VideoBarFloor`, #2754). The room's calendar may
 put no meeting in that window, so the test first dials a call on the bar through
 `POST /components/{name}/simulation:fire`, as a demo would.
 
@@ -381,13 +381,15 @@ outpost runs them:
 - **A token pusher.** `corporate` places one booking service a site, pushing four of its systems'
   bookings every 30 seconds through `POST /telemetry:push`. The lab mints its bearer token on every
   run, for a machine user that may push to those systems and do nothing else.
-- **A webhook sender.** `corporate` also places one meeting platform account a site (`ucc-platform`),
-  which speaks for every one of the site's systems. The lab seeds the account as a component with a
-  `ucc-webhook` endpoint and a signing key minted on every run (beside the product's polled
-  `ucc-rooms` endpoint on the site's outpost), and binds each system's room to its system;
-  the simulator subscribes the account to the endpoint, adds each bound room, and the account posts a
-  signed report naming every room's meeting state every 30 seconds. Its key is sealed in the server
-  and handed to the simulator alone: neither the plan, the seed's output nor a log shows it.
+- **A webhook sender.** `corporate` also places one meeting platform account for the whole fleet
+  (`ucc-platform`, a `services:` entry), at the headquarters, which speaks for every system of every
+  site. The lab seeds the account as a component with a `ucc-webhook` endpoint and a signing key minted
+  on every run (beside the product's polled `ucc-rooms` endpoint on the headquarters' outpost), and
+  binds each system's room id to its system and each device the account lists to its component, as an
+  installer would; the simulator subscribes the account to the endpoint, and the account posts a
+  signed report naming every room's meeting state every 30 seconds, besides the meeting boundaries the
+  calendar sets. Its key is sealed in the server and handed to the simulator alone: neither the plan,
+  the seed's output nor a log shows it.
 
 Both arrive on the server's [push lane](#reading-the-delivery-table), so `lab measure` reads their
 loss beside the outposts'.
@@ -396,11 +398,11 @@ A standard's `control` list names the slots whose devices are wired with a **sec
 another endpoint on the same device: the boardroom displays (`mr86`) get their web admin beside their
 SNMP agent, so a demo can switch an input from the console, and the divisible conference rooms' video
 bars get their websocket control socket (`kestrel-ws`, wss on 9443) beside their https API, so one bar
-talks over two protocols (#2754). Every video bar in the lab keeps its room's meeting schedule, drifts
+talks over two protocols (#2754). A conference room's people counter takes its raw-TCP control band (`tessellate-census-feed`, 5000) beside its http API: the band answers the live head-count the API does not carry, as `people-count` on the component, and the plan's `room-occupancy` calc rule carries the most any counter in a room reports up to the room's `occupancy-count`, so the room follows the calendar's attendees through the census (#2757). A room's temperature is its control processor's: the processor reads it as `room-sensor-temperature` (`GET ROOMTEMP`, following the room's meetings), and the plan's `room-temperature` calc rule carries it up to the room's own `room-temperature`. Every video bar in the lab acts out its room's meetings off the lab calendar, drifts
 its call stats in a call and logs on its own
-([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about 3 events and
-9 log lines a bar an hour, beside its polls, or under one event and three log lines a second across
-the 950 or so bars of a 1,000-system lab.
+([a device talks on its own](/architecture/simulation/#a-device-talks-on-its-own)): about 1.7 events and
+6.7 log lines a bar an hour, beside its polls, or under half an event and two log lines a second across
+the 920 or so bars of a 1,000-system lab.
 
 ```sh
 omniglass lab run --scenario corporate --systems 300
@@ -417,6 +419,12 @@ print what a size would build without starting anything: three tables (each arch
 floors per site, systems of each standard and totals; each site's systems and components; the
 components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
 `--systems`, a scenario asks for a size (one system per site at the fewest sites, up to 10,000).
+
+A scale lab's server serves the calendar its simulators act out: `omniglass lab calendar list --start <rfc3339> --end <rfc3339>`
+(`GET /lab/calendar`, at most 31 days, `--system`, `--room`, `--building` and `--site` narrow it) lists every
+meeting of the window by room, to lay beside what the console detected. The server reads the world file the seed
+wrote into the data volume it shares, so no setting carries it; a lab without a plan has an empty calendar. See
+[reading the calendar back](/architecture/simulation/#reading-the-calendar-back).
 
 ### Which fleet each level measures
 
@@ -460,14 +468,14 @@ measured with `docker stats` at 20 and 100 systems and kept in `lab.MeasuredCost
 - **a simulated component**, its simulator's share and the collection from it: about 0.9 MiB and a
   thousandth of a core.
 
-So `corporate` at 1,000 systems (18 sites, 3,016 components) needs about 3.4 GiB and 3.2 cores, and at
-3,000 (30 sites, 8,950 components) about 9.1 GiB and 9.3 cores, before Postgres's shared buffers (below).
+So `corporate` at 1,000 systems (18 sites, 3,124 components) needs about 3.5 GiB and 3.4 cores, and at
+3,000 (30 sites, 9,166 components) about 9.3 GiB and 9.5 cores, before Postgres's shared buffers (below).
 CPU, not memory, is what runs out first on most machines: the reference WSL setup of 12 GB on a
 12-core host fits 3,000 systems with little to spare. `--plan` ends with the decision for this machine:
 
 ```text
-Preflight: about 9.1 GiB of memory and 9.3 cores (the server and Postgres, an outpost for each of 30 sites, 8950 simulated components).
-Postgres's shared buffers, sized to this host and fleet, add 525 MiB: about 9.6 GiB in all.
+Preflight: about 9.3 GiB of memory and 9.5 cores (the server and Postgres, an outpost for each of 30 sites, 9166 simulated components).
+Postgres's shared buffers, sized to this host and fleet, come to 331 MiB: about 9.6 GiB in all.
 This Docker host can spare 9.6 GiB and 9.6 cores (80% of its 12.0 GiB and 12 cores).
 Decision: fits.
 ```
@@ -475,8 +483,8 @@ Decision: fits.
 A size that does not fit exits non-zero before it creates a container, saying why and what does:
 
 ```text
-error: A scale lab of 1000 systems (18 sites, 3016 simulated components) needs about 3.6 GiB of memory and 3.2 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
-  To fix it: run --systems 410, the largest that fits, or give Docker more memory or CPUs.
+error: A scale lab of 1000 systems (18 sites, 3124 simulated components) needs about 3.5 GiB of memory and 3.4 cores; this Docker host has 2.0 GiB and 12 cores, of which the lab plans to use at most 80%.
+  To fix it: run --systems 417, the largest that fits, or give Docker more memory or CPUs.
 ```
 
 Both were forced with the hidden `--host-memory`, which plans against a memory limit of your
@@ -735,8 +743,8 @@ Below the endpoints block, the delivery table says how much telemetry the lab lo
 `outpost` is what the outposts collected and shipped, `push` what was pushed to the server (`POST
 /telemetry:push` and the webhook receivers). The scale lab's push lane comes from the outside actors
 its scenario declares ([the manifest format](#the-manifest-format)): `corporate` places one booking
-service a site, each pushing its four systems' bookings, and one meeting platform account a site,
-each posting a signed report of its rooms' meeting state, both every 30 seconds from the simulator
+service a site, each pushing its four systems' bookings, and one meeting platform account for the
+fleet, posting a signed report of its rooms' meeting state, both every 30 seconds from the simulator
 beside the site's outpost. So every corporate lab reads push rows: metrics and properties from the
 bookings, properties and log lines from the reports. A report names the account's own demo rooms
 too, which no system binds, so the push lane's properties read some `unbound`, which is not loss.
@@ -1300,11 +1308,13 @@ standards:
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
     control: [main-display]     # optional: slots whose devices also get their second face
+    room_name: Huddle           # optional: its rooms are named for what they are, "Huddle 3" (#2757)
 archetypes:
   - name: hq
     label: Headquarters
     headquarters: true          # placed exactly once, under its own name
     typical_systems: 250        # how many systems a site of this kind typically has
+    room_names: [scientists]    # the naming theme a site's rooms take, one theme a site (#2757)
     buildings:
       - { name: tower, floors: 30 }
     systems:                    # standard -> ratio, in tie-break order
@@ -1324,9 +1334,42 @@ pushers:                        # outside actors that report by pushing, placed 
     profile: booking-service    # a simulator profile with a push face
     per_site: 1                 # how many each site has
     systems: 4                  # how many of the site's systems each one pushes for
-  - name: ucc                   # each placed one is <site>-ucc-<k>
-    profile: ucc-platform       # a simulator profile with a webhook face: a signed-webhook sender
-    per_site: 1                 # systems omitted: it speaks for every one of the site's systems
+services:                       # polled cloud services: one account for the whole scenario (#2765)
+  - name: scheduling            # placed once, at the headquarters, as <hq>-scheduling-1
+    profile: scheduling-service # a product the simulator serves; it covers every system of every site
+    label: Scheduling Platform  # optional: what its component reads as in a console (#2757)
+  - name: meeting               # <hq>-meeting-1
+    profile: ucc-platform       # a profile with a webhook face is a signed-webhook sender as well (#2790)
+  - name: recording             # <hq>-recording-1, the one recording service for every room (#2757)
+    profile: recording-service  # its list is paged, one record per room; no standard carries a recorder slot
+calendar:                       # what every room acts out on the simulator's clock (#2757)
+  meetings:
+    mr65:                       # a standard of this scenario; knobs per standard
+      booking_rate: 0.40        # the chance a free slot boundary starts a booking
+      slot_mix: { 15: 1, 30: 5, 60: 3 }   # slot lengths in minutes, by weight
+      no_show_rate: 0.12        # the share of bookings nobody attends
+      ended_early_rate: 0.18    # of attended bookings; the rest end on time or late
+      ended_late_rate: 0.10
+      attendance: { min: 3, max: 8 }
+      walk_in_rate: 0.08        # the chance a free 15-minute cell holds a walk-in
+      hours: { start: 8, end: 18 }   # UTC hours meetings fall in; omit for the whole day
+      recording_rate: 0.15      # the share of meetings that took place that are recorded
+      # How the room around its meetings behaves, read by every device in it through the room
+      # phase. All optional; omitted, they read the values shown.
+      wake_lead_seconds: 120    # a room wakes this long before a booked meeting someone attends
+      cooldown_seconds: 300     # and stays in use this long after a meeting that took place
+      recording_tail_seconds: 600   # a recorded meeting's recording is processed this long after
+      sharing: { min_minutes: 30, parts: 3, from_part: 1, to_part: 2 }   # a meeting this long shares from part 1 to part 2 of 3
+  problems:                     # what goes wrong on a schedule (#2769), scripted and not drawn
+    - name: tuesday-display-dark
+      cadence: weekly           # daily; weekly (with weekday); monthly (with day, or nth and weekday)
+      weekday: tuesday
+      at: "14:00"               # UTC time of day it starts
+      for: 2h                   # how long it lasts, up to a day
+      spread: 30m               # optional: each room starts a seeded whole number of minutes later, up to this
+      scope: { standard: mr86, role: main-display }   # standard, site (or its archetype) and rooms (system names); role is a slot
+      impairment:               # exactly one of: unplugged, loss_pct, pin
+        pin: { path: status.device.power, value: "off" }
 ```
 
 The vocabulary is the platform's own, so a scenario never invents a device. Each standard is a
@@ -1349,7 +1392,19 @@ identity, named for the system. A standard's `control` names the slots whose dev
 commands: each is wired with its product's control face beside the driver that reads it (the Boreal
 displays' web admin beside their SNMP agent, behind the simulated login), so a demo can fix a fault
 from the console. Name few: each is one more endpoint polling every such device across every site.
-A slot under `control` must be one the standard fills. The validator collects every problem at once and names
+A slot under `control` must be one the standard fills. The `calendar` block is optional: each of its
+`meetings` names a standard of the scenario, with its knobs checked at load (a rate between 0 and 1, a
+slot mix of 15, 30 and 60 minutes, an attendance range from at least one, hours inside the day); a
+refusal names the field, as `calendar.meetings.mr65.booking_rate`. What the knobs produce is the
+[lab calendar](/architecture/simulation/#the-lab-calendar). Each of its `problems` is a name, a
+cadence (`daily`; `weekly` on a `weekday`; `monthly` on a `day` of 1 to 28 or on the `nth` weekday), a UTC `at`
+and a `for` of up to a day, and a scope: any of a `standard`, a `site` (a site's name or its archetype's) and
+`rooms` (system names), which must all match, plus the `role`, the slot of the room the problem lands on
+(never a product). A problem sets exactly one impairment: `unplugged` (dark on every protocol), `loss_pct`
+(packets lost) or a `pin` (a state path held at a value). A scope that names no standard, site or room, a
+role no standard in scope fills, a name used twice or a named room the plan lacks is refused, naming the
+problem and the field, as `calendar.problems.tuesday-display-dark.scope.role`. A scale lab hands each
+outpost's simulator the world its plan resolves to (below), problems included. The validator collects every problem at once and names
 each with the manifest line to fix:
 
 ```text
@@ -1357,6 +1412,39 @@ corporate.yaml:21: sites max 3 is below min 5
 corporate.yaml:57: product "polaris-sky-c6" has no simulator profile, so the lab cannot simulate it
 corporate.yaml:65: unknown product "boreal-cast-m9": the catalog has no product of that name
 ```
+
+### The world file
+
+A scale lab's simulators hold the world they simulate: the lab resolves the plan to a **world file** per
+site outpost and the simulator loads it, so the rooms and the [lab calendar](/architecture/simulation/#the-lab-calendar)
+reach a running simulator without the server saying anything about them
+([the world it holds](/architecture/simulation/#the-world-it-holds)). One pure function turns the plan
+into each site's world (`scenario.SiteWorlds`): the site's rooms with their standard, system and capacity
+(the largest attendance their standard's meeting knobs declare), each room's planned devices by the
+name the world gives them (`<system>-<slot>-<n>`, unique across the plan) and the simulator profile that serves them, the services (a pusher
+or a webhook sender) with the systems each speaks for, the `calendar.meetings` knobs per standard, and a
+calendar seed taken from the scenario's name, so a room's meetings do not move when the lab is resized.
+The file is versioned (`version: 1`) and sized to the site, not the fleet.
+
+The seed one-off writes the files into the lab's data volume (`world/<outpost>.json`), and each outpost
+mounts that volume read-only and finds its own file at the path in `OMNIGLASS_SIM_WORLD`, a variable the
+lab sets as it sets each outpost's pushers. The volume is the one place the seed and the outposts
+already share, so nothing new carries it. A lab without a plan (the default lab) writes none and its
+simulator holds no calendar and no rooms. The world owns the names: the seed onboards each
+component under the name its world gives it (a scale lab's components are `hq-mr86-1-main-display-1`,
+not a `display-1` in every room), and a test seeds a plan and holds every seeded name and room to the world's.
+
+### Setting the simulator's clock
+
+A lab test that must see a room in a meeting does not wait for the corporate hours: `omniglass lab run
+--sim-clock-offset 36h` (a hidden flag of a scale lab, a Go duration, negative to run behind) sets
+`OMNIGLASS_SIM_CLOCK_OFFSET` on each site outpost, and its simulator runs the simulated world's clock that far
+ahead of real time. A test picks a meeting from the plan's own calendar (the same scenario resolved at the
+same size, the world of the site and the calendar it implies), sets the offset to land a minute into it and
+reads each device of the room over the console's fire API. The offset moves what the world reads and
+stamps in its own time, never the outpost's cadence or a timestamp the lab stamps
+([the simulator's clock](/architecture/simulation/#the-lab-calendar)). A speed factor, a simulated day in
+an hour, is #1362, and joins the same clock.
 
 ### How many sites
 
@@ -1407,9 +1495,18 @@ within 60). A small N can round a rare standard at a small site to zero; that is
 Each site's systems are then placed in its archetype's standard order, round-robin over its floors
 (buildings in order, floors bottom up), so system `j` of a site with `F` floors sits in room
 `j ÷ F + 1` of floor `j mod F`: every floor fills evenly. A system is named `<site>-<standard>-<k>`,
-its room `<site>-<building>-<floor>-<room>`, and it takes a friendly label from the same name
-generator the simulator's fleets use, seeded from the scenario, site, standard and index, so the same
-manifest at the same size always resolves to the same plan.
+its room `<site>-<building>-<floor>-<room>`, and it takes the name a company would give the room as
+its label (#2757): the location stays the address ("Hq Tower 12 01") and the system's label is the
+name ("Curie"), and the console shows both. A site names its rooms after one theme, a word list the
+scenario package holds in one place (`scientists`, `peaks`, `rivers`, `parks`, `lakes`, `bridges`), the
+archetype's `room_names` giving the theme (a repeated archetype's sites take its themes in turn: the
+headquarters after scientists, the regional offices after peaks, rivers and parks), each word taken
+once in a site and a site that runs a theme dry taking its words again numbered 2, 3 and so on. A
+standard with a `room_name` is named for what it is instead (a huddle room, an auditorium, signage),
+numbered in the order the site has them and a lone one unnumbered. The word is picked by a hash of the
+scenario, site, standard and index, so the same manifest at the same size always resolves to the same
+plan, and a name is unique within its site, never across the plan (two sites may each have a
+"Huddle 1").
 
 ## Why Docker is required
 

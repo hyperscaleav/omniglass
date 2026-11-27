@@ -3,12 +3,12 @@ package scenario
 import (
 	"fmt"
 	"sort"
-
-	"github.com/hyperscaleav/omniglass/sim/fleet"
 )
 
-// MaxSystems bounds the size knob: the name generator's space of distinct
-// labels is about 13,500, and the scale lab's largest target is 3,000 (#1357).
+// MaxSystems bounds the size knob: headroom over the scale lab's largest
+// target, 3,000 systems (#1357). Above about 4,000 the account-wide platforms'
+// paged polls reach their declared max_pages and refuse the poll, so a lab
+// that large raises those caps first (#2805).
 const MaxSystems = 10000
 
 // Count is how many of a named thing: systems of a standard, or components
@@ -67,7 +67,17 @@ type PusherPlan struct {
 	Profile string
 	Systems []string
 	Webhook bool
+	// Service is a polled cloud service (#2765): a component seeded once for
+	// the fleet, covering Systems. It is also a webhook sender (Webhook) when
+	// its profile posts webhooks as well (#2790).
+	Service bool
+	// Label is the service's manifest label (#2757), "" for none.
+	Label string
 }
+
+// IsComponent says whether the actor is a component the site's simulator
+// serves (a webhook sender or a polled service) rather than a token user.
+func (p PusherPlan) IsComponent() bool { return p.Webhook || p.Service }
 
 // Simulated is how many components the site's simulator serves: the site's
 // own and each webhook sender's (#1747), a component with an address on the
@@ -75,7 +85,7 @@ type PusherPlan struct {
 func (s SitePlan) Simulated() int {
 	n := s.Totals.Components
 	for _, p := range s.Pushers {
-		if p.Webhook {
+		if p.IsComponent() {
 			n++
 		}
 	}
@@ -107,6 +117,9 @@ type SlotFill struct {
 	// Control is a slot the standard wires with its product's control face
 	// as well (Standard.Control, #2649).
 	Control bool
+	// Platform is the kind a meeting platform lists the component as
+	// (PlatformDeviceType), "" when it lists none (#2790).
+	Platform string
 }
 
 // SystemPlan is one planned system: its name, its generated label, its
@@ -161,17 +174,18 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	type site struct {
 		name, label string
 		arch        *Archetype
+		ordinal     int // the repeat of its archetype, 1 for the headquarters
 	}
 	var sites []site
 	perArchetype := archetypeSites(m, SiteCount(m, size))
 	for i := range m.Archetypes {
 		a := &m.Archetypes[i]
 		if a.Headquarters {
-			sites = append(sites, site{name: a.Name.Name, label: a.Label, arch: a})
+			sites = append(sites, site{name: a.Name.Name, label: a.Label, arch: a, ordinal: 1})
 			continue
 		}
 		for k := 1; k <= perArchetype[i]; k++ {
-			sites = append(sites, site{name: fmt.Sprintf("%s-%02d", a.Name.Name, k), label: siteLabel(a, k), arch: a})
+			sites = append(sites, site{name: fmt.Sprintf("%s-%02d", a.Name.Name, k), label: siteLabel(a, k), arch: a, ordinal: k})
 		}
 	}
 	weights := make([]int, len(sites))
@@ -180,11 +194,10 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	}
 	perSite := apportion(size-len(sites), weights)
 
-	names := fleet.NewNameGenerator()
 	plan := &Plan{Scenario: m.Name, Label: m.Label, Size: size}
 	byArchetype := map[string][]SystemPlan{}
 	for i, s := range sites {
-		sp := resolveSite(m.Name, s.name, s.label, s.arch, perSite[i]+1, c, names)
+		sp := resolveSite(m.Name, s.name, s.label, s.arch, s.ordinal, perSite[i]+1, c)
 		sp.Totals = count(m, sp.Systems)
 		sp.Pushers = placePushers(m.Pushers, sp.Name, sp.Systems, cat)
 		plan.Sites = append(plan.Sites, sp)
@@ -205,6 +218,23 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 	plan.Totals = count(m, plan.allSystems())
 	for _, d := range m.Pushers {
 		plan.Pushers = addCount(plan.Pushers, d.Profile.Name, d.PerSite*len(plan.Sites))
+	}
+	// A polled service is one account for the whole fleet (#2765): placed once,
+	// at the headquarters, covering every system of every site.
+	if len(plan.Sites) > 0 {
+		var all []string
+		for _, s := range plan.allSystems() {
+			all = append(all, s.Name)
+		}
+		hq := &plan.Sites[0]
+		for _, d := range m.Services {
+			// A service whose profile also posts webhooks (the meeting
+			// platform, #2790) is a sender too: its signed posts name the
+			// rooms it covers as a polled list does.
+			sender := cat.Sender != nil && cat.Sender(d.Profile.Name)
+			hq.Pushers = append(hq.Pushers, PusherPlan{Name: fmt.Sprintf("%s-%s-1", hq.Name, d.Name.Name), Profile: d.Profile.Name, Systems: all, Service: true, Webhook: sender, Label: d.Label})
+			plan.Pushers = addCount(plan.Pushers, d.Profile.Name, 1)
+		}
 	}
 	return plan, nil
 }
@@ -311,7 +341,7 @@ func siteLabel(a *Archetype, k int) string {
 // by index: system j lands on floor j mod F of the site's F floors (buildings
 // in order, floors bottom up) in that floor's room j/F+1, so every floor
 // fills evenly.
-func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled, names *fleet.NameGenerator) SitePlan {
+func resolveSite(scenario, name, label string, a *Archetype, ordinal, n int, c *compiled) SitePlan {
 	sp := SitePlan{Name: name, Label: label, Archetype: a.Name.Name}
 	type floor struct{ building, name string }
 	var floors []floor
@@ -329,6 +359,12 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 	}
 	perStandard := apportion(n, ratios)
 
+	theme := defaultRoomTheme
+	if len(a.RoomNames) > 0 {
+		theme = a.RoomNames[(ordinal-1)%len(a.RoomNames)].Name
+	}
+	namer := newRoomNamer(scenario, name, theme)
+
 	j := 0
 	for i, r := range a.Systems {
 		cs := c.standards[r.Standard.Name]
@@ -336,7 +372,7 @@ func resolveSite(scenario, name, label string, a *Archetype, n int, c *compiled,
 			fl := floors[j%len(floors)]
 			sp.Systems = append(sp.Systems, SystemPlan{
 				Name:       fmt.Sprintf("%s-%s-%d", name, cs.name, k),
-				Label:      names.Next(fmt.Sprintf("%s/%s/%s/%d", scenario, name, cs.name, k)),
+				Label:      roomLabel(namer, cs, k, perStandard[i]),
 				Standard:   cs.name,
 				SystemType: cs.systemType,
 				Building:   fl.building,
@@ -416,4 +452,13 @@ func apportion(total int, weights []int) []int {
 		out[i]++
 	}
 	return out
+}
+
+// roomLabel is the name the k-th of n rooms of a standard goes by (#2757): the
+// standard's function when it has one, else the next word of the site's theme.
+func roomLabel(r *roomNamer, cs compiledStandard, k, n int) string {
+	if cs.roomName != "" {
+		return function(cs.roomName, k, n)
+	}
+	return r.themed(cs.name, k)
 }

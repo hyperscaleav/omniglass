@@ -101,12 +101,18 @@ func (e *ValidationError) Error() string {
 // is required. Use compileMutationList for the list-of-objects shape
 // that supports enum, pattern, and optional.
 func compileMutations(raw map[string]any) ([]mutation, error) {
+	return compileMutationsWith(raw, templateFuncs)
+}
+
+// compileMutationsWith is compileMutations against an explicit FuncMap, so a
+// device's routes render `now` on the device's clock.
+func compileMutationsWith(raw map[string]any, funcs template.FuncMap) ([]mutation, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
 	out := make([]mutation, 0, len(raw))
 	for path, value := range raw {
-		m, err := compileOne(path, value, nil, "", false)
+		m, err := compileOneFuncs(path, value, nil, "", false, funcs)
 		if err != nil {
 			return nil, err
 		}
@@ -120,6 +126,11 @@ func compileMutations(raw map[string]any) ([]mutation, error) {
 // optional; all three are optional and may be combined. Pattern regex
 // is compiled here (once at profile load), not per-request.
 func compileMutationList(items []profile.Mutation) ([]mutation, error) {
+	return compileMutationListWith(items, templateFuncs)
+}
+
+// compileMutationListWith is compileMutationList against an explicit FuncMap.
+func compileMutationListWith(items []profile.Mutation, funcs template.FuncMap) ([]mutation, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
@@ -128,7 +139,7 @@ func compileMutationList(items []profile.Mutation) ([]mutation, error) {
 		if item.Path == "" {
 			return nil, fmt.Errorf("mutation missing required field 'path'")
 		}
-		m, err := compileOne(item.Path, item.Value, item.Enum, item.Pattern, item.Optional)
+		m, err := compileOneFuncs(item.Path, item.Value, item.Enum, item.Pattern, item.Optional, funcs)
 		if err != nil {
 			return nil, err
 		}
@@ -142,14 +153,19 @@ func compileMutationList(items []profile.Mutation) ([]mutation, error) {
 // declaration order is preserved); legacy map entries run after in
 // arbitrary order. Both nil produces nil.
 func compileMerged(raw map[string]any, items []profile.Mutation) ([]mutation, error) {
+	return compileMergedWith(raw, items, templateFuncs)
+}
+
+// compileMergedWith is compileMerged against an explicit FuncMap.
+func compileMergedWith(raw map[string]any, items []profile.Mutation, funcs template.FuncMap) ([]mutation, error) {
 	if len(raw) == 0 && len(items) == 0 {
 		return nil, nil
 	}
-	listMuts, err := compileMutationList(items)
+	listMuts, err := compileMutationListWith(items, funcs)
 	if err != nil {
 		return nil, err
 	}
-	mapMuts, err := compileMutations(raw)
+	mapMuts, err := compileMutationsWith(raw, funcs)
 	if err != nil {
 		return nil, err
 	}

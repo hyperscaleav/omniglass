@@ -33,7 +33,7 @@ func TestLabRunScriptFlagsAreHidden(t *testing.T) {
 	}
 	// A scale lab's proving knobs are for the integration tests, not a
 	// learner's help, and the induced refusal is off unless asked (#1698).
-	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered", "health-history"} {
+	for _, name := range []string{"host-memory", "ready-timeout", "induce-unregistered", "health-history", "sim-clock-offset"} {
 		f := cmd.Flags().Lookup(name)
 		if f == nil {
 			t.Errorf("lab run has no --%s", name)
@@ -162,6 +162,7 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
 		{[]string{"--scenario", "corporate", "--systems", "20", "--sso", "--plan"}, "--sso is a seeded fleet's"},
 		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
+		{[]string{"--scenario", "dev", "--sim-clock-offset", "36h"}, "--sim-clock-offset moves a scale lab's calendar"},
 		{[]string{"--scenario", "dev", "--health-history"}, "--health-history seeds a scale scenario's storyline"},
 		{[]string{"--scenario", "dev", "--omnibot-key-env", "OMNIGLASS_TEST_NO_SUCH_KEY"}, "OMNIGLASS_TEST_NO_SUCH_KEY is not set"},
 		{[]string{"--scenario", "dev", "--omnibot-replay", "nope"}, "omnibot recordings: corporate-outage, default"},
@@ -201,7 +202,7 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		}
 		return out.String()[strings.Index(out.String(), "\nPreflight"):]
 	}
-	need := lab.MeasuredCost.Estimate(18, 3016)
+	need := lab.MeasuredCost.Estimate(18, 3124)
 	for name, tc := range map[string]struct {
 		systems  int
 		mem      string
@@ -209,14 +210,14 @@ func TestLabRunScenarioPlanPreflight(t *testing.T) {
 		want     []string
 	}{
 		"fits": {1000, "", host, []string{
-			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, an outpost for each of 18 sites, 3016 simulated components)",
+			fmt.Sprintf("Preflight: about %s of memory and %.1f cores (the server and Postgres, an outpost for each of 18 sites, 3124 simulated components)",
 				lab.FormatMiB(need.MemMiB), need.CPU),
 			fmt.Sprintf("Postgres's shared buffers, sized to this host and fleet, come to 8.0 GiB: about %s in all.", lab.FormatMiB(need.MemMiB+8<<10)),
 			"This Docker host can spare 25.6 GiB and 9.6 cores (80% of its 32.0 GiB and 12 cores)", "Decision: fits."}},
 		// The corporate 3,000 runs on a 12 GB laptop: the buffers take what
 		// the fleet leaves spare rather than a quarter of the host.
 		"3,000 on a laptop": {3000, "12g", host, []string{"Decision: fits."}},
-		"refused": {3000, "4g", host, []string{"Decision: refused. A scale lab of 3000 systems (30 sites, 8950 simulated components)",
+		"refused": {3000, "4g", host, []string{"Decision: refused. A scale lab of 3000 systems (30 sites, 9166 simulated components)",
 			"this Docker host has 4.0 GiB and 12 cores", ", the largest that fits"}},
 		"none fits": {100, "64m", host, []string{"Decision: refused.", "Not even the smallest size fits", "the smallest scale lab, --systems 3"}},
 		"no docker": {100, "", func(context.Context, int64) (lab.HostResources, error) {

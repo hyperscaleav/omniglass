@@ -19,6 +19,21 @@
 # document and the SNMP face stay read only, and switching an outlet off
 # models only the outlet: no sim device is wired to it, so what it feeds
 # keeps answering.
+#
+# In a room whose scenario declares a lab calendar (#2777) the load follows
+# the room's day. The outlets map to the room's gear by a fixed table, the
+# same on every PDU: outlet 1 the video chain (display, video bar, codec),
+# outlet 2 the processors (DSP and the control processor), outlet 3 the
+# amplifier, outlet 4 nothing plugged in. The gear is awake by the displays'
+# rule (#2768): from two minutes before a booked meeting someone will attend
+# (at the start of a walk-in) until five minutes after its end, a no-show
+# waking nothing (the room phase's in_use, the reading the whole room shares, #2797).
+# Each outlet reads a level, from the calendar alone, never
+# from the devices on it: video 150 mA in standby, 700 awake, 950 in a call
+# (a meeting with someone in the room); processors 180 and 300; amplifier
+# 120, 500 and 800. A switched-off outlet draws nothing, and the total and
+# the energy follow. The mains voltage stays noise. A PDU with no calendar
+# keeps its earlier random walk, whatever the room.
 
 name: ferrite-pdu-4c
 manufacturer: Ferrite
@@ -78,6 +93,7 @@ interfaces:
       status.device.uptime:              "1.3.6.1.2.1.1.3.0"
       status.mains.voltage_mv:           "1.3.6.1.4.1.55560.1.1.0"
       status.load.total_current_ma:      "1.3.6.1.4.1.55560.1.2.0"
+      status.load.energy_mwh:            "1.3.6.1.4.1.55560.1.3.0"
       status.outlets.0.name:             "1.3.6.1.4.1.55560.2.1.1.1"
       status.outlets.1.name:             "1.3.6.1.4.1.55560.2.1.1.2"
       status.outlets.2.name:             "1.3.6.1.4.1.55560.2.1.1.3"
@@ -102,7 +118,9 @@ computed:
 
 # The mains wobbles around its nominal 230 V, and what the rack draws moves
 # with its load. An outlet that is off draws nothing; the total is what the
-# outlets draw. Each is a behavior a scenario timeline can drive or override.
+# outlets draw, and the energy is the total's draw accrued. With a calendar
+# the outlets follow the room's day (header); without one they drift. Each
+# is a behavior a scenario timeline can drive or override.
 behaviors:
   - name: mains_drift
     schedule:
@@ -116,15 +134,23 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.outlets.0.current_ma
-        value: '{{ $o := index .State.status.outlets 0 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+        value: >-
+          {{- $o := index .State.status.outlets 0 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $p := roomPhase -}}{{- $awake := $p.in_use -}}{{- $call := and $p.call_active (gt $p.attendees 0) -}}{{ $v := 150 }}{{ if $awake }}{{ $v = 700 }}{{ end }}{{ if $call }}{{ $v = 950 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
       - path: status.outlets.1.current_ma
-        value: '{{ $o := index .State.status.outlets 1 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+        value: >-
+          {{- $o := index .State.status.outlets 1 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $p := roomPhase -}}{{- $awake := $p.in_use -}}{{- $call := and $p.call_active (gt $p.attendees 0) -}}{{ $v := 180 }}{{ if $awake }}{{ $v = 300 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
       - path: status.outlets.2.current_ma
-        value: '{{ $o := index .State.status.outlets 2 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+        value: >-
+          {{- $o := index .State.status.outlets 2 -}}{{- if eq (get "state" $o) "on" -}}{{- if not hasCalendar -}}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{- else -}}{{- $p := roomPhase -}}{{- $awake := $p.in_use -}}{{- $call := and $p.call_active (gt $p.attendees 0) -}}{{ $v := 120 }}{{ if $awake }}{{ $v = 500 }}{{ end }}{{ if $call }}{{ $v = 800 }}{{ end }}{{ $v }}{{- end -}}{{- else -}}0{{- end -}}
       - path: status.outlets.3.current_ma
-        value: '{{ $o := index .State.status.outlets 3 }}{{ if eq (get "state" $o) "on" }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
+        value: '{{ $o := index .State.status.outlets 3 }}{{ if and (eq (get "state" $o) "on") (not hasCalendar) }}{{ round 0 (clamp 100.0 1200.0 (randStep 40.0 (get "current_ma" $o))) }}{{ else }}0{{ end }}'
       - path: status.load.total_current_ma
         value: '{{ $t := 0 }}{{ range .State.status.outlets }}{{ $t = add $t (get "current_ma" .) }}{{ end }}{{ $t }}'
+      # What the rack has drawn since it booted, in milliwatt-hours: each
+      # tick adds the draw of its 30 s (milliamps times millivolts is
+      # microwatts), so a busy room's rack reads more by evening than an idle one's.
+      - path: status.load.energy_mwh
+        value: '{{ add .State.status.load.energy_mwh (round 0 (div (mul .State.status.load.total_current_ma .State.status.mains.voltage_mv) 120000.0)) }}'
 
 defaults:
   status:
@@ -137,6 +163,7 @@ defaults:
     # a mix. The total is what the three on draw (310 + 180 + 650).
     load:
       total_current_ma: 1140
+      energy_mwh: 0
     outlets:
       - { id: 1, name: "Video switcher", state: "on", current_ma: 310 }
       - { id: 2, name: "Audio DSP", state: "on", current_ma: 180 }

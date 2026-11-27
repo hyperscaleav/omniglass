@@ -137,6 +137,53 @@ identity and land as before. A save refuses a key that is not a registered prope
 extract the transport cannot read, and `records` on anything but a JSON body. A
 [preview](#check-preview-and-run-a-poll-now) shows each sample's identity.
 
+### Paged lists
+
+A platform with thousands of rooms lists them a page at a time. A poll that reads `records` declares
+`paginate` on its request, and one poll walks every page, gathers the records of all of them, then
+identifies and fans them out once, exactly as a single answer is. The engine knows no field name:
+the driver spells every one, so a platform's own cursor name appears only in its driver.
+
+```yaml
+polls:
+  - name: rooms
+    schedule: { every: 30s }
+    request:
+      path: /api/rooms
+      paginate:
+        style: cursor
+        size_param: page_size
+        size: 100
+        cursor_from: next_page_token     # where each answer carries the cursor
+        cursor_param: next_page_token    # the query parameter it is sent back in
+    records: rooms
+    identity: { key: ucc-room-id, extract: { jsonpath: id } }
+    emits:
+      - { name: call-state, extract: { jsonpath: state } }
+```
+
+- `style: cursor`: a value read off each answer is sent on the next request. `cursor_from` is a
+  dotted path in the JSON body (`meta.cursor`), or `cursor_from_header` a response header; send it back
+  in `cursor_param` (a query parameter) or `cursor_header` (a request header). An absent, null or
+  empty cursor is the last page.
+- `style: page`: the request sends an ascending number in `page_param`, from `first_page` (1 when
+  absent, 0 for a zero-based API). The walk stops at an answer with no records, or sooner when the
+  answer declares its total: `pages_from` (the path of the page count) or `total_from` (the path of the
+  record count; needs `size`).
+- `size_param` and `size` go together and ask for a page size; absent, the platform's default applies.
+- Bounds: `max_pages` (default 100, at most 1000) and `max_records` (default 10000, at most 100000)
+  bound one poll. Reaching either, a cursor that answers itself, or a page that fails faults the poll
+  naming the endpoint and the page, and **nothing lands**: there is no partial fan-out. A paged poll's
+  `max_records` replaces the 2048 cap of an unpaged answer.
+
+One driver may carry several such polls on its one endpoint (an endpoint is named for its transport, so
+a component holds one `https` endpoint): the meeting platform's `ucc-rooms` polls its rooms and its
+devices, each identifying its own records by its own key (`ucc-room-id`, `ucc-device-id`), so one
+binding ties a room id to a system and another a device id to a component.
+
+A page-number API: `paginate: { style: page, page_param: page, first_page: 1, size_param: per_page, size: 100, pages_from: meta.total_pages }`.
+`paginate` rides a GET poll that declares `records`; a save refuses it anywhere else.
+
 An identified value lands on the system or component its identity is **bound** to on this
 component, never on the component itself ([shared-API
 collection](/architecture/collection/#shared-api-collection-one-component-many-owners)). Bind an

@@ -668,6 +668,10 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err != nil {
 		return err
 	}
+	// A component staffing a slot is numbered within it, as the scale lab's are
+	// (#2757): the platform's own counter spans a stem across the room, so the
+	// only wireless microphone of a room with two ceiling ones read 3.
+	slotLabel := slotLabels(doc, componentTypeLabelsByProduct())
 	seedComponent := func(c Component) error {
 		var locID string
 		if c.Location != "" {
@@ -696,6 +700,9 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			return nil
 		}
 		spec := storage.ComponentSpec{Name: c.Name, Label: c.Label}
+		if l, ok := slotLabel[c.Key]; ok {
+			spec.Label = l
+		}
 		if locID != "" {
 			l := locID
 			spec.LocationName = &l
@@ -1547,4 +1554,54 @@ func sortStrings(s []string) {
 			s[j], s[j-1] = s[j-1], s[j]
 		}
 	}
+}
+
+// slotLabels is the label of each fixture component that staffs a slot and
+// names none of its own (#2757): its component type's label, and the place it
+// holds among the slot's components when the slot holds several, so a lone one
+// is unnumbered (the scale lab's rule, plan.go). A component in several slots
+// reads by the first it is assigned to; one in no slot, or of a product the
+// catalog does not label, is left to the shipped rule. typeLabels is the label
+// of each product's component type. Pure.
+func slotLabels(doc Doc, typeLabels map[string]string) map[string]string {
+	product := map[string]string{}
+	named := map[string]bool{}
+	for _, c := range doc.Components {
+		product[c.Key] = c.Product
+		named[c.Key] = c.Label != ""
+	}
+	type slot struct{ system, slot string }
+	members := map[slot][]string{}
+	var firstSlot = map[string]slot{}
+	for _, a := range doc.SlotAssignments {
+		k := slot{a.System, a.Slot}
+		dup := false
+		for _, m := range members[k] {
+			dup = dup || m == a.Component
+		}
+		if dup {
+			continue
+		}
+		members[k] = append(members[k], a.Component)
+		if _, ok := firstSlot[a.Component]; !ok {
+			firstSlot[a.Component] = k
+		}
+	}
+	out := map[string]string{}
+	for key, k := range firstSlot {
+		base := typeLabels[product[key]]
+		if base == "" || named[key] {
+			continue
+		}
+		if len(members[k]) == 1 {
+			out[key] = base
+			continue
+		}
+		for i, m := range members[k] {
+			if m == key {
+				out[key] = fmt.Sprintf("%s %d", base, i+1)
+			}
+		}
+	}
+	return out
 }

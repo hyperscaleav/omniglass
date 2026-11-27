@@ -29,10 +29,13 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 	// The files allowed to name a SKU: the seed's own contract pins and the
 	// demo fleet, whose fixtures staff rooms with catalog products on purpose.
 	pinFiles := map[string]bool{
-		"internal/seed/seed_test.go":        true,
-		"internal/seed/facts_test.go":       true,
-		"internal/devseed/devseed_test.go":  true,
-		"internal/devseed/identity_test.go": true,
+		// Holds GET /lab/calendar to what a simulated Gaze camera acts out in
+		// the room, so naming the simulator's own profile is what it tests (#2770).
+		"internal/api/labcalendar_sim_test.go": true,
+		"internal/seed/seed_test.go":           true,
+		"internal/seed/facts_test.go":          true,
+		"internal/devseed/devseed_test.go":     true,
+		"internal/devseed/identity_test.go":    true,
 		// The template dry-run holds the catalog's templates to the seeded
 		// catalogs, so naming a seeded SKU is what it tests (#1323).
 		"internal/template/check_test.go": true,
@@ -43,6 +46,9 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Pins the shipped UCC drivers to the simulated platform's own
 		// answer, so naming the shipped product is what it tests (#1282).
 		"internal/seed/ucc_drivers_test.go": true,
+		// Polls the shipped ucc-rooms driver against the simulated platform's
+		// pages and fans them out to bound owners (#2789).
+		"internal/bus/fanout_paged_test.go": true,
 		// The outpost rename carries the seeded platform rows by name, so
 		// naming the shipped platform product is what it tests (#2059).
 		"internal/storage/outpost_rename_migration_test.go": true,
@@ -68,6 +74,22 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// States the showcase floor for the corporate lab's conference
 		// video bar, so naming the shipped product is what it tests (#2754).
 		"internal/lab/videobar_talks_integration_test.go": true,
+		// Reads the corporate lab's conference video bar off the live
+		// simulator to prove the world reaches it, so naming the shipped
+		// product is what it tests (#2773).
+		"internal/lab/world_integration_test.go": true,
+		// Reads the corporate lab's conference-room microphone, DSP and
+		// amplifier off the live simulator to prove they read their room's
+		// meeting, so naming the shipped products is what it tests (#2774).
+		"internal/lab/room_audio_integration_test.go": true,
+		// Reads the corporate lab's wireless microphone and the meeting
+		// platform off the live simulator while a scripted problem breaks
+		// them, so naming the shipped products is what it tests (#2769).
+		"internal/lab/calendar_problems_integration_test.go": true,
+		// Reads a conference room's devices and the meeting platform off the
+		// live simulator on a clock offset into a meeting, so naming the
+		// shipped platform is what it tests (#2800).
+		"internal/lab/calendar_clock_offset_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

@@ -15,6 +15,13 @@
 # refusal. Default credentials are admin / boreal, baked into the profile
 # so the lab is self-explanatory; a real Boreal device would force a
 # password change on first boot.
+#
+# In a lab with a calendar (#2757, #2768) the panel follows its room's
+# meetings: it wakes on the conferencing input (hdmi1) two minutes before a
+# booked meeting someone will attend (at the start of a walk-in) and goes to
+# standby five minutes after it ends; a no-show leaves it as it was. The
+# schedule is read off the lab calendar through the device's clock, never
+# from Omniglass. The temperature, volume and brightness stay noise.
 
 name: boreal-edge-86
 manufacturer: Boreal
@@ -189,6 +196,31 @@ computed:
 # Phase 1 supports schedule.interval only; preconditions, probabilistic
 # triggers, and recovery actions land in later phases (omniglass-lab#52).
 behaviors:
+  # The panel follows the room's meetings, read off the lab calendar (#2768)
+  # through the device's own clock: it wakes (power on, the conferencing input)
+  # two minutes before a booked meeting someone will attend, or at the start
+  # of a walk-in, and sleeps (standby) five minutes after the meeting ends. A
+  # no-show wakes nothing and leaves it as it was. A room with no calendar is
+  # left alone. An operator's change in the middle of a meeting holds: the
+  # wake is the edge, not a level held every tick.
+  - name: room_meeting
+    schedule:
+      interval: 30s
+      on_start: true
+    mutations:
+      - path: status.sim.busy
+        value: '{{ $p := roomPhase }}{{ or $p.call_active (eq $p.occupancy "waking") }}'
+      - path: status.sim.known
+        value: '{{ (roomPhase).scheduled }}'
+      - path: status.sim.until
+        value: '{{ $p := roomPhase }}{{ if $p.call_active }}{{ $p.use_until }}{{ else }}{{ .State.status.sim.until }}{{ end }}'
+      - path: status.device.power
+        value: '{{ $s := .State.status.sim }}{{ if $s.busy }}{{ if $s.awake }}{{ .State.status.device.power }}{{ else }}on{{ end }}{{ else if and $s.known (ge now $s.until) }}standby{{ else }}{{ .State.status.device.power }}{{ end }}'
+      - path: status.display.input
+        value: '{{ $s := .State.status.sim }}{{ if and $s.busy (not $s.awake) }}hdmi1{{ else }}{{ .State.status.display.input }}{{ end }}'
+      - path: status.sim.awake
+        value: '{{ $s := .State.status.sim }}{{ or $s.busy (lt now $s.until) }}'
+
   - name: temperature_drift
     schedule:
       interval: 60s
@@ -226,6 +258,11 @@ defaults:
       contrast: 70
       temperature: 38
       resolution: "3840x2160"
+    sim:
+      busy: false
+      known: false
+      awake: false
+      until: 0
     audio:
       volume: 20
       mute: false

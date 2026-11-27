@@ -5,7 +5,6 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim/impair"
 )
 
@@ -22,10 +21,10 @@ func TestImpairerAppliesWhatTheServerAsksOnChange(t *testing.T) {
 	ap := &fakeApplier{}
 	m := newImpairer(ap, true)
 	served := map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1"), "c2": netip.MustParseAddr("127.60.0.2")}
-	wants := map[string]collection.SimImpairment{"c2": {Unplugged: true}}
+	wants := map[string]impair.Impairment{"c2": {Unplugged: true}}
 
-	m.reconcile(served, wants)
-	m.reconcile(served, wants) // unchanged: not re-applied
+	m.Reconcile(served, wants)
+	m.Reconcile(served, wants) // unchanged: not re-applied
 	if len(ap.applied) != 1 {
 		t.Fatalf("applied %d times for one state, want once", len(ap.applied))
 	}
@@ -37,14 +36,14 @@ func TestImpairerAppliesWhatTheServerAsksOnChange(t *testing.T) {
 		t.Fatalf("status = %+v, want available with c2 impaired", st)
 	}
 
-	m.reconcile(served, nil) // replugged
+	m.Reconcile(served, nil) // replugged
 	if len(ap.applied) != 2 || len(ap.applied[1].Unplugged) != 0 {
 		t.Fatalf("replug not applied: %+v", ap.applied)
 	}
 
 	// An impairment the server asks for on a device this simulator does not
 	// serve is not applied (it has no address here).
-	m.reconcile(served, map[string]collection.SimImpairment{"c9": {Unplugged: true}})
+	m.Reconcile(served, map[string]impair.Impairment{"c9": {Unplugged: true}})
 	if last := ap.applied[len(ap.applied)-1]; len(last.Unplugged) != 0 {
 		t.Fatalf("an unserved device was impaired: %+v", last)
 	}
@@ -53,7 +52,7 @@ func TestImpairerAppliesWhatTheServerAsksOnChange(t *testing.T) {
 func TestImpairerWithoutNetAdminSaysWhy(t *testing.T) {
 	ap := &fakeApplier{}
 	m := newImpairer(ap, false)
-	m.reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, map[string]collection.SimImpairment{"c1": {LatencyMs: 100}})
+	m.Reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, map[string]impair.Impairment{"c1": {LatencyMs: 100}})
 	if len(ap.applied) != 0 {
 		t.Fatal("applied without NET_ADMIN")
 	}
@@ -65,12 +64,12 @@ func TestImpairerWithoutNetAdminSaysWhy(t *testing.T) {
 func TestImpairerReportsAnApplyFailure(t *testing.T) {
 	ap := &fakeApplier{err: errors.New("netlink: operation not permitted")}
 	m := newImpairer(ap, true)
-	m.reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, nil)
+	m.Reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, nil)
 	if st := m.status(); st.Error == "" {
 		t.Fatalf("status = %+v, want the apply error", st)
 	}
 	ap.err = nil
-	m.reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, nil) // retried after a failure
+	m.Reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, nil) // retried after a failure
 	if st := m.status(); st.Error != "" || len(ap.applied) != 2 {
 		t.Fatalf("status %+v after %d applies, want a retry that clears the error", st, len(ap.applied))
 	}
@@ -82,7 +81,7 @@ func TestImpairerReportsAnApplyFailure(t *testing.T) {
 func TestImpairerClearsAfterAFailedApply(t *testing.T) {
 	ap := &fakeApplier{err: errors.New("root qdisc: file exists")}
 	m := newImpairer(ap, true)
-	m.reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, map[string]collection.SimImpairment{"c1": {Unplugged: true}})
+	m.Reconcile(map[string]netip.Addr{"c1": netip.MustParseAddr("127.60.0.1")}, map[string]impair.Impairment{"c1": {Unplugged: true}})
 	m.clear()
 	if ap.cleared != 1 {
 		t.Fatalf("cleared %d times after a failed apply, want once", ap.cleared)

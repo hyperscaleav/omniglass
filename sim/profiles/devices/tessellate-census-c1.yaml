@@ -136,11 +136,11 @@ interfaces:
     protocol: tcp
     port: 5000
     doc:
-      summary: "Raw-TCP occupancy feed (CR-delimited ASCII, push subscriptions)"
+      summary: "Raw-TCP occupancy feed (CRLF-delimited ASCII, push subscriptions)"
       tags: [control, persistent-session, raw-tcp, data]
     api_surface: tessellate-census-control
     persistent: true
-    line_ending: "\r"
+    line_ending: "\r\n"
     welcome: "TESSELLATE CENSUS C1 FEED READY"
     limits:
       max_subs_per_session: 64
@@ -238,16 +238,22 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
-# Occupancy drift. One behavior owns the whole occupancy tuple so the
-# fields stay internally consistent each tick:
+# Occupancy follows the room's lab calendar (#2766). The sim is; Omniglass
+# learns: the head-count is who the calendar says is in this device's own
+# room right now (`meetingNow`, read through the device's clock), never a walk
+# of its own. One behavior owns the whole occupancy tuple so the fields stay
+# internally consistent each tick:
 #   1. snapshot the current count into people_count_prev
-#   2. random-walk people_count within [0, 14] (a room's plausible range)
+#   2. the count is the meeting's actual attendees (a held meeting or a
+#      walk-in, over the room's capacity when the payload says so), zero
+#      for a no-show and for an empty room, and in a meeting with two or
+#      more, one fewer now and then (somebody stepped out)
 #   3. derive last_event from new-vs-prev (increased/decreased/steady)
 #   4. derive vacant = (count == 0)
 # Order matters: mutations run in list order against the same state
 # map, so step 3 sees both the pre-step prev (step 1) and the post-step
-# count (step 2). This is what surfaces the "occupancy increased/
-# decreased" signal and the vacant boolean the case study calls for.
+# count (step 2). With no calendar the old walk runs. The raw-TCP and hex
+# bands, and the push subscriptions, publish the count this writes.
 behaviors:
   - name: occupancy_drift
     schedule:
@@ -256,12 +262,13 @@ behaviors:
       # 1. Snapshot the prior count so step 3 can compare against it.
       - path: status.occupancy.people_count_prev
         value: "{{ .State.status.occupancy.people_count }}"
-      # 2. Random-walk the count within [0, 14], snapped to a whole
-      #    number. `round 0` keeps it integer-valued (5, not 5.0) while
-      #    staying float64 so the comparison helpers below work without
-      #    an int() cast (the simulator registers no `int` template func).
+      # 2. The calendar's attendees, less the one who stepped out 15% of
+      #    ticks. `actual` is zero for a no-show, so no-shows read empty. A
+      #    calendar always has a next meeting within its horizon, so neither
+      #    a meeting running nor one ahead (the phase's scheduled) means no calendar: the old walk.
       - path: status.occupancy.people_count
-        value: "{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}"
+        value: >-
+          {{ if (roomPhase).scheduled }}{{ with (roomPhase).meeting }}{{ if and (gt .actual 1) (chance 0.15) }}{{ sub .actual 1 }}{{ else }}{{ .actual }}{{ end }}{{ else }}0{{ end }}{{ else }}{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}{{ end }}
       # 3. Derive the occupancy change signal from new-vs-prev. `round 0`
       #    stores a whole-numbered value that the mutation pipeline
       #    coerces back to int64, so `sub` here returns int64 and the

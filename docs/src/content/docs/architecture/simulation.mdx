@@ -169,6 +169,29 @@ health's values. A simulator silent for a hundred seconds is forgotten, and dele
 forgets it at once. Because hits live in one server process, a second replica sees no simulator; that
 is accepted while the server runs as one ([scaling](/architecture/scaling/)).
 
+### The world it holds
+
+The server's list says which devices to serve and nothing of where they sit: no site, building or
+room. The simulator does not ask. **The sim is; Omniglass learns.** The simulator holds the world it
+simulates (`sim/world`): the sites, the rooms with their standard and capacity, each room's planned
+devices, the services that speak for rooms, the meeting knobs per standard and the calendar seed. It
+reads that world from a file the lab wrote from the scenario, at the path in `OMNIGLASS_SIM_WORLD`,
+and never from the server or its database; Omniglass learns the world only by collecting from it. The one
+reader beside the simulators is a lab server's own ground-truth route, which reads the same file to
+serve [the calendar back](#reading-the-calendar-back) and feeds nothing it reads into detection.
+With the file, `sim run` (and `outpost run --simulate`) builds the [lab calendar](#the-lab-calendar)
+from the world's seed and knobs and installs it on the engine, so `meetingNow` reads a real room. With
+none there is no calendar and no room, as before.
+
+Each pull is joined to the world by the component's **name**. The world gives every planned device
+a name of its own, `<system>-<slot>-<n>` (unique across the plan), and the lab's scale seed onboards
+the component under exactly that name, so the join is an exact lookup and Omniglass's own naming is
+never replayed. A device the world names takes its site, building and room from it, which fills the
+profile tokens `{site}`, `{building}`, `{room}` and `{room-device:...}` and the room the
+device's own `meetingNow` reads; a device it does not name keeps empty room fields. A service
+resolves a push's `.Owner` system to a room through the world (`ownerRoom`, `ownerMeetingNow`,
+`ownerMeetingNext`) and lists the rooms it speaks for (`coveredRooms`).
+
 ### What an endpoint observed
 
 A hit says a device was touched, not whether every request arrived or how each ended. For that, every
@@ -322,26 +345,306 @@ device keeps the same schedule on every run and a test drives a simulated day on
 No behavior in a shipped profile ticks faster than 15 seconds: a device gets richer by reporting more
 kinds of signal, not more samples (#1360).
 
-The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab keeps its room's meeting
-schedule, a tick a minute. When the room is free it books its next slot, 15, 30 or 60 minutes,
-starting on the next half hour (a 15-minute one on the next quarter), and takes about half the slots
-it considers; a meeting starts up to 2 minutes early or 5 late and ends up to 5 minutes before its
-slot does. The call reports `call-started` (a fresh call id, two to six participants) and
-`call-ended`, and in between a participant joins or leaves now and then (`participant-joined`,
+The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab acts out its room's meetings
+off the [lab calendar](#the-lab-calendar), a tick a minute: one call per held meeting, starting and
+ending at the first tick on or after the meeting does, none for a no-show. The call reports
+`call-started` (the meeting's id, at least half of who came) and `call-ended`, and in between a
+participant joins or leaves now and then, never past who came (`participant-joined`,
 `participant-left`). Each occurrence is also an `event: log` line in the codec's idiom (a severity, a
 facility such as `kvroom.call`, and its text), beside a status line every 15 minutes. A second
 behavior, every 30 seconds, drifts the call's packet loss (a ratio), jitter, bitrate, frame rate,
 speaker level and microphone level while a call is up and rests them when the room is idle, drifts
 the codec's own load, temperature, fan and memory, and writes the WARN line a bar's network log does
-when loss crosses 3% and an INFO line when it recovers. A bar runs about 0.6 calls, 3 events and 9 log
-lines an hour. Booking tables would drive the schedule in time; today it is each bar's own draws.
+when loss crosses 3% and an INFO line when it recovers. On the corporate
+lab's calendar a bar runs about 1.7 named events and 6.7 log lines an hour (11 feed events counting
+state changes), and the schedule is the room's, not the bar's own (a bar with no calendar keeps its own).
 
 A call on demand still talks now: the bar's own dial route starts one at once with its event and log
-line, a meeting falling due under it is skipped, and it ends at the bar's hang-up route or after
-30 minutes, so a demo or a test can make a bar talk without waiting for its schedule. The
+line, a meeting running under it is skipped, and it ends at the bar's hang-up route or after
+30 minutes, so a demo or a test can make a bar talk without waiting for a meeting. The
 `kestrel-api` driver lands all of it from one held feed and two polls, and in the corporate lab's
 conference rooms the bar's websocket control socket is a second endpoint beside its https API
 ([the scale lab](/developer/lab/#scale-lab-scenarios)).
+
+### The lab calendar
+
+A device that talks on its own needs something to talk about, and a room's meetings should be the
+same for everything that speaks of that room: its video bar, its scheduling panel, the booking
+service and the meeting platform. The **lab calendar** (#2757) is that one thing. It is not stored
+and not shipped: it is a pure function of the scenario's knobs, a seed and a window, so every
+simulator and the server compute the same calendar without asking each other
+([ADR-2757](/architecture/decisions/#adr-2757-the-lab-calendar-is-derived-not-stored-and-a-scripted-source-feeds-it-problems)).
+
+A calendar **entry** is a kind (`meeting`, or a scripted `problem`, below), a window on the
+simulator's clock, the room it is scoped to (the engine's room key: site, building, room), and a
+payload of its kind, and exactly one: an entry is a sum type, built only with a kind and a payload that
+agree (a mismatch is refused), and read through typed accessors (`AsMeeting`, `AsProblem`) that report false
+for another kind, so a new kind cannot nil-deref a reader that does not know it. There is one query: the
+entries of a room over a window, filtered by the kinds the caller says it reads, in start order; `Now`,
+`Next` and `Prev` take the same kinds. A meeting's payload says whether it was **booked** or a **walk-in**, who
+organized it, how many were expected and how many came, how it went (**held**, **no-show**,
+**ended early**, **ended late**) and the slot it was booked on, which differs from when it ran.
+
+The scenario declares meetings in its `calendar.meetings` block, a set of knobs per standard
+(`booking_rate`, `slot_mix`, `no_show_rate`, `ended_early_rate`, `ended_late_rate`, `attendance`,
+`walk_in_rate`, `hours`, `recording_rate`, and the room's timing, `wake_lead_seconds`,
+`cooldown_seconds`, `recording_tail_seconds` and `sharing`, [below](#the-room-phase)); a bad block is refused at load naming the field
+([the lab guide](/developer/lab/#scale-lab-scenarios)). Each room's day is generated whole from its
+seed, its room key and the UTC day, so a day reads the same whichever window asks for it, across
+runs and across engines:
+
+- a slot opens on every 15-minute boundary where its length (15, 30 or 60 minutes, weighted by
+  `slot_mix`) lands on a wall-clock boundary of its own length, and is booked with `booking_rate`;
+- a booked meeting starts up to 2 minutes early or 5 late and ends up to 5 minutes before or after
+  its slot, a late end pushing the next start later, so meetings in a room never overlap;
+- a no-show holds its slot with nobody in it;
+- a free 15-minute cell no booking touches holds a short walk-in with `walk_in_rate`;
+- a meeting that took place (never a no-show) is recorded with `recording_rate`, a draw of its own
+  from the seed, the room and the slot, so it moves no other draw.
+
+The engine holds the calendar (`Engine.SetCalendar`) and reads time only through each device's clock,
+the seam a test pins; that clock is the engine's own, real time plus an **offset** (`Engine.SetClock`,
+`sim.Clock`, [ADR-2800](/architecture/decisions/#adr-2800-the-simulated-worlds-clock-has-an-offset-and-a-route-reads-it-too)).
+A lab started with `--sim-clock-offset` (the `OMNIGLASS_SIM_CLOCK_OFFSET` variable of each simulator) runs
+the simulated world ahead of real time, so a test stands the calendar's "now" inside a chosen meeting
+and reads the room's devices live. The offset moves what the world reads and writes in its own time (the
+calendar funcs, `now`, a route's `now`, uptime and the anchor it counts from, a webhook body's `ts`) and
+nothing Omniglass owns: the outpost's collection cadence, a sample's collection time, a request hit and a
+webhook signature's timestamp stay on real time. It is the first, fixed-speed step of the accelerated
+clock of #1362, which adds a speed to the same `Clock`. A behavior's template reads its own room with `meetingNow` and `meetingNext`
+(each a map of the meeting, or nothing), `meetingsBetween` reads the room's meetings over a window of
+unix seconds (what a charge or a warm-up is built from), `hasCalendar` says whether the room has a
+calendar at all, and any template, a push body included, reads another room
+by its key with `roomMeetingNow` and `roomMeetingNext`; `meetingPrev` and `roomMeetingPrev` read the last meeting that has ended. A service that speaks for many rooms reads by
+**room key**, not by system: the calendar is keyed by room, and a push's `.Owner` is a system, so a
+service resolves its owner to the room key before it reads, through
+[the world the simulator holds](#the-world-it-holds).
+
+#### The room phase
+
+Every device in a room reads **one derived room state**, not timing rules worked out again in its own
+profile (#2797, [ADR-2757](/architecture/decisions/#adr-2757-the-lab-calendar-is-derived-not-stored-and-a-scripted-source-feeds-it-problems)).
+`calendar.StateAt(room, instant)` is a pure function of the calendar, so a control processor, a touch
+panel, a display, a bar and a PDU in one room cannot disagree. It gives a **phase**, one of:
+
+| Phase | The room is |
+| --- | --- |
+| `idle` | in none of the others |
+| `waking` | in the lead before a booked meeting someone will attend (a walk-in has none) |
+| `in-meeting` | in a meeting someone attends |
+| `sharing` | in a running meeting that is sharing content |
+| `cooldown` | in the tail after a meeting that took place |
+| `impaired` | under a scripted problem (read through the calendar's problem entries) |
+
+and the facts readers need: `occupancy` (the phase the meetings alone give, so a reading that holds
+whatever goes wrong reads it), `in_use` (waking, in a meeting, sharing or cooling down), `call_active`,
+`attendees`, `sharing`, `scheduled`, `impaired`, `building_open`, `use_until`, `recording_pending`, `meeting`
+(the running meeting, a no-show included) and `has_calendar`. A no-show holds its slot with nobody in it
+and wakes and cools nothing. `impaired` outranks the other phases in `phase`, and moves nothing else: a
+panel under an impairment still reads the meeting beneath it.
+
+The wake lead, the cooldown tail, the recording tail and the sharing stretch are declared once per
+standard in the `calendar.meetings` knobs (`wake_lead_seconds` 120, `cooldown_seconds` 300,
+`recording_tail_seconds` 600, `sharing` the middle third, `{min_minutes: 30, parts: 3, from_part: 1,
+to_part: 2}` of a meeting), validated at load like the others, and unset they read those values. A
+profile carries none of them: a guard test fails the build if one writes arithmetic on a meeting's time, or
+calls the retired `roomInUse` or `meetingSharing`. A template reads the phase with `roomPhase` (its own
+room), `roomPhaseOf site building room` (a service that speaks for many) and `ownerPhase owner`, each a map
+with every key present, so `{{ if (roomPhase).in_use }}` is the whole rule.
+
+The engine computes a room's state **once per room per second** through one memo, however many devices read
+it (the booked-meetings reading of the scheduling surfaces rides the same memo), keyed by the calendar and
+world it was read through and the device clock's second.
+
+Devices that read the calendar:
+
+- **Boreal displays, projectors and signage** (#2768): the Edge display and the Beam projector wake
+  (power on, the conferencing input) by default two minutes before a booked meeting someone will attend, at the
+  start of a walk-in, and sleep by default five minutes after it ends, a no-show leaving them as they were; the
+  projector's light-source hours grow only while it is on. The Cast signage player follows the
+  building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
+  the world's knobs give them), and the
+  player plays inside them and stops outside.
+- **The people counter** (`tessellate-census-c1`) reports who the calendar says is in its room: a held
+  meeting's or walk-in's actual attendees (over the room's capacity when the payload says so), zero in a
+  no-show and in an empty room, and now and then one fewer in a meeting of two or more, as someone steps
+  out. The lab's conference rooms carry one, so its count rises at a meeting's start and falls at its end.
+  A counter with no calendar (the dev fleet, which holds no world) keeps its own random walk, as a room
+  with no calendar is left as it was.
+
+
+- **The scheduling surfaces** (#2765): the booking service, the scheduling service and the Slate 5
+  panel say what the calendar says of a room, through `bookings`, `roomBookings` and `ownerBookings`
+  (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked
+  meeting holds its room from the earlier of its slot's start and its own to the later of its slot's
+  end and its own.
+  - The **booking service** pushes each system's `booking-count` (booked meetings left in the day, the
+    one running included) and `booking-state` for the room the world places the system in. It pushes
+    for the system names the world gives it, since a grant carries only the server's ids.
+  - The **scheduling service** is one account for the whole fleet, a conduit
+    ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)):
+    the lab places it once, at the headquarters, covering every room the plan books. Its rooms list
+    is token-paged, one record per room keyed by the room's system and listed by its `name` (the name a
+    company gave the room, as a calendar lists it) with its `address` (the location) beside it, with that
+    room's booking state, bookings today and left, the organizer holding it and the next start, all
+    off the calendar. A driver polls it and fans each record out to the system the lab's installer
+    bound that room id to; a room nobody bound lands in the conduit's unbound inbox. It also counts
+    today's booked meetings, those still to come and the rooms with one in progress across the rooms it covers.
+  - The **scheduling panel** reads its own room: booked or free, `GET CURRENT` and `GET NEXT` for the
+    booked meeting holding the room and the next (`<start> <end> <organizer>` of the slot, or
+    `none`). BOOK and RELEASE are a momentary override that holds until the calendar's reading changes.
+  - A device with no calendar (the dev fleet has no world file) keeps its previous behavior exactly: the
+    booking service its fixed meeting day, the scheduling service its 8 and no rooms, the panel its buttons.
+- **Room audio** (#2774): the ceiling microphone is active, with its level up and mute moving now and
+  then, while someone is in the room (a no-show holds its slot with nobody in it, so it is idle). The
+  wireless pack transmits in the same hours, and its battery is a pure function of the calendar over
+  the 48 hours before now (`meetingsBetween`): it drains in use and recharges on its dock between
+  meetings, so the charge reads the same at any instant on any run, and a scripted problem can pin it (a dead battery, below).
+  The DSP opens a gate for every two attendees actually in the room, up to its four table and ceiling
+  strips, and raises their peak with the head count; the amplifier carries signal and warms while the
+  room is in use. Each sits at its noise floor otherwise. A device whose room holds no calendar
+  (`hasCalendar`) keeps its earlier drift unchanged.
+
+- **Conferencing, the video bar and the codec** (#2767): a held meeting is a call. The Kestrel VRoom
+  bar and the Relay C1 codec are in a call exactly when their room's meeting has somebody in it (a
+  no-show has none, a walk-in has one), at the first tick on or after it starts and ends; participants
+  open at half to all of who came and move inside it, content is shared now and then, and a meeting
+  that starts as the last one ends moves the call on in one tick. A dial or a hang-up on the device
+  holds against the calendar. A bar whose room has no calendar (the dev fleet has no world) keeps
+  #2754's own schedule, exactly as before. The bar's camera also counts the room (`status.video.people_count`,
+  in its status snapshot): the calendar's attendees in a held meeting or a walk-in, one fewer now and then as
+  the camera misses someone, and 0 in a no-show and outside any meeting; with no calendar it counts only the
+  call it is in (a dial's participants) and reads a steady 0 when idle. Its driver collects it as the
+  existing `people-count`, so the plan's `room-occupancy` rule fills `occupancy-count` in every room with
+  a bar, a huddle room included, with no rule of its own. A huddle room's temperature stays empty: no
+  device in it is the source of one.
+- **The meeting platform** (#2767, #2790): one account for the whole fleet, a conduit
+  ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)),
+  designed to the shape of a real cloud meeting platform's rooms and devices admin APIs under our own
+  names. The lab places it once, at the headquarters, covering every room of every site, and its
+  world owns the ids: a room is its system's name, a device has the stable id the world gives it.
+  - **The rooms list** is token-paged (`page_size`, `next_page_token`, the last room of the page, empty
+    on the last), one record per room: its `id`, its `name` (the name a company gave the room, "Curie" or
+    "Huddle 3", the world's label for it) with the room's `address` (its location) as a field beside it,
+    its `status` (`available`, `in-meeting`,
+    `offline`), the `meeting` it holds (`id`, `topic`, `start`, `participants`, empty when there is none),
+    the `booking` that holds it now (a booked no-show leaves the room available with its booking) and the
+    `next` booked one, all from the calendar. A room is in a meeting exactly when somebody is in it.
+  - **The devices list** is paged the same way, one record per device in those rooms that a meeting
+    platform manages (a codec, bar, controller, scheduling panel, camera or microphone, not a display or an
+    amplifier): its `id`, `name`, `room_id`, `type`, `status` (`online`, `offline`), `firmware` (the version
+    the device itself reports) and `last_seen`. The world's devices read online; a device the platform
+    holds itself, which no room names, keeps the status its own route gave it.
+  - **Webhooks**, signed as every post is: `room.meeting.started` and `room.meeting.ended` at each
+    calendar boundary, one a tick, none for what was already running when it was subscribed;
+    `room.participant.joined` and `room.participant.left` and `device.status.changed` when the platform's
+    own routes post them. Each names its `room_id` (and the `device_id` where it applies).
+  - **Omniglass learns it from configuration.** The `ucc-rooms` driver walks both lists in one poll each
+    (`request.paginate`, [paged lists](/admin/drivers/#paged-lists)) and fans each room's call state and headcount to the
+    system the lab's installer bound its id to, and each device's platform status and firmware to the
+    component bound to its id; `ucc-webhook` routes a post by the same ids. A room id or a device id nobody
+    bound (`zr-boardroom-b`, `zd-spare-bar`) lands in the conduit's unbound inbox.
+  - A platform with no world (the dev fleet) keeps its own rooms and devices, as before.
+- **PTZ camera and recording service** (#2775): the Gaze camera reports the people actually in its
+  room (nobody in a no-show), frames the group when a meeting starts (tracking on, a tighter shot for
+  fewer people) and returns to its home preset when it ends, holding still while the room is empty. The
+  recording service (#2757) is one account-wide cloud component, placed once through the manifest's
+  `services:` block and covering every room, with no recorder slot in any standard. It carries a
+  recording in progress for each recorded meeting in the rooms it covers (else its own room) and queues
+  it for ten minutes after it ends, and lists the rooms as a token-paged recordings list, one record
+  per room, which its driver walks and fans out to each room's system by the room id the lab's
+  installer bound, as the scheduling platform's rooms do. A service with no calendar keeps the old drift and lists
+  no room. The recording failure feed stays route-driven.
+- **Room control and switching** (#2776): the room is started and ended for its meetings. The Newtron
+  control processor holds the room's system power (`status.control.room_power`, read as `GET ROOMPOWER`) on
+  from (by default) two minutes before a booked meeting someone attends (at the start of a walk-in) to five minutes after
+  it ends, the window the displays wake in, and runs the start-meeting macro as it goes on and the end-meeting
+  macro as it goes to standby, the last one and the second it ran held beside it (`GET MACRO`). It also reads the room's temperature (`status.room.temperature_c`, `GET ROOMTEMP`), as a real processor polls a room sensor: the room warms with the people in a held meeting toward the setpoint plus a load per attendee and settles back between meetings and overnight, with small noise, and a processor with no calendar reads the setpoint with the same noise. Its driver collects it as `room-sensor-temperature`, and the plan's `room-temperature` calc rule carries it up to the room system's own `room-temperature`, as `room-occupancy` does for the people counter. The touch
+  panel wakes in the same window and its active page is idle, in-call while the meeting is held, and sharing
+  through the middle third of a meeting of half an hour or more, a no-show leaving it idle. The switcher routes
+  the conferencing input while a meeting is held, the lectern laptop through the sharing stretch and the empty
+  input between meetings and through a no-show, so it is on a real source exactly when the video bar in the
+  room is in a call; an operator's route inside a meeting holds until the meeting asks for another. The
+  extender carries a signal exactly while a meeting is held, its link staying the cable's. The room phase's `in_use` and
+  `sharing` are the two readings the room's devices share. A device whose room has no calendar keeps
+  its previous state. The bar's and the codec's content sharing is the same stretch (the phase's `sharing`), so
+  the switcher is on the laptop input exactly while the bar shares; a bar in a room with no calendar, or
+  in a call someone dialed, keeps its own random draw. An operator's share or stop holds until the calendar's sharing next changes.
+- **Rack power** (#2777): the Ferrite PDU's outlet load is a pure function of the calendar, not a
+  walk. Its outlets map to the room's gear by a fixed table in the profile (outlet 1 the video chain
+  of display, bar and codec, outlet 2 the DSP and the control processor, outlet 3 the amplifier,
+  outlet 4 nothing plugged in), so no new function and no look at another device: the gear is awake
+  by the displays' rule above (the phase's `in_use`, shared with the control processor) and each outlet reads a level for it (the video outlet and the
+  amplifier rise again while a meeting has somebody in the room). A switched-off outlet draws
+  nothing, the total is the outlets', and the energy counter accrues the total's draw each tick, so a
+  busy room's rack reads more by evening than an idle one's. The mains voltage stays noise. A PDU
+  whose room holds no calendar keeps its earlier random walk.
+
+#### Reading the calendar back
+
+The lab calendar is the ground truth a learner lays beside what Omniglass detected, so a lab server
+serves it: `GET /lab/calendar?start=&end=` (`omniglass lab calendar list`, #2770), gated by
+`simulation:read`, 404 on a server that is not a lab. It answers each entry's kind, window, site,
+building, room, system and an open `payload` (a meeting's origin, organizer, expected and actual
+headcount, outcome, slot and whether it is recorded; a scripted problem's `name`, `role`, `unplugged`,
+`loss_pct` and, when it pins a path, `pin_path` and `pin_value`), for rooms whose system is in the caller's system
+read scope, and `site`, `building`, `room` and `system` narrow it. A window is at most 31 days.
+
+The server does not ask a simulator and does not learn the calendar from collected data. It computes
+it with the functions the simulator uses, from the world file the lab's seed wrote into the data
+volume the server shares ([the world it holds](#the-world-it-holds)), so a route and a device in
+the same room cannot disagree. A lab with no world (no plan, the dev fleet) has an empty calendar.
+
+### Scripted problems
+
+Not everything on the calendar is a meeting. A scenario scripts **recurring problems** in
+`calendar.problems`: a display dark on Tuesday afternoons, a wireless pack that reads dead every Thursday, a
+codec that takes a firmware window every night. Each is scripted, not drawn: a **cadence** (daily; weekly on
+a weekday; monthly on a date or on the nth weekday), a UTC time of day and a duration, a **scope** (a
+standard, a site or its kind, or named rooms, resolved from the plan and the world) with the **role** of the
+room it lands on (a slot such as `main-display` or `wireless-mic`, never a product), and one
+**impairment**. Only one thing is drawn: with a `spread`, each room's occurrence starts a seeded whole number
+of minutes after the time, inside the cadence, so a fleet does not break at one instant. The calendar derives
+problems exactly as it derives meetings, from the world and the seed, so a month asked whole, day by day or
+from another process is the same month.
+
+A problem is a `problem` entry beside the meetings: its window, its room and a payload of `name`, `role` and
+the impairment (`unplugged`, `loss_pct` or a `pin` of a state path and a value). A reader of a meeting asks for the
+meeting kind alone and so never meets a problem; the readers of problems ask for the problem kind, the
+lab-only route for every kind, and `problemsNow` reads the device's own room in a template.
+
+**One executor registers them; one arbiter decides.** The simulator's problem executor reads the calendar
+through the clock and, for each device a problem is active on (the room it sits in and the slot it fills),
+registers the problem's wants as the window opens and releases them as it closes; a device does not
+re-implement a problem, and a device with no calendar is untouched. The executor writes to nothing itself.
+
+**The impairment arbiter** (`sim.Arbiter`, one per simulator engine) decides what a device suffers when several
+sources want something at once: the operator's impairment route, each scripted problem and, next, scenes. A
+source registers its wants under its own name (unplugged, delay, jitter, loss, a rate limit, and pins of state
+paths) and releases only its own, so clearing a problem never clears an operator's impairment and the reverse
+holds too. The arbiter resolves the same way every time:
+
+- **Unplugged** if any source wants it. **Loss, latency and jitter** take the highest wanted and a **rate
+  limit** the tightest.
+- For one **pinned path** the newest pin wins, a pin being as new as the moment its source first held that
+  path on that device. The losers are kept: as a winner releases, the next newest takes the path, and when
+  the last releases the path goes back to what it read before any pin held it.
+
+It is the only writer to the two seams that make a device suffer, the behavior-override set and the netns
+impairer, and a guard test fails the build if anything else calls them. Pins hold a path through the
+override seam, so the device's own behavior stops writing it while a pin is open. **Unplugged** and **loss**
+are the network's, applied by the impairer exactly as an operator's would be, so the same firewall and
+shaping that break a device on request break it on schedule. They need `--impairments` and `NET_ADMIN`;
+without them the simulator logs that the problem needs the network and is not applied, once per window, and
+the pins still apply.
+
+The sim is; Omniglass learns. Nothing is told to Omniglass: a collector learns of a problem by collecting from
+the broken device (an unreachable endpoint, a pinned reading, a lossy link), and an operator can lay the two
+side by side with the calendar. The meeting platform reads the same fact from the arbiter (which derives scripted problems from the
+calendar, whichever simulator serves the device) and not from the dark device: while a source, an operator
+or a problem, has a listed device unplugged, its entry on the platform's devices list reads `offline`,
+last seen when the problem began, and its room reads `offline` on the rooms list when the device is the
+room's codec or bar.
 
 ### A simulated service posts from the start
 
@@ -351,8 +654,8 @@ it in advance. The simulator plays the outside service, and so holds what that s
 the server's device list carries, for a simulated component with a webhook endpoint, the endpoint's
 path and signing secret, and the simulator calls the device's own subscribe route
 (`webhook.subscribe`) as the service's admin would. A webhook sender profile also names a provision
-route (`webhook.provision`), through which the simulator adds every identity bound on the component,
-so a meeting platform comes to speak for each system of its site (#1747).
+route (`webhook.provision`), through which the simulator adds every identity bound to a system on the component (a device id bound to a component is no room),
+so a meeting platform comes to speak for each system it is bound to (#1747); a lab's account takes its rooms and devices from its world instead (#2790).
 
 The fence is two facts an outpost cannot assert: the database carries the lab mark, and the component
 sits in `127.60.0.0/16`, which only the seed allocates. Outside a lab nothing is handed out, and a real
@@ -360,7 +663,7 @@ device's webhook never is.
 
 The account-wide meeting platform is the face the
 [fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners) is proven against:
-one service speaking for every room on its account, polled as records and posting batched state on a
+one service speaking for every room and device on its account, polled as paged records and posting batched state on a
 behavior every 30 seconds, so an account no one drives is still heard. One of its rooms is bound to
 nothing, so its values land in the conduit's unbound inbox until an operator binds it
 ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).

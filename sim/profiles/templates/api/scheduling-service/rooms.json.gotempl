@@ -1,0 +1,14 @@
+{{- $rooms := .State | get "status" | get "rooms" -}}
+{{- $p := pageKeys $rooms .Request.Query.next_page_token .Request.Query.page_size -}}
+{
+  "rooms": [
+  {{- $sep := "" }}
+  {{- range $id := $p.keys }}{{ $r := index $rooms $id }}{{ $sep }}
+    {{/* @field status.rooms.*.state string "booked while a booked meeting holds the room, else free" */}}
+    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "address": {{ marshal (or (index $r "address") "") }}, "state": {{ marshal (or (index $r "state") "free") }}, "today": {{ whole (index $r "today") }}, "remaining": {{ whole (index $r "remaining") }}, "current": {{ marshal (or (index $r "current") "") }}, "next_start": {{ whole (index $r "next_start") }}}
+  {{- $sep = "," }}
+  {{- end }}
+  ],
+  "page_size": {{ len $p.keys }},
+  "next_page_token": {{ marshal $p.next }}
+}

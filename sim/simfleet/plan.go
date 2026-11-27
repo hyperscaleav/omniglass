@@ -28,6 +28,9 @@ const (
 	// UCCTokenSecret is the simulated UCC platform's api token (#1282), the
 	// one its http api's X-UCC-Token header demands.
 	UCCTokenSecret = "sim-ucc-token"
+	// SchedTokenSecret is the simulated scheduling service's api token
+	// (#2765), the one its http api's X-Sched-Token header demands.
+	SchedTokenSecret = "sim-sched-token"
 	// CastKeySecret is the simulated Boreal Cast media player's api key
 	// (#893), sent in the header its API demands.
 	CastKeySecret = "sim-cast-key"
@@ -54,7 +57,11 @@ var AttachSecret = map[string]string{
 	"kestrel-relay-api":      KestrelLoginSecret,
 	"kestrel-gaze-api":       KestrelLoginSecret,
 	"tessellate-census-http": CensusKeySecret,
+	// Its raw-TCP band is the same sensor, offered to whoever may read the
+	// sensor's key (#2757).
+	"tessellate-census-feed": CensusKeySecret,
 	"ucc-rooms":              UCCTokenSecret,
+	"scheduling-service-api": SchedTokenSecret,
 	"boreal-cast-api":        CastKeySecret,
 	"recording-service-api":  RecordingKeySecret,
 	"lyra-arc-snmp":          CommunitySecret,
@@ -74,11 +81,14 @@ var AttachSecret = map[string]string{
 // protocol beside the one its product's driver speaks. The Boreal display's
 // SNMP agent only reads it, and its web admin switches it (#2649); the
 // Kestrel bar's https API is joined by the control socket its touch panel
-// drives, a held websocket (#2754). Planned only where it is asked for,
-// never fleet wide.
+// drives, a held websocket (#2754). Planned only where it is asked for, never
+// fleet wide.
 var Control = map[string]string{
 	"boreal-edge-snmp": "boreal-edge-web",
 	"kestrel-api":      "kestrel-ws",
+	// The Tessellate sensor's http API reads whether the room is vacant; its
+	// raw-TCP control band is the one that answers the head-count (#2757).
+	"tessellate-census-http": "tessellate-census-feed",
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -220,6 +230,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"recording-service-api": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "key": RecordingKeySecret}
 	},
+	// The scheduling service's https API on 443 (#2765), its key pinned on
+	// first use, its token in the header the service demands.
+	"scheduling-service-api": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(443)), "token": SchedTokenSecret}
+	},
 	// The UCC platform's https API on 443 (#1282), its key pinned on first
 	// use, its token in the header the platform demands.
 	"ucc-rooms": func(addr string, shift func(int) int) map[string]string {
@@ -230,6 +245,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// face (Control), never a product's own driver. 9443 needs no lift.
 	"kestrel-ws": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(9443)), "login": KestrelLoginSecret}
+	},
+	// The Tessellate sensor's raw-TCP control band on 5000 (#2757), its
+	// second face (Control): the band that answers COUNT?. 5000 needs no lift.
+	"tessellate-census-feed": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(5000))}
 	},
 	// The Boreal display's web admin on 80, behind its digest login: its
 	// control face (Control), never a product's own driver.

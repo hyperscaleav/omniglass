@@ -406,8 +406,16 @@ function Results(props: { entries: OutlineEntry[]; outlineRoots: LocationNode[];
               <span class="col-span-2 flex min-w-0 items-center gap-2 pr-4 @max-[40rem]:col-span-1">
                 <span class="flex-none text-base-content/45"><Icon size={16} /></span>
                 <span class="flex min-w-0 items-baseline">
+                  <Show when={e.name}>
+                    {(name) => (
+                      <>
+                        <span data-system-label class="min-w-0 shrink-[2] truncate font-semibold">{name()}</span>
+                        <span aria-hidden="true" class="mx-1.5 flex-none text-base-content/30">·</span>
+                      </>
+                    )}
+                  </Show>
                   <Show when={e.path.length > 0}><span class="mr-1.5 min-w-0 shrink-[999] truncate text-base-content/40">{e.path.join(" / ")} /</span></Show>
-                  <OutlineName kind={nameKind} label={e.label} class="min-w-0 shrink-0 max-w-full" />
+                  <OutlineName kind={e.name ? "address" : nameKind} label={e.label} class="min-w-0 shrink-0 max-w-full" />
                 </span>
               </span>
               <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{e.kind === "component" ? e.product : e.standard}</span>

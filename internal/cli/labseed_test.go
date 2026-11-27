@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // The lab's seed with no outpost (#1267), against a real database: the dev
@@ -400,19 +402,23 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 	if err := runLabScaleSeed(ctx, &out, "corporate", 3, lab.LoginUser, lab.LoginPassword, lab.FormatSiteOutpostTokenHashes(outposts), pushers, false, false, false); err != nil {
 		t.Fatalf("lab seed --systems 3: %v", err)
 	}
+	// The meeting platform is one account-wide component (#2790), so the plan
+	// declares it once, not once per site.
 	senders := map[string]int{} // site -> its platforms
+	total := 0
 	for _, site := range plan.Sites {
 		for _, p := range site.Pushers {
 			if p.Webhook {
 				senders[site.Name]++
+				total++
 			}
 		}
 	}
-	if len(senders) != len(plan.Sites) {
-		t.Fatalf("corporate at 3 declares platforms at %d of %d sites, want every one", len(senders), len(plan.Sites))
+	if total != 1 {
+		t.Fatalf("corporate at 3 declares %d platforms, want the one account-wide platform", total)
 	}
 	if res := lab.ParseSeedResult(out.String()); !res.Outpost || !strings.Contains(res.Summary, "3 systems") ||
-		!strings.Contains(res.Summary, fmt.Sprintf("%d webhook senders", len(plan.Sites))) {
+		!strings.Contains(res.Summary, fmt.Sprintf("%d webhook senders", total)) {
 		t.Fatalf("seed result %+v, want the outposts present, the size and the webhook senders named", res)
 	}
 	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
@@ -444,6 +450,12 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 		t.Errorf("%d outposts for %d sites", len(listed), len(plan.Sites))
 	}
 	addresses := map[string]string{}
+	var fleet []string
+	for _, site := range plan.Sites {
+		for _, s := range site.Systems {
+			fleet = append(fleet, s.Name)
+		}
+	}
 	for _, site := range plan.Sites {
 		name := labscenario.SiteOutpost(site.Name)
 		outpost, err := gw.GetOutpost(ctx, name, all)
@@ -457,8 +469,8 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := site.Totals.Components + senders[site.Name]; len(devices) != want {
-			t.Errorf("outpost %s simulates %d components, want the site's %d and its platform", name, len(devices), want)
+		if want := site.Simulated(); len(devices) != want {
+			t.Errorf("outpost %s simulates %d components, want the site's %d, its platform and any polled service", name, len(devices), want)
 		}
 		hooks, err := gw.OutpostSimWebhooks(ctx, name)
 		if err != nil {
@@ -473,9 +485,28 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 			t.Errorf("outpost %s holds %d webhooks to post, want its site's %d platforms", name, len(hooks), senders[site.Name])
 		}
 		for comp, h := range hooks {
-			if h.Path == "" || h.Secret == "" || !reflect.DeepEqual(h.Identities, rooms) {
-				t.Errorf("platform %s posts to %q (secret set %v) naming %v, want a path, a secret and its site's systems %v",
-					comp, h.Path, h.Secret != "", h.Identities, rooms)
+			// The account-wide platform speaks for every system of the fleet
+			// and for the devices it lists (#2790), so it names the whole
+			// fleet's rooms, not just its site's.
+			named := map[string]bool{}
+			for _, id := range h.Identities {
+				named[id] = true
+			}
+			for _, s := range fleet {
+				if !named[s] {
+					t.Errorf("platform %s names %v, want it to name system %s", comp, h.Identities, s)
+				}
+			}
+			// A device id is no room: the account lists its rooms, so the
+			// simulator is handed room ids alone, never the device ids bound
+			// on the same conduit (#2757).
+			for _, id := range h.Identities {
+				if strings.HasPrefix(id, "dev-") {
+					t.Errorf("platform %s is handed %q to add as a room, want room ids only", comp, id)
+				}
+			}
+			if h.Path == "" || h.Secret == "" {
+				t.Errorf("platform %s posts to %q (secret set %v), want a path and a secret", comp, h.Path, h.Secret != "")
 			}
 		}
 		for _, d := range devices {
@@ -488,7 +519,7 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 			addresses[d.Address] = d.ComponentID
 		}
 	}
-	if want := plan.Totals.Components + len(plan.Sites); len(addresses) != want {
+	if want := plan.Simulated(); len(addresses) != want {
 		t.Errorf("%d addresses for %d components and platforms", len(addresses), want)
 	}
 	if err := runLabScaleSeed(ctx, &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword,
@@ -771,5 +802,43 @@ func TestLabScaleSeedRefusesAStorylineItsPlanCannotHold(t *testing.T) {
 	err := runLabScaleSeed(context.Background(), &bytes.Buffer{}, "corporate", 3, lab.LoginUser, lab.LoginPassword, "", nil, false, false, true)
 	if err == nil || !strings.Contains(err.Error(), "hq-mr86-1") {
 		t.Fatalf("a 3-system lab with --health-history: %v, want a refusal naming the storyline's missing rooms", err)
+	}
+}
+
+// A scale lab's seed leaves each site outpost's world file for its simulator
+// (#2773): resolved from the scenario at the lab's size, one per site, each
+// the world the pure plan-to-world function gives, loadable by the simulator.
+func TestLabScaleSeedWritesEachSiteOutpostsWorldFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "world")
+	if err := writeLabWorlds("corporate", 20, dir); err != nil {
+		t.Fatal(err)
+	}
+	plan := corporateScalePlan(t, 20)
+	m, err := labscenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := labscenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := labscenario.SiteWorlds(m, cat, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, site := range plan.Sites {
+		outpost := labscenario.SiteOutpost(site.Name)
+		got, err := world.Load(filepath.Join(dir, outpost+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, _ := got.Marshal()
+		b, _ := want[outpost].Marshal()
+		if string(a) != string(b) {
+			t.Errorf("%s's world file is not the plan's world", outpost)
+		}
+	}
+	if err := writeLabWorlds("no-such-scenario", 20, dir); err == nil {
+		t.Error("an unknown scenario wrote worlds")
 	}
 }

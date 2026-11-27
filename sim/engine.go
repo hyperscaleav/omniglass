@@ -8,10 +8,13 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Engine manages all simulated devices for a site.
@@ -33,18 +36,37 @@ type Engine struct {
 	// obs counts what every device's faces were sent and how each request
 	// settled, kept by device id so a rebuilt device counts on.
 	obs *endpointObservation
+	// cal is the lab calendar (#2757) devices read through their clock.
+	cal atomic.Pointer[calendar.Calendar]
+	// clock is the simulated world's clock (#2800), real time unless set.
+	clock atomic.Pointer[Clock]
+	// world is the world the simulator holds (#2773), which a service reads
+	// to resolve a system to a room.
+	world atomic.Pointer[world.World]
+	// arb decides what each device suffers when several sources impair it
+	// (#2799); its readers (a platform's offline listing) ask it.
+	arb *Arbiter
+	// rooms is the memo of room readings every device reads through (#2797).
+	rooms roomMemo
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
 // tree (profiles.Templates() for the embedded catalog). A nil templates tree
 // is valid for profiles that render no templates.
 func NewEngine(store *profile.Store, templates fs.FS) *Engine {
-	return &Engine{
+	e := &Engine{
 		store:     store,
 		templates: templates,
 		obs:       newEndpointObservation(),
 	}
+	e.arb = NewArbiter(e.Now) // stamps an unplugged-since on the simulated world's clock
+	e.arb.Derive("scripted-problem", e.scriptedOffline)
+	return e
 }
+
+// Arbiter is the engine's impairment arbiter (#2799): the one writer to its
+// devices' override sets and to the network impairer.
+func (e *Engine) Arbiter() *Arbiter { return e.arb }
 
 // SetSessionPublisher attaches a publisher that receives every
 // SessionEvent (open / close / push) emitted by any persistent
@@ -151,7 +173,12 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		state = deepCopy(defaults)
 	}
 	dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, state)
+	// The device reads time through the engine's simulated clock (#2800),
+	// from the start, so its uptime anchor is seeded on the same clock its
+	// reads use.
+	dev.now = e.Now
 	dev.Product = snap.Product
+	dev.room = calendar.Room{Site: snap.SiteCode, Building: snap.Building, Room: snap.Room}
 	// Install the profile's defaults snapshot so templates and
 	// mutations on this device can read `{{ .Defaults.<path> }}` to
 	// reset state paths to their declared defaults (used by reboot
@@ -263,7 +290,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		}
 	}
 
-	push, err := compilePush(prof.Name, prof.Push)
+	push, err := compilePush(prof.Name, prof.Push, dev.calendarFuncs())
 	if err != nil {
 		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
 	}
@@ -609,6 +636,10 @@ func (e *Engine) SetHitReporter(f func(Hit)) {
 // engine's current seams, so a seam set after a device starts serving reaches
 // it without writing fields its listeners are reading.
 func (e *Engine) installSeams(dev *Device) {
+	dev.calSrc = e.Calendar
+	dev.worldSrc = e.World
+	dev.arbSrc = func() *Arbiter { return e.arb }
+	dev.memo = &e.rooms
 	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()

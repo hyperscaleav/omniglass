@@ -11,6 +11,7 @@ import {
 } from "../lib/identity_bindings";
 import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
+import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { answerConfirms } from "../lib/confirm.testkit";
@@ -66,13 +67,14 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { bindings?: IdentityBindings; unbound?: UnboundIdentities; canUpdate?: boolean; unseeded?: boolean; systems?: System[] } = {}) {
+function mount(opts: { bindings?: IdentityBindings; unbound?: UnboundIdentities; canUpdate?: boolean; unseeded?: boolean; systems?: System[]; locations?: Location[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   if (!opts.unseeded) {
     qc.setQueryData([...identityBindingsKey(CONDUIT)], opts.bindings ?? bound);
     qc.setQueryData([...unboundIdentitiesKey(CONDUIT)], opts.unbound ?? inbox);
   }
   qc.setQueryData([...SYSTEMS_KEY], opts.systems ?? systems);
+  qc.setQueryData([...LOCATIONS_KEY], opts.locations ?? []);
   qc.setQueryData([...COMPONENTS_KEY], components);
   qc.setQueryData([...ME_KEY], admin);
   const result = render(() => (
@@ -107,6 +109,24 @@ describe("IdentitiesPanel", () => {
     expect(owner.getAttribute("href")).toBe(`/systems/${uuidFor("boardroom-a")}`);
     expect(within(list).getAllByText("ucc-room-id").length).toBe(2);
     expect(within(list).getByText("and 2 more you cannot see")).toBeTruthy();
+  });
+
+  // A system owner is its name and its address (#2757), as everywhere a system
+  // is named: the room's name linked, the location it sits at beside it, and
+  // the picker's option reading the same two.
+  it("names a system owner with the address of the room it sits at, in the list and in the picker", () => {
+    const room = { id: uuidFor("room-12-01"), name: "hq-tower-12-01", label: "Hq Tower 12 01" } as unknown as Location;
+    const placed = systems.map((s) => (s.name === "boardroom-a" ? { ...s, label: "Curie", location_id: room.id, location: room.name } : s));
+    const q = mount({ systems: placed, locations: [room] });
+    const row = within(boundList(q)).getByRole("link", { name: /^Curie/ });
+    expect(row.getAttribute("href")).toBe(`/systems/${uuidFor("boardroom-a")}`);
+    expect(within(row).getByText("Hq Tower 12 01", { selector: "[data-system-address]" })).toBeTruthy();
+    // A system with no location has no address to add.
+    expect(within(boundList(q)).queryByText("Huddle North", { selector: "[data-system-address]" })).toBeNull();
+    fireEvent.click(q.getByRole("button", { name: "Bind zr-annex-1" }));
+    const picker = q.getByLabelText("Owner for zr-annex-1");
+    expect(within(picker).getByRole("option", { name: "Curie · Hq Tower 12 01" })).toBeTruthy();
+    expect(within(picker).getByRole("option", { name: "Annex" })).toBeTruthy();
   });
 
   it("links a component owner to the component's page", () => {

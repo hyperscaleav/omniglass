@@ -4,6 +4,16 @@
 # The panel mounted at a room's door that shows whether the room is booked
 # and what is next. It is not a touch panel: it controls nothing in the room,
 # so it answers the NVP line protocol with its room's booking alone (#896).
+#
+# The booking it shows is the lab calendar's (#2757, #2765): the sim is, and
+# Omniglass learns. A behavior reads the room's booked meetings through
+# `bookings` (booked entries alone: a no-show holds its room booked, a walk-in
+# is on no booking) and writes the room's booked or free state, the booked
+# meeting in the room now and the next booked one. Nothing is drawn and
+# nothing is fixed: the panel has no schedule of its own. BOOK and RELEASE
+# are the panel's own buttons, a momentary override: they hold until the
+# calendar's reading of the room next changes, which then takes over. With no
+# world the calendar never changes, so a button holds, as it always did.
 
 name: newtron-slate-5
 manufacturer: Newtron
@@ -22,7 +32,9 @@ interfaces:
   # NVP: the newtron-slate-nvp driver's line protocol (TCP 51325, CRLF lines,
   # no banner). GET BOOKING reports booked or free, BOOK takes the room and
   # RELEASE frees it; SUBSCRIBE BOOKING pushes "EVT BOOKING <state>" on
-  # change. GET NEXT reports the next meeting.
+  # change. GET NEXT reports the room's next booked meeting and GET CURRENT
+  # the booked meeting holding it now, each "<start> <end> <organizer>" in
+  # unix seconds of the booked slot, or "none".
   - name: nvp
     protocol: tcp
     port: 51325
@@ -50,6 +62,8 @@ interfaces:
           - { path: status.room.booking, value: "free" }
       - match: "GET NEXT"
         response: 'NEXT {{ .State | get "status" | get "room" | get "next_meeting" }}'
+      - match: "GET CURRENT"
+        response: 'CURRENT {{ .State | get "status" | get "room" | get "current_meeting" }}'
       - match: "SUBSCRIBE BOOKING"
         action: subscribe
         subject: "status.room.booking"
@@ -68,6 +82,24 @@ interfaces:
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
+# The room's booking, read from the lab calendar through the device's clock.
+# status.room.cal_booking is the calendar's last reading: the panel's own
+# booking follows it only when it changes, so a button press holds until then.
+behaviors:
+  - name: room_bookings
+    schedule:
+      interval: 10s
+      on_start: true
+    mutations:
+      - path: status.room.booking
+        value: '{{ $cal := "free" }}{{ if (bookings).booked }}{{ $cal = "booked" }}{{ end }}{{ if ne $cal .State.status.room.cal_booking }}{{ $cal }}{{ else }}{{ .State.status.room.booking }}{{ end }}'
+      - path: status.room.cal_booking
+        value: '{{ if (bookings).booked }}booked{{ else }}free{{ end }}'
+      - path: status.room.current_meeting
+        value: '{{ with (bookings).now }}{{ .slot_start }} {{ .slot_end }} {{ .organizer }}{{ else }}none{{ end }}'
+      - path: status.room.next_meeting
+        value: '{{ with (bookings).next }}{{ .slot_start }} {{ .slot_end }} {{ .organizer }}{{ else }}none{{ end }}'
+
 defaults:
   status:
     device:
@@ -76,6 +108,9 @@ defaults:
     room:
       # Whether the room is booked now: booked or free.
       booking: "free"
+      # The calendar's last reading of the room, which booking follows on a change.
+      cal_booking: "free"
+      current_meeting: "none"
       next_meeting: "none"
   configuration:
     device:

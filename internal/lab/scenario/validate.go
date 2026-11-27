@@ -51,6 +51,7 @@ type compiled struct {
 type compiledStandard struct {
 	name       string
 	systemType string
+	roomName   string
 	components []Count
 	slots      []SlotFill
 }
@@ -98,9 +99,12 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 	for _, a := range m.Archetypes {
 		probs = append(probs, checkArchetype(a, declared, archetypes)...)
 	}
+	probs = append(probs, checkRoomNames(m)...)
 	probs = append(probs, checkSiteBounds(m)...)
 	probs = append(probs, checkPushers(m, cat)...)
+	probs = append(probs, checkServices(m, cat)...)
 	probs = append(probs, checkHealthHistory(m)...)
+	probs = append(probs, checkCalendar(m)...)
 
 	if len(probs) > 0 {
 		sort.SliceStable(probs, func(i, j int) bool { return probs[i].Line < probs[j].Line })
@@ -119,7 +123,7 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
 	}
 	name := s.Name.Name
-	cs := compiledStandard{name: name, systemType: s.SystemType.Name}
+	cs := compiledStandard{name: name, systemType: s.SystemType.Name, roomName: strings.TrimSpace(s.RoomName)}
 
 	st, known := cat.Standard(name)
 	if !known {
@@ -217,7 +221,7 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 			continue
 		}
 		cs.components = append(cs.components, Count{Name: f.Product, Count: f.Count})
-		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count, Control: control[f.Slot]})
+		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count, Control: control[f.Slot], Platform: PlatformDeviceType(cat, f.Product)})
 	}
 	return cs, probs
 }
@@ -376,6 +380,35 @@ func checkPushers(m *Manifest, cat Catalog) []Problem {
 	return probs
 }
 
+// checkServices checks each polled service declaration (#2765): a name unique
+// among the pushers and services and a product the simulator serves (the lab
+// seeds it as a component, polled like any).
+func checkServices(m *Manifest, cat Catalog) []Problem {
+	var probs []Problem
+	add := func(line int, format string, args ...any) {
+		probs = append(probs, Problem{Line: line, Message: fmt.Sprintf(format, args...)})
+	}
+	seen := map[string]int{}
+	for _, p := range m.Pushers {
+		seen[p.Name.Name] = lineOr(p.Name.Line, p.Line)
+	}
+	for _, s := range m.Services {
+		name := s.Name.Name
+		switch {
+		case !legalName(name):
+			add(lineOr(s.Name.Line, s.Line), "service name %q is not a name (lowercase letters, digits and dashes, at most %d)", name, maxNameLen)
+		case seen[name] != 0:
+			add(lineOr(s.Name.Line, s.Line), "service %q has the name of a pusher or service on line %d", name, seen[name])
+		default:
+			seen[name] = lineOr(s.Name.Line, s.Line)
+		}
+		if _, ok := cat.Product(s.Profile.Name); !ok || cat.Simulated == nil || !cat.Simulated(s.Profile.Name) {
+			add(lineOr(s.Profile.Line, s.Line), "product %q of service %q is not one the simulator serves", s.Profile.Name, name)
+		}
+	}
+	return probs
+}
+
 func legalName(s string) bool { return len(s) <= maxNameLen && nameRule.MatchString(s) }
 
 func lineOr(line, fallback int) int {
@@ -392,4 +425,18 @@ func sortedSlots(m map[string]Ref) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// checkRoomNames holds each archetype's naming themes to the ones the scenario
+// package knows (#2757). An archetype naming none takes the default theme.
+func checkRoomNames(m *Manifest) []Problem {
+	var probs []Problem
+	for _, a := range m.Archetypes {
+		for _, t := range a.RoomNames {
+			if _, ok := roomThemes[t.Name]; !ok {
+				probs = append(probs, Problem{Line: lineOr(t.Line, a.Line), Message: fmt.Sprintf("archetype %q names the room theme %q, which is not one of %s", a.Name.Name, t.Name, strings.Join(RoomThemes(), ", "))})
+			}
+		}
+	}
+	return probs
 }

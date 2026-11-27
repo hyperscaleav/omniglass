@@ -29,6 +29,7 @@ type searchEntityBody struct {
 	Label        string `json:"label,omitempty" doc:"The entity's display label, when it has one"`
 	LocationPath string `json:"location_path,omitempty" doc:"The locations it sits under, outermost first, joined with ' / '. Empty for a component that has no location of its own and is in a system; its system field says where it is"`
 	System       string `json:"system,omitempty" doc:"A component's primary system, when it has one"`
+	Location     string `json:"location,omitempty" doc:"A system's address: the label (the name when it has none) of the location it sits at, when the caller may read that location. A company names its rooms (the system's label) and addresses them (the location), and the console shows both"`
 }
 
 type searchCatalogBody struct {
@@ -139,7 +140,11 @@ func registerSearchRoutes(api huma.API, a *authenticator, gw storage.Gateway, lo
 			out.Body.Locations = append(out.Body.Locations, searchEntityBody{ID: l.ID, Name: l.Name, Label: l.Label, LocationPath: locationPathOf(l.PathSegments, true)})
 		}
 		for _, s := range found.Systems {
-			out.Body.Systems = append(out.Body.Systems, searchEntityBody{ID: s.ID, Name: s.Name, Label: s.Label, LocationPath: locationPathOf(s.PathSegments, false)})
+			b := searchEntityBody{ID: s.ID, Name: s.Name, Label: s.Label, LocationPath: locationPathOf(s.PathSegments, false)}
+			if s.LocationID != nil {
+				b.Location = found.SystemPlaces[*s.LocationID]
+			}
+			out.Body.Systems = append(out.Body.Systems, b)
 		}
 		for _, c := range found.Components {
 			b := searchEntityBody{ID: c.ID, Name: c.Name, Label: c.Label, LocationPath: locationPathOf(c.PathSegments, false)}

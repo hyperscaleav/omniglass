@@ -183,12 +183,18 @@ templates:
     name: divisible-conference
     label: Divisible Conference
     description: >-
-      One side of a combinable space: two displays and two room microphones each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.
+      One side of a combinable space: two displays, two room microphones and a wireless microphone each, with one DSP, amplifier and power conditioner rack shared by both sides, the shared-component quorum case.
     standard:
       slots:
         - name: video-bar
           label: Video Bar
           accepted_types: [video-bar]
+        - name: camera
+          label: Camera
+          accepted_types: [camera]
+        - name: codec
+          label: Codec
+          accepted_types: [codec]
         - name: main-display
           label: Main Display
           quorum: 2
@@ -197,18 +203,39 @@ templates:
           label: Room Microphone
           quorum: 2
           accepted_types: [ceiling-mic]
+        - name: wireless-mic
+          label: Wireless Microphone
+          accepted_types: [wireless-mic]
         - name: dsp
           label: DSP
           accepted_types: [dsp]
         - name: amplifier
           label: Amplifier
           accepted_types: [amplifier]
+        - name: control-system
+          label: Control System
+          accepted_types: [control-processor]
+        - name: video-switcher
+          label: Video Switcher
+          accepted_types: [presentation-switcher]
+        - name: display-endpoint
+          label: Display Endpoint
+          accepted_types: [av-extender]
+        - name: power
+          label: Power Conditioner
+          accepted_types: [power-device]
         - name: touch-control
           label: Touch Control
           accepted_types: [touch-panel]
         - name: scheduling-panel
           label: Scheduling Panel
           accepted_types: [scheduling-panel]
+        - name: people-counter
+          label: People Counter
+          accepted_types: [occupancy-sensor]
+        - name: projection
+          label: Projection
+          accepted_types: [projector]
       metrics:
         - { name: room-temperature }
         - { name: occupancy-count }

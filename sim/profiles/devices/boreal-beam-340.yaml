@@ -15,6 +15,13 @@
 # serial (.5.2.0) sit where the Edge keeps them; firmware at .5.1.0 is the
 # Beam's own (the Edge withholds it from SNMP on purpose). The projector's
 # own branch is .6: light-source hours, shutter, input, temperature.
+#
+# In a lab with a calendar (#2757, #2768) the projector follows its room's
+# meetings like the Edge display: on and on hdmi1 two minutes before a booked
+# meeting someone will attend (at the start of a walk-in), standby five
+# minutes after it ends, a no-show leaves it as it was. The light source
+# ages only while it is on, so its hours grow only around held meetings.
+# The temperature and the shutter stay noise.
 
 name: boreal-beam-340
 manufacturer: Boreal
@@ -123,6 +130,31 @@ computed:
 # hours, standby adds none. A scenario timeline can run this faster to
 # walk the source toward its service threshold.
 behaviors:
+  # The panel follows the room's meetings, read off the lab calendar (#2768)
+  # through the device's own clock: it wakes (power on, the conferencing input)
+  # two minutes before a booked meeting someone will attend, or at the start
+  # of a walk-in, and sleeps (standby) five minutes after the meeting ends. A
+  # no-show wakes nothing and leaves it as it was. A room with no calendar is
+  # left alone. An operator's change in the middle of a meeting holds: the
+  # wake is the edge, not a level held every tick.
+  - name: room_meeting
+    schedule:
+      interval: 30s
+      on_start: true
+    mutations:
+      - path: status.sim.busy
+        value: '{{ $p := roomPhase }}{{ or $p.call_active (eq $p.occupancy "waking") }}'
+      - path: status.sim.known
+        value: '{{ (roomPhase).scheduled }}'
+      - path: status.sim.until
+        value: '{{ $p := roomPhase }}{{ if $p.call_active }}{{ $p.use_until }}{{ else }}{{ .State.status.sim.until }}{{ end }}'
+      - path: status.device.power
+        value: '{{ $s := .State.status.sim }}{{ if $s.busy }}{{ if $s.awake }}{{ .State.status.device.power }}{{ else }}on{{ end }}{{ else if and $s.known (ge now $s.until) }}standby{{ else }}{{ .State.status.device.power }}{{ end }}'
+      - path: status.projector.input
+        value: '{{ $s := .State.status.sim }}{{ if and $s.busy (not $s.awake) }}hdmi1{{ else }}{{ .State.status.projector.input }}{{ end }}'
+      - path: status.sim.awake
+        value: '{{ $s := .State.status.sim }}{{ or $s.busy (lt now $s.until) }}'
+
   - name: light_source_aging
     schedule:
       interval: 60s
@@ -149,6 +181,11 @@ defaults:
       shutter: open
       input: hdmi1
       temperature: 36
+    sim:
+      busy: false
+      known: false
+      awake: false
+      until: 0
     network:
       ipv4:
         address: ""

@@ -295,6 +295,17 @@ export default function Outline(props: {
                             the cell) and truncates only once the path is down to its
                             ellipsis. At the narrowest the path steps aside entirely,
                             and the whole of it stays on hover. */}
+                        {/* A room is its name and its address (#2757): the system a
+                            location wears leads the row, the address (the location,
+                            with its path) follows beside it. */}
+                        <Show when={soleName(n())}>
+                          {(name) => (
+                            <>
+                              <span data-system-label class="min-w-0 shrink-[2] truncate font-semibold">{name()}</span>
+                              <span aria-hidden="true" class="flex-none text-base-content/30">·</span>
+                            </>
+                          )}
+                        </Show>
                         <Tooltip as="span" class="flex min-w-0 items-baseline" content={n().chain.map((c) => c.label).join(" / ")}>
                           <Show when={n().chain.length > 1}>
                             <span class="min-w-[1.25em] shrink-[999] truncate font-medium text-base-content/55 @max-[28rem]:hidden">
@@ -304,7 +315,7 @@ export default function Outline(props: {
                             </span>
                             <span class="mx-1.5 shrink-0 text-base-content/30 @max-[28rem]:hidden">/</span>
                           </Show>
-                          <OutlineName kind="location" label={n().chain[n().chain.length - 1].label} class="min-w-0 max-w-full shrink-0" />
+                          <OutlineName kind={soleName(n()) ? "address" : "location"} label={n().chain[n().chain.length - 1].label} class="min-w-0 max-w-full shrink-0" />
                         </Tooltip>
                       </>
                     );
@@ -369,6 +380,10 @@ export default function Outline(props: {
     </div>
   );
 }
+
+// The name of the one system a location wears, when the location's own label
+// is only its address (#2757); a system named for its room has none to add.
+const soleName = (n: LocationNode): string | undefined => (n.id !== "unplaced" && n.systems.length === 1 && n.systems[0].address ? n.systems[0].label : undefined);
 
 const KIND_LABEL: Record<AddKind, string> = { location: "Location", system: "System", component: "Component" };
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/egress"
 	"github.com/hyperscaleav/omniglass/internal/heartbeat"
+	labpkg "github.com/hyperscaleav/omniglass/internal/lab"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
@@ -216,6 +218,11 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	// window on the Platform health page.
 	ring := closedloop.NewRing(api.NewSimLoopSource(busSrv, gw, loop.Cadence), time.Now, closedloop.RingSpan, loop.Every)
 	apiOpts := []api.Option{api.WithClosedLoopRing(ring), api.WithVersion(version), api.WithSecureCookies(c.SecureCookies), api.WithTrustedProxies(trust), api.WithNatsURL(natsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimHub(busSrv), api.WithOutpostRunner(busSrv), api.WithLab(lab), api.WithRequestRecorder(self.rec)}
+	if lab {
+		// The lab calendar the simulators act out (#2770): the world files the
+		// lab's seed wrote into the data volume this server shares.
+		apiOpts = append(apiOpts, api.WithLabCalendar(api.WorldDirCalendar(filepath.Join(c.DataDir, filepath.Base(labpkg.WorldDir)))))
+	}
 	// A recorded model, when one is named, is the omnibot a run plays
 	// (#2121); a live provider is its own slice.
 	if c.OmnibotReplay != "" {
