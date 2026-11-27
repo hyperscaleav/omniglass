@@ -72,6 +72,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// simulator to prove the world reaches it, so naming the shipped
 		// product is what it tests (#2773).
 		"internal/lab/world_integration_test.go": true,
+		// Reads the corporate lab's conference-room microphone, DSP and
+		// amplifier off the live simulator to prove they read their room's
+		// meeting, so naming the shipped products is what it tests (#2774).
+		"internal/lab/room_audio_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()
