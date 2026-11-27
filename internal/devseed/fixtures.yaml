@@ -545,6 +545,18 @@ components:
   - key: sched-b
     product: newtron-slate-5
     location: boardroom-b
+  - key: census-a
+    product: tessellate-census-c1
+    location: boardroom-a
+  - key: proj-a
+    product: boreal-beam-340
+    location: boardroom-a
+  - key: census-b
+    product: tessellate-census-c1
+    location: boardroom-b
+  - key: proj-b
+    product: boreal-beam-340
+    location: boardroom-b
   # The divisible pair's ONE audio rack, physically in room A, serving both
   # sides through zones: the same two components satisfy both sides' dsp and
   # amplifier slots (the shared-component quorum case, #802; the old "shared
@@ -1457,6 +1469,12 @@ slot_assignments:
     slot: scheduling-panel
     component: sched-a
   - system: boardroom-a
+    slot: people-counter
+    component: census-a
+  - system: boardroom-a
+    slot: projection
+    component: proj-a
+  - system: boardroom-a
     slot: dsp
     component: div-dsp
   - system: boardroom-a
@@ -1483,6 +1501,12 @@ slot_assignments:
   - system: boardroom-b
     slot: scheduling-panel
     component: sched-b
+  - system: boardroom-b
+    slot: people-counter
+    component: census-b
+  - system: boardroom-b
+    slot: projection
+    component: proj-b
   - system: boardroom-b
     slot: dsp
     component: div-dsp

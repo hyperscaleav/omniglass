@@ -252,7 +252,7 @@ computed:
 #   4. derive vacant = (count == 0)
 # Order matters: mutations run in list order against the same state
 # map, so step 3 sees both the pre-step prev (step 1) and the post-step
-# count (step 2). With no calendar the room is empty. The raw-TCP and hex
+# count (step 2). With no calendar the old walk runs. The raw-TCP and hex
 # bands, and the push subscriptions, publish the count this writes.
 behaviors:
   - name: occupancy_drift
@@ -263,10 +263,12 @@ behaviors:
       - path: status.occupancy.people_count_prev
         value: "{{ .State.status.occupancy.people_count }}"
       # 2. The calendar's attendees, less the one who stepped out 15% of
-      #    ticks. `actual` is zero for a no-show, so no-shows read empty.
+      #    ticks. `actual` is zero for a no-show, so no-shows read empty. A
+      #    calendar always has a next meeting within its horizon, so neither
+      #    meetingNow nor meetingNext means no calendar: the old walk.
       - path: status.occupancy.people_count
         value: >-
-          {{ with meetingNow }}{{ if and (gt .actual 1) (chance 0.15) }}{{ sub .actual 1 }}{{ else }}{{ .actual }}{{ end }}{{ else }}0{{ end }}
+          {{ if or meetingNow meetingNext }}{{ with meetingNow }}{{ if and (gt .actual 1) (chance 0.15) }}{{ sub .actual 1 }}{{ else }}{{ .actual }}{{ end }}{{ else }}0{{ end }}{{ else }}{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}{{ end }}
       # 3. Derive the occupancy change signal from new-vs-prev. `round 0`
       #    stores a whole-numbered value that the mutation pipeline
       #    coerces back to int64, so `sub` here returns int64 and the

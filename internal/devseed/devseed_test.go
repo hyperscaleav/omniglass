@@ -1031,14 +1031,14 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		// from its physical home in A, so both halves name dsp-1 and amp-1.
 		{room: "boardroom-a", want: map[string]string{
 			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
-			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1",
 		}},
 		// B's own devices are the first OF THEIR OWN ROOM (the
 		// placement-scoped index at work, not duplicates), while the rack's
 		// names stay the ones it minted in A.
 		{room: "boardroom-b", want: map[string]string{
 			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
-			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1", "people-counter": "sensor-1", "projection": "projector-1",
 		}},
 	} {
 		rows, err := conn.Query(ctx, `
@@ -1606,7 +1606,7 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 	mr := map[string]int{"video-bar": 1, "main-display": 1, "touch-control": 1, "scheduling-panel": 1}
 	quorums := map[string]map[string]int{
 		"mr55": mr, "mr65": mr, "mr75": mr, "mr86": mr, "mr98": mr,
-		"divisible-conference": {"video-bar": 1, "main-display": 2, "room-mic": 2, "dsp": 1, "amplifier": 1, "touch-control": 1, "scheduling-panel": 1},
+		"divisible-conference": {"video-bar": 1, "main-display": 2, "room-mic": 2, "dsp": 1, "amplifier": 1, "touch-control": 1, "scheduling-panel": 1, "people-counter": 1, "projection": 1},
 		"classroom":            {"class-display": 1, "instructor-mic": 1, "touch-control": 1},
 		"training-room": {
 			"front-display": 2, "ceiling-mic": 2, "presenter-mic": 1, "podium-mic": 1,

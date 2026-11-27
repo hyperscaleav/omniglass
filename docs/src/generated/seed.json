@@ -2803,6 +2803,13 @@
       "accepted_types": [
        "occupancy-sensor"
       ]
+     },
+     {
+      "name": "projection",
+      "label": "Projection",
+      "accepted_types": [
+       "projector"
+      ]
      }
     ],
     "metrics": [

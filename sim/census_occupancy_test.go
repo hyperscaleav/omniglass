@@ -106,20 +106,32 @@ func TestCensusOccupancyFollowsTheLabCalendar(t *testing.T) {
 	}
 }
 
-// With no calendar the room is empty: the counter reports zero and vacant
-// rather than inventing a crowd of its own.
-func TestCensusOccupancyIsEmptyWithoutACalendar(t *testing.T) {
+// With no calendar (the dev fleet holds no world) the counter keeps the walk it
+// had before the calendar: a room with no calendar is left as it was. Its
+// count stays whole and inside [0, 14], moves, and keeps vacant and the signal
+// consistent with it.
+func TestCensusOccupancyWalksWithoutACalendar(t *testing.T) {
 	at := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
 	d, _, e := censusDevice(t, 7, calendar.Room{Site: "hq", Building: "tower", Room: "r101"}, &at)
 	e.SetCalendar(nil)
-	for i := 0; i < 20; i++ {
+	valid := map[string]bool{"increased": true, "decreased": true, "steady": true}
+	seen := map[int64]bool{}
+	for i := 0; i < 200; i++ {
 		d.TickBehavior("occupancy_drift")
 		at = at.Add(20 * time.Second)
+		count, _, err := toFloat(d.ReadPath("status.occupancy.people_count"))
+		if err != nil || count < 0 || count > 14 || count != float64(int64(count)) {
+			t.Fatalf("tick %d: people_count = %v (%v), want a whole number in [0,14]", i, d.ReadPath("status.occupancy.people_count"), err)
+		}
+		seen[int64(count)] = true
+		if ev, _ := d.ReadPath("status.occupancy.last_event").(string); !valid[ev] {
+			t.Fatalf("tick %d: last_event = %v", i, d.ReadPath("status.occupancy.last_event"))
+		}
+		if want := map[bool]string{true: "true", false: "false"}[count == 0]; fmt.Sprint(d.ReadPath("status.occupancy.vacant")) != want {
+			t.Fatalf("tick %d: vacant = %v with people_count %v", i, d.ReadPath("status.occupancy.vacant"), count)
+		}
 	}
-	if got := fmt.Sprint(d.ReadPath("status.occupancy.people_count")); got != "0" {
-		t.Fatalf("with no calendar people_count = %s", got)
-	}
-	if got := fmt.Sprint(d.ReadPath("status.occupancy.vacant")); got != "true" {
-		t.Fatalf("with no calendar vacant = %s", got)
+	if len(seen) < 3 {
+		t.Fatalf("with no calendar the count only took %d values over 200 ticks: %v", len(seen), seen)
 	}
 }
