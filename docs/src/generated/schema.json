@@ -4315,6 +4315,12 @@
       "nullable": true,
       "fk": true,
       "fk_target": "event_rule.id"
+     },
+     {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
      }
     ],
     "uniques": [

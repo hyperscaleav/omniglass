@@ -1,0 +1,11 @@
+# The selftest's list with a caption on a step: a marketing capture has none, so
+# the run fails before the lab starts, naming the shot and the step.
+lab: { scenario: dev, systems: 1 }
+shots:
+  - id: broken
+    kind: loop
+    alt: A loop that is never recorded.
+    start: /explore
+    steps:
+      - click: 'button'
+        caption: Say what this does.

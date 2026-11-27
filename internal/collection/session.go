@@ -93,6 +93,30 @@ const defaultSessionTimeout = 5 * time.Second
 // ErrSessionClosed is the answer to an exchange over a torn-down session.
 var ErrSessionClosed = errors.New("collection: session torn down")
 
+// ErrSessionEstablishing marks an exchange that could not run because its
+// session is still making its first connection (#2755): it has never been up,
+// so nothing has failed yet. A poll that meets it records no collection-failed;
+// a session that is down, recovering or rejected never answers with it.
+var ErrSessionEstablishing = errors.New("collection: session establishing")
+
+// sessionNotUpError is an exchange refused because its session holds no
+// connection to lend, naming the state and its reason. One whose session has
+// never been up (establishing, or "" before the machine's first report) is
+// ErrSessionEstablishing.
+type sessionNotUpError struct {
+	target string
+	state  SessionState
+	reason string
+}
+
+func (e *sessionNotUpError) Error() string {
+	return fmt.Sprintf("collection: session to %s is %s: %s", e.target, e.state, e.reason)
+}
+
+func (e *sessionNotUpError) Is(target error) bool {
+	return target == ErrSessionEstablishing && (e.state == SessionEstablishing || e.state == "")
+}
+
 // SessionBackoff is the wait before the given attempt: zero for attempt 0
 // (an immediate redial after a stable connection dropped), else
 // SessionBackoffBase doubled per attempt, capped at SessionBackoffMax, scaled
@@ -469,7 +493,10 @@ func (s *Session) State() (SessionState, string) {
 // connection held otherwise, the exchange fails at once naming the state and
 // its reason: a down device must not stall the outpost's tick, and a poll never
 // reconnects on its own (the session owns the connection). A down session
-// lends the connection it is proving, so an answer can prove it.
+// lends the connection it is proving, so an answer can prove it. Either
+// refusal from a session that has never been up (the first dial outlasting
+// the wait, or a first attempt failed inside the budget) is
+// ErrSessionEstablishing, so a poll can tell "not yet" from a failure (#2755).
 func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = s.cfg.Timeout
@@ -508,7 +535,7 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 			return "", fmt.Errorf("collection: session to %s is %s: %w", s.cfg.Target, state, refusal)
 		}
 		if !dialing {
-			return "", fmt.Errorf("collection: session to %s is %s: %s", s.cfg.Target, state, reason)
+			return "", &sessionNotUpError{target: s.cfg.Target, state: state, reason: reason}
 		}
 		if wait == nil {
 			t := time.NewTimer(timeout)
@@ -518,7 +545,7 @@ func (s *Session) Exchange(ctx context.Context, line string, reply *driver.Reply
 		select {
 		case <-changed:
 		case <-wait:
-			return "", fmt.Errorf("collection: session to %s is %s: %s", s.cfg.Target, state, reason)
+			return "", &sessionNotUpError{target: s.cfg.Target, state: state, reason: reason}
 		case <-ctx.Done():
 			return "", fmt.Errorf("collection: session to %s: %w", s.cfg.Target, ctx.Err())
 		}

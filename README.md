@@ -12,9 +12,13 @@ It is two things at once, on purpose:
   `/docs`. Concepts and data flows are taught *in the product*, against real or
   simulated data, not just described in a wiki.
 
-> **Status: early, and public from the first commit.** Omniglass is being rebuilt in
-> the open, one vertical slice at a time. Expect the surface to move. The architecture
-> is published ahead of the code at
+> [!CAUTION]
+> **Pre-production software. Do not use it in production yet.** Omniglass has not
+> reached 1.0. Until it does, breaking changes can land in any release, at any time,
+> without notice.
+>
+> It is being rebuilt in the open, one vertical slice at a time, and the architecture is
+> published ahead of the code at
 > [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
 
 ## Design principles
@@ -45,7 +49,8 @@ make                      # builds bin/omniglass and the omniglass:dev image, wi
 [release binary](https://github.com/hyperscaleav/omniglass/releases), run `omniglass lab run`.
 The console is at `http://127.0.0.1:8080/web`, signed in as `dev` / `dev`.
 [Your first ten minutes](https://docs.omniglass.hyperscaleav.com/start/first-ten-minutes/) is the guide:
-what runs, the guided walkthroughs to follow, and why Docker is required.
+bring the lab up, then break a device in the console in ten steps. What a lab runs, and why Docker is
+required, is on [the lab page](https://docs.omniglass.hyperscaleav.com/developer/lab/).
 
 ## Repository layout
 

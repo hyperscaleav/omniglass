@@ -1,8 +1,9 @@
 // Package releasenotes renders a release's notes from the commits it ships,
 // grouped by conventional-commit type (#2142). The repo squash-merges, so each
-// commit subject on main is a PR title, `<type>(<scope>)!: <description> (#<n>)`,
-// and a cherry-pick onto a release branch keeps it. Nothing here touches git or
-// the network: the command reads the log and hands the commits in.
+// commit subject on main is a PR title, `<type>(<scope>)!: <description> (#<n>)`.
+// release-please writes the published notes (ADR-2652); this renders the same
+// grouping for a local preview and lists the PRs a release ships. Nothing here
+// touches git or the network: the command reads the log and hands the commits in.
 package releasenotes
 
 import (
@@ -38,6 +39,46 @@ var (
 	breakingRe = regexp.MustCompile(`(?m)^BREAKING[ -]CHANGE:`)
 )
 
+// Change is one commit read as a conventional commit.
+type Change struct {
+	// Type is the lower-cased conventional-commit type, empty when the
+	// subject is not a conventional commit.
+	Type string
+	// Scope is the parenthesized scope as written, "(lab)", or empty.
+	Scope string
+	// Breaking is a `!` after the type or a `BREAKING CHANGE:` footer.
+	Breaking bool
+	// Description is the subject after the type, or the whole subject when
+	// it is not a conventional commit, without the PR suffix.
+	Description string
+	// PR is the squash merge's PR number, 0 when the subject names none.
+	PR int
+}
+
+// Parse reads a commit as a conventional commit, the shape a squash merge on
+// main has: `<type>(<scope>)!: <description> (#<n>)`. It reports false for an
+// empty subject. cmd/releasenotes, the local preview and the list of PRs a
+// release ships, is the only reader.
+func Parse(c Commit) (Change, bool) {
+	subject := strings.TrimSpace(c.Subject)
+	if subject == "" {
+		return Change{}, false
+	}
+	ch := Change{}
+	if m := prSuffixRe.FindStringSubmatch(subject); m != nil {
+		ch.PR, _ = strconv.Atoi(m[1])
+		subject = strings.TrimSpace(subject[:len(subject)-len(m[0])])
+	}
+	ch.Description = subject
+	if m := subjectRe.FindStringSubmatch(subject); m != nil {
+		ch.Type = strings.ToLower(m[1])
+		ch.Scope = m[2]
+		ch.Breaking = m[3] == "!" || breakingRe.MatchString(c.Body)
+		ch.Description = strings.TrimSpace(m[4])
+	}
+	return ch, true
+}
+
 type group struct {
 	title string
 	lines []string
@@ -64,36 +105,31 @@ func Render(in Input) Notes {
 	seen := map[int]bool{}
 
 	for _, c := range in.Commits {
-		subject := strings.TrimSpace(c.Subject)
-		if subject == "" {
+		ch, ok := Parse(c)
+		if !ok {
 			continue
 		}
-		pr := 0
-		if m := prSuffixRe.FindStringSubmatch(subject); m != nil {
-			pr, _ = strconv.Atoi(m[1])
-			subject = strings.TrimSpace(subject[:len(subject)-len(m[0])])
-		}
+		pr := ch.PR
 		if pr > 0 && !seen[pr] {
 			seen[pr] = true
 			prs = append(prs, pr)
 		}
 
-		section, desc := other, subject
-		if m := subjectRe.FindStringSubmatch(subject); m != nil {
-			desc = strings.TrimSpace(m[4])
+		section, desc := other, ch.Description
+		if ch.Type != "" {
 			switch {
-			case m[3] == "!" || breakingRe.MatchString(c.Body):
+			case ch.Breaking:
 				section = breaking
-			case strings.EqualFold(m[1], "feat"):
+			case ch.Type == "feat":
 				section = features
-			case strings.EqualFold(m[1], "fix"):
+			case ch.Type == "fix":
 				section = fixes
-			case strings.EqualFold(m[1], "perf"):
+			case ch.Type == "perf":
 				section = perf
 			}
 			if section == other || section == breaking {
 				// Keep the type where the section does not already say it.
-				desc = strings.ToLower(m[1]) + m[2] + ": " + desc
+				desc = ch.Type + ch.Scope + ": " + desc
 			}
 		}
 		line := "- " + desc

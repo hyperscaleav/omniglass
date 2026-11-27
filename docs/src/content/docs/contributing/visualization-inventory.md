@@ -21,7 +21,7 @@ An **entry** is one place the console draws a visualization: one component mount
 | Pages | Every console route that shows it (SPA routes, not API routes, so a path parameter is written `<id>`). Blades (the stacked detail panels) are hosted by `Explore`, `LocationZoom`, `SystemZoom` and `ComponentLeaf` through `fleetRegistry`, so a blade entry lists those four routes. |
 | Primitive | What it shows: `metric`, `property`, `event`, `log`, or `derived` (a count or health the server computed from those: the fleet view, the health read, the alarm read). |
 | Source | The API read or helper that feeds it. |
-| Live behavior | `poll N s` is a `refetchInterval`; `mount+focus` is TanStack's default (fetch on mount and again when the window regains focus, no interval); `static` is read once with focus refetch off; `follows parent` means it draws what its host already fetched. |
+| Live behavior | `poll N s` is a `refetchInterval`; `mount+focus` is TanStack's default (fetch on mount and again when the window regains focus, no interval); `static` is read once with focus refetch off; `live` refetches when the tab's one stream names a topic the read shows (`liveQuery`, ADR-2731); `follows parent` means it draws what its host already fetched. |
 | Widget | The widget in epic #1826's vocabulary (metric chart, sparkline row, metric card, property distribution, property timeline, event list, log list, timeline), or `new: <name>` where the vocabulary has nothing that fits. |
 
 The poll constants, for reference: `LEAF_POLL_MS` 5 s and `LEAF_OUTPOST_POLL_MS` 10 s
@@ -62,7 +62,7 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 |---|---|---|---|---|---|---|
 | V05 | `Header` `Fact` cards: platform health, version, up for (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` (`lib/platformhealth.ts`, `GET /views/platform`) | poll 5 s | metric card |
 | V06 | `Stat` tiles: locations, open alarms, systems, collectors, platform health (`pages/Home.tsx`) | `/` | derived | `fleetView`, `listLocations`, `listOutposts`, `platformView` | mount+focus | metric card |
-| V07 | `uptime-kpi` card, uptime over 30 days (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | derived | `systemHealth` transitions (`lib/health.ts`) | poll 5 s | metric card |
+| V07 | `uptime-kpi` card, the availability KPI over a fixed rolling 30 days whatever the picker holds (`components/SystemDetail.tsx`, `lib/uptime.ts`) | `/systems/<id>`, its blade | derived | the current, unranged `systemHealth` read: its 30-day transitions and `carried_in` (`lib/health.ts`) | live: refetches on the `system:<id>` topic (ADR-2731) | metric card |
 | V08 | `leaf-vitals` list, the latest value per effective metric with a live dot and per-endpoint spread (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | metric | `effectiveMetrics` (`lib/component_leaf.ts`) | poll 5 s | metric card (no series; the only metric surface with no chart or sparkline) |
 | V09 | `Count` per catalog row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each catalog's own list read, on the list page's query key | mount+focus | metric card |
 | V10 | `explore-counts` line and the "need attention" chip, worded and counted by `lib/attention` over the rows its filter leaves, the same count Home's Need attention card reads (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
@@ -78,13 +78,13 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V14 | `HealthBadge` sm, header (`components/HealthBadge.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>`, its blade | derived | `systemHealth` | poll 5 s | new: health badge |
+| V14 | `HealthBadge` sm, header (`components/HealthBadge.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>`, its blade | derived | `systemHealth` | live: refetches on the `system:<id>` topic (ADR-2731) | new: health badge |
 | V15 | `HealthBadge` sm, header (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | derived | the fleet view's recorded health | mount+focus | new: health badge |
 | V16 | `HealthBadge` md, outpost rows xs, per-server disclosure with an "N open" badge (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: health badge |
 | V17 | `HealthBadge` in the system, component and location detail bodies, page and blade alike (`components/SystemDetail.tsx`, `ComponentDetail.tsx`, `LocationDetail.tsx`, ADR-2423) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `fleetView`, `systemHealth`, `locationHealth` | mount+focus (health reads refetch off on focus when standalone) | new: health badge |
 | V18 | `SystemSummary` card: health, since-line, why rows, slot text (`components/SystemSummary.tsx`) | `/locations/<id>` | derived | `fleetView`, `systemHealth` (stale 30 s) | mount+focus | new: system summary card |
 | V19 | `HealthGlyph` and `HealthSlots`, the health counts on each outline row, packed left in severity order with no blank slots (`components/Outline.tsx`, `components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, the health values the server recorded | mount+focus | new: health slots |
-| V20 | `MemberRows` glyph and alarm text per member (`components/MemberRows.tsx`) | `/systems/<id>` | derived | `systemMembers` | poll 5 s | new: health badge |
+| V20 | `MemberRows` glyph and alarm text per member (`components/MemberRows.tsx`) | `/systems/<id>` | derived | `systemMembers` | live: refetches on the `system:<id>` topic (ADR-2731) | new: health badge |
 | V21 | `OutpostTable`: liveness pill, `HealthBadge` xs, tinted figure cells, row tone (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: status table |
 | V22 | `StatusPill` up / down / never, in the list and the outpost blade (`pages/Outposts.tsx`) | `/outposts` | derived | `listOutposts`, `nodeStatus` from `last_heartbeat_at` against the down window | mount+focus (the age is computed client-side) | new: status pill |
 | V23 | `SimStatusBadge` and hit counters per row, plus `OutpostCard` connected and impairment pills (`pages/Simulation.tsx`, `components/SimStatusBadge.tsx`) | `/simulation` | derived | `getSimulation` (`lib/simulation.ts`) | poll 1 s | new: simulator status table |
@@ -102,7 +102,7 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V31 | `HealthHistory compact` with `alarm-marker-*` triangles and the expandable `stretch-list` (`components/HealthHistory.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event (recorded health edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
+| V31 | `HealthHistory compact` with `alarm-marker-*` triangles and the expandable `stretch-list` (`components/HealthHistory.tsx`, in `components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event (recorded health edges) | `systemHealth` transitions over the page range, opened at its start with `carried_in` | live: refetches on the `system:<id>` topic (ADR-2731); the clock ticks every 5 s | timeline |
 | V32 | `AvailabilityStrip`, up / down segments with an uptime figure (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | event (reachability edges) | `getReachability` history | mount+focus | timeline |
 | V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/event-rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
 | V33a | `TimelineOverlay`: health spans (a row per member on a system), one span per alarm with its duration, picked property bands and metric lines, clustered event, log and command markers, on the shared cursor (`components/TimelineOverlay.tsx`, `lib/timeline_lanes.ts`, `lib/timeline_reads.ts`) | `/systems/<id>` and `/components/<id>`, their blades (Timeline tab) | event, property, metric | health `since`/`until` with `carried_in`, alarm lists `since`/`until`, `/views:run` events, logs and properties with `from`/`to`, commands `since`/`until`, `metricBucketsBetween` | a preset re-reads every 60 s; an absolute range reads once | timeline |
@@ -111,8 +111,8 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V34 | `alarm-strip` "Why": `SeverityBadge`, `SnoozedBadge`, the `AlarmActions` group (acknowledge, snooze, troubleshoot, timeline), `AlarmTimeline` (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | event | `systemAlarms` | poll 5 s | new: alarm list |
-| V35 | `stretch-list` and "Other alarms" (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
+| V34 | `alarm-strip` "Why": `SeverityBadge`, `SnoozedBadge`, the `AlarmActions` group (acknowledge, snooze, troubleshoot, timeline), `AlarmTimeline` (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade | event | `systemAlarms` | live: refetches on the `system:<id>` topic (ADR-2731) | new: alarm list |
+| V35 | `stretch-list` and "Other alarms" (`components/SystemDetail.tsx`) | `/systems/<id>`, its blade (Activity tab) | event | `systemAlarms`, `systemHealth` | live: refetches on the `system:<id>` topic (ADR-2731) | new: alarm list |
 | V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, the `AlarmActions` group (acknowledge, snooze, troubleshoot, timeline), `AlarmTimeline` (`components/ComponentDetail.tsx`) | `/components/<id>`, its blade | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
 | V38 | Rule detail "Open alarms" and "Firing" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
@@ -130,7 +130,7 @@ component set; the surfaces below are where they are mounted.
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
 | V48 | `PipelineFlow`, the "where work is lost" hop flow with a lane tab group and a per-hop loss figure (`components/PipelineFlow.tsx`) | `/platform` | derived (counts of metric, property, event and log samples per hop) | `view.pipeline` from `platformView` | follows parent (poll 5 s) | new: pipeline flow |
-| V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | poll 5 s | new: floor map |
+| V49 | `SystemMap`, the top-down room map with health-coloured markers (`components/SystemMap.tsx`, `lib/system_map.ts`) | `/systems/<id>` | derived | `systemMembers`, `layoutMarkers` | live: refetches on the `system:<id>` topic (ADR-2731) | new: floor map |
 | V50 | The alarm queue: severity-badged alarm rows with component, systems, location, raised-at, cleared-at and a duration, ack (by whom) and snooze state, with an Open, Cleared and All state read (`pages/Alarms.tsx`) | `/alarms` | event | `fleetAlarms` (`lib/alarms.ts`), the state read, paged by `page_token` | poll 5 s (the leaf cadence); an open alarm's duration ticks each second (`AlarmDuration`) | new: alarm queue |
 | V51 | `DependenciesPanel`: upstream and downstream rows with a kind badge, a health badge and a holding mark (`components/DependenciesPanel.tsx`, `lib/dependencies.ts`) | `/components/<id>` | derived | `listDependencies` (`lib/dependencies.ts`), the fleet view's dot health, `getReachability` | poll 5 s | new: dependency list |
 
@@ -206,8 +206,9 @@ what each page draws itself.
 - **A component has no history.** `/components/<id>` shows the latest value of each metric (V08) and
   never a chart or sparkline, though the series endpoints take `components` as an owner (V01 already
   charts a component's metrics on `/platform`).
-- **Liveness is uneven.** Entries on `/platform` and `/systems/<id>` poll every 5 s and their series
-  every 30 s. The component's events and logs (V40, V42), the Home tiles (V06), the outline counts
+- **Liveness is uneven.** Entries on `/platform` poll every 5 s and their series every 30 s; on
+  `/systems/<id>` the health, slots, members and alarms follow the tab's live stream (ADR-2731) while
+  its series still poll every 30 s and its events and logs every 5 s. The component's events and logs (V40, V42), the Home tiles (V06), the outline counts
   (V10, V19) and the Inbox list (V44) read on mount and on focus only, so they go stale on a wall
   display. A widget library that owns its refresh cadence closes this gap.
 - **Health surfaces are the long tail.** Fourteen entries are a health, severity or liveness pill in

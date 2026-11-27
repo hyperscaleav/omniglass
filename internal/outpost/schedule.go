@@ -105,6 +105,17 @@ func (s *pollSchedule) refusedRun(taskID string) {
 	s.refused[taskID] = true
 }
 
+// heldForSession books a poll held because its session is still making its
+// first connection (#2755): no backoff, and released the moment the session
+// is up by the same sweep that releases a refused poll (releaseRefused), so
+// its first data lands when the session connects, not an interval later.
+func (s *pollSchedule) heldForSession(taskID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.backoff, taskID)
+	s.refused[taskID] = true
+}
+
 // book records when the dispatcher next runs a task.
 func (s *pollSchedule) book(taskID string, at time.Time) {
 	s.mu.Lock()

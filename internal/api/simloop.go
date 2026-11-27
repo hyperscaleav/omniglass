@@ -7,8 +7,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/simhub"
 )
 
 // WithClosedLoopRing supplies the server's closed-loop ring: the sliding

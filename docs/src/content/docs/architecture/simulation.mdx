@@ -10,7 +10,7 @@ sidebar:
 
 import CollectionMethods from '../../../components/CollectionMethods.astro';
 
-Omniglass ships a device simulator in the same binary (`internal/sim`). It serves a fleet of
+Omniglass ships a device simulator in the same binary (the top-level `sim/` tree, see its README). It serves a fleet of
 fictional AV and IT devices, each on its own loopback address, speaking the protocols real gear
 speaks (HTTP and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols and the same over TLS, UDP,
 WebSocket, server-sent events, signed webhooks), all from one live state per device. An outpost
@@ -26,11 +26,11 @@ work against devices they can break on purpose. The operator's walk-through is t
 ## The catalog
 
 Everything a simulated device is comes from the catalog embedded in the binary
-(`internal/sim/profiles`), so nothing is read from disk:
+(`sim/profiles`), so nothing is read from disk:
 
 - a **device profile** (`devices/*.yaml`) declares a product's identity, its protocol surfaces (each
   a protocol, a port, its auth, and the routes, commands, OIDs and subscriptions it answers), its
-  behaviors (values that drift on an interval), its computed fields (values derived on read, such as
+  behaviors (state that moves on an interval, and the named events it reports), its computed fields (values derived on read, such as
   uptime from a boot time) and its default state;
 - a **surface fragment** (`surfaces/*.yaml`) is what two profiles share, taken in with `include:`;
   the loader refuses an unknown fragment or one a surface restates
@@ -162,7 +162,7 @@ saw and the devices it is serving.
 
 The server accepts hits only for components it handed that outpost, by a closed set of protocols
 (`http`, `snmp`, `ssh`, `telnet`, `tcp`, `udp`, `websocket`), and keeps them in memory as a live
-signal (`internal/simhub`). `GET /outposts/{name}/simulation` (`omniglass outpost simulation
+signal (`sim/simhub`). `GET /outposts/{name}/simulation` (`omniglass outpost simulation
 <outpost>`) joins them to the outpost's devices, each with a `status`: `running`, `starting`,
 `failed` or `offline`. These are the simulator's own words, so they never borrow reachability's or
 health's values. A simulator silent for a hundred seconds is forgotten, and deleting the outpost
@@ -172,7 +172,7 @@ is accepted while the server runs as one ([scaling](/architecture/scaling/)).
 ### What an endpoint observed
 
 A hit says a device was touched, not whether every request arrived or how each ended. For that, every
-simulated endpoint keeps an **observation** (`internal/sim/observe.go`): counters that never reset, so
+simulated endpoint keeps an **observation** (`sim/observe.go`): counters that never reset, so
 a reader takes two reads and the difference. It counts three units, each matched with what the outpost
 tallies sending:
 
@@ -226,7 +226,7 @@ and the unprivileged-port sysctl, so it binds the profiles' real ports and ping 
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an address
 in `127.60.0.0/16` and endpoints on the dev outpost, `edge-hq`. A product whose driver has a spec gets
 that driver attached, with the credential its face demands seeded as a platform secret; the attach
-table is `internal/simfleet`. A product whose driver is still a stub gets a reachability probe on its
+table is `sim/simfleet`. A product whose driver is still a stub gets a reachability probe on its
 profile's port. For a simulator that may not bind below 1024, `omniglass seed-dev --sim-port-offset
 10000` aims the endpoints at the lifted ports.
 
@@ -306,6 +306,42 @@ delivery sent twice. These are the faces the shipped drivers' event, log and web
 against
 ([ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s),
 [ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
+
+### A device talks on its own
+
+A behavior is a timer on one device: each tick applies its changes to the live state, then reports
+its **named events** on the device's events face, as a route does, each rendered against the state
+the tick left. An event whose data renders empty is not one that tick reports, so the template's own
+condition says when it fires; and a tick streams only what it changed, so a timer that rewrites a
+watched path with the value it already holds puts nothing on the feed
+([ADR-2754](/architecture/decisions/#adr-2754-a-behavior-tick-streams-only-what-it-changed-and-may-report-named-events)).
+A behavior reads the wall clock through its device's clock (`now`, and `nextSlot` for the next
+boundary of a slot) and draws from its device's seeded source (`randStep`, `randInt`, `chance`), so a
+device keeps the same schedule on every run and a test drives a simulated day on a pinned clock
+([ADR-2754.2](/architecture/decisions/#adr-27542-a-behavior-reads-its-devices-wall-clock-and-draws-from-its-devices-source)).
+No behavior in a shipped profile ticks faster than 15 seconds: a device gets richer by reporting more
+kinds of signal, not more samples (#1360).
+
+The Kestrel VRoom shows what that buys (#2754). Every video bar in a lab keeps its room's meeting
+schedule, a tick a minute. When the room is free it books its next slot, 15, 30 or 60 minutes,
+starting on the next half hour (a 15-minute one on the next quarter), and takes about half the slots
+it considers; a meeting starts up to 2 minutes early or 5 late and ends up to 5 minutes before its
+slot does. The call reports `call-started` (a fresh call id, two to six participants) and
+`call-ended`, and in between a participant joins or leaves now and then (`participant-joined`,
+`participant-left`). Each occurrence is also an `event: log` line in the codec's idiom (a severity, a
+facility such as `kvroom.call`, and its text), beside a status line every 15 minutes. A second
+behavior, every 30 seconds, drifts the call's packet loss (a ratio), jitter, bitrate, frame rate,
+speaker level and microphone level while a call is up and rests them when the room is idle, drifts
+the codec's own load, temperature, fan and memory, and writes the WARN line a bar's network log does
+when loss crosses 3% and an INFO line when it recovers. A bar runs about 0.6 calls, 3 events and 9 log
+lines an hour. Booking tables would drive the schedule in time; today it is each bar's own draws.
+
+A call on demand still talks now: the bar's own dial route starts one at once with its event and log
+line, a meeting falling due under it is skipped, and it ends at the bar's hang-up route or after
+30 minutes, so a demo or a test can make a bar talk without waiting for its schedule. The
+`kestrel-api` driver lands all of it from one held feed and two polls, and in the corporate lab's
+conference rooms the bar's websocket control socket is a second endpoint beside its https API
+([the scale lab](/developer/lab/#scale-lab-scenarios)).
 
 ### A simulated service posts from the start
 

@@ -10,13 +10,21 @@ import { fmtTime } from "./format";
 //
 //   TimeRange                       a preset sliding to now, or an absolute [from, to)
 //   parseRange(searchParams)        the URL's range; anything unparseable is the default
-//   serializeRange(range)           the search-param patch that writes it back
+//   parseGivenRange(searchParams)   the same, but undefined when the URL gives none
+//   serializeRange(range, opts?)    the search-param patch that writes it back
 //   resolveRange(range, now)        [from, to] in epoch ms at an injected clock
-//   useTimeRange()                  { range, setRange } over the router's search params
+//   useTimeRange(opts?)             { range, given, setRange } over the router's search params
 //
-// and three helpers for reads: rangeHours (a preset's width, for the series
+// and four helpers for reads: rangeHours (a preset's width, for the series
 // routes' `hours`), rangeStepSeconds (a bucket width that keeps a chart a few
-// hundred buckets wide) and rangeLabel (the range in words).
+// hundred buckets wide), rangeLabel (the range as the picker names it) and
+// rangePhrase (the range inside a sentence: "of the last hour").
+//
+// `given` is the range the address (or a blade's own pick) actually carries,
+// undefined when none: a body whose tabs open on different defaults (a
+// system's Activity on 30 days, its Overview on 24 hours, #2741) reads it, and
+// writes every pick with `explicit`, the default included, so a pick of 24
+// hours is still a pick on the tab that would otherwise open on 30 days.
 //
 // The address: `?range=1h|6h|24h|7d|30d` for a preset, `?from=<rfc3339>&to=<rfc3339>`
 // for an absolute range, nothing for the default (24h), the way the tab rail
@@ -34,12 +42,12 @@ export type TimeRange =
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
 
-export const PRESETS: readonly { key: PresetKey; label: string; ms: number }[] = [
-  { key: "1h", label: "Last 1 hour", ms: HOUR },
-  { key: "6h", label: "Last 6 hours", ms: 6 * HOUR },
-  { key: "24h", label: "Last 24 hours", ms: DAY },
-  { key: "7d", label: "Last 7 days", ms: 7 * DAY },
-  { key: "30d", label: "Last 30 days", ms: 30 * DAY },
+export const PRESETS: readonly { key: PresetKey; label: string; phrase: string; ms: number }[] = [
+  { key: "1h", label: "Last 1 hour", phrase: "the last hour", ms: HOUR },
+  { key: "6h", label: "Last 6 hours", phrase: "the last 6 hours", ms: 6 * HOUR },
+  { key: "24h", label: "Last 24 hours", phrase: "the last 24 hours", ms: DAY },
+  { key: "7d", label: "Last 7 days", phrase: "the last 7 days", ms: 7 * DAY },
+  { key: "30d", label: "Last 30 days", phrase: "the last 30 days", ms: 30 * DAY },
 ];
 
 // MAX_CUSTOM_MS is the longest absolute range a read takes: the views read's
@@ -47,6 +55,11 @@ export const PRESETS: readonly { key: PresetKey; label: string; ms: number }[] =
 export const MAX_CUSTOM_MS = 2 * 365 * DAY;
 
 export const DEFAULT_RANGE = { kind: "preset", preset: "24h" } as const satisfies TimeRange;
+
+// HISTORY_DEFAULT_RANGE is where a health history opens with no range given:
+// the last 30 days a status page leads with (a system's Activity, #2741), and
+// the window the health read itself defaults to.
+export const HISTORY_DEFAULT_RANGE = { kind: "preset", preset: "30d" } as const satisfies TimeRange;
 
 const presetOf = (key: PresetKey) => PRESETS.find((p) => p.key === key)!;
 
@@ -68,20 +81,27 @@ const instant = (s: string | undefined): number | undefined => {
   return Number.isNaN(t) ? undefined : t;
 };
 
-export function parseRange(src: ParamSource): TimeRange {
+// parseGivenRange is the range the address carries, undefined when it
+// carries none (or only a broken one): the caller picks what that means.
+export function parseGivenRange(src: ParamSource): TimeRange | undefined {
   const from = instant(first(src, "from"));
   const to = instant(first(src, "to"));
   if (from !== undefined && to !== undefined && from < to) return { kind: "absolute", from, to };
   const key = first(src, "range");
   if (key && PRESETS.some((p) => p.key === key)) return { kind: "preset", preset: key as PresetKey };
-  return DEFAULT_RANGE;
+  return undefined;
+}
+
+export function parseRange(src: ParamSource): TimeRange {
+  return parseGivenRange(src) ?? DEFAULT_RANGE;
 }
 
 // The patch for the router's setSearchParams: every key the range owns, the
-// ones it does not use set to undefined so they leave the address.
-export function serializeRange(r: TimeRange): { range: string | undefined; from: string | undefined; to: string | undefined } {
+// ones it does not use set to undefined so they leave the address. The
+// default is left out unless `explicit` asks for it (see `given` above).
+export function serializeRange(r: TimeRange, opts: { explicit?: boolean } = {}): { range: string | undefined; from: string | undefined; to: string | undefined } {
   if (r.kind === "absolute") return { range: undefined, from: new Date(r.from).toISOString(), to: new Date(r.to).toISOString() };
-  return { range: r.preset === DEFAULT_RANGE.preset ? undefined : r.preset, from: undefined, to: undefined };
+  return { range: !opts.explicit && r.preset === DEFAULT_RANGE.preset ? undefined : r.preset, from: undefined, to: undefined };
 }
 
 export function resolveRange(r: TimeRange, now: number): { from: number; to: number } {
@@ -113,20 +133,38 @@ export function rangeLabel(r: TimeRange): string {
   return `${fmtTime(new Date(r.from).toISOString())} → ${fmtTime(new Date(r.to).toISOString())}`;
 }
 
+// rangeQuery is a range as a read's since and until (RFC 3339): a preset sends
+// only its start, so the read runs to the server's now; a custom range sends
+// both.
+export function rangeQuery(r: TimeRange, now: number): { since: string; until?: string } {
+  const { from, to } = resolveRange(r, now);
+  const since = new Date(from).toISOString();
+  return r.kind === "absolute" ? { since, until: new Date(to).toISOString() } : { since };
+}
+
+// rangePhrase is the range inside a sentence ("Uptime of the last hour",
+// "Showing the last 24 hours instead"); a custom range reads by its dates.
+export function rangePhrase(r: TimeRange): string {
+  return r.kind === "preset" ? presetOf(r.preset).phrase : rangeLabel(r);
+}
+
 // useTimeRange reads and writes the page's range in the router's search
 // params. Setting it keeps every other param (the tab, a filter). `from` also
 // names the template a row was created from (?from=<template>, #1329), so
 // from and to are cleared only when leaving an absolute range, the one case
 // they are the range's own.
-export function useTimeRange(): { range: Accessor<TimeRange>; setRange: (r: TimeRange) => void } {
+type HostRange = { range: Accessor<TimeRange>; given: Accessor<TimeRange | undefined>; setRange: (r: TimeRange) => void };
+const sameRange = (a: TimeRange | undefined, b: TimeRange | undefined) => JSON.stringify(a) === JSON.stringify(b);
+
+export function useTimeRange(opts: { explicit?: boolean } = {}): HostRange {
   const [params, setParams] = useSearchParams();
-  const range = createMemo(() => parseRange(params as Record<string, string | string[] | undefined>), DEFAULT_RANGE, {
-    equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
-  });
+  const given = createMemo(() => parseGivenRange(params as Record<string, string | string[] | undefined>), undefined, { equals: sameRange });
+  const range = createMemo(() => given() ?? DEFAULT_RANGE, DEFAULT_RANGE, { equals: sameRange });
   return {
     range,
+    given,
     setRange: (r) => {
-      const patch: Record<string, string | undefined> = serializeRange(r);
+      const patch: Record<string, string | undefined> = serializeRange(r, opts);
       if (r.kind === "preset" && range().kind === "preset") {
         delete patch.from;
         delete patch.to;
@@ -139,10 +177,11 @@ export function useTimeRange(): { range: Accessor<TimeRange>; setRange: (r: Time
 // useHostTimeRange is the range a detail body reads (#2425): a page's is the
 // address's (useTimeRange); a blade's opens on its page's range but is its
 // own signal, so a pick in a blade never rewrites the page beneath it, as a
-// blade's tab never does (lib/tabstate, ADR-2423).
-export function useHostTimeRange(host: "page" | "blade"): { range: Accessor<TimeRange>; setRange: (r: TimeRange) => void } {
-  const page = useTimeRange();
+// blade's tab never does (lib/tabstate, ADR-2423). A blade opened over a page
+// with no range given has none given either, until a pick in it.
+export function useHostTimeRange(host: "page" | "blade", opts: { explicit?: boolean } = {}): HostRange {
+  const page = useTimeRange(opts);
   if (host === "page") return page;
-  const [range, setRange] = createSignal<TimeRange>(page.range(), { equals: (a, b) => JSON.stringify(a) === JSON.stringify(b) });
-  return { range, setRange };
+  const [given, setGiven] = createSignal<TimeRange | undefined>(page.given(), { equals: sameRange });
+  return { range: () => given() ?? DEFAULT_RANGE, given, setRange: (r) => setGiven(r) };
 }

@@ -18,7 +18,7 @@ discarded; the rest is counted unclaimed, with a new spec-level `unmatched: coll
 landing one fault per tick. Commands ride the held session too (the delivery now names its endpoint
 and carries the binding's reply shape), falling back to a throwaway connection only when none is held,
 and the transport registry marks `tcp` as held. The seeded `newtron-nvp` declares its reply shapes.
-Proven over the simulator's NVP port (`internal/sim/listener_hold_test.go`: SUBSCRIBE INPUT armed, a
+Proven over the simulator's NVP port (`sim/listener_hold_test.go`: SUBSCRIBE INPUT armed, a
 change made elsewhere heard within a second, thirty GET polls amid a stream of pushes each getting
 their own answer, the subscription re-armed after the listener dies and returns) and end to end
 (`TestNodeLandsPushedSamplesThroughARecover`: with the node's tick at an hour, a change on the panel

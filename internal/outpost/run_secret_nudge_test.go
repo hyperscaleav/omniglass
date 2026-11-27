@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // keyDevice is an http device that records the api key each request carried.

@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
-	"github.com/hyperscaleav/omniglass/internal/simfleet"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
 // plannedEndpoint is one endpoint a plan's component takes: the simulated

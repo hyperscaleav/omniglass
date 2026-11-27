@@ -286,6 +286,13 @@
       "setup": []
     },
     {
+      "id": "read-a-rooms-history-over-an-hour",
+      "title": "Read a room's history over the last hour",
+      "description": "Open the Huddle Room's Activity on its 30-day window, pick the last hour on the tab rail, and read the history redrawn over that hour while Uptime keeps its 30 days.",
+      "lab": [],
+      "setup": []
+    },
+    {
       "id": "read-an-entity-in-its-blade",
       "title": "Read an entity in its blade",
       "description": "Open a system from Explore, open one of its components over it, and read the component's whole detail without leaving the outline.",

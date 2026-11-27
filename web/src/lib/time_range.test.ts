@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RANGE,
+  HISTORY_DEFAULT_RANGE,
   MAX_CUSTOM_MS,
   PRESETS,
+  parseGivenRange,
   parseRange,
   rangeHours,
   rangeLabel,
+  rangePhrase,
   rangeStepSeconds,
   resolveRange,
   serializeRange,
@@ -145,5 +148,44 @@ describe("rangeLabel", () => {
 describe("MAX_CUSTOM_MS", () => {
   it("is the views read's two-year ceiling", () => {
     expect(MAX_CUSTOM_MS).toBe(2 * 365 * 86400_000);
+  });
+});
+
+// A body whose tabs open on different defaults (a system's Activity on 30
+// days, its Overview on 24 hours, #2741) has to tell "no range given" from
+// "the default": the address leaves the default out, so a pick of 24 hours
+// must say so there.
+describe("a range given or not (#2741)", () => {
+  it("parseGivenRange is undefined when the address carries no range, or only a broken one", () => {
+    expect(parseGivenRange({})).toBeUndefined();
+    expect(parseGivenRange({ range: "banana" })).toBeUndefined();
+    expect(parseGivenRange({ from: "2026-11-01T08:00:00Z" })).toBeUndefined();
+  });
+
+  it("parseGivenRange reads a preset and an absolute range as parseRange does", () => {
+    expect(parseGivenRange({ range: "24h" })).toEqual(DEFAULT_RANGE);
+    expect(parseGivenRange({ range: "1h" })).toEqual({ kind: "preset", preset: "1h" });
+    expect(parseGivenRange({ from: "2026-11-01T08:00:00Z", to: "2026-11-01T09:00:00Z" })?.kind).toBe("absolute");
+  });
+
+  it("an explicit serialize writes the default too, so a pick of 24 hours is a pick", () => {
+    expect(serializeRange(DEFAULT_RANGE, { explicit: true })).toEqual({ range: "24h", from: undefined, to: undefined });
+    expect(serializeRange({ kind: "preset", preset: "7d" }, { explicit: true })).toEqual({ range: "7d", from: undefined, to: undefined });
+  });
+
+  it("the history's default is the last 30 days", () => {
+    expect(HISTORY_DEFAULT_RANGE).toEqual({ kind: "preset", preset: "30d" });
+  });
+
+  it("rangePhrase names a preset's window in words, an absolute range by its dates", () => {
+    expect(PRESETS.map((p) => rangePhrase({ kind: "preset", preset: p.key }))).toEqual([
+      "the last hour",
+      "the last 6 hours",
+      "the last 24 hours",
+      "the last 7 days",
+      "the last 30 days",
+    ]);
+    const abs: TimeRange = { kind: "absolute", from: Date.parse("2026-11-01T08:00:00Z"), to: Date.parse("2026-11-01T09:00:00Z") };
+    expect(rangePhrase(abs)).toBe(rangeLabel(abs));
   });
 });

@@ -37,7 +37,7 @@ metric_types:
   - name: poll-held-count
     data_type: int
     label: Held Polls
-    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable, a disruptive command (a reboot) holds it, or a component it is reached through is down (which holds its probes too, counted here); never sent, so not failures; reported only when nonzero.
+    description: The endpoint's due driver polls its gate held in the report window because its probe reads it unreachable, a disruptive command (a reboot) holds it, or a component it is reached through is down (which holds its probes too, counted here), and the polls that found its held session still making its first connection; never sent, so not failures; reported only when nonzero.
   - name: hold-expiry-count
     data_type: int
     label: Hold Expiries
@@ -595,6 +595,59 @@ metric_types:
     data_type: int
     label: Peripheral Count
     description: How many peripherals (cameras, microphones, touch panels) a component reports attached to it.
+  # A codec's call quality, read off its API while a call is up (#2754): the
+  # numbers a conferencing engineer reads first when a room sounds wrong.
+  # Each is 0 when no call is up. Loss is a ratio (0 is healthy), the uniform
+  # convention every loss figure in the catalog follows.
+  - name: packet-loss-ratio
+    data_type: float
+    unit: ratio
+    precision: 4
+    label: Packet Loss
+    description: The share of a call's media packets a component reports lost, as a fraction (0 to 1); 0 is healthy, and 0 when no call is up.
+  - name: jitter
+    data_type: float
+    unit: ms
+    precision: 1
+    label: Jitter
+    description: The variation in a call's media packet arrival a component reports, in milliseconds; 0 when no call is up.
+  - name: bitrate
+    data_type: float
+    unit: kbps
+    label: Bitrate
+    description: The rate a component reports sending a call's video at, in kilobits per second; 0 when no call is up.
+  - name: frame-rate
+    data_type: float
+    unit: fps
+    label: Frame Rate
+    description: The frames per second a component reports sending a call's video at; 0 when no call is up.
+  # A speaker's output against its range, a ratio like volume: the level the
+  # room hears, which moves with the far end talking.
+  - name: speaker-level
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Speaker Level
+    description: The output level a component reports at its speakers, as a fraction of its range (0 to 1); 0 when it plays nothing.
+  # A component's own processor and memory (#2754), ratios like
+  # storage-utilization: a codec in a call, a DSP running its design.
+  - name: cpu-utilization
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: CPU Utilization
+    description: How busy a component reports its processor (its CPU or its DSP engine), as a fraction of its capacity (0 to 1).
+  - name: memory-utilization
+    data_type: float
+    unit: ratio
+    precision: 3
+    label: Memory Utilization
+    description: How much of its memory a component reports in use, as a fraction of its capacity (0 to 1).
+  # An audio processor's channels carrying signal (#2754).
+  - name: active-channel-count
+    data_type: int
+    label: Active Channel Count
+    description: The channels a component reports active (carrying signal) of those it has.
   # A media player's local storage filling as content syncs down (#893).
   # Dimensionless, so stored as a ratio (0..1) and shown as a percentage.
   - name: storage-utilization

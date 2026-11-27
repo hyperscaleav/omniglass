@@ -33,7 +33,8 @@ The subsystem a change touches, named to match the [glossary](/reference/glossar
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity` `area:fleet`
-`area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
+`area:collection` `area:ingest` `area:expr` `area:messaging` `area:ui` `area:assistant`
+`area:outpost` `area:lab` `area:ci` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.
@@ -157,6 +158,11 @@ That is the whole taxonomy: a native Issue Type, the Project priority field, `ar
 labels. Adding a label means a new subsystem (`area:*`) or a new automation task (`run:*`); the
 `tier:*` and `risk:*` sets are closed, they are what the dispatcher's lint accepts; anything
 else belongs in a field.
+
+Two labels sit outside the taxonomy because a tool owns them: release-please marks its release
+PR `autorelease: pending` and, once tagged, `autorelease: tagged`, and reads them to find the PR
+to tag ([cutting a release](/contributing/release-ci/#cutting-a-release-manual)). Nobody applies
+them by hand.
 
 ## The board
 

@@ -1,7 +1,7 @@
 // Package systemplan is the pure half of the planned-system primitive
 // (#827, ADR-0827): it staffs a standard's slots from a set of candidate
 // products and says which alternate each choice takes, touching nothing.
-// The simulator plans with the products it serves (internal/simfleet), a
+// The simulator plans with the products it serves (sim/simfleet), a
 // system template with the product it names per slot; the transactional
 // half is storage.CreatePlan, which lands what a plan says.
 package systemplan

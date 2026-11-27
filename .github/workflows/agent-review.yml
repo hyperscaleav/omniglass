@@ -157,8 +157,11 @@ jobs:
       review_base: ${{ steps.lenses.outputs.base }}
       turns: ${{ steps.lenses.outputs.turns }}
     steps:
+      # A Dependabot run gets no Actions secrets, so minting would fail the
+      # plan; its PR is skipped below without any token.
       - name: Mint the agent App token
         id: app
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.AGENT_APP_CLIENT_ID }}

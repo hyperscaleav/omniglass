@@ -8,15 +8,18 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Replay is a recorded model: it plays its turns in order, whatever the
 // conversation, numbering every call it makes. It stands in for a live model
-// wherever a run must be the same every time.
+// wherever a run must be the same every time. A turn may record how long the
+// model thought before it, so a capture of the console paces like live
+// inference instead of answering at once.
 type Replay struct {
-	turns         []Turn
+	turns         []recorded
 	prompt        string
 	conversations []conversation
 	next          int
@@ -28,7 +31,7 @@ type Replay struct {
 type conversation struct {
 	match  string
 	prompt string
-	turns  []Turn
+	turns  []recorded
 }
 
 // Scripted is a recorded model that knows which messages it answers (#2443):
@@ -41,7 +44,22 @@ type Scripted interface {
 	Plays(message string) bool
 }
 
+// recorded is a turn and the pause the model takes before it.
+type recorded struct {
+	turn  Turn
+	think time.Duration
+}
+
+// MaxThink is the longest pause a recorded turn may take.
+const MaxThink = 30 * time.Second
+
 type recordedTurn struct {
+	// Think is how long the model works before this turn arrives, as a Go
+	// duration ("1.8s"); none answers at once.
+	Think string `yaml:"think"`
+	// Reasoning is the model's chain of thought for the turn, which the
+	// console shows as its thinking.
+	Reasoning string `yaml:"reasoning"`
 	Text      string `yaml:"text"`
 	ToolCalls []struct {
 		Name      string         `yaml:"name"`
@@ -103,33 +121,60 @@ func ParseReplay(b []byte) (*Replay, error) {
 	return r, nil
 }
 
-func parseTurns(in []recordedTurn, what string) ([]Turn, error) {
-	out := make([]Turn, 0, len(in))
+func parseTurns(in []recordedTurn, what string) ([]recorded, error) {
+	out := make([]recorded, 0, len(in))
 	for i, rt := range in {
 		if rt.Text == "" && len(rt.ToolCalls) == 0 {
 			return nil, fmt.Errorf("%s's turn %d has neither text nor tool calls", what, i+1)
 		}
-		turn := Turn{Text: rt.Text}
+		var think time.Duration
+		if rt.Think != "" {
+			d, err := time.ParseDuration(rt.Think)
+			if err != nil || d < 0 || d > MaxThink {
+				return nil, fmt.Errorf("%s's turn %d: think %q is not a duration from 0 to %s", what, i+1, rt.Think, MaxThink)
+			}
+			think = d
+		}
+		turn := Turn{Text: rt.Text, Reasoning: rt.Reasoning}
 		for _, c := range rt.ToolCalls {
 			if c.Name == "" {
 				return nil, fmt.Errorf("%s's turn %d calls a tool with no name", what, i+1)
 			}
 			turn.ToolCalls = append(turn.ToolCalls, ToolCall{Name: c.Name, Arguments: c.Arguments})
 		}
-		out = append(out, turn)
+		out = append(out, recorded{turn: turn, think: think})
 	}
 	return out, nil
 }
 
+// pause waits out a turn's thinking, or until the run is cancelled.
+func pause(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Next plays the next of the default turns; the conversations are played
 // only by Positioned, which reads the person's message to choose one.
-func (r *Replay) Next(_ context.Context, _ []Message, _ []Tool) (Turn, error) {
+func (r *Replay) Next(ctx context.Context, _ []Message, _ []Tool) (Turn, error) {
 	if r.next >= len(r.turns) {
 		return Turn{}, fmt.Errorf("the recording ran out after %d turns", len(r.turns))
 	}
-	t := r.turns[r.next]
+	rec := r.turns[r.next]
 	r.next++
-	out := Turn{Text: t.Text, ToolCalls: make([]ToolCall, len(t.ToolCalls))}
+	if err := pause(ctx, rec.think); err != nil {
+		return Turn{}, err
+	}
+	t := rec.turn
+	out := Turn{Text: t.Text, Reasoning: t.Reasoning, ToolCalls: make([]ToolCall, len(t.ToolCalls))}
 	for i, c := range t.ToolCalls {
 		r.calls++
 		out.ToolCalls[i] = ToolCall{ID: "call-" + strconv.Itoa(r.calls), Name: c.Name, Arguments: c.Arguments}
@@ -149,7 +194,7 @@ func (r *Replay) Positioned() Provider {
 }
 
 type positioned struct {
-	turns         []Turn
+	turns         []recorded
 	prompt        string
 	conversations []conversation
 }
@@ -168,7 +213,7 @@ func (c conversation) holds(message string) bool {
 }
 
 // script is the turns the message is played, and whether any are.
-func (p positioned) script(message string) ([]Turn, bool) {
+func (p positioned) script(message string) ([]recorded, bool) {
 	for _, c := range p.conversations {
 		if c.holds(message) {
 			return c.turns, true
@@ -198,7 +243,7 @@ func (p positioned) Plays(message string) bool {
 	return ok
 }
 
-func (p positioned) Next(_ context.Context, messages []Message, _ []Tool) (Turn, error) {
+func (p positioned) Next(ctx context.Context, messages []Message, _ []Tool) (Turn, error) {
 	at, calls, latest := 0, 0, ""
 	for _, m := range messages {
 		switch m.Role {
@@ -216,8 +261,12 @@ func (p positioned) Next(_ context.Context, messages []Message, _ []Tool) (Turn,
 	if at >= len(turns) {
 		return Turn{}, fmt.Errorf("the recording ran out after %d turns", len(turns))
 	}
-	t := turns[at]
-	out := Turn{Text: t.Text, ToolCalls: make([]ToolCall, len(t.ToolCalls))}
+	rec := turns[at]
+	if err := pause(ctx, rec.think); err != nil {
+		return Turn{}, err
+	}
+	t := rec.turn
+	out := Turn{Text: t.Text, Reasoning: t.Reasoning, ToolCalls: make([]ToolCall, len(t.ToolCalls))}
 	for i, c := range t.ToolCalls {
 		calls++
 		out.ToolCalls[i] = ToolCall{ID: "call-" + strconv.Itoa(calls), Name: c.Name, Arguments: c.Arguments}

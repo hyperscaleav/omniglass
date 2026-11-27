@@ -3,6 +3,7 @@ package outpost
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -117,6 +118,17 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 		c.report.refused(task.EndpointID)
 	} else {
 		cost := measureRun(func() { dps, faults = collectDriverTask(ctx, c.runner, task, c.sessions) })
+		if establishingRun(dps, faults) {
+			// The endpoint's held session is still making its first
+			// connection (#2755): nothing was sent and nothing failed, so
+			// the poll is held, as a gate holds one: no collection-failed,
+			// no backoff, no failure, and it runs the moment the session is
+			// up (the dispatcher's release sweep), not an interval later.
+			c.report.heldPoll(task.EndpointID)
+			c.sched.heldForSession(task.ID)
+			slog.Debug("poll held: its session is still making its first connection", "facility", "collection", "task", task.ID)
+			return nil
+		}
 		// The run's own account of itself (#1369): how long it took and
 		// the CPU the kernel charged it (#1870), answered or failed, and
 		// whether it failed as bookPollRun reads a failure, faulted and
@@ -246,6 +258,22 @@ func bookPollRun(sched *pollSchedule, taskID string, interval time.Duration, now
 		return
 	}
 	sched.succeeded(taskID)
+}
+
+// establishingRun reports a poll run that landed nothing because the
+// endpoint's held session is still making its first connection (#2755): every
+// fault is collection.ErrSessionEstablishing. Such a run is held, never a
+// failure; a session that is down, recovering or rejected faults as before.
+func establishingRun(dps []collection.Sample, faults []error) bool {
+	if len(dps) > 0 || len(faults) == 0 {
+		return false
+	}
+	for _, f := range faults {
+		if !errors.Is(f, collection.ErrSessionEstablishing) {
+			return false
+		}
+	}
+	return true
 }
 
 // landedData reports a run that landed a sample beyond the session rung its
