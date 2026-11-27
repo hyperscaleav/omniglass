@@ -56,6 +56,11 @@ type Config struct {
 	// With one, the engine holds the lab calendar and the pulled devices are
 	// placed in rooms; with none there is no calendar and no room, as before.
 	World *world.World
+	// ClockOffset is how far the simulated world's clock runs ahead of real
+	// time (negative: behind), set by a lab test to stand "now" inside a
+	// chosen meeting (#2800). Zero is real time. It moves what the simulated
+	// world reads, never the cadence this node collects on.
+	ClockOffset time.Duration
 }
 
 // operatorSource is the arbiter source of the impairments an operator set
@@ -133,6 +138,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	engine := sim.NewEngine(store, profiles.Templates())
 	installWorld(engine, cfg.World)
+	engine.SetClock(sim.Clock{Offset: cfg.ClockOffset})
 	if cfg.PortOffset != 0 {
 		engine.SetPortMap(sim.PrivilegedPortShift(cfg.PortOffset))
 	}
@@ -175,7 +181,7 @@ func Run(ctx context.Context, cfg Config) error {
 	profileFor := func(p string) (string, bool) { name, _, ok := store.ForProduct(p); return name, ok }
 	subs := newSubscriber(cfg.ServerURL, store)
 	if len(cfg.Pushers) > 0 {
-		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers, cfg.World)
+		pushers, err := startPushers(store, cfg.ServerURL, cfg.Pushers, cfg.World, sim.Clock{Offset: cfg.ClockOffset})
 		if err != nil {
 			return err
 		}
@@ -190,7 +196,7 @@ func Run(ctx context.Context, cfg Config) error {
 	// their wants with it, and settling applies what they resolve to.
 	arb := engine.Arbiter()
 	arb.SetNet(impairs)
-	problems := newProblemExecutor(cfg.World, engine.Calendar(), arb, nil, log)
+	problems := newProblemExecutor(cfg.World, engine.Calendar(), arb, engine.Now, log)
 	settle := func() {
 		devs := engine.Devices()
 		if problems != nil {

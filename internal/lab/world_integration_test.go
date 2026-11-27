@@ -28,6 +28,14 @@ import (
 // down what it made.
 func startCorporateLab(t *testing.T, name string, systems int) (string, *http.Client) {
 	t.Helper()
+	return startCorporateLabWith(t, name, systems)
+}
+
+// startCorporateLabWith is startCorporateLab with more `lab run` flags: the
+// simulator's clock offset (#2800), for a test that stands the lab inside a
+// chosen meeting.
+func startCorporateLabWith(t *testing.T, name string, systems int, extra ...string) (string, *http.Client) {
+	t.Helper()
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the corporate lab runs through make test-lab (it needs the image make builds)")
 	}
@@ -55,6 +63,7 @@ func startCorporateLab(t *testing.T, name string, systems int) (string, *http.Cl
 	file := t.TempDir() + "/lab.env"
 	var out lockedBuffer
 	args := []string{"lab", "run", "--scenario", "corporate", "--systems", fmt.Sprint(systems), "--project", project, "--port", "0", "--ready-file", file}
+	args = append(args, extra...)
 	if image := os.Getenv("OMNIGLASS_LAB_TEST_IMAGE"); image != "" {
 		args = append(args, "--image", image)
 	}

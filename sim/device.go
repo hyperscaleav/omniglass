@@ -1005,6 +1005,20 @@ func (d *Device) SetClock(now func() time.Time) {
 	d.now = now
 }
 
+// routeFuncs is the FuncMap a route or a command compiles against: the
+// package's templateFuncs with `now` on the device's clock, so a stamp a
+// request writes (a reboot's boot_epoch, a webhook's ts) is in the same time
+// the device's uptime and calendar reads are, whatever the engine's clock
+// offset (#2800).
+func (d *Device) routeFuncs() template.FuncMap {
+	funcs := make(template.FuncMap, len(templateFuncs))
+	for name, fn := range templateFuncs {
+		funcs[name] = fn
+	}
+	funcs["now"] = func() int64 { return d.clock().Unix() }
+	return funcs
+}
+
 // clock returns the device's clock, defaulting to time.Now for devices
 // constructed without going through NewDevice (older test fixtures).
 func (d *Device) clock() time.Time {
@@ -1139,22 +1153,23 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 		return err
 	}
 
-	tmpl, err := template.New(tmplPath).Funcs(templateFuncs).Funcs(d.listingFuncs()).Parse(tmplContent)
+	funcs := d.routeFuncs()
+	tmpl, err := template.New(tmplPath).Funcs(funcs).Funcs(d.listingFuncs()).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
 	}
 
-	muts, err := compileMerged(mutate, items)
+	muts, err := compileMergedWith(mutate, items, funcs)
 	if err != nil {
 		return fmt.Errorf("compiling mutations for %q: %w", match, err)
 	}
 
-	evs, err := compileNamedEvents("route "+strconv.Quote(match), events, templateFuncs)
+	evs, err := compileNamedEvents("route "+strconv.Quote(match), events, funcs)
 	if err != nil {
 		return err
 	}
 
-	em, err := compileEmit(emit, templateFuncs)
+	em, err := compileEmit(emit, funcs)
 	if err != nil {
 		return fmt.Errorf("route %q: %w", match, err)
 	}
@@ -1794,11 +1809,12 @@ func hexNybble(c byte) (byte, error) {
 
 func (d *Device) addCommand(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation,
 	action, subjectTmpl, tokenTmpl, intervalTmpl string) error {
-	tmpl, err := template.New(tmplPath).Funcs(templateFuncs).Parse(tmplContent)
+	funcs := d.routeFuncs()
+	tmpl, err := template.New(tmplPath).Funcs(funcs).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
 	}
-	muts, err := compileMerged(mutate, items)
+	muts, err := compileMergedWith(mutate, items, funcs)
 	if err != nil {
 		return fmt.Errorf("compiling mutations for %q: %w", match, err)
 	}
@@ -1809,19 +1825,19 @@ func (d *Device) addCommand(match, tmplPath, tmplContent string, mutate map[stri
 		Action:    action,
 	}
 	if subjectTmpl != "" {
-		entry.Subject, err = template.New(match + ".subject").Funcs(templateFuncs).Parse(subjectTmpl)
+		entry.Subject, err = template.New(match + ".subject").Funcs(funcs).Parse(subjectTmpl)
 		if err != nil {
 			return fmt.Errorf("parsing subject template for %q: %w", match, err)
 		}
 	}
 	if tokenTmpl != "" {
-		entry.Token, err = template.New(match + ".token").Funcs(templateFuncs).Parse(tokenTmpl)
+		entry.Token, err = template.New(match + ".token").Funcs(funcs).Parse(tokenTmpl)
 		if err != nil {
 			return fmt.Errorf("parsing token template for %q: %w", match, err)
 		}
 	}
 	if intervalTmpl != "" {
-		entry.IntervalMs, err = template.New(match + ".interval_ms").Funcs(templateFuncs).Parse(intervalTmpl)
+		entry.IntervalMs, err = template.New(match + ".interval_ms").Funcs(funcs).Parse(intervalTmpl)
 		if err != nil {
 			return fmt.Errorf("parsing interval_ms template for %q: %w", match, err)
 		}

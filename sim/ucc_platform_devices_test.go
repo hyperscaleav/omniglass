@@ -179,9 +179,10 @@ func TestTheUCCPlatformPostsADeviceStatusChange(t *testing.T) {
 	if b := got["room.participant.left"]; b["room_id"] != "zr-huddle-north" || b["participants"] != float64(2) {
 		t.Errorf("left post = %v", b)
 	}
+	// A route's `now` is the device's clock (#2800), the one pinned here.
 	devs, _ := walkDevices(t, d, 300)
 	for _, g := range devs {
-		if g.ID == "zd-spare-bar" && (g.Status != "offline" || time.Now().Unix()-g.LastSeen > 5) {
+		if g.ID == "zd-spare-bar" && (g.Status != "offline" || g.LastSeen != at.Unix()) {
 			t.Errorf("the held bar reads %+v after going offline", g)
 		}
 	}

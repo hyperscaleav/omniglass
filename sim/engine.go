@@ -38,6 +38,8 @@ type Engine struct {
 	obs *endpointObservation
 	// cal is the lab calendar (#2757) devices read through their clock.
 	cal atomic.Pointer[calendar.Calendar]
+	// clock is the simulated world's clock (#2800), real time unless set.
+	clock atomic.Pointer[Clock]
 	// world is the world the simulator holds (#2773), which a service reads
 	// to resolve a system to a room.
 	world atomic.Pointer[world.World]
@@ -54,8 +56,8 @@ func NewEngine(store *profile.Store, templates fs.FS) *Engine {
 		store:     store,
 		templates: templates,
 		obs:       newEndpointObservation(),
-		arb:       NewArbiter(nil),
 	}
+	e.arb = NewArbiter(e.Now) // stamps an unplugged-since on the simulated world's clock
 	e.arb.Derive("scripted-problem", e.scriptedOffline)
 	return e
 }
@@ -169,6 +171,10 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		state = deepCopy(defaults)
 	}
 	dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, state)
+	// The device reads time through the engine's simulated clock (#2800),
+	// from the start, so its uptime anchor is seeded on the same clock its
+	// reads use.
+	dev.now = e.Now
 	dev.Product = snap.Product
 	dev.room = calendar.Room{Site: snap.SiteCode, Building: snap.Building, Room: snap.Room}
 	// Install the profile's defaults snapshot so templates and

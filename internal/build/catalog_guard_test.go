@@ -86,6 +86,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// platform off the live simulator while a scripted problem breaks
 		// them, so naming the shipped products is what it tests (#2769).
 		"internal/lab/calendar_problems_integration_test.go": true,
+		// Reads a conference room's devices and the meeting platform off the
+		// live simulator on a clock offset into a meeting, so naming the
+		// shipped platform is what it tests (#2800).
+		"internal/lab/calendar_clock_offset_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

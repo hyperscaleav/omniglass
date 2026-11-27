@@ -119,3 +119,31 @@ func TestAPulledDeviceTheWorldNamesIsPlacedAndOneItDoesNotIsNot(t *testing.T) {
 		t.Errorf("with no world a device is placed at %+v", s)
 	}
 }
+
+// The offset the lab names reaches every engine of the simulator (#2800): the
+// fleet's and the pushers'. An empty value is real time and a value that is no
+// duration is refused.
+func TestClockOffsetEnvReachesThePushersEngine(t *testing.T) {
+	off, err := LoadClockOffset("36h")
+	if err != nil || off != 36*time.Hour {
+		t.Fatalf("LoadClockOffset(36h) = %v, %v", off, err)
+	}
+	if off, err := LoadClockOffset(""); err != nil || off != 0 {
+		t.Fatalf("an empty offset is %v, %v, want none", off, err)
+	}
+	if _, err := LoadClockOffset("soon"); err == nil {
+		t.Fatal("an offset that is no duration was read")
+	}
+	store, err := profile.LoadStoreFS(profiles.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := startPushers(store, "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.StopAll()
+	if got := e.Clock().Offset; got != off {
+		t.Fatalf("the pushers' engine runs offset %v, want %v", got, off)
+	}
+}
