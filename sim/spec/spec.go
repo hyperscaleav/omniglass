@@ -17,7 +17,10 @@ package spec
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/behave"
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 )
@@ -155,6 +158,31 @@ type Command struct {
 // leaves it nil.
 type Animator func(d Device) (stop func())
 
+// TickContext is what a Tick reads beside the device: the room the device
+// stands in as the engine reads it (an idle room when it has no calendar), the
+// simulated world's time, and the device's seeded random source, which the
+// sim/behave primitives take.
+type TickContext struct {
+	Room calendar.RoomState
+	Now  time.Time
+	Rand behave.Source
+}
+
+// Tick is a typed behavior of a Go family: a function that runs on an
+// interval, reads the device's typed state and the room, calls sim/behave
+// primitives, and returns the state paths it wants written. The engine applies
+// them the way a YAML behavior's mutations are applied: only what changed is
+// written, so the version advances, the diff stream and subscribed sessions
+// see it, and a path an operator has overridden is left alone.
+type Tick struct {
+	Name     string
+	Interval time.Duration
+	// OnStart runs the tick once as the device starts, before it serves, so
+	// what it derives from the room is right from the first request.
+	OnStart bool
+	Run     func(d Device, c TickContext) []surface.Change
+}
+
 // Surface is the shared protocol surfaces (sim/surface, #2831) a family
 // serves for one device: the helpers in sim/surface/{nvp,snmp,httpapi} build
 // these from the device's typed state.
@@ -181,6 +209,7 @@ type Handlers struct {
 	Commands []Command
 	Animate  Animator
 	Surface  SurfaceFunc
+	Ticks    []Tick
 }
 
 // Spec is a Go device family: one API, its models as a table. A family
@@ -204,6 +233,8 @@ type Spec struct {
 	Commands []Command
 	// Animate is the behavior seam (see Animator).
 	Animate Animator
+	// Ticks are the family's typed behaviors (see Tick).
+	Ticks []Tick
 	// Surface builds the shared protocol surfaces the family serves (see
 	// SurfaceFunc).
 	Surface SurfaceFunc
@@ -238,6 +269,11 @@ func (s Spec) validate() error {
 		}
 		if method != strings.ToUpper(method) {
 			return fmt.Errorf("family %q route %q: the method is upper case", s.Name, r.Match)
+		}
+	}
+	for _, t := range s.Ticks {
+		if t.Name == "" || t.Run == nil || t.Interval <= 0 {
+			return fmt.Errorf("family %q has a tick with no name, no func or no interval", s.Name)
 		}
 	}
 	cmds := map[string]bool{}

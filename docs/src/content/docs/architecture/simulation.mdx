@@ -61,8 +61,11 @@ A **product resolves to a Go family when one claims it** (its name or one of its
 YAML profile that simulates it, so a family takes a product over without touching the profile that
 serves the rest. A family may not share a name with a profile, and two families may not claim one
 product. A family's routes and commands are listed on its surfaces, so the console shows its API as it
-shows a profile's. A family may run YAML-style behaviors until the shared behavior primitives land, and
-its `Animator` is the seam they plug into, and its `Surface` func builds the shared protocol surfaces (`sim/surface`) for each device. No shipped profile is a family yet.
+shows a profile's. A family's behavior is typed `Tick`s: each runs on an interval with the device, the room and a seeded
+source, and returns the state paths to write, which the engine applies as a profile behavior's mutations
+are. The `sim/behave` primitives plug in there; an `Animator` is the escape hatch for anything else, and
+a family may still run YAML-style behaviors. A `Surface` func builds the shared protocol surfaces
+(`sim/surface`) for each device. No shipped profile is a family yet.
 
 The catalog holds devices and nothing above them: no room archetype and no fleet layout, since a
 simulated system is built to the platform's own standards ([fleets](#fleets),

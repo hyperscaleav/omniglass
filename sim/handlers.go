@@ -6,7 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"reflect"
+	"sync"
+	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
@@ -19,14 +23,19 @@ type goHandlers struct {
 	model   spec.Model
 	animate spec.Animator
 	// stop ends what animate started.
-	stop func()
+	stop  func()
+	ticks []spec.Tick
+	// tickStop ends the tick goroutines and tickDone waits for them.
+	tickStop chan struct{}
+	tickDone sync.WaitGroup
+	src      *behave.DeviceSource
 }
 
 // addHandlers registers a family's routes and commands on the device and
 // holds its animator for StartBehaviors. model is the row of the product the
 // device simulates, the zero Model for a device of the family itself.
 func (d *Device) addHandlers(h spec.Handlers, model spec.Model) error {
-	d.fam = &goHandlers{model: model, animate: h.Animate}
+	d.fam = &goHandlers{model: model, animate: h.Animate, ticks: h.Ticks, src: behave.NewSource(d.DeviceID)}
 	for _, r := range h.HTTP {
 		method, path, err := parseMatch(r.Match)
 		if err != nil {
@@ -43,25 +52,104 @@ func (d *Device) addHandlers(h spec.Handlers, model spec.Model) error {
 // startAnimator runs the family's animator, once.
 func (d *Device) startAnimator() {
 	d.behaviorMu.Lock()
-	defer d.behaviorMu.Unlock()
-	if d.fam == nil || d.fam.animate == nil || d.fam.stop != nil {
+	if d.fam == nil || d.fam.stop != nil {
+		d.behaviorMu.Unlock()
 		return
 	}
-	stop := d.fam.animate(goDevice{d})
-	if stop == nil {
-		stop = func() {}
+	stop := func() {}
+	if d.fam.animate != nil {
+		if s := d.fam.animate(goDevice{d}); s != nil {
+			stop = s
+		}
 	}
 	d.fam.stop = stop
+	var first []spec.Tick
+	d.fam.tickStop = make(chan struct{})
+	for _, t := range d.fam.ticks {
+		if t.OnStart {
+			first = append(first, t)
+		}
+		d.fam.tickDone.Add(1)
+		go d.runTick(t, d.fam.tickStop, &d.fam.tickDone)
+	}
+	d.behaviorMu.Unlock()
+	for _, t := range first {
+		d.applyTick(t)
+	}
+}
+
+// runTick is a tick's goroutine: a deterministic phase offset, then its
+// interval, as a YAML behavior's.
+func (d *Device) runTick(t spec.Tick, stop <-chan struct{}, done *sync.WaitGroup) {
+	defer done.Done()
+	timer := time.NewTimer(time.Duration(behaviorPhaseOffset(d.DeviceID, t.Name, int64(t.Interval))))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-stop:
+		return
+	}
+	tk := time.NewTicker(t.Interval)
+	defer tk.Stop()
+	for {
+		d.applyTick(t)
+		select {
+		case <-tk.C:
+		case <-stop:
+			return
+		}
+	}
+}
+
+// applyTick runs a tick and writes what it returns: only the paths whose value
+// changed, never one an operator override holds.
+func (d *Device) applyTick(t spec.Tick) {
+	c := spec.TickContext{Room: d.roomState(d.room), Now: d.clock(), Rand: d.fam.src}
+	changes := t.Run(goDevice{d}, c)
+	if len(changes) == 0 {
+		return
+	}
+	held := d.OverridePaths()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	diffs := map[string]any{}
+	for _, ch := range changes {
+		if _, over := held[ch.Path]; over {
+			continue
+		}
+		if reflect.DeepEqual(lookupStatePath(d.state, ch.Path), ch.Value) {
+			continue
+		}
+		if err := SetPath(d.state, ch.Path, ch.Value); err != nil {
+			slog.Warn("tick write failed", "device_id", d.DeviceID, "tick", t.Name, "path", ch.Path, "error", err)
+			continue
+		}
+		diffs[ch.Path] = ch.Value
+	}
+	if len(diffs) == 0 {
+		return
+	}
+	d.Version++
+	if d.DiffPublisher != nil {
+		d.DiffPublisher(StateChange{DeviceID: d.DeviceID, Version: d.Version, Diffs: diffs, Cause: "behavior:" + t.Name})
+	}
+	d.fanoutToSessions(diffs)
 }
 
 // stopAnimator stops what the animator started.
 func (d *Device) stopAnimator() {
 	d.behaviorMu.Lock()
 	var stop func()
+	var ticks chan struct{}
 	if d.fam != nil {
 		stop, d.fam.stop = d.fam.stop, nil
+		ticks, d.fam.tickStop = d.fam.tickStop, nil
 	}
 	d.behaviorMu.Unlock()
+	if ticks != nil {
+		close(ticks)
+		d.fam.tickDone.Wait()
+	}
 	if stop != nil {
 		stop()
 	}

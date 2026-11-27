@@ -7,14 +7,18 @@ import (
 	"encoding/json"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/behave"
+	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
 )
 
@@ -294,5 +298,71 @@ func TestGoFamilyServesASharedSurface(t *testing.T) {
 	reg := d.TCPSession()
 	if reg == nil || len(reg.cfg.Subjects) != len(nvp.Subjects()) {
 		t.Fatalf("the panel's session config carries %v subjects, want the surface's %d", reg, len(nvp.Subjects()))
+	}
+}
+
+// A family's typed ticks run on their interval (once at start for OnStart),
+// read the room and call sim/behave primitives, and their writes go through the
+// path a YAML behavior's mutations do: only what changed is written, the diff
+// stream sees it with the behavior as its cause, and a stopped device ticks no
+// more. A room with no calendar leaves the power where it was, so
+// PowerFollowsRoom writes nothing.
+func TestGoFamilyTicksWriteOnlyWhatChanged(t *testing.T) {
+	var runs atomic.Int64
+	var sawRoom atomic.Bool
+	fam := spectest.Spec()
+	fam.Ticks = []spec.Tick{
+		{Name: "count", Interval: 20 * time.Millisecond, OnStart: true, Run: func(d spec.Device, c spec.TickContext) []surface.Change {
+			n := runs.Add(1)
+			if c.Room.Phase == calendar.PhaseIdle && c.Rand != nil && !c.Now.IsZero() {
+				sawRoom.Store(true)
+			}
+			return []surface.Change{{Path: "status.device.ticks", Value: n}}
+		}},
+		{Name: "power", Interval: 20 * time.Millisecond, Run: func(d spec.Device, c spec.TickContext) []surface.Change {
+			prev, _ := d.Read("status.device.power").(string)
+			next, _ := behave.PowerFollowsRoom(behave.PowerState{Power: prev}, c.Room, c.Now, behave.DefaultPower)
+			return []surface.Change{{Path: "status.device.power", Value: next.Power}}
+		}},
+	}
+	e := familyEngine(t, fam)
+	var mu sync.Mutex
+	var causes []string
+	snap := familySnap("tf-1", "127.88.28.1", "tf-display-55")
+	// The publisher is set before the device serves, so the OnStart tick is seen.
+	e.SetDiffPublisher(func(c StateChange) {
+		mu.Lock()
+		causes = append(causes, c.Cause)
+		mu.Unlock()
+	})
+	if err := e.Sync([]DeviceSnapshot{snap}); err != nil {
+		t.Fatal(err)
+	}
+	d := deviceNamed(t, e, "tf-1")
+	if runs.Load() < 1 || d.ReadPath("status.device.ticks") == nil {
+		t.Fatal("the OnStart tick did not run before the device served")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for runs.Load() < 4 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if runs.Load() < 4 || !sawRoom.Load() {
+		t.Fatalf("runs=%d sawRoom=%v", runs.Load(), sawRoom.Load())
+	}
+	mu.Lock()
+	for _, c := range causes {
+		if c != "behavior:count" {
+			t.Errorf("a write with cause %q: the power tick changed nothing and must write nothing", c)
+		}
+	}
+	mu.Unlock()
+	if d.ReadPath("status.device.power") != "on" {
+		t.Fatalf("power = %v, want it held with no calendar", d.ReadPath("status.device.power"))
+	}
+	d.StopBehaviors()
+	n := runs.Load()
+	time.Sleep(100 * time.Millisecond)
+	if runs.Load() != n {
+		t.Fatal("a stopped device kept ticking")
 	}
 }
