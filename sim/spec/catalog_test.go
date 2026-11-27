@@ -7,6 +7,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
 func TestCatalogResolvesAProductToItsYAMLProfileWhenNoFamilyClaimsIt(t *testing.T) {
@@ -84,13 +85,17 @@ func TestCatalogRefusesWhatItCouldNotServeFaithfully(t *testing.T) {
 		mutate func(*spec.Spec)
 		want   string
 	}{
-		"a name a profile has":       {func(s *spec.Spec) { s.Name = "yaml-display" }, "the name of another definition"},
-		"a model with no product":    {func(s *spec.Spec) { s.Models = append(s.Models, spec.Model{}) }, "no product"},
-		"a product listed twice":     {func(s *spec.Spec) { s.Models = append(s.Models, s.Models[0]) }, "twice"},
-		"no name":                    {func(s *spec.Spec) { s.Name = "" }, "no name"},
-		"a route with no handler":    {func(s *spec.Spec) { s.HTTP = append(s.HTTP, spec.HTTPRoute{Match: "GET /x"}) }, "no handler"},
-		"a route with no method":     {func(s *spec.Spec) { s.HTTP[0].Match = "/x" }, "METHOD /path"},
-		"routes with no http face":   {func(s *spec.Spec) { s.Interfaces = nil }, "no http interface"},
+		"a name a profile has":     {func(s *spec.Spec) { s.Name = "yaml-display" }, "the name of another definition"},
+		"a model with no product":  {func(s *spec.Spec) { s.Models = append(s.Models, spec.Model{}) }, "no product"},
+		"a product listed twice":   {func(s *spec.Spec) { s.Models = append(s.Models, s.Models[0]) }, "twice"},
+		"no name":                  {func(s *spec.Spec) { s.Name = "" }, "no name"},
+		"a route with no handler":  {func(s *spec.Spec) { s.HTTP = append(s.HTTP, spec.HTTPRoute{Match: "GET /x"}) }, "no handler"},
+		"a route with no method":   {func(s *spec.Spec) { s.HTTP[0].Match = "/x" }, "METHOD /path"},
+		"routes with no http face": {func(s *spec.Spec) { s.Interfaces = nil }, "no http interface"},
+		"a route listed twice":     {func(s *spec.Spec) { s.HTTP = append(s.HTTP, s.HTTP[0]) }, "route \"GET /api/info\" twice"},
+		"a tick with no interval": {func(s *spec.Spec) {
+			s.Ticks = []spec.Tick{{Name: "t", Run: func(spec.Device, spec.TickContext) []surface.Change { return nil }}}
+		}, "no interval"},
 		"a command listed twice":     {func(s *spec.Spec) { s.Commands = append(s.Commands, s.Commands[0]) }, "twice"},
 		"commands with no line face": {func(s *spec.Spec) { s.Interfaces = s.Interfaces[:1] }, "no ssh, telnet, tcp or udp interface"},
 	}

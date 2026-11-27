@@ -259,7 +259,12 @@ func (s Spec) validate() error {
 		}
 		seen[m.Product] = true
 	}
+	routes := map[string]bool{}
 	for _, r := range s.HTTP {
+		if routes[r.Match] {
+			return fmt.Errorf("family %q lists route %q twice", s.Name, r.Match)
+		}
+		routes[r.Match] = true
 		method, path, ok := strings.Cut(r.Match, " ")
 		if !ok || method == "" || !strings.HasPrefix(path, "/") {
 			return fmt.Errorf("family %q route %q: expected 'METHOD /path'", s.Name, r.Match)
