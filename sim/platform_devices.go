@@ -168,6 +168,9 @@ func (d *Device) unpluggedSince(l world.Listing) (int64, bool) {
 // roomOffline says whether the room of a system reads offline on the platform:
 // a codec or a bar in it that a scripted problem has unplugged.
 func (d *Device) roomOffline(system string) bool {
+	if !d.calendarSrc().HasProblems() {
+		return false // the scan is per room every tick: skip it where no problem is scripted
+	}
 	for _, l := range d.world().Listed(d.Hostname) {
 		if l.System != system || (l.Type != "codec" && l.Type != "bar") {
 			continue

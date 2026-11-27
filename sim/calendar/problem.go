@@ -262,6 +262,10 @@ func (c *Calendar) WithProblems(problems func(Room) []ProblemSpec) *Calendar {
 	return &cp
 }
 
+// HasProblems says whether the calendar scripts any problem at all, so a reader
+// that scans many rooms can skip the scan on a calendar with none.
+func (c *Calendar) HasProblems() bool { return c != nil && c.problems != nil }
+
 // Problems is the room's problem entries overlapping [from, to), in start
 // order. A nil calendar has none.
 func (c *Calendar) Problems(room Room, from, to time.Time) []Entry {
