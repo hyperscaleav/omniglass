@@ -35,8 +35,8 @@ on GitHub-hosted runners and have a page of their own, [Agents in CI](/contribut
   from the release branches ADR-2652 retired, removed in #2788).
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and a release's
-  notes group it by its type. A malformed title would muddy the history and land in the
-  notes' Other changes, so it is blocked at the PR. The titles also pick the version: release-please reads their types
+  notes group it by its type. A malformed title would muddy the history and drop out of
+  the notes, so it is blocked at the PR. The titles also pick the version: release-please reads their types
   to choose the next release's number (see [cutting a release](#cutting-a-release-manual)).
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
@@ -306,7 +306,13 @@ evidence that the release will build.
 
 ## Why the PR title, not the commits
 
-A squash merge collapses a branch's commits into one, and GitHub uses the PR title as that
-commit's subject. So the PR title is the single conventional-commit that lands on `main`, and
-it is the unit both the merge model and the release notes reason about. That is why
+A squash merge collapses a branch's commits into one. The repository sets that commit's title to
+the PR title and its body to blank (Settings, General, Pull Requests: squash merge commit message
+"Pull request title", #2792). So the PR title is the single conventional commit that lands on
+`main`, and it is the unit both the merge model and the release notes reason about. That is why
 `pr-title.yml` is a required check, not advisory.
+
+The body is blank on purpose. release-please reads every conventional line in a commit message,
+and GitHub's default body lists each branch commit as `* <type>: <subject>`, so a `fix:` commit
+on a `chore:` branch would bump the version and land in the notes. The branch's commits stay on
+the PR, which the `(#<n>)` in each subject links to.
