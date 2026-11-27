@@ -278,6 +278,9 @@ type Device struct {
 	// worldSrc reaches the engine's world (#2773), nil on a device standing
 	// alone.
 	worldSrc func() *world.World
+	// arbSrc reaches the engine's impairment arbiter (#2799), nil on a device
+	// standing alone.
+	arbSrc func() *Arbiter
 
 	mu    sync.RWMutex
 	state map[string]any

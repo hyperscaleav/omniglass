@@ -4,7 +4,6 @@ package simoutpost
 
 import (
 	"net"
-	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -41,14 +40,9 @@ func TestNetlinkScriptedLossAppliesForItsWindowAndClearsAfter(t *testing.T) {
 	ap := impair.NewNetlink()
 	m := newImpairer(ap, true)
 	t.Cleanup(func() { _ = ap.Clear() })
-	served := map[string]netip.Addr{}
-	for _, d := range r.e.Devices() {
-		a, _ := netip.AddrFromSlice(d.LoopbackIP.To4())
-		served[d.DeviceID] = a
-	}
+	r.e.Arbiter().SetNet(m)
 	settle := func(at time.Duration) {
-		r.now = rigOpen.Add(at)
-		m.reconcile(served, mergeNet(nil, r.x.reconcile(r.e.Devices(), true)))
+		r.at(true, rigOpen.Add(at))
 	}
 	reachable := func() bool {
 		c, err := net.DialTimeout("tcp", mic+":8080", 700*time.Millisecond)

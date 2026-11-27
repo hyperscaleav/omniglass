@@ -551,23 +551,36 @@ the impairment (`unplugged`, `loss_pct` or a `pin` of a state path and a value).
 `Prev` stay the meetings alone, which every reader of a meeting depends on; `Problems`, `ProblemsNow` and `All`
 read the rest, and `problemsNow` reads the device's own room in a template.
 
-**One executor applies them.** The simulator's problem executor reads the calendar through the clock and, for
-each device a problem is active on (the room it sits in and the slot it fills), applies the impairment as the
-window opens and removes it as it closes; a device does not re-implement a problem, and a device with no
-calendar is untouched.
+**One executor registers them; one arbiter decides.** The simulator's problem executor reads the calendar
+through the clock and, for each device a problem is active on (the room it sits in and the slot it fills),
+registers the problem's wants as the window opens and releases them as it closes; a device does not
+re-implement a problem, and a device with no calendar is untouched. The executor writes to nothing itself.
 
-- A **pin** holds a state path at a value through the behavior-override seam, so the device's own behavior
-  stops writing that path while the window is open, and the path is put back to what it was as the window
-  closes.
-- **Unplugged** and **loss** are the network's: the executor hands the impairer the impairment an operator's
-  would be, merged with what the server asks for, so the same netns firewall and shaping that break a device
-  on request break it on schedule. They need `--impairments` and `NET_ADMIN`; without them the simulator logs
-  that the problem needs the network and is not applied, once per window, and the pins still apply.
+**The impairment arbiter** (`sim.Arbiter`, one per simulator engine) decides what a device suffers when several
+sources want something at once: the operator's impairment route, each scripted problem and, next, scenes. A
+source registers its wants under its own name (unplugged, delay, jitter, loss, a rate limit, and pins of state
+paths) and releases only its own, so clearing a problem never clears an operator's impairment and the reverse
+holds too. The arbiter resolves the same way every time:
+
+- **Unplugged** if any source wants it. **Loss, latency and jitter** take the highest wanted and a **rate
+  limit** the tightest.
+- For one **pinned path** the newest pin wins, a pin being as new as the moment its source first held that
+  path on that device. The losers are kept: as a winner releases, the next newest takes the path, and when
+  the last releases the path goes back to what it read before any pin held it.
+
+It is the only writer to the two seams that make a device suffer, the behavior-override set and the netns
+impairer, and a guard test fails the build if anything else calls them. Pins hold a path through the
+override seam, so the device's own behavior stops writing it while a pin is open. **Unplugged** and **loss**
+are the network's, applied by the impairer exactly as an operator's would be, so the same firewall and
+shaping that break a device on request break it on schedule. They need `--impairments` and `NET_ADMIN`;
+without them the simulator logs that the problem needs the network and is not applied, once per window, and
+the pins still apply.
 
 The sim is; Omniglass learns. Nothing is told to Omniglass: a collector learns of a problem by collecting from
 the broken device (an unreachable endpoint, a pinned reading, a lossy link), and an operator can lay the two
-side by side with the calendar. The meeting platform reads the same fact from the calendar and not from the
-dark device: while a problem has a listed device unplugged, its entry on the platform's devices list reads `offline`,
+side by side with the calendar. The meeting platform reads the same fact from the arbiter (which derives scripted problems from the
+calendar, whichever simulator serves the device) and not from the dark device: while a source, an operator
+or a problem, has a listed device unplugged, its entry on the platform's devices list reads `offline`,
 last seen when the problem began, and its room reads `offline` on the rooms list when the device is the
 room's codec or bar.
 

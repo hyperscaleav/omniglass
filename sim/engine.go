@@ -41,18 +41,28 @@ type Engine struct {
 	// world is the world the simulator holds (#2773), which a service reads
 	// to resolve a system to a room.
 	world atomic.Pointer[world.World]
+	// arb decides what each device suffers when several sources impair it
+	// (#2799); its readers (a platform's offline listing) ask it.
+	arb *Arbiter
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
 // tree (profiles.Templates() for the embedded catalog). A nil templates tree
 // is valid for profiles that render no templates.
 func NewEngine(store *profile.Store, templates fs.FS) *Engine {
-	return &Engine{
+	e := &Engine{
 		store:     store,
 		templates: templates,
 		obs:       newEndpointObservation(),
+		arb:       NewArbiter(nil),
 	}
+	e.arb.Derive("scripted-problem", e.scriptedOffline)
+	return e
 }
+
+// Arbiter is the engine's impairment arbiter (#2799): the one writer to its
+// devices' override sets and to the network impairer.
+func (e *Engine) Arbiter() *Arbiter { return e.arb }
 
 // SetSessionPublisher attaches a publisher that receives every
 // SessionEvent (open / close / push) emitted by any persistent
@@ -620,6 +630,7 @@ func (e *Engine) SetHitReporter(f func(Hit)) {
 func (e *Engine) installSeams(dev *Device) {
 	dev.calSrc = e.Calendar
 	dev.worldSrc = e.World
+	dev.arbSrc = func() *Arbiter { return e.arb }
 	dev.observe = e.obs.device(dev.DeviceID, dev.Hostname)
 	dev.Logger = func(l RequestLog) {
 		e.seamMu.RLock()

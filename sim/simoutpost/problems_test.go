@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -86,7 +86,7 @@ func newProblemRig(t *testing.T) *problemRig {
 		}
 	})
 	rig := &problemRig{e: e, now: rigOpen.Add(-time.Minute), logs: &bytes.Buffer{}}
-	rig.x = newProblemExecutor(w, e.Calendar(), func() time.Time { return rig.now }, slog.New(slog.NewTextHandler(rig.logs, nil)))
+	rig.x = newProblemExecutor(w, e.Calendar(), e.Arbiter(), func() time.Time { return rig.now }, slog.New(slog.NewTextHandler(rig.logs, nil)))
 	if rig.x == nil {
 		t.Fatal("a world with problems has no executor")
 	}
@@ -105,7 +105,12 @@ func (r *problemRig) dev(name string) *sim.Device {
 func (r *problemRig) at(netOK bool, t time.Time) map[string]string {
 	r.now = t
 	out := map[string]string{}
-	for id, imp := range r.x.reconcile(r.e.Devices(), netOK) {
+	r.x.reconcile(r.e.Devices(), netOK)
+	net, errs := r.e.Arbiter().Settle(r.e.Devices())
+	if len(errs) != 0 {
+		panic(errs)
+	}
+	for id, imp := range net {
 		out[id] = fmt.Sprintf("unplugged=%v loss=%v", imp.Unplugged, imp.LossPct)
 	}
 	return out
@@ -188,12 +193,15 @@ func TestUnpluggedAndLossProblemsAskTheNetworkForTheirWindow(t *testing.T) {
 		t.Fatalf("after every window: %v, want the network clear", got)
 	}
 
-	// Without NET_ADMIN: nothing is asked of the network, the pins still apply,
+	// Without NET_ADMIN: the impairer applies nothing, the pins still apply,
 	// and the refusal is a clear log line, once per window.
 	r = newProblemRig(t)
+	ap := &fakeApplier{}
+	r.e.Arbiter().SetNet(newImpairer(ap, false))
 	for _, at := range []time.Duration{40 * time.Minute, 45 * time.Minute} {
-		if got := r.at(false, rigOpen.Add(at)); len(got) != 0 {
-			t.Fatalf("a simulator without NET_ADMIN asked the network for %v", got)
+		r.at(false, rigOpen.Add(at))
+		if len(ap.applied) != 0 {
+			t.Fatalf("a simulator without NET_ADMIN applied %v", ap.applied)
 		}
 	}
 	if n := strings.Count(r.logs.String(), "needs the network and is not applied"); n != 1 || !strings.Contains(r.logs.String(), "bar-dark") || !strings.Contains(r.logs.String(), "NET_ADMIN") {
@@ -204,26 +212,37 @@ func TestUnpluggedAndLossProblemsAskTheNetworkForTheirWindow(t *testing.T) {
 	}
 }
 
-func TestMergeNetFoldsProblemsIntoWhatTheServerAsks(t *testing.T) {
-	if got := mergeNet(nil, nil); len(got) != 0 {
-		t.Fatalf("merge of nothing = %v", got)
-	}
-	wants := map[string]collection.SimImpairment{"a": {LatencyMs: 50, LossPct: 10}, "b": {RateKbit: 9}}
-	got := mergeNet(wants, map[string]collection.SimImpairment{"a": {LossPct: 30}, "c": {Unplugged: true}})
-	if got["a"].LatencyMs != 50 || got["a"].LossPct != 30 || got["b"].RateKbit != 9 || !got["c"].Unplugged {
-		t.Fatalf("merged = %+v", got)
-	}
-	if wants["a"].LossPct != 10 {
-		t.Fatal("the server's own wants were rewritten")
-	}
-}
-
 // A world with no scripted problems has no executor: a device is untouched.
 func TestAWorldWithNoProblemsHasNoExecutor(t *testing.T) {
 	w := worldFixture()
 	e := sim.NewEngine(nil, nil)
 	installWorld(e, w)
-	if newProblemExecutor(w, e.Calendar(), nil, slog.Default()) != nil || newProblemExecutor(nil, nil, nil, slog.Default()) != nil {
+	if newProblemExecutor(w, e.Calendar(), e.Arbiter(), nil, slog.Default()) != nil || newProblemExecutor(nil, nil, nil, nil, slog.Default()) != nil {
 		t.Fatal("an executor exists for a world with no problems")
+	}
+}
+
+// #2799: the operator's impairment and the scripted problems are separate
+// sources of one arbiter: a problem's window opening and closing never clears
+// what the operator set, and the operator's repair never clears a problem.
+func TestAProblemWindowAndAnOperatorsImpairmentDoNotClearEachOther(t *testing.T) {
+	r := newProblemRig(t)
+	arb := r.e.Arbiter()
+	const mic = "id-hq-mr86-1-wireless-mic-1"
+	arb.Set(operatorSource, map[string]sim.Want{mic: {Impairment: impair.Impairment{Unplugged: true}}})
+
+	got := r.at(true, rigOpen.Add(70*time.Minute)) // mic-lossy is open
+	if got[mic] != "unplugged=true loss=30" {
+		t.Fatalf("operator unplug and scripted loss together: %q", got[mic])
+	}
+	got = r.at(true, rigOpen.Add(121*time.Minute)) // every window closed
+	if got[mic] != "unplugged=true loss=0" {
+		t.Fatalf("the problem closed and left %q, want the operator's unplug alone", got[mic])
+	}
+	r.at(true, rigOpen.Add(24*time.Hour+70*time.Minute)) // the next day's window
+	arb.Set(operatorSource, nil)                         // the operator repairs it
+	got = r.at(true, rigOpen.Add(24*time.Hour+71*time.Minute))
+	if got[mic] != "unplugged=false loss=30" {
+		t.Fatalf("the operator's repair left %q, want the scripted loss alone", got[mic])
 	}
 }

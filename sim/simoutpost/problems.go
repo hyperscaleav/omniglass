@@ -3,13 +3,11 @@ package simoutpost
 import (
 	"fmt"
 	"log/slog"
-	"sort"
-	"strings"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -20,50 +18,45 @@ import (
 // never its product) it applies the problem's impairment when the window opens
 // and removes it when the window closes:
 //
-//   - a pin holds a state path at a value, through the behavior-override seam,
-//     and puts the path back as it was when the window closes;
-//   - unplugged and packet loss are the network's: the executor hands the
-//     impairer the same per-device impairment an operator's would, merged with
-//     what the server asks for, and the impairer applies it (NET_ADMIN only).
+//   - a pin holds a state path at a value and puts the path back as it was
+//     when the window closes;
+//   - unplugged and packet loss are the network's, applied by the impairer
+//     (NET_ADMIN only).
+//
+// The executor writes to neither seam. It registers each active problem's wants
+// with the impairment arbiter (sim.Arbiter, #2799) as a source of its own,
+// "problem:<name>", and releases it when the window closes; the arbiter merges
+// them with the operator's and applies the result.
 //
 // Devices do not re-implement problems; omniglass is told nothing and learns
 // of a problem only by collecting from the device it broke.
 
-// pinPrefix marks the overrides the executor owns. The executor owns a
-// device's whole override set while it runs: nothing else installs one.
-const pinPrefix = "problem:"
-
-// pinInterval is how often a held pin rewrites its path, so a write by
-// anything else is undone within it.
-const pinInterval = 10 * time.Second
-
-type pinned struct {
-	path string
-	prev any
-}
+// problemSource names the arbiter source one scripted problem registers as.
+const problemSource = "problem:"
 
 type problemExecutor struct {
 	cal   *calendar.Calendar
 	w     *world.World
+	arb   *sim.Arbiter
 	clock func() time.Time
 	log   *slog.Logger
-	// pins is what the executor holds on each device (by component id), by
-	// override id.
-	pins map[string]map[string]pinned
+	// held is the problem sources registered with the arbiter, so one whose
+	// window closed is released.
+	held map[string]bool
 	// refused is the net problems already logged as refused, by key.
 	refused map[string]bool
 }
 
 // newProblemExecutor is nil for a world with no scripted problems: a device
 // with no calendar, or a calendar with no problems, is untouched.
-func newProblemExecutor(w *world.World, cal *calendar.Calendar, clock func() time.Time, log *slog.Logger) *problemExecutor {
-	if w == nil || cal == nil || len(w.Problems) == 0 {
+func newProblemExecutor(w *world.World, cal *calendar.Calendar, arb *sim.Arbiter, clock func() time.Time, log *slog.Logger) *problemExecutor {
+	if w == nil || cal == nil || arb == nil || len(w.Problems) == 0 {
 		return nil
 	}
 	if clock == nil {
 		clock = time.Now
 	}
-	return &problemExecutor{cal: cal, w: w, clock: clock, log: log, pins: map[string]map[string]pinned{}, refused: map[string]bool{}}
+	return &problemExecutor{cal: cal, w: w, arb: arb, clock: clock, log: log, held: map[string]bool{}, refused: map[string]bool{}}
 }
 
 // activeOn is the problems active now on the device: those of its room whose
@@ -82,128 +75,55 @@ func (x *problemExecutor) activeOn(d *sim.Device, now time.Time) []calendar.Entr
 	return out
 }
 
-// reconcile brings every device to what the calendar says now and returns the
-// network impairments the active problems ask for, by component id. netOK says
-// whether the simulator may apply them; without it they are refused with a log
-// line, once per window, and the pins still apply.
-func (x *problemExecutor) reconcile(devices []*sim.Device, netOK bool) map[string]collection.SimImpairment {
+// reconcile registers with the arbiter what the calendar says now, one source
+// per active problem, and releases the problems whose window closed. netOK says
+// whether the simulator may apply network impairments; without it they are
+// refused with a log line, once per window (the pins still apply). It does not
+// settle: the arbiter's Settle applies.
+func (x *problemExecutor) reconcile(devices []*sim.Device, netOK bool) {
 	now := x.clock()
-	net := map[string]collection.SimImpairment{}
-	live := map[string]bool{}
+	wants := map[string]map[string]sim.Want{}
 	for _, d := range devices {
-		live[d.DeviceID] = true
-		want := x.activeOn(d, now)
-		specs := map[string]calendar.Pin{}
-		for _, e := range want {
+		for _, e := range x.activeOn(d, now) {
+			src := problemSource + e.Problem.Name
 			imp := e.Problem.Impairment
-			switch {
-			case imp.Pin != nil:
-				specs[pinPrefix+e.Problem.Name] = *imp.Pin
-			default:
-				key := fmt.Sprintf("%s|%s|%d", e.Problem.Name, d.Hostname, e.Start.Unix())
+			w := sim.Want{Since: e.Start}
+			if imp.Pin != nil {
+				w.Pins = []sim.Pin{{Path: imp.Pin.Path, Value: imp.Pin.Value}}
+			} else {
 				if !netOK {
+					key := fmt.Sprintf("%s|%s|%d", e.Problem.Name, d.Hostname, e.Start.Unix())
 					if !x.refused[key] {
 						x.refused[key] = true
 						x.log.Warn("a scripted problem needs the network and is not applied: the simulator lacks NET_ADMIN or --impairments",
 							"problem", e.Problem.Name, "device", d.Hostname, "role", e.Problem.Role)
 					}
-					continue
 				}
-				cur := net[d.DeviceID]
-				cur.Unplugged = cur.Unplugged || imp.Unplugged
-				cur.LossPct = max(cur.LossPct, imp.LossPct)
-				net[d.DeviceID] = cur
+				w.Impairment = impair.Impairment{Unplugged: imp.Unplugged, LossPct: imp.LossPct}
 			}
-		}
-		x.settlePins(d, specs)
-	}
-	for id := range x.pins {
-		if !live[id] {
-			delete(x.pins, id)
-		}
-	}
-	return net
-}
-
-// settlePins makes the device's pins the specs: a pin that opened is applied
-// at once, one that closed puts its path back, and the device's override set
-// is replaced only when it changed.
-func (x *problemExecutor) settlePins(d *sim.Device, specs map[string]calendar.Pin) {
-	held := x.pins[d.DeviceID]
-	same := len(held) == len(specs)
-	for id := range specs {
-		if _, ok := held[id]; !ok {
-			same = false
-		}
-	}
-	if same {
-		return
-	}
-	ids := make([]string, 0, len(specs))
-	for id := range specs {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	next := map[string]pinned{}
-	overrides := make([]sim.BehaviorOverrideSpec, 0, len(ids))
-	for _, id := range ids {
-		pin := specs[id]
-		prev := held[id].prev
-		if _, ok := held[id]; !ok {
-			prev = d.ReadPath(pin.Path)
-		}
-		next[id] = pinned{path: pin.Path, prev: prev}
-		overrides = append(overrides, sim.BehaviorOverrideSpec{OverrideID: id, Path: pin.Path, Expression: pin.Value, IntervalMs: int32(pinInterval / time.Millisecond)})
-	}
-	if err := d.SetBehaviorOverrides(overrides); err != nil {
-		x.log.Warn("a scripted problem's pin did not apply", "device", d.Hostname, "error", err)
-		return
-	}
-	for _, id := range ids {
-		if _, ok := held[id]; !ok {
-			if err := d.WritePath(id, specs[id].Path, specs[id].Value); err != nil {
-				x.log.Warn("a scripted problem's pin did not apply", "device", d.Hostname, "error", err)
+			if wants[src] == nil {
+				wants[src] = map[string]sim.Want{}
 			}
+			wants[src][d.DeviceID] = w
 		}
 	}
-	// What closed puts its path back, unless another pin still holds it.
-	stillHeld := map[string]bool{}
-	for _, p := range next {
-		stillHeld[p.path] = true
+	for src, byDev := range wants {
+		x.arb.Set(src, byDev)
+		x.held[src] = true
 	}
-	for id, p := range held {
-		if _, ok := next[id]; ok || stillHeld[p.path] || p.prev == nil || strings.Contains(fmt.Sprint(p.prev), "{{") {
-			continue
+	for src := range x.held {
+		if _, ok := wants[src]; !ok {
+			x.arb.Release(src)
+			delete(x.held, src)
 		}
-		if err := d.WritePath(id, p.path, fmt.Sprint(p.prev)); err != nil {
-			x.log.Warn("a scripted problem's pin did not release", "device", d.Hostname, "error", err)
-		}
-	}
-	x.pins[d.DeviceID] = next
-}
-
-// release puts every pin back, for a simulator that stops.
-func (x *problemExecutor) release(devices []*sim.Device) {
-	for _, d := range devices {
-		x.settlePins(d, nil)
 	}
 }
 
-// mergeNet folds the impairments the problems ask for into what the server
-// asks for, by component id: unplugged if either unplugs, the larger loss.
-func mergeNet(wants map[string]collection.SimImpairment, problems map[string]collection.SimImpairment) map[string]collection.SimImpairment {
-	if len(problems) == 0 {
-		return wants
+// release lets go of every problem, for a simulator that stops. The arbiter
+// puts the pinned paths back.
+func (x *problemExecutor) release() {
+	for src := range x.held {
+		x.arb.Release(src)
+		delete(x.held, src)
 	}
-	out := make(map[string]collection.SimImpairment, len(wants)+len(problems))
-	for id, w := range wants {
-		out[id] = w
-	}
-	for id, p := range problems {
-		w := out[id]
-		w.Unplugged = w.Unplugged || p.Unplugged
-		w.LossPct = max(w.LossPct, p.LossPct)
-		out[id] = w
-	}
-	return out
 }

@@ -80,3 +80,13 @@ refs: [2757, 2764, 2769, 2773]
   unplugged or packet loss through the netns impairer, merged with the server's own impairment and refused
   with a log line without NET_ADMIN. Omniglass is told nothing; the meeting platform's devices list reads a
   device offline from the calendar while a problem has it unplugged, not from the dark device.
+
+- **Amended (#2799): one impairment arbiter decides what a simulated device suffers.** #2769's executor owned a
+  device's whole override set and merged network wants its own way, so a next source (scenes, #2314) would
+  have overwritten it or been overwritten. `sim.Arbiter`, one per engine, now takes each source's wants under
+  the source's name (the operator's route, each scripted problem as `problem:<name>`) and is the only writer to
+  the override set and the impairer. Resolution is deterministic: unplugged if any source wants it; the highest
+  loss, latency and jitter and the tightest rate; for one path the newest pin (by when its source first held
+  it) wins, the losers kept and restored in order as winners release. Each source releases only its own. The
+  meeting platform's offline listing asks the arbiter, which holds scripted problems as a derivation from the
+  calendar (central, so it also answers for devices another simulator serves) beside the registered wants.

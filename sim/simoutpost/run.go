@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -58,6 +57,10 @@ type Config struct {
 	// placed in rooms; with none there is no calendar and no room, as before.
 	World *world.World
 }
+
+// operatorSource is the arbiter source of the impairments an operator set
+// through the impairment route, which the pull carries.
+const operatorSource = "operator"
 
 // problemBeat is how often the problem executor looks at the calendar between
 // pulls: a window opens and closes within it of its time.
@@ -182,26 +185,24 @@ func Run(ctx context.Context, cfg Config) error {
 	// The scripted problems on the lab calendar (#2769) are applied by one
 	// executor, settled on every pull and on its own beat, so a window opens
 	// and closes on the clock and not on the next pull.
-	problems := newProblemExecutor(cfg.World, engine.Calendar(), nil, log)
-	var lastWants map[string]collection.SimImpairment
+	// The impairment arbiter (#2799) is the only writer to the override seam and
+	// the impairer: the operator's impairments and the problems each register
+	// their wants with it, and settling applies what they resolve to.
+	arb := engine.Arbiter()
+	arb.SetNet(impairs)
+	problems := newProblemExecutor(cfg.World, engine.Calendar(), arb, nil, log)
 	settle := func() {
-		served := map[string]netip.Addr{}
 		devs := engine.Devices()
-		for _, d := range devs {
-			if a, ok := netip.AddrFromSlice(d.LoopbackIP.To4()); ok {
-				served[d.DeviceID] = a
-			}
-		}
-		wants := lastWants
 		if problems != nil {
-			wants = mergeNet(wants, problems.reconcile(devs, impairs.netAdmin))
+			problems.reconcile(devs, impairs.netAdmin)
 		}
-		impairs.reconcile(served, wants)
+		_, errs := arb.Settle(devs)
+		for _, err := range errs {
+			log.Warn("an impairment did not apply", "error", err)
+		}
 		impairedCount.Store(int64(len(impairs.status().Impaired)))
 	}
-	if problems != nil {
-		defer func() { problems.release(engine.Devices()) }()
-	}
+	defer func() { arb.Shutdown(engine.Devices()) }()
 	pull := func() {
 		devices, err := pullList(nc, cfg.Name, caps)
 		if err != nil {
@@ -215,13 +216,13 @@ func Run(ctx context.Context, cfg Config) error {
 		if err := engine.Sync(snaps); err != nil {
 			log.Warn("some devices did not start", "error", err)
 		}
-		wants := map[string]collection.SimImpairment{}
+		wants := map[string]sim.Want{}
 		for _, d := range devices {
 			if d.Impairment != nil {
-				wants[d.ComponentID] = *d.Impairment
+				wants[d.ComponentID] = sim.Want{Impairment: impair.Impairment(*d.Impairment)}
 			}
 		}
-		lastWants = wants
+		arb.Set(operatorSource, wants)
 		settle()
 		if st := impairs.status(); st.Error != "" {
 			log.Warn("impairments did not apply", "error", st.Error)

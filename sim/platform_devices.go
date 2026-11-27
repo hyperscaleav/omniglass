@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -147,19 +148,29 @@ func heldSeen(v any, now int64) int64 {
 	return now
 }
 
-// unpluggedSince says whether a scripted problem on the lab calendar has the
-// listed device unplugged now, and if so since when (unix seconds): the
-// problem's own start, read off the calendar, so the platform learns what the
-// world did and not what the dark device would say.
+// unpluggedSince says whether the arbiter has the listed device unplugged now,
+// and if so since when (unix seconds): by an operator, or by a scripted problem
+// on the lab calendar, whose own start the platform reads, so it learns what
+// the world did and not what the dark device would say (#2799).
 func (d *Device) unpluggedSince(l world.Listing) (int64, bool) {
-	c := d.calendarSrc()
+	if d.arbSrc == nil {
+		return 0, false
+	}
+	return d.arbSrc().Offline(l, d.clock())
+}
+
+// scriptedOffline is the arbiter's derivation for scripted problems: the lab
+// calendar says a problem has the listed device unplugged, whichever simulator
+// serves it.
+func (e *Engine) scriptedOffline(l world.Listing, now time.Time) (int64, bool) {
+	c := e.Calendar()
 	if c == nil {
 		return 0, false
 	}
 	room := calendar.Room{Site: l.Site, Building: l.Building, Room: l.Room}
-	for _, e := range c.ProblemsNow(room, d.clock()) {
-		if e.Problem.Impairment.Unplugged && e.Problem.Role == l.Slot {
-			return e.Start.Unix(), true
+	for _, p := range c.ProblemsNow(room, now) {
+		if p.Problem.Impairment.Unplugged && p.Problem.Role == l.Slot {
+			return p.Start.Unix(), true
 		}
 	}
 	return 0, false
@@ -168,8 +179,8 @@ func (d *Device) unpluggedSince(l world.Listing) (int64, bool) {
 // roomOffline says whether the room of a system reads offline on the platform:
 // a codec or a bar in it that a scripted problem has unplugged.
 func (d *Device) roomOffline(system string) bool {
-	if !d.calendarSrc().HasProblems() {
-		return false // the scan is per room every tick: skip it where no problem is scripted
+	if !d.calendarSrc().HasProblems() && (d.arbSrc == nil || len(d.arbSrc().Sources()) == 0) {
+		return false // the scan is per room every tick: skip it where nothing impairs a device
 	}
 	for _, l := range d.world().Listed(d.Hostname) {
 		if l.System != system || (l.Type != "codec" && l.Type != "bar") {

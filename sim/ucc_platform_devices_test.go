@@ -3,11 +3,13 @@ package sim
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -254,5 +256,36 @@ func TestAnUnpluggedDeviceReadsOfflineOnThePlatform(t *testing.T) {
 	devs, rooms = statuses(d)
 	if devs["hq-r2-codec-1"].Status != "online" || rooms["hq-r2"] == "offline" {
 		t.Errorf("after the window the codec reads %q and the room %q", devs["hq-r2-codec-1"].Status, rooms["hq-r2"])
+	}
+}
+
+// #2799: the platform asks the arbiter, not the calendar alone, so a device an
+// operator unplugged reads offline on its devices list and takes its room's
+// status with it, and plugging it back in clears both.
+func TestAnOperatorsUnplugReadsOfflineOnThePlatform(t *testing.T) {
+	at := time.Date(2026, 11, 26, 10, 5, 0, 0, time.UTC)
+	d, _ := uccDeviceWorld(t, &at)
+	d.TickBehavior("rooms_calendar")
+	arb := d.arbSrc()
+	codec := NewDevice("dev-hq-r2-codec-1", "hq-r2-codec-1", net.IPv4(127, 0, 0, 2), "test-profile", 1, map[string]any{})
+	arb.Set("operator", map[string]Want{codec.DeviceID: {Impairment: impair.Impairment{Unplugged: true}}})
+	if _, errs := arb.Settle([]*Device{codec}); len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	d.TickBehavior("rooms_calendar")
+	devs, _ := walkDevices(t, d, 50)
+	status := map[string]string{}
+	for _, g := range devs {
+		status[g.Name] = g.Status
+	}
+	if status["hq-r2-codec-1"] != "offline" || status["hq-r1-codec-1"] != "online" {
+		t.Errorf("after the operator's unplug the codecs read %v", status)
+	}
+	if !d.roomOffline("hq-r2") || d.roomOffline("hq-r1") {
+		t.Error("the unplugged codec did not take its room offline")
+	}
+	arb.Release("operator")
+	if d.roomOffline("hq-r2") {
+		t.Error("the room still reads offline after the operator plugged the codec back in")
 	}
 }
