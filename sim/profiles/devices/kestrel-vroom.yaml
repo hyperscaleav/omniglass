@@ -110,7 +110,7 @@ interfaces:
         visibility: private
         doc: { summary: "Recent device logs (private; undocumented direct-call route)", tags: [api, logs, private] }
 
-      # The room's own meeting, read off the lab calendar (#2757, #2773): the
+      # The #2773 probe (#2767 replaces it): the room's own meeting, read off the lab calendar (#2757): the
       # organizer of the meeting running in the room now, the start of the
       # next and the room's key. A bar placed in no room reads empty.
       - match: "GET /api/room"
@@ -358,7 +358,9 @@ behaviors:
       - name: log
         data: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ $id := .State.status.call.id }}{{ if eq $e "start" }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if eq $e "join" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "leave" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "end" }}{"severity":"INFO","facility":"kvroom.call","text":"Call ended (id={{ $id }}, peers={{ .State.status.sim.participants_prev }}, reason=remote-hangup)"}{{ end }}'
 
-  # The room's calendar, read through the device's room (#2773): the lab
+  # The #2773 probe, which #2767 (conferencing) replaces with the bar's real
+  # call behavior: it exists so a lab test can observe a real device reading
+  # its room's meeting. The room's calendar, read through the device's room: the lab
   # calendar is the one every device of the room speaks of, so the bar reads
   # it and does not keep a second schedule of its own. Empty with no world.
   - name: room_calendar

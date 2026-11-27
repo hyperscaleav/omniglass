@@ -5911,7 +5911,7 @@ Serve the outpost's simulated devices and follow changes until interrupted
 omniglass sim run [flags]
 ```
 
-Serves each component placed on the outpost whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+Serves each component placed on the outpost whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart. With a world file (env OMNIGLASS_SIM_WORLD), the simulator holds the world it simulates: the lab calendar and each device's room, from the scenario and not from the server.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

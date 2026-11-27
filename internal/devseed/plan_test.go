@@ -554,14 +554,13 @@ func TestSeedPlanInducesNothingByDefault(t *testing.T) {
 	}
 }
 
-// The simulator joins what a server lists to its world by the component's name
-// and address (#2773), so the names and addresses the world predicts must be
-// the ones the platform mints and the fleet plans. Seed a plan through the real
-// name generator and the real address planner, then read each outpost's sim
-// device list back, the list a simulator pulls: every device it names is a
-// device of its site's world, in the room the world puts it in, and the world
-// names no device the server does not list.
-func TestSeedPlanMintsTheNamesAndAddressesTheWorldPredicts(t *testing.T) {
+// The world owns component names (#2773): the seed onboards every planned
+// component under exactly the name its site's world gives it, in the room the
+// world puts it in. Seed a plan, then read each outpost's sim device list, the
+// list a simulator pulls: every device it names is a device of its site's
+// world, placed by an exact lookup of its name, and the platform minted no name
+// of its own for a component of the plan.
+func TestSeedPlanOnboardsEveryComponentUnderTheWorldsName(t *testing.T) {
 	t.Parallel()
 	ctx, gw, conn := openSeededGateway(t)
 	m, err := scenario.Shipped("corporate")
@@ -586,22 +585,45 @@ func TestSeedPlanMintsTheNamesAndAddressesTheWorldPredicts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Where the platform put each component: its room, by id.
-	rows, err := conn.Query(ctx, `select c.id::text, l.name from component c join location l on l.id = c.location_id`)
+	rows, err := conn.Query(ctx, `select c.id::text, c.name, l.name, c.name_generated from component c join location l on l.id = c.location_id`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	roomOf := map[string]string{}
+	type seeded struct {
+		name, room string
+		generated  bool
+	}
+	byID := map[string]seeded{}
 	for rows.Next() {
-		var id, loc string
-		if err := rows.Scan(&id, &loc); err != nil {
+		var id string
+		var c seeded
+		if err := rows.Scan(&id, &c.name, &c.room, &c.generated); err != nil {
 			t.Fatal(err)
 		}
-		roomOf[id] = loc
+		byID[id] = c
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+	want := 0
+	for _, w := range worlds {
+		for _, r := range w.Sites[0].Rooms {
+			want += len(r.Devices)
+		}
+		for _, svc := range w.Services {
+			if svc.Webhook {
+				want++
+			}
+		}
+	}
+	if len(byID) != want {
+		t.Fatalf("the plan seeded %d components, the worlds name %d", len(byID), want)
+	}
+	for id, c := range byID {
+		if c.generated {
+			t.Errorf("component %s (%s) carries a platform-minted name, the world's is owed", id, c.name)
+		}
 	}
 	listed := 0
 	for _, s := range p.Sites {
@@ -612,33 +634,21 @@ func TestSeedPlanMintsTheNamesAndAddressesTheWorldPredicts(t *testing.T) {
 		}
 		for _, d := range devices {
 			listed++
-			place, ok := w.PlaceDevice(d.Name, d.Address)
+			c := byID[d.ComponentID]
+			if c.name != d.Name {
+				t.Fatalf("the list names %s, the component is %s", d.Name, c.name)
+			}
+			place, ok := w.PlaceDevice(d.Name)
 			if !ok {
 				// A webhook sender sits at its site, in no room: it is a service.
-				if roomOf[d.ComponentID] == s.Name && w.Covered(d.Name) != nil {
+				if c.room == s.Name && w.Covered(d.Name) != nil {
 					continue
 				}
-				t.Fatalf("%s lists %s at %s (%s in %s), which its world does not place", outpostOf(s.Name), d.Name, d.Address, d.Product, roomOf[d.ComponentID])
+				t.Fatalf("%s lists %s (%s in %s), which its world does not name", outpostOf(s.Name), d.Name, d.Product, c.room)
 			}
-			if place.Room != roomOf[d.ComponentID] || place.Site != s.Name {
-				t.Fatalf("%s: the platform put %s at %s in %s, the world in %s/%s", outpostOf(s.Name), d.Name, d.Address, roomOf[d.ComponentID], place.Site, place.Room)
+			if place.Room != c.room || place.Site != s.Name {
+				t.Fatalf("%s: the seed put %s in %s, the world in %s/%s", outpostOf(s.Name), d.Name, c.room, place.Site, place.Room)
 			}
-		}
-		simulated := 0
-		for _, r := range w.Sites[0].Rooms {
-			for _, d := range r.Devices {
-				if d.Profile != "" {
-					simulated++
-				}
-			}
-		}
-		for _, svc := range w.Services {
-			if svc.Webhook && svc.Address != "" {
-				simulated++
-			}
-		}
-		if simulated != len(devices) {
-			t.Fatalf("%s: the world plans %d simulated devices, the server lists %d", outpostOf(s.Name), simulated, len(devices))
 		}
 	}
 	if listed == 0 {

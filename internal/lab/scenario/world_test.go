@@ -63,6 +63,15 @@ func TestSiteWorldsCoverTheWholePlan(t *testing.T) {
 			if devices != sp.Totals.Components {
 				t.Fatalf("size %d: site %s world holds %d devices, plan has %d components", size, sp.Name, devices, sp.Totals.Components)
 			}
+			names := map[string]bool{}
+			for _, r := range w.Sites[0].Rooms {
+				for _, d := range r.Devices {
+					if names[d.Name] {
+						t.Fatalf("size %d: the world names %s twice", size, d.Name)
+					}
+					names[d.Name] = true
+				}
+			}
 			if len(w.Services) != len(sp.Pushers) {
 				t.Fatalf("size %d: site %s world holds %d services, plan has %d pushers", size, sp.Name, len(w.Services), len(sp.Pushers))
 			}
@@ -112,9 +121,6 @@ func TestSiteWorldCarriesTheMeetingKnobsAndASeedOfTheScenario(t *testing.T) {
 	}
 	if _, err := SiteWorld(m, cat, plan, "nowhere"); err == nil {
 		t.Error("a site the plan lacks resolved to a world")
-	}
-	if _, err := SiteWorld(m, Catalog{}, plan, plan.Sites[0].Name); err == nil {
-		t.Error("a catalog that cannot name components resolved to a world")
 	}
 }
 

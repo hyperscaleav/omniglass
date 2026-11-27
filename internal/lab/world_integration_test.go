@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/labcheck"
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
+	"github.com/hyperscaleav/omniglass/internal/labcheck"
 )
 
 // startCorporateLab runs `lab run --scenario corporate --systems N` on a real

@@ -34,10 +34,6 @@ type Catalog struct {
 	// the driver that receives it, and a product of the same name the
 	// simulator serves, so the lab seeds it as a component.
 	Sender func(profile string) bool
-	// Stem returns the stem the platform mints a product's components' names
-	// from (its component type's, inherited), so a plan can say what a
-	// component will be called before it exists. Empty or false: none.
-	Stem func(product string) (string, bool)
 	// SimProfile returns the simulator profile that serves the product, as
 	// the simulator itself picks it.
 	SimProfile func(product string) (string, bool)
@@ -68,7 +64,6 @@ func loadShipped() (Catalog, error) {
 		products[p.Name] = p.ComponentType
 	}
 	parents := seed.ShippedComponentTypeParents()
-	stems := seed.ShippedComponentTypeStems()
 	systemTypes := map[string]bool{}
 	for _, st := range seed.ShippedSystemTypes() {
 		systemTypes[st] = true
@@ -88,11 +83,6 @@ func loadShipped() (Catalog, error) {
 		Simulated: func(product string) bool {
 			_, _, ok := store.ForProduct(product)
 			return ok
-		},
-		Stem: func(product string) (string, bool) {
-			ct, ok := products[product]
-			stem := stems[ct]
-			return stem, ok && stem != ""
 		},
 		SimProfile: func(product string) (string, bool) {
 			name, _, ok := store.ForProduct(product)

@@ -41,23 +41,21 @@ type World struct {
 	Services []Service `json:"services,omitempty"`
 
 	once    sync.Once
-	devices map[deviceKey]Placement
+	devices map[string]Placement
 	systems map[string]Placement
 	covers  map[string][]Placement
 }
 
-type deviceKey struct{ name, address string }
-
 // index builds the lookups once; a World is read-only after it is loaded.
 func (w *World) index() {
 	w.once.Do(func() {
-		w.devices, w.systems, w.covers = map[deviceKey]Placement{}, map[string]Placement{}, map[string][]Placement{}
+		w.devices, w.systems, w.covers = map[string]Placement{}, map[string]Placement{}, map[string][]Placement{}
 		for _, s := range w.Sites {
 			for _, r := range s.Rooms {
 				p := Placement{Site: s.Name, Building: r.Building, Room: r.Name}
 				w.systems[r.System] = p
 				for _, d := range r.Devices {
-					w.devices[deviceKey{d.Name, d.Address}] = p
+					w.devices[d.Name] = p
 				}
 			}
 		}
@@ -89,15 +87,12 @@ type Room struct {
 	Devices  []Device `json:"devices,omitempty"`
 }
 
-// Device is one planned component: the name the platform will mint for it,
-// the loopback address its simulated endpoint is planned at, the product it
-// is, and the simulator profile that serves it ("" when none does). A name
-// is minted per room, so "display-1" is in every room that has a display; the
-// address is what is unique across an outpost, and the pair is the key a
-// simulator joins a pulled device on.
+// Device is one planned component: the name the world gives it (unique across
+// the plan, and the name the lab's seed onboards the component under, so a
+// simulator joins a pulled device by an exact name), the product it is, and
+// the simulator profile that serves it ("" when none does).
 type Device struct {
 	Name    string `json:"name"`
-	Address string `json:"address,omitempty"`
 	Product string `json:"product"`
 	Profile string `json:"profile,omitempty"`
 }
@@ -147,11 +142,10 @@ func (w *World) Validate() error {
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
 			for _, d := range r.Devices {
-				k := d.Name + "@" + d.Address
-				if seen[k] {
-					return fmt.Errorf("world: device %q at %q is placed twice", d.Name, d.Address)
+				if seen[d.Name] {
+					return fmt.Errorf("world: device %q is placed twice", d.Name)
 				}
-				seen[k] = true
+				seen[d.Name] = true
 			}
 		}
 	}
@@ -196,14 +190,14 @@ func Load(path string) (*World, error) {
 	return w, nil
 }
 
-// PlaceDevice is where the world places the device of that component name at
-// that address. A device the world does not name (by both) is not placed.
-func (w *World) PlaceDevice(name, address string) (Placement, bool) {
+// PlaceDevice is where the world places the device of that component name. A
+// device the world does not name is not placed.
+func (w *World) PlaceDevice(name string) (Placement, bool) {
 	if w == nil {
 		return Placement{}, false
 	}
 	w.index()
-	p, ok := w.devices[deviceKey{name, address}]
+	p, ok := w.devices[name]
 	return p, ok
 }
 

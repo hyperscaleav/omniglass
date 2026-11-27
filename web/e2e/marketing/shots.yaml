@@ -58,15 +58,15 @@ viewport: { width: 1440, height: 900 }
 # each display down) rather than uniformly green. The shipped reachability rule
 # raises its High alarm on each; the wait holds until the fifth is open.
 setup:
-  - put: /components/{branch-03.branch-03-main.branch-03-main-1.branch-03-main-1-01.$comp.display-1}/impairment
+  - put: /components/{branch-03.branch-03-main.branch-03-main-1.branch-03-main-1-01.$comp.branch-03-huddle-room-1-main-display-1}/impairment
     body: { unplugged: true }
-  - put: /components/{branch-09.branch-09-main.branch-09-main-1.branch-09-main-1-01.$comp.display-1}/impairment
+  - put: /components/{branch-09.branch-09-main.branch-09-main-1.branch-09-main-1-01.$comp.branch-09-huddle-room-1-main-display-1}/impairment
     body: { unplugged: true }
-  - put: /components/{regional-01.regional-01-main.regional-01-main-1.regional-01-main-1-01.$comp.display-1}/impairment
+  - put: /components/{regional-01.regional-01-main.regional-01-main-1.regional-01-main-1-01.$comp.regional-01-huddle-room-1-main-display-1}/impairment
     body: { unplugged: true }
-  - put: /components/{regional-04.regional-04-main.regional-04-main-1.regional-04-main-1-01.$comp.display-1}/impairment
+  - put: /components/{regional-04.regional-04-main.regional-04-main-1.regional-04-main-1-01.$comp.regional-04-huddle-room-1-main-display-1}/impairment
     body: { unplugged: true }
-  - put: /components/{regional-06.regional-06-main.regional-06-main-1.regional-06-main-1-01.$comp.display-1}/impairment
+  - put: /components/{regional-06.regional-06-main.regional-06-main-1.regional-06-main-1-01.$comp.regional-06-huddle-room-1-main-display-1}/impairment
     body: { unplugged: true }
   - wait: { get: /alarms?limit=50, field: alarms.4.active, equals: true, timeout: 180000 }
   # The conference room's video bar takes a call at lab start (#2754), so by
@@ -74,7 +74,7 @@ setup:
   # drifting, its participants coming and going, its log lines and events.
   # {@system/member} is the component the system holds under that member
   # name, looked up at run time, wherever the lab's size placed the room.
-  - post: /components/{@hq-divisible-conference-1/videobar-1}/simulation:fire
+  - post: /components/{@hq-divisible-conference-1/hq-divisible-conference-1-video-bar-1}/simulation:fire
     body: { surface: http-api, method: POST, path: /api/call/dial, body: '{"id":"c-showcase","participants":4}' }
 
 shots:
@@ -109,11 +109,11 @@ shots:
       - click: 'aside[data-blade] button[aria-label=Expand]'
       - wait: { selector: '[data-testid=alarm-strip]' }
         focus: here
-        expect: ["Why", "Reachability lost", "display-1", "impairs"]
+        expect: ["Why", "Reachability lost", "hq-mr86-1-main-display-1", "impairs"]
         zoom: 1.4
         hold: 1600
       # Beat 4: the display the alarm names, its outage at the top of its page.
-      - click: '[data-testid=alarm-strip] button:text-is("display-1")'
+      - click: '[data-testid=alarm-strip] button:text-is("hq-mr86-1-main-display-1")'
         hold: 300
       - click: 'aside[data-blade] button[aria-label=Expand]'
         focus: out
@@ -134,7 +134,7 @@ shots:
     # 60: every beat holds long enough to read, and the story runs before and
     # after the fix (the architect's ruling, #2752).
     max_seconds: 60
-    alt: "Omniglass from the fleet to a fix: the fleet and the rooms that need attention, filtered to them; a headquarters boardroom, down, opened in the drawer to its Activity, the outage ongoing beside its uptime; the outage expanded to the alarm that explains it, display-1 on the wrong input; the display itself, what it is, Video Input hdmi2, its alarm and its quick actions; Send command, Set input hdmi1, sent and settled; the display's alarm clearing, sped up under a clock; the room healthy again, and three minutes later its Activity with the outage closed and the last hour's timeline: healthy, then down, then healthy again."
+    alt: "Omniglass from the fleet to a fix: the fleet and the rooms that need attention, filtered to them; a headquarters boardroom, down, opened in the drawer to its Activity, the outage ongoing beside its uptime; the outage expanded to the alarm that explains it, hq-mr86-1-main-display-1 on the wrong input; the display itself, what it is, Video Input hdmi2, its alarm and its quick actions; Send command, Set input hdmi1, sent and settled; the display's alarm clearing, sped up under a clock; the room healthy again, and three minutes later its Activity with the outage closed and the last hour's timeline: healthy, then down, then healthy again."
     # The fault is a display switched to the wrong input, which the console
     # fixes itself (#2649): the boardroom displays carry their web admin beside
     # their SNMP agent, so they take Set input. The rule that names the fault
@@ -152,7 +152,7 @@ shots:
           severity: high
           fire_event_type: rule-fired
           clear_event_type: rule-cleared
-      - post: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/simulation:fire
+      - post: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}/simulation:fire
         body: { surface: web-admin, method: POST, path: /api/display/input, body: '{"input": "hdmi2"}' }
       - wait: { get: /systems/hq-mr86-1/health, field: health, equals: outage, timeout: 180000 }
       # The room stays down ten minutes before the shot (#2722), so its hour on
@@ -207,11 +207,11 @@ shots:
         hold: 300
       - wait: { selector: 'aside[data-blade] [data-testid=stretch-0] li:has-text("Display on the wrong input")' }
         focus: 'aside[data-blade] [data-testid=stretch-0]'
-        expect: ["Display on the wrong input", "display-1"]
+        expect: ["Display on the wrong input", "hq-mr86-1-main-display-1"]
         zoom: 2.2
         hold: 2200
-      # 7. Follow to the device: display-1, clicked close.
-      - click: 'aside[data-blade] [data-testid=stretch-0] button:text-is("display-1")'
+      # 7. Follow to the device: hq-mr86-1-main-display-1, clicked close.
+      - click: 'aside[data-blade] [data-testid=stretch-0] button:text-is("hq-mr86-1-main-display-1")'
         hold: 300
       # 8. Widen to the display's full drawer.
       - wait: { selector: 'aside[data-blade] [data-testid=leaf-identity]' }
@@ -232,7 +232,7 @@ shots:
         hold: 1400
       - hover: 'aside[data-blade] [data-testid=leaf-alarms] button[aria-label="Send command"]'
         focus: here
-        expect: ["Send a command to display-1"]
+        expect: ["Send a command to hq-mr86-1-main-display-1"]
         zoom: 2.6
         hold: 1300
       # 11. Send command.
@@ -252,7 +252,7 @@ shots:
       # 13. The confirmation, as soon as it shows: set-input issued.
       - wait: { selector: '[data-testid=command-toast]' }
         focus: '[data-testid=toast]:has([data-testid=command-toast])'
-        expect: ["set-input issued to display-1"]
+        expect: ["set-input issued to hq-mr86-1-main-display-1"]
         zoom: 2.2
         hold: 900
       # 14. Straight back up to the display's own health while its alarm is
@@ -416,9 +416,9 @@ shots:
     setup:
       - post: /secrets
         body: { name: retired-video-bar-login, label: Retired video bar login, secret_type: basic-auth, owner_kind: platform, fields: { username: admin, password: retired } }
-      - patch: /endpoints/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.videobar-1/https}
+      - patch: /endpoints/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.hq-mr65-59-video-bar-1/https}
         body: { inputs: { login: retired-video-bar-login } }
-      - wait: { get: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.videobar-1}/reachability', field: endpoints.0.session.state, equals: rejected, timeout: 180000 }
+      - wait: { get: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.hq-mr65-59-video-bar-1}/reachability', field: endpoints.0.session.state, equals: rejected, timeout: 180000 }
     start: /systems/hq-mr65-59
     ready: { text: Video Bar 1 }
     # Off camera: open the video bar to its own page, then its endpoint, where
@@ -474,13 +474,13 @@ shots:
     # 20: five beats, each closed in on (#2752).
     max_seconds: 20
     alt: "Everything one device says in Omniglass: a conference room's video bar in a call, its identity (firmware, hardware revision, serial, MAC, IP, hostname, resolution), its vitals moving (packet loss, jitter, bitrate, frame rate, levels, CPU, temperature, fan), and its two endpoints over https and websocket, each reachable, responsive and authenticated."
-    start: '/components/{@hq-divisible-conference-1/videobar-1}'
+    start: '/components/{@hq-divisible-conference-1/hq-divisible-conference-1-video-bar-1}'
     ready: { selector: '[data-testid=leaf-identity]' }
     steps:
       # 1. The device: healthy, a Kestrel VRoom.
       - wait: { selector: '[data-testid=leaf-header]' }
         focus: '[data-testid=component-card]'
-        expect: ["healthy", "videobar-1"]
+        expect: ["healthy", "hq-divisible-conference-1-video-bar-1"]
         zoom: 1.0
         hold: 1300
       # 2. Who it is: the top of What it is, then down its identity.
@@ -523,10 +523,10 @@ shots:
     # alarm arrives on camera. A run that follows one that left it unplugged
     # waits for the room to recover first.
     setup:
-      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
+      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}/impairment
         body: { unplugged: false }
       - wait: { get: /systems/hq-mr86-1/health, field: health, equals: healthy, timeout: 180000 }
-      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.display-1}/impairment
+      - put: /components/{hq.hq-annex.hq-annex-1.hq-annex-1-05.$comp.hq-mr86-1-main-display-1}/impairment
         body: { unplugged: true }
     start: /systems/hq-mr86-1
     ready: { selector: '[data-testid=system-header]' }
@@ -542,13 +542,13 @@ shots:
       - wait: { selector: '[data-testid=alarm-strip]', timeout: 180000 }
         lapse: 0.9
         focus: here
-        expect: ["Why", "Reachability lost", "display-1", "Main Display"]
+        expect: ["Why", "Reachability lost", "hq-mr86-1-main-display-1", "Main Display"]
         zoom: 1.3
         hold: 1500
       # The display answers on two endpoints (its SNMP agent and its web admin),
       # and the shipped rule raises one alarm per endpoint, so the strip names
-      # display-1 twice. Either row opens the same display.
-      - click: '[data-testid=alarm-strip] button:text-is("display-1") >> nth=0'
+      # hq-mr86-1-main-display-1 twice. Either row opens the same display.
+      - click: '[data-testid=alarm-strip] button:text-is("hq-mr86-1-main-display-1") >> nth=0'
         hold: 300
       - click: 'aside[data-blade] button[aria-label=Expand]'
         focus: out

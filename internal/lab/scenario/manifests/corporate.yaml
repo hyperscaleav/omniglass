@@ -144,7 +144,7 @@ health_history:
   days: 30
   stretches:
     - system: hq-mr86-1
-      component: display-1
+      component: hq-mr86-1-main-display-1
       rule: reachability-lost
       instance: snmp
       severity: high
@@ -153,7 +153,7 @@ health_history:
       days_ago: 23
       minutes: 47
     - system: hq-mr86-1
-      component: display-1
+      component: hq-mr86-1-main-display-1
       rule: reachability-lost
       instance: snmp
       severity: high
@@ -162,7 +162,7 @@ health_history:
       days_ago: 9
       minutes: 18
     - system: hq-mr65-59
-      component: videobar-1
+      component: hq-mr65-59-video-bar-1
       rule: reachability-lost
       instance: https
       severity: high

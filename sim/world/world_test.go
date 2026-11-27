@@ -21,9 +21,9 @@ func testWorld() *World {
 		Meetings: map[string]calendar.Knobs{"huddle": testKnobs()},
 		Sites: []Site{{Name: "hq", Rooms: []Room{
 			{Name: "r1", Building: "tower", Standard: "huddle", System: "s1", Capacity: 6,
-				Devices: []Device{{Name: "display-1", Address: "127.60.0.1", Product: "p", Profile: "pp"}}},
+				Devices: []Device{{Name: "r1-display-1", Product: "p", Profile: "pp"}}},
 			{Name: "r2", Building: "tower", Standard: "sign", System: "s2",
-				Devices: []Device{{Name: "display-1", Address: "127.60.0.2", Product: "p", Profile: "pp"}}},
+				Devices: []Device{{Name: "r2-display-1", Product: "p", Profile: "pp"}}},
 		}}},
 		Services: []Service{{Name: "svc", Profile: "b", Covers: []Cover{{System: "s2", Site: "hq", Building: "tower", Room: "r2"}}}},
 	}
@@ -54,7 +54,7 @@ func TestAWorldIsRefusedWhenItCannotBeTrusted(t *testing.T) {
 	for name, tc := range map[string]struct{ from, to, want string }{
 		"another version":    {`"version": 1`, `"version": 9`, "version 9"},
 		"an unknown field":   {`"outpost"`, `"nope"`, "unknown field"},
-		"a device twice":     {`"address": "127.60.0.2"`, `"address": "127.60.0.1"`, "placed twice"},
+		"a device twice":     {`"name": "r2-display-1"`, `"name": "r1-display-1"`, "placed twice"},
 		"knobs out of range": {`"booking_rate": 0.5`, `"booking_rate": 4`, "booking_rate"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -69,21 +69,21 @@ func TestAWorldIsRefusedWhenItCannotBeTrusted(t *testing.T) {
 	}
 }
 
-func TestADeviceIsPlacedByNameAndAddress(t *testing.T) {
+func TestADeviceIsPlacedByItsName(t *testing.T) {
 	w := testWorld()
-	if p, ok := w.PlaceDevice("display-1", "127.60.0.2"); !ok || p != (Placement{Site: "hq", Building: "tower", Room: "r2"}) {
+	if p, ok := w.PlaceDevice("r2-display-1"); !ok || p != (Placement{Site: "hq", Building: "tower", Room: "r2"}) {
 		t.Fatalf("second display placed at %+v, %v", p, ok)
 	}
-	if p, ok := w.PlaceDevice("display-1", "127.60.0.1"); !ok || p.Room != "r1" {
+	if p, ok := w.PlaceDevice("r1-display-1"); !ok || p.Room != "r1" {
 		t.Fatalf("first display placed at %+v, %v", p, ok)
 	}
-	for _, c := range [][2]string{{"display-1", "127.60.0.9"}, {"display-2", "127.60.0.1"}, {"display-1", ""}} {
-		if p, ok := w.PlaceDevice(c[0], c[1]); ok {
-			t.Errorf("%v placed at %+v, the world names no such device", c, p)
+	for _, n := range []string{"display-1", "r1-display-2", ""} {
+		if p, ok := w.PlaceDevice(n); ok {
+			t.Errorf("%q placed at %+v, the world names no such device", n, p)
 		}
 	}
 	var none *World
-	if _, ok := none.PlaceDevice("display-1", "127.60.0.1"); ok {
+	if _, ok := none.PlaceDevice("r1-display-1"); ok {
 		t.Error("a nil world placed a device")
 	}
 }

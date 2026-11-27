@@ -12,7 +12,6 @@ import (
 	"strconv"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
@@ -87,7 +86,9 @@ var Control = map[string]string{
 const AddressCap = 256 * 250
 
 // Address is the i-th address of the simulated block, 127.60.0.1 onward.
-func Address(i int) string { return fleet.Address(i) }
+func Address(i int) string {
+	return fmt.Sprintf("127.60.%d.%d", i/250, i%250+1)
+}
 
 // FreeAddress is the lowest address of the block not in used.
 func FreeAddress(used map[string]bool) (string, bool) {

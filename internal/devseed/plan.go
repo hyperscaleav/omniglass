@@ -69,10 +69,11 @@ type locationRow struct{ Key, Name, Label, Type, Parent string }
 type systemRow struct{ Key, Name, Label, Standard, SystemType, Room string }
 
 // componentRow is one component of a plan: a product placed in a room of Site,
-// filling Slot of System. Its name is the platform's to mint. A webhook
+// filling Slot of System. Its Name is the plan's own (the world's, #2773):
+// the seed onboards the component under exactly that name. A webhook
 // sender's component (#1747) is placed at its site and fills no slot.
 type componentRow struct {
-	Key, Product, Site, Room, System, Slot string
+	Key, Name, Product, Site, Room, System, Slot string
 	// Control wires the device's control face too (scenario.SlotFill.Control).
 	Control bool
 }
@@ -115,7 +116,7 @@ func rowsOf(p *scenario.Plan) planRows {
 			for _, fill := range s.Slots {
 				for n := 1; n <= fill.Count; n++ {
 					r.Components = append(r.Components, componentRow{
-						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Product: fill.Product,
+						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Name: scenario.ComponentName(s.Name, fill.Slot, n), Product: fill.Product,
 						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control,
 					})
 				}
@@ -125,7 +126,7 @@ func rowsOf(p *scenario.Plan) planRows {
 			if !ps.Webhook {
 				continue
 			}
-			r.Components = append(r.Components, componentRow{Key: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
+			r.Components = append(r.Components, componentRow{Key: ps.Name, Name: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
 			r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
 		}
 	}
@@ -246,7 +247,7 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 	compIDs := make([]string, 0, len(rows.Components))
 	for _, c := range rows.Components {
 		prod, loc := c.Product, locIDs[c.Room]
-		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{ProductName: &prod, LocationName: &loc}, all, all, all, all)
+		created, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{Name: c.Name, ProductName: &prod, LocationName: &loc}, all, all, all, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}

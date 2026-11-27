@@ -47,33 +47,6 @@ func ShippedComponentTypeParents() map[string]string {
 	return out
 }
 
-// ShippedComponentTypeStems returns the stem each official component type
-// mints its components' names from, resolved the way the platform resolves it
-// (the type's own, else the nearest ancestor's), so a caller can say what a
-// component of a product will be called without a database. A type no stem
-// reaches is left out.
-func ShippedComponentTypeStems() map[string]string {
-	var doc componentTypesDoc
-	if err := yaml.Unmarshal(componentTypesYAML, &doc); err != nil {
-		panic("seed: parse component_types.yaml: " + err.Error())
-	}
-	own := make(map[string]string, len(doc.ComponentTypes))
-	parent := make(map[string]string, len(doc.ComponentTypes))
-	for _, ct := range doc.ComponentTypes {
-		own[ct.ID], parent[ct.ID] = ct.Stem, ct.ParentID
-	}
-	out := make(map[string]string, len(doc.ComponentTypes))
-	for id := range own {
-		for t, steps := id, 0; t != "" && steps <= len(own); t, steps = parent[t], steps+1 {
-			if own[t] != "" {
-				out[id] = own[t]
-				break
-			}
-		}
-	}
-	return out
-}
-
 // ShippedSystemTypes returns the official system type names, in
 // system_types.yaml order.
 func ShippedSystemTypes() []string {

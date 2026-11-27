@@ -30,9 +30,9 @@ type Skip struct {
 //
 // The server's list says which devices to serve and nothing of where they sit;
 // the simulator holds the world it simulates, and places each device in it by
-// the component's name and address (a name is minted per room, so it alone
-// repeats; the address is unique on the outpost). A device the world does not
-// name keeps empty room fields. A nil world places nothing.
+// the component's name, which the world gave it and the lab's seed onboarded
+// it under, so the join is an exact lookup. A device the world does not name
+// keeps empty room fields. A nil world places nothing.
 func plan(devices []collection.SimDevice, profileFor func(string) (string, bool), w *world.World) ([]sim.DeviceSnapshot, []Skip) {
 	var snaps []sim.DeviceSnapshot
 	var skips []Skip
@@ -58,7 +58,7 @@ func plan(devices []collection.SimDevice, profileFor func(string) (string, bool)
 			DeviceID: d.ComponentID, Hostname: d.Name, LoopbackIP: ip.String(),
 			ProfileName: profileName, Product: d.Product, Version: 1,
 		}
-		if at, ok := w.PlaceDevice(d.Name, d.Address); ok {
+		if at, ok := w.PlaceDevice(d.Name); ok {
 			snap.SiteCode, snap.Building, snap.Room = at.Site, at.Building, at.Room
 		}
 		snaps = append(snaps, snap)

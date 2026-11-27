@@ -5,7 +5,6 @@ import (
 	"hash/fnv"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
-	"github.com/hyperscaleav/omniglass/sim/fleet"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -18,47 +17,38 @@ func calendarSeed(scenario string) int64 {
 	return int64(h.Sum64() >> 1)
 }
 
-// nameMinter predicts the names the platform mints for components (ADR-0097):
-// "<stem>-<n>", n the lowest free ordinal among a placement's components of
-// that stem. A plan seeds its components in plan order, so counting in that
-// order gives the names the seed's platform will mint.
-type nameMinter struct{ next map[[2]string]int }
-
-func (n *nameMinter) mint(bucket, stem string) string {
-	if n.next == nil {
-		n.next = map[[2]string]int{}
-	}
-	k := [2]string{bucket, stem}
-	n.next[k]++
-	return fmt.Sprintf("%s-%d", stem, n.next[k])
+// ComponentName is the name the world gives the n-th (from 1) component that
+// fills a slot of a system: "<system>-<slot>-<n>". A system's name is unique
+// across a plan, so the name is too, which is what lets a simulator join a
+// pulled device to the world by an exact name lookup. The world owns the name
+// and the lab's seed onboards the component under it (#2773); the platform's
+// own name generator is not asked.
+func ComponentName(system, slot string, n int) string {
+	return fmt.Sprintf("%s-%s-%d", system, slot, n)
 }
 
 // SiteWorld is the world one site's simulator holds, resolved from the plan
 // (#2773): the site's rooms with their standard and capacity, each room's
-// planned devices by the name the platform will mint and the simulator
-// profile that serves them, the services (webhook senders and token pushers)
-// with the rooms each speaks for, the meeting knobs per standard and the
-// calendar seed. Pure: the same manifest, catalog and plan give the same
-// world, and it reads nothing from a server or a database.
+// planned devices by name and the simulator profile that serves them, the
+// services (webhook senders and token pushers) with the rooms each speaks
+// for, the meeting knobs per standard and the calendar seed. Pure: the same
+// manifest, catalog and plan give the same world, and it reads nothing from a
+// server or a database.
 func SiteWorld(m *Manifest, cat Catalog, plan *Plan, site string) (*world.World, error) {
-	ws, err := SiteWorlds(m, cat, plan)
-	if err != nil {
-		return nil, err
-	}
-	if w, ok := ws[SiteOutpost(site)]; ok {
-		return w, nil
+	for _, sp := range plan.Sites {
+		if sp.Name == site {
+			return siteWorld(m, cat, plan, sp)
+		}
 	}
 	return nil, fmt.Errorf("scenario %s: the plan has no site %q", plan.Scenario, site)
 }
 
 // SiteWorlds is each site's world by the name of the outpost it is written
-// for. The simulated block's addresses run on across sites in plan order, so
-// the worlds are resolved in one pass.
+// for, in plan order.
 func SiteWorlds(m *Manifest, cat Catalog, plan *Plan) (map[string]*world.World, error) {
 	out := make(map[string]*world.World, len(plan.Sites))
-	addr := 0 // the next simulated component's place in the block
 	for _, sp := range plan.Sites {
-		w, err := siteWorld(m, cat, plan, sp, &addr)
+		w, err := siteWorld(m, cat, plan, sp)
 		if err != nil {
 			return nil, err
 		}
@@ -67,12 +57,8 @@ func SiteWorlds(m *Manifest, cat Catalog, plan *Plan) (map[string]*world.World, 
 	return out, nil
 }
 
-// siteWorld is one site's world; addr is the simulated block's cursor.
-func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan, addr *int) (*world.World, error) {
+func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World, error) {
 	site := sp.Name
-	if cat.Stem == nil {
-		return nil, fmt.Errorf("scenario %s: the catalog cannot name a component, so no world can be planned", plan.Scenario)
-	}
 	w := &world.World{
 		Version: world.Version, Scenario: plan.Scenario, Outpost: SiteOutpost(site),
 		CalendarSeed: calendarSeed(plan.Scenario),
@@ -85,7 +71,13 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan, addr *int) (*w
 			w.Meetings[sm.Standard.Name] = sm.Knobs
 		}
 	}
-	var minter nameMinter
+	profileOf := func(product string) string {
+		if cat.SimProfile == nil {
+			return ""
+		}
+		p, _ := cat.SimProfile(product)
+		return p
+	}
 	rooms := make([]world.Room, 0, len(sp.Systems))
 	cover := map[string]world.Cover{}
 	for _, sys := range sp.Systems {
@@ -94,14 +86,10 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan, addr *int) (*w
 			r.Capacity = k.Attendance.Max
 		}
 		for _, fill := range sys.Slots {
-			stem, ok := cat.Stem(fill.Product)
-			if !ok {
-				return nil, fmt.Errorf("scenario %s: product %q has no stem to name its components from", plan.Scenario, fill.Product)
-			}
-			for i := 0; i < fill.Count; i++ {
-				d := world.Device{Name: minter.mint(sys.Room, stem), Product: fill.Product}
-				d.Profile, d.Address = simulated(cat, fill.Product, addr)
-				r.Devices = append(r.Devices, d)
+			for i := 1; i <= fill.Count; i++ {
+				r.Devices = append(r.Devices, world.Device{
+					Name: ComponentName(sys.Name, fill.Slot, i), Product: fill.Product, Profile: profileOf(fill.Product),
+				})
 			}
 		}
 		rooms = append(rooms, r)
@@ -109,17 +97,9 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan, addr *int) (*w
 	}
 	w.Sites = []world.Site{{Name: site, Rooms: rooms}}
 	for _, p := range sp.Pushers {
+		// A sender is a component named for its pusher; a token pusher is a
+		// device of its own name apart from the fleet.
 		svc := world.Service{Name: p.Name, Profile: p.Profile, Webhook: p.Webhook}
-		if p.Webhook {
-			// A sender is a component placed at its site, named after the
-			// site's rooms are staffed.
-			stem, ok := cat.Stem(p.Profile)
-			if !ok {
-				return nil, fmt.Errorf("scenario %s: product %q has no stem to name its components from", plan.Scenario, p.Profile)
-			}
-			svc.Name = minter.mint(site, stem)
-			_, svc.Address = simulated(cat, p.Profile, addr)
-		}
 		for _, s := range p.Systems {
 			c, ok := cover[s]
 			if !ok {
@@ -130,22 +110,4 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan, addr *int) (*w
 		w.Services = append(w.Services, svc)
 	}
 	return w, nil
-}
-
-// simulated is the simulator profile that serves a product and the address the
-// simulated fleet's planner gives its component, "" for both when no profile
-// serves it. The planner (sim/simfleet.Plan) hands the block out in creation
-// order to each component a profile serves, so the k-th such component is the
-// k-th address; devseed's test seeds a plan and holds this to it.
-func simulated(cat Catalog, product string, next *int) (profile, address string) {
-	if cat.SimProfile == nil {
-		return "", ""
-	}
-	name, ok := cat.SimProfile(product)
-	if !ok {
-		return "", ""
-	}
-	address = fleet.Address(*next)
-	*next++
-	return name, address
 }

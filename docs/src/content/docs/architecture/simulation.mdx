@@ -181,10 +181,11 @@ With the file, `sim run` (and `outpost run --simulate`) builds the [lab calendar
 from the world's seed and knobs and installs it on the engine, so `meetingNow` reads a real room. With
 none there is no calendar and no room, as before.
 
-Each pull is joined to the world by the component's **name and loopback address**: the platform mints
-a name per room, so `display-1` is in every room that has a display, and the address (unique across an
-outpost) tells them apart. A device the world names takes its site, building and room from it, which
-fills the profile tokens `{site}`, `{building}`, `{room}` and `{room-device:...}` and the room the
+Each pull is joined to the world by the component's **name**. The world gives every planned device
+a name of its own, `<system>-<slot>-<n>` (unique across the plan), and the lab's scale seed onboards
+the component under exactly that name, so the join is an exact lookup and Omniglass's own naming is
+never replayed. A device the world names takes its site, building and room from it, which fills the
+profile tokens `{site}`, `{building}`, `{room}` and `{room-device:...}` and the room the
 device's own `meetingNow` reads; a device it does not name keeps empty room fields. A service
 resolves a push's `.Owner` system to a room through the world (`ownerRoom`, `ownerMeetingNow`,
 `ownerMeetingNext`) and lists the rooms it speaks for (`coveredRooms`).

@@ -23,9 +23,9 @@ func worldFixture() *world.World {
 		Meetings: map[string]calendar.Knobs{"huddle": knobs},
 		Sites: []world.Site{{Name: "hq", Rooms: []world.Room{
 			{Name: "r1", Building: "tower", Standard: "huddle", System: "s1",
-				Devices: []world.Device{{Name: "display-1", Address: "127.60.0.1", Product: "p", Profile: "pp"}}},
+				Devices: []world.Device{{Name: "r1-display-1", Product: "p", Profile: "pp"}}},
 			{Name: "r2", Building: "annex", Standard: "huddle", System: "s2",
-				Devices: []world.Device{{Name: "display-1", Address: "127.60.0.2", Product: "p", Profile: "pp"}}},
+				Devices: []world.Device{{Name: "r2-display-1", Product: "p", Profile: "pp"}}},
 		}}},
 	}
 }
@@ -91,16 +91,15 @@ func TestARunWithAWorldFileInstallsTheCalendarItImplies(t *testing.T) {
 	}
 }
 
-// A pulled device the world names, by component name and address, is placed
-// in the world's room; one it does not name keeps empty room fields. A name
-// repeats across rooms (it is minted per room), so the address tells them
-// apart.
+// A pulled device the world names, by component name, is placed in the
+// world's room; one it does not name keeps empty room fields. The world gives
+// every device a name of its own, so the lookup is exact.
 func TestAPulledDeviceTheWorldNamesIsPlacedAndOneItDoesNotIsNot(t *testing.T) {
 	profileFor := func(string) (string, bool) { return "pp", true }
 	snaps, skips := plan([]collection.SimDevice{
-		{ComponentID: "c1", Name: "display-1", Product: "p", Address: "127.60.0.1"},
-		{ComponentID: "c2", Name: "display-1", Product: "p", Address: "127.60.0.2"},
-		{ComponentID: "c3", Name: "display-2", Product: "p", Address: "127.60.0.1"},
+		{ComponentID: "c1", Name: "r1-display-1", Product: "p", Address: "127.60.0.1"},
+		{ComponentID: "c2", Name: "r2-display-1", Product: "p", Address: "127.60.0.2"},
+		{ComponentID: "c3", Name: "r1-display-2", Product: "p", Address: "127.60.0.3"},
 		{ComponentID: "c4", Name: "display-1", Product: "p", Address: "127.60.0.9"},
 	}, profileFor, worldFixture())
 	if len(skips) != 0 || len(snaps) != 4 {
@@ -114,7 +113,7 @@ func TestAPulledDeviceTheWorldNamesIsPlacedAndOneItDoesNotIsNot(t *testing.T) {
 		}
 	}
 	// With no world, nothing is placed.
-	snaps, _ = plan([]collection.SimDevice{{ComponentID: "c1", Name: "display-1", Product: "p", Address: "127.60.0.1"}}, profileFor, nil)
+	snaps, _ = plan([]collection.SimDevice{{ComponentID: "c1", Name: "r1-display-1", Product: "p", Address: "127.60.0.1"}}, profileFor, nil)
 	if s := snaps[0]; s.SiteCode != "" || s.Building != "" || s.Room != "" {
 		t.Errorf("with no world a device is placed at %+v", s)
 	}

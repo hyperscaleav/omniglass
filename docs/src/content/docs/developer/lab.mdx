@@ -1257,7 +1257,7 @@ reach a running simulator without the server saying anything about them
 ([the world it holds](/architecture/simulation/#the-world-it-holds)). One pure function turns the plan
 into each site's world (`scenario.SiteWorlds`): the site's rooms with their standard, system and capacity
 (the largest attendance their standard's meeting knobs declare), each room's planned devices by the
-name the platform will mint and the loopback address the fleet plans for them, the services (a pusher
+name the world gives them (`<system>-<slot>-<n>`, unique across the plan) and the simulator profile that serves them, the services (a pusher
 or a webhook sender) with the systems each speaks for, the `calendar.meetings` knobs per standard, and a
 calendar seed taken from the scenario's name, so a room's meetings do not move when the lab is resized.
 The file is versioned (`version: 1`) and sized to the site, not the fleet.
@@ -1266,9 +1266,9 @@ The seed one-off writes the files into the lab's data volume (`world/<outpost>.j
 mounts that volume read-only and finds its own file at the path in `OMNIGLASS_SIM_WORLD`, a variable the
 lab sets as it sets each outpost's pushers. The volume is the one place the seed and the outposts
 already share, so nothing new carries it. A lab without a plan (the default lab) writes none and its
-simulator holds no calendar and no rooms. The names and addresses are predictions of what the seed
-will mint, and a test seeds a plan through the real name generator and address planner and holds the
-two to each other.
+simulator holds no calendar and no rooms. The world owns the names: the seed onboards each
+component under the name its world gives it (a scale lab's components are `hq-mr86-1-main-display-1`,
+not a `display-1` in every room), and a test seeds a plan and holds every seeded name and room to the world's.
 
 ### How many sites
 

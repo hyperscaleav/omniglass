@@ -34,13 +34,15 @@ refs: [2757, 2764, 2769, 2773]
     mounts; each simulator outpost mounts that volume read-only and finds its file at the path in
     `OMNIGLASS_SIM_WORLD`, as the lab already hands it its pushers. No new volume, host path or
     server route. A lab with no plan writes no file and its simulator has no calendar and no rooms.
-  - **The join.** The pull still says which devices to serve (ADR-0142, unchanged). The simulator
-    places each pulled device in the world by component name **and** loopback address: the platform
-    mints a name per room (`display-1` is in every room with a display), so the name alone is
-    ambiguous, and the address is the one thing unique across an outpost that the pull carries. The
-    world predicts both (the name by the platform's mint, the address by the fleet planner's block), and
-    a test seeds a plan through the real generator and planner and holds the world to it. A pulled
-    device the world does not name keeps empty room fields.
+  - **The join: the world names, the seed obeys.** The pull still says which devices to serve
+    (ADR-0142, unchanged). The world gives every planned device a name of its own, unique across the
+    plan and room-qualified, `<system>-<slot>-<n>` (`hq-mr86-1-main-display-1`), and the lab's scale
+    seed onboards each component under exactly that name instead of asking the platform's generator
+    for one. The simulator then places a pulled device by an exact lookup of its component name; the
+    world does not replay Omniglass's naming, and no address is predicted. A test seeds a plan and
+    holds every seeded name and room to the world's. A pulled device the world does not name keeps
+    empty room fields. This changes a scale lab's component names (they were `display-1` in every
+    room); the storyline, the omnibot recording and the marketing shots that named components follow.
   - **Services.** A service resolves a push's `.Owner` system to a room through the world
     (`ownerRoom`, `ownerMeetingNow`, `ownerMeetingNext`) and reads the rooms it covers
     (`coveredRooms`); Omniglass is not asked.
