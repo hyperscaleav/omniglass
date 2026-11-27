@@ -78,6 +78,9 @@ type componentRow struct {
 	Key, Name, Product, Site, Room, System, Slot string
 	// Control wires the device's control face too (scenario.SlotFill.Control).
 	Control bool
+	// Platform is the kind a meeting platform lists the component as, "" when
+	// it lists none (scenario.SlotFill.Platform, #2790).
+	Platform string
 }
 
 // planRows is a plan flattened to the rows a seed creates, in creation order.
@@ -91,6 +94,19 @@ type planRows struct {
 	Senders    []senderRow
 	// Services are the polled services (#2765): components with no slot and no webhook.
 	Services []serviceRow
+}
+
+// pusherComponents is how many components are a sender or a service rather
+// than a slot's: one that is both counts once.
+func (r planRows) pusherComponents() int {
+	seen := map[int]bool{}
+	for _, s := range r.Senders {
+		seen[s.Comp] = true
+	}
+	for _, s := range r.Services {
+		seen[s.Comp] = true
+	}
+	return len(seen)
 }
 
 // rowsOf flattens a plan. Pure.
@@ -121,7 +137,7 @@ func rowsOf(p *scenario.Plan) planRows {
 				for n := 1; n <= fill.Count; n++ {
 					r.Components = append(r.Components, componentRow{
 						Key: fmt.Sprintf("%s/%s/%d", s.Name, fill.Slot, n), Name: scenario.ComponentName(s.Name, fill.Slot, n), Product: fill.Product,
-						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control,
+						Site: site.Name, Room: s.Room, System: s.Name, Slot: fill.Slot, Control: fill.Control, Platform: fill.Platform,
 					})
 				}
 			}
@@ -131,10 +147,12 @@ func rowsOf(p *scenario.Plan) planRows {
 				continue
 			}
 			r.Components = append(r.Components, componentRow{Key: ps.Name, Name: ps.Name, Product: ps.Profile, Site: site.Name, Room: site.Name})
+			comp := len(r.Components) - 1
 			if ps.Webhook {
-				r.Senders = append(r.Senders, senderRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
-			} else {
-				r.Services = append(r.Services, serviceRow{Comp: len(r.Components) - 1, Systems: ps.Systems})
+				r.Senders = append(r.Senders, senderRow{Comp: comp, Systems: ps.Systems, Service: ps.Service})
+			}
+			if ps.Service {
+				r.Services = append(r.Services, serviceRow{Comp: comp, Systems: ps.Systems})
 			}
 		}
 	}
@@ -172,7 +190,7 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 	if err != nil {
 		return res, err
 	}
-	res.Locations, res.Systems, res.Components, res.Slots = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-len(rows.Senders)-len(rows.Services)
+	res.Locations, res.Systems, res.Components, res.Slots = len(rows.Locations), len(rows.Systems), len(rows.Components), len(rows.Components)-rows.pusherComponents()
 	n, err := seedPlanPushers(ctx, gw, actorID, p, sysIDs)
 	if err != nil {
 		return res, err

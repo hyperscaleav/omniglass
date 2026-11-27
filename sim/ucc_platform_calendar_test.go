@@ -14,8 +14,8 @@ import (
 )
 
 // uccWorld is a meeting platform account over a world of three rooms, each a
-// system, and the lab calendar of the seed, its clock pinned to *at. Each room
-// is added to the account as a lab's seed does it, through the provision route.
+// system the account covers, and the lab calendar of the seed, its clock pinned
+// to *at.
 func uccWorld(t *testing.T, at *time.Time) (*Device, *calendar.Calendar, map[string]calendar.Room) {
 	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
@@ -29,87 +29,162 @@ func uccWorld(t *testing.T, at *time.Time) (*Device, *calendar.Calendar, map[str
 	rooms := map[string]calendar.Room{}
 	w := &world.World{Version: world.Version}
 	site := world.Site{Name: "hq"}
+	svc := world.Service{Name: "ucc-hq", Profile: "ucc-platform", Webhook: true}
 	for _, n := range []string{"r1", "r2", "r3"} {
 		sys := "hq-" + n
 		site.Rooms = append(site.Rooms, world.Room{Name: n, Building: "tower", System: sys})
 		rooms[sys] = calendar.Room{Site: "hq", Building: "tower", Room: n}
+		svc.Covers = append(svc.Covers, world.Cover{System: sys, Site: "hq", Building: "tower", Room: n})
 	}
 	w.Sites = []world.Site{site}
+	w.Services = []world.Service{svc}
 	e.SetWorld(w)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "ucc-hq", Hostname: "ucc-hq", LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]
 	d.SetClock(func() time.Time { return *at })
-	for sys := range rooms {
-		uccCall(t, d, http.MethodPost, "/api/rooms", fmt.Sprintf(`{"id":%q}`, sys))
-	}
+	tickByName(t, d, "rooms_calendar") // the account learns its rooms from the world
 	return d, cal, rooms
 }
 
 type uccRoom struct {
-	State, Meeting string
-	Participants   int
+	Status, Meeting, Topic string
+	Participants           int
+	Start                  int64
+	Booking                struct {
+		Topic      string
+		Start, End int64
+	}
+	Next struct {
+		Topic string
+		Start int64
+	}
 }
 
 func readRoomDocs(t *testing.T, d *Device) map[string]uccRoom {
 	t.Helper()
-	var doc struct {
-		Rooms []struct {
-			ID, State, Meeting string
-			Participants       int
+	out := map[string]uccRoom{}
+	token := ""
+	for pages := 0; ; pages++ {
+		var doc struct {
+			Rooms []struct {
+				ID, Status string
+				Meeting    struct {
+					ID, Topic    string
+					Start        int64
+					Participants int
+				}
+				Booking struct {
+					Topic      string
+					Start, End int64
+				}
+				Next struct {
+					Topic string
+					Start int64
+				}
+			}
+			NextPageToken string `json:"next_page_token"`
+		}
+		path := "/api/rooms?page_size=2"
+		if token != "" {
+			path += "&next_page_token=" + token
+		}
+		if err := json.Unmarshal(uccCall(t, d, http.MethodGet, path, ""), &doc); err != nil {
+			t.Fatal(err)
+		}
+		if len(doc.Rooms) > 2 {
+			t.Fatalf("a page of two holds %d rooms", len(doc.Rooms))
+		}
+		for _, r := range doc.Rooms {
+			if _, dup := out[r.ID]; dup {
+				t.Fatalf("room %s is on two pages", r.ID)
+			}
+			out[r.ID] = uccRoom{Status: r.Status, Meeting: r.Meeting.ID, Topic: r.Meeting.Topic, Participants: r.Meeting.Participants,
+				Start: r.Meeting.Start, Booking: r.Booking, Next: r.Next}
+		}
+		if token = doc.NextPageToken; token == "" {
+			return out
+		}
+		if pages > 50 {
+			t.Fatal("the room list never ends")
 		}
 	}
-	if err := json.Unmarshal(uccCall(t, d, http.MethodGet, "/api/rooms", ""), &doc); err != nil {
-		t.Fatal(err)
-	}
-	out := map[string]uccRoom{}
-	for _, r := range doc.Rooms {
-		out[r.ID] = uccRoom{r.State, r.Meeting, r.Participants}
-	}
-	return out
 }
 
-// The platform's room state is the lab calendar's (#2767): over a simulated
-// day on a pinned clock, after every tick each room the world places reads
-// in-call exactly when somebody is in it (a no-show reads idle), names the
-// meeting by its start and the room, and counts who came; a room the world
-// does not name keeps the state its routes gave it.
+// The platform's room list is the lab calendar's (#2767, #2790): over a
+// simulated day on a pinned clock, after every tick each room the world places
+// reads in-meeting exactly when somebody is in it (a no-show reads available,
+// but its booking still holds the room), names the meeting by its start and the
+// room, counts who came, and says which booking holds it now and which is next,
+// all read through pages of two; a room the world does not name keeps the state
+// its routes gave it.
 func TestTheUCCPlatformsRoomsFollowTheLabCalendar(t *testing.T) {
 	day := time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC)
 	at := day
 	d, cal, rooms := uccWorld(t, &at)
-	var inCall, noShow, walkIn int
+	var inCall, noShow, walkIn, booked int
 	for i := range 24 * 60 * 4 {
 		at = day.Add(time.Duration(i) * 15 * time.Second)
 		tickByName(t, d, "rooms_calendar")
 		if i%4 != 0 {
-			continue // read the room list each minute: one read is a full render
+			continue // read the room list each minute: one read is a full walk
 		}
 		got := readRoomDocs(t, d)
 		for sys, room := range rooms {
 			e, in := held(cal, room, at)
 			r := got[sys]
-			want := uccRoom{State: "idle"}
+			bk := RoomBookingsAt(cal, room, at)
+			if r.Status != map[bool]string{true: "in-meeting", false: "available"}[in] {
+				t.Fatalf("at %s %s reads %q, want in-meeting %v", at.Format("15:04:05"), sys, r.Status, in)
+			}
+			wantMeeting := ""
 			if in {
-				want = uccRoom{"in-call", fmt.Sprintf("m-%d-%s", e.Start.Unix(), sys), e.Meeting.Actual}
+				wantMeeting = fmt.Sprintf("m-%d-%s", e.Start.Unix(), sys)
 				inCall++
 				if e.Meeting.Origin == calendar.OriginWalkIn {
 					walkIn++
 				}
-			} else if now, ok := cal.Now(room, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
-				noShow++
+				if r.Participants != e.Meeting.Actual || r.Start != e.Start.Unix() || r.Topic == "" {
+					t.Fatalf("at %s %s holds %+v, want %d people from %d with a topic", at.Format("15:04:05"), sys, r, e.Meeting.Actual, e.Start.Unix())
+				}
+			} else if r.Participants != 0 || r.Topic != "" || r.Start != 0 {
+				t.Fatalf("at %s %s reads %+v with nobody in it", at.Format("15:04:05"), sys, r)
 			}
-			if r != want {
-				t.Fatalf("at %s %s reads %+v, want %+v", at.Format("15:04:05"), sys, r, want)
+			if r.Meeting != wantMeeting {
+				t.Fatalf("at %s %s names meeting %q, want %q", at.Format("15:04:05"), sys, r.Meeting, wantMeeting)
+			}
+			if now, ok := cal.Now(room, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
+				noShow++
+				if now.Meeting.Origin == calendar.OriginBooked && (r.Status != "available" || r.Booking.Start == 0) {
+					t.Fatalf("at %s %s holds a booked no-show and reads %+v, want available with its booking", at.Format("15:04:05"), sys, r)
+				}
+			}
+			// The booking is the booked slot holding the room now, the next one
+			// the first booked meeting to begin after: a booked no-show leaves
+			// the room available with its booking.
+			if m, ok := bk["now"].(map[string]any); ok {
+				booked++
+				if r.Booking.Start != m["slot_start"] || r.Booking.End != m["slot_end"] || r.Booking.Topic == "" {
+					t.Fatalf("at %s %s booking %+v, want the slot %v to %v", at.Format("15:04:05"), sys, r.Booking, m["slot_start"], m["slot_end"])
+				}
+			} else if r.Booking.Start != 0 || r.Booking.End != 0 {
+				t.Fatalf("at %s %s reads a booking %+v the calendar does not hold", at.Format("15:04:05"), sys, r.Booking)
+			}
+			if n, ok := bk["next"].(map[string]any); ok {
+				if r.Next.Start != n["slot_start"] {
+					t.Fatalf("at %s %s next %+v, want the slot at %v", at.Format("15:04:05"), sys, r.Next, n["slot_start"])
+				}
+			} else if r.Next.Start != 0 {
+				t.Fatalf("at %s %s reads a next booking %+v the calendar does not hold", at.Format("15:04:05"), sys, r.Next)
 			}
 		}
-		if z := got["zr-huddle-north"]; z.State != "in-call" || z.Meeting != "m-1001" || z.Participants != 3 {
+		if z := got["zr-huddle-north"]; z.Status != "in-meeting" || z.Meeting != "m-1001" || z.Participants != 3 {
 			t.Fatalf("at %s a room the world does not name reads %+v, want its own state kept", at.Format("15:04"), z)
 		}
 	}
-	if inCall == 0 || noShow == 0 || walkIn == 0 {
-		t.Fatalf("the day sampled %d in-call, %d no-show and %d walk-in room-minutes; want all", inCall, noShow, walkIn)
+	if inCall == 0 || noShow == 0 || walkIn == 0 || booked == 0 {
+		t.Fatalf("the day sampled %d in-meeting, %d no-show, %d walk-in and %d booked room-minutes; want all", inCall, noShow, walkIn, booked)
 	}
 }
 

@@ -37,6 +37,9 @@ type Catalog struct {
 	// SimProfile returns the simulator profile that serves the product, as
 	// the simulator itself picks it.
 	SimProfile func(product string) (string, bool)
+	// Firmware returns the firmware version the simulator's device of that
+	// product reports, "" when it reports none (#2790).
+	Firmware func(product string) string
 }
 
 var (
@@ -88,6 +91,19 @@ func loadShipped() (Catalog, error) {
 			name, _, ok := store.ForProduct(product)
 			return name, ok
 		},
+		Firmware: func(product string) string {
+			name, overlay, ok := store.ForProduct(product)
+			if !ok {
+				return ""
+			}
+			if v := firmwareOf(overlay); v != "" {
+				return v
+			}
+			if p, ok := store.Devices[name]; ok {
+				return firmwareOf(p.Defaults)
+			}
+			return ""
+		},
 		Within:     func(have, accepted string) bool { return within(parents, have, accepted) },
 		SystemType: func(name string) bool { return systemTypes[name] },
 		Pusher: func(name string) bool {
@@ -111,4 +127,12 @@ func within(parents map[string]string, have, accepted string) bool {
 		}
 	}
 	return false
+}
+
+// firmwareOf reads configuration.firmware.version from a profile's defaults.
+func firmwareOf(defaults map[string]any) string {
+	cfg, _ := defaults["configuration"].(map[string]any)
+	fw, _ := cfg["firmware"].(map[string]any)
+	v, _ := fw["version"].(string)
+	return v
 }

@@ -124,28 +124,26 @@ archetypes:
 # of the site's systems. The lab seeds its telemetry:push user and mints
 # its token per run, so every corporate lab pushes and lab measure reads the
 # push lane.
-#
-# And one meeting platform account a site (#1747), a webhook sender: systems
-# omitted, so it speaks for every one of the site's systems. The lab seeds
-# its webhook endpoint, mints the endpoint's signing key per run and binds
-# each room to its system, so the account's signed posts land on the push
-# lane beside the booking service's.
 pushers:
   - name: booking
     profile: booking-service
     per_site: 1
     systems: 4
-  - name: ucc
-    profile: ucc-platform
-    per_site: 1
 
-# Polled cloud services (#2765): one account for the whole fleet, placed once
-# at the headquarters and covering every room it books, not a box in each. The
-# simulator reads the rooms it covers off its world and reports their booked
-# meetings off the lab calendar, one paged room list.
+# Polled cloud services (#2765, #2790): one account for the whole fleet, placed
+# once at the headquarters and covering every room it books, not a box in each.
+# The simulator reads the rooms (and, for the meeting platform, the devices) it
+# covers off its world and reports their booked and held meetings off the lab
+# calendar, a paged list each. The meeting platform is also a webhook sender
+# (#1747): the lab seeds its webhook endpoint, mints the endpoint's signing key
+# per run, and binds each room to its system and each device to its component
+# as an installer would, so the account's signed posts land on the system or
+# component their ids name.
 services:
   - name: scheduling
     profile: scheduling-service
+  - name: meeting
+    profile: ucc-platform
 
 # The past a lab seeded with --health-history carries (#2728, ADR-2726): every
 # system healthy for the 30 days before the lab started, except the showcase

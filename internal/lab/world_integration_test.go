@@ -244,14 +244,16 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 			}
 		}
 		lo := time.Now().Add(-40 * time.Second) // the platform ticks every fifteen seconds
-		body, err := fireOnComponent(ctx, client, base, uccID, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/rooms"})
+		body, err := fireOnComponent(ctx, client, base, uccID, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/rooms?page_size=300"})
 		hi := time.Now()
 		if err == nil {
 			var doc struct {
 				Rooms []struct {
-					ID           string `json:"id"`
-					State        string `json:"state"`
-					Participants int    `json:"participants"`
+					ID      string `json:"id"`
+					Status  string `json:"status"`
+					Meeting struct {
+						Participants int `json:"participants"`
+					} `json:"meeting"`
 				} `json:"rooms"`
 			}
 			if jerr := json.Unmarshal([]byte(body), &doc); jerr != nil {
@@ -265,14 +267,14 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 				could, couldNot, most := held(at.CalRoom(), lo, hi)
 				uccReads++
 				switch {
-				case r.State == "in-call" && !could:
+				case r.Status == "in-meeting" && !could:
 					t.Fatalf("the platform has %s in a call with nobody in it on the calendar between %s and %s", r.ID, lo.Format("15:04:05"), hi.Format("15:04:05"))
-				case r.State == "idle" && !couldNot:
+				case r.Status == "available" && !couldNot:
 					t.Fatalf("the platform has %s idle while the calendar has it in a meeting from %s to %s", r.ID, lo.Format("15:04:05"), hi.Format("15:04:05"))
-				case r.State == "in-call":
+				case r.Status == "in-meeting":
 					uccCalls++
-					if r.Participants < 1 || r.Participants > most {
-						t.Fatalf("the platform has %d in %s's meeting, at most %d came", r.Participants, r.ID, most)
+					if r.Meeting.Participants < 1 || r.Meeting.Participants > most {
+						t.Fatalf("the platform has %d in %s's meeting, at most %d came", r.Meeting.Participants, r.ID, most)
 					}
 				}
 			}
