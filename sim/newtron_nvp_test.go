@@ -79,6 +79,9 @@ func TestControlProcessorSpeaksThePanelsSurfaceAndItsOwn(t *testing.T) {
 	if got := ask("GET PANELS"); got != "PANELS 3" {
 		t.Errorf("GET PANELS = %q, want the panels connected to it", got)
 	}
+	if got := ask("GET ROOMTEMP"); got != "ROOMTEMP 21.5" {
+		t.Errorf("GET ROOMTEMP = %q, want the setpoint at rest", got)
+	}
 	if got := ask("GET BOOKING"); !strings.HasPrefix(got, "-ERR") {
 		t.Errorf("GET BOOKING = %q, want a processor to refuse a scheduling panel's verb", got)
 	}

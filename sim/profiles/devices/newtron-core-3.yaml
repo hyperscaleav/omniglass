@@ -71,6 +71,9 @@ interfaces:
       # "MACRO none 0" before the first.
       - match: "GET ROOMPOWER"
         response: 'ROOMPOWER {{ .State | get "status" | get "control" | get "room_power" }}'
+      # The room's temperature in degrees Celsius: "ROOMTEMP 21.6".
+      - match: "GET ROOMTEMP"
+        response: 'ROOMTEMP {{ .State | get "status" | get "room" | get "temperature_c" }}'
       - match: "GET MACRO"
         response: 'MACRO {{ .State | get "status" | get "control" | get "macro" }} {{ .State | get "status" | get "control" | get "macro_at" }}'
       - match: "SUBSCRIBE PROGRAM"
@@ -106,6 +109,20 @@ behaviors:
       - path: status.control.room_power
         value: '{{ if hasCalendar }}{{ if (roomPhase).in_use }}on{{ else }}standby{{ end }}{{ else }}{{ .State.status.control.room_power }}{{ end }}'
 
+  # The room's climate: the underlying temperature (climate_c) moves a fifth of
+  # the way to its target each tick, the target being the setpoint plus 0.25 C
+  # per attendee (to at most 4 C) while the room is in use and the setpoint
+  # otherwise; the reading (temperature_c) is that value with 0.1 C of noise.
+  - name: room_climate
+    schedule:
+      interval: 30s
+      on_start: true
+    mutations:
+      - path: status.room.temperature_c
+        value: '{{ round 1 (randStep 0.1 .State.status.room.climate_c) }}'
+      - path: status.room.climate_c
+        value: '{{ $c := .State.status.room.climate_c }}{{ $t := 21.5 }}{{ if hasCalendar }}{{ $r := roomPhase }}{{ if $r.in_use }}{{ $t = add 21.5 (clamp 0.0 4.0 (mul 0.25 $r.attendees)) }}{{ end }}{{ round 3 (add $c (mul 0.2 (sub $t $c))) }}{{ else }}21.5{{ end }}'
+
 defaults:
   status:
     device:
@@ -116,6 +133,10 @@ defaults:
     room:
       scene: "idle"
       source: "none"
+      # The room's temperature in degrees Celsius, and the underlying value the
+      # reading is taken from (see room_climate).
+      temperature_c: 21.5
+      climate_c: 21.5
     diagnostics:
       log: ""
     video:
