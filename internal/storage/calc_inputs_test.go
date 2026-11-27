@@ -275,7 +275,10 @@ func TestCalcRuleReservedAliasBackfill(t *testing.T) {
 	// Every name the calc site reserves today is in one of the reserving
 	// migrations' lists: the first, or a later one for names reserved since.
 	reserving := up
-	for _, later := range []string{"migrations/20261118150100_calc_rule_alias_reserved_trend.sql"} {
+	for _, later := range []string{
+		"migrations/20261118150100_calc_rule_alias_reserved_trend.sql",
+		"migrations/20261127011751_calc_rule_alias_reserved_expr118.sql",
+	} {
 		raw, err := db.FS.ReadFile(later)
 		if err != nil {
 			t.Fatal(err)
@@ -347,6 +350,66 @@ func TestCalcRuleTrendAliasBackfill(t *testing.T) {
 	got, err := gw.GetCalcRule(ctx, "by-slope")
 	if err != nil || got.CalcError == nil || got.CalcError.Field != "inputs[0].alias" {
 		t.Fatalf("by-slope reads %+v (%v), want a calc_error on its alias", got, err)
+	}
+}
+
+// TestCalcRuleExpr118AliasBackfill proves the Expr 1.18 follow-up migration:
+// a rule whose alias became a builtin's name (log2, merge) is disabled and
+// reads back with a calc_error on that alias; a rule with a fine alias is left
+// alone; the backfill run again changes nothing.
+func TestCalcRuleExpr118AliasBackfill(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	dsn := storagetest.NewDSN(t)
+	if err := migrate.RollbackBelow(dsn, "20261127011751"); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	conn := connectDSN(t, dsn)
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, sql, args...); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	exec(`insert into metric_type (name, data_type) values ('e118-in', 'float'), ('e118-out-a', 'float'), ('e118-out-b', 'float'), ('e118-out-c', 'float')`)
+	for name, alias := range map[string]string{"by-log2": "log2", "by-merge": "merge", "fine": "rtt"} {
+		out := map[string]string{"by-log2": "e118-out-a", "by-merge": "e118-out-b", "fine": "e118-out-c"}[name]
+		exec(`insert into calc_rule (name, owner_kind, reduce, output_lane, output_metric_type_id, enabled)
+			values ($1, 'component', '{"expr": "max(`+alias+`)"}', 'metric', (select id from metric_type where name = $2), true)`, name, out)
+		exec(`insert into calc_rule_input (rule_id, position, alias, lane, metric_type_id)
+			values ((select id from calc_rule where name = $1), 0, $2, 'metric', (select id from metric_type where name = 'e118-in'))`, name, alias)
+	}
+	if err := migrate.Run(dsn); err != nil {
+		t.Fatal(err)
+	}
+	enabled := func() string {
+		t.Helper()
+		return scalar(t, conn, `select string_agg(name || '=' || enabled::text, ',' order by name) from calc_rule`)
+	}
+	const want = "by-log2=false,by-merge=false,fine=true"
+	if got := enabled(); got != want {
+		t.Fatalf("after the migration %s, want %s", got, want)
+	}
+	raw, err := db.FS.ReadFile("migrations/20261127011751_calc_rule_alias_reserved_expr118.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, _, _ := strings.Cut(string(raw), "-- migrate:down")
+	exec(strings.TrimPrefix(up, "-- migrate:up"))
+	if got := enabled(); got != want {
+		t.Fatalf("a second run %s, want %s", got, want)
+	}
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	got, err := gw.GetCalcRule(ctx, "by-merge")
+	if err != nil || got.CalcError == nil || got.CalcError.Field != "inputs[0].alias" {
+		t.Fatalf("by-merge reads %+v (%v), want a calc_error on its alias", got, err)
 	}
 }
 
