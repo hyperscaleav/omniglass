@@ -35,13 +35,17 @@ type World struct {
 	// Meetings are the meeting knobs of each standard, by standard name. A
 	// room whose standard has none holds no meetings.
 	Meetings map[string]calendar.Knobs `json:"meetings,omitempty"`
-	Sites    []Site                    `json:"sites"`
+	// Problems are the recurring problems the scenario scripts (#2769), each
+	// with the scope it lands in; the calendar derives them per room.
+	Problems []calendar.ProblemSpec `json:"problems,omitempty"`
+	Sites    []Site                 `json:"sites"`
 	// Services are the devices that speak for rooms and are no room's own: a
 	// pusher or a webhook sender, each with the systems it covers.
 	Services []Service `json:"services,omitempty"`
 
 	once    sync.Once
 	devices map[string]Placement
+	slots   map[string]string
 	systems map[string]Placement
 	covers  map[string][]Placement
 }
@@ -50,12 +54,14 @@ type World struct {
 func (w *World) index() {
 	w.once.Do(func() {
 		w.devices, w.systems, w.covers = map[string]Placement{}, map[string]Placement{}, map[string][]Placement{}
+		w.slots = map[string]string{}
 		for _, s := range w.Sites {
 			for _, r := range s.Rooms {
 				p := Placement{Site: s.Name, Building: r.Building, Room: r.Name}
 				w.systems[r.System] = p
 				for _, d := range r.Devices {
 					w.devices[d.Name] = p
+					w.slots[d.Name] = d.Slot
 				}
 			}
 		}
@@ -71,8 +77,11 @@ func (w *World) index() {
 
 // Site is a site and its rooms.
 type Site struct {
-	Name  string `json:"name"`
-	Rooms []Room `json:"rooms"`
+	Name string `json:"name"`
+	// Archetype is the kind of site it is (headquarters, regional), so a
+	// problem scoped to every site of a kind finds it.
+	Archetype string `json:"archetype,omitempty"`
+	Rooms     []Room `json:"rooms"`
 }
 
 // Room is a place with a system built to a standard, and the devices planned
@@ -92,7 +101,10 @@ type Room struct {
 // simulator joins a pulled device by an exact name), the product it is, and
 // the simulator profile that serves it ("" when none does).
 type Device struct {
-	Name    string `json:"name"`
+	Name string `json:"name"`
+	// Slot is the role the device plays in its room (main-display,
+	// wireless-mic), which a scripted problem lands on (#2769).
+	Slot    string `json:"slot,omitempty"`
 	Product string `json:"product"`
 	Profile string `json:"profile,omitempty"`
 }
@@ -137,6 +149,16 @@ func (w *World) Validate() error {
 		if err := k.Validate(); err != nil {
 			return fmt.Errorf("world: meetings.%s.%w", std, err)
 		}
+	}
+	names := map[string]bool{}
+	for _, p := range w.Problems {
+		if err := p.Validate(); err != nil {
+			return fmt.Errorf("world: problem %q: %w", p.Name, err)
+		}
+		if names[p.Name] {
+			return fmt.Errorf("world: problem %q is scripted twice", p.Name)
+		}
+		names[p.Name] = true
 	}
 	seen := map[string]bool{}
 	for _, s := range w.Sites {
@@ -201,6 +223,16 @@ func (w *World) PlaceDevice(name string) (Placement, bool) {
 	return p, ok
 }
 
+// SlotOf is the role the world gives the device of that component name
+// ("" for a device it does not name, or one with no slot).
+func (w *World) SlotOf(name string) string {
+	if w == nil {
+		return ""
+	}
+	w.index()
+	return w.slots[name]
+}
+
 // PlaceSystem is where the world places the system of that name: the room a
 // service's push for that system is about. This is how a push's .Owner
 // resolves to a room, through the world and not through Omniglass.
@@ -224,24 +256,36 @@ func (w *World) Covered(service string) []Placement {
 }
 
 // Calendar is the lab calendar the world implies: the world's seed and each
-// room's meeting knobs by its standard. Nil when the world declares no
-// meeting knobs at all, so a world with none has no calendar.
+// room's meeting knobs by its standard, and the problems scripted for each
+// room by their scope. Nil when the world declares neither, so a world with
+// none has no calendar.
 func (w *World) Calendar() *calendar.Calendar {
-	if w == nil || len(w.Meetings) == 0 {
+	if w == nil || (len(w.Meetings) == 0 && len(w.Problems) == 0) {
 		return nil
 	}
 	byRoom := map[calendar.Room]calendar.Knobs{}
+	problems := map[calendar.Room][]calendar.ProblemSpec{}
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
+			room := calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}
 			if k, ok := w.Meetings[r.Standard]; ok {
-				byRoom[calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}] = k
+				byRoom[room] = k
+			}
+			for _, p := range w.Problems {
+				if p.Scope.Matches(r.Standard, s.Name, s.Archetype, r.System) {
+					problems[room] = append(problems[room], p)
+				}
 			}
 		}
 	}
-	return calendar.New(w.CalendarSeed, func(room calendar.Room) (calendar.Knobs, bool) {
+	cal := calendar.New(w.CalendarSeed, func(room calendar.Room) (calendar.Knobs, bool) {
 		k, ok := byRoom[room]
 		return k, ok
 	})
+	if len(w.Problems) > 0 {
+		cal = cal.WithProblems(func(room calendar.Room) []calendar.ProblemSpec { return problems[room] })
+	}
+	return cal
 }
 
 // Standards is the standards the world's rooms are built to, sorted.

@@ -41,7 +41,7 @@ standards:
 		{"inverted attendance", base + block("      booking_rate: 0.5\n      slot_mix: {30: 1}\n      attendance: {min: 5, max: 2}\n"), "calendar.meetings.sign-55.attendance"},
 		{"not a standard", base + "calendar:\n  meetings:\n    mr99:\n      booking_rate: 0.5\n", `calendar.meetings.mr99: "mr99" is no standard`},
 		{"unknown knob", base + block("      booking_rat: 0.5\n"), `unknown field "booking_rat"`},
-		{"unknown key", base + "calendar:\n  problems: {}\n", `unknown field "problems"`},
+		{"unknown key", base + "calendar:\n  incidents: {}\n", `unknown field "incidents"`},
 		{"not a mapping", base + "calendar:\n  meetings: [a]\n", "calendar.meetings wants a mapping"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

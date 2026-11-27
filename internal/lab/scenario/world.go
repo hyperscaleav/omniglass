@@ -74,6 +74,10 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 			w.Meetings[sm.Standard.Name] = sm.Knobs
 		}
 	}
+	if err := checkProblemRooms(m, plan); err != nil {
+		return nil, err
+	}
+	w.Problems = m.ScriptedProblems()
 	profileOf := func(product string) string {
 		if cat.SimProfile == nil {
 			return ""
@@ -105,14 +109,14 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 					return nil, err
 				}
 				r.Devices = append(r.Devices, world.Device{
-					Name: ComponentName(sys.Name, fill.Slot, i), Product: fill.Product, Profile: profileOf(fill.Product),
+					Name: ComponentName(sys.Name, fill.Slot, i), Slot: fill.Slot, Product: fill.Product, Profile: profileOf(fill.Product),
 				})
 			}
 		}
 		rooms = append(rooms, r)
 		cover[sys.Name] = world.Cover{System: sys.Name, Site: site, Building: sys.Building, Room: sys.Room}
 	}
-	w.Sites = []world.Site{{Name: site, Rooms: rooms}}
+	w.Sites = []world.Site{{Name: site, Archetype: sp.Archetype, Rooms: rooms}}
 	// A service covers rooms beyond its own site (#2765): the other sites'
 	// rooms come in as rooms with no devices, so the world places their systems
 	// and the calendar holds their meetings.
@@ -133,7 +137,7 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 				rs = append(rs, r)
 				cover[sys.Name] = world.Cover{System: sys.Name, Site: other.Name, Building: sys.Building, Room: sys.Room}
 			}
-			w.Sites = append(w.Sites, world.Site{Name: other.Name, Rooms: rs})
+			w.Sites = append(w.Sites, world.Site{Name: other.Name, Archetype: other.Archetype, Rooms: rs})
 		}
 		break
 	}
@@ -156,4 +160,23 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 		w.Services = append(w.Services, svc)
 	}
 	return w, nil
+}
+
+// checkProblemRooms refuses a scripted problem that names a room the plan does
+// not have: a typo would otherwise script nothing and say nothing.
+func checkProblemRooms(m *Manifest, plan *Plan) error {
+	systems := map[string]bool{}
+	for _, sp := range plan.Sites {
+		for _, sys := range sp.Systems {
+			systems[sys.Name] = true
+		}
+	}
+	for _, p := range m.ScriptedProblems() {
+		for _, r := range p.Scope.Rooms {
+			if !systems[r] {
+				return fmt.Errorf("scenario %s: calendar.problems.%s names the room %q, which is no system of the plan", plan.Scenario, p.Name, r)
+			}
+		}
+	}
+	return nil
 }

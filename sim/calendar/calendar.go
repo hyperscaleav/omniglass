@@ -11,9 +11,10 @@
 // #1749's stable device key has not landed in the code, and a room is the unit
 // meetings are about, not a device.
 //
-// The entry model leaves room for a second kind, a scripted problem (#2769):
-// an Entry carries its Kind and one payload pointer per kind, of which only
-// Meeting exists today.
+// An Entry carries its Kind and one payload pointer per kind: a Meeting, or a
+// scripted Problem (#2769), which comes from the scenario's script rather than
+// the knobs and is read through Problems, ProblemsNow and All. Entries, Now,
+// Next and Prev are the meetings alone.
 package calendar
 
 import (
@@ -35,8 +36,8 @@ func (r Room) Key() string { return r.Site + "/" + r.Building + "/" + r.Room }
 // Kind is what an entry is.
 type Kind string
 
-// KindMeeting is a meeting in a room. A problem kind joins it with its own
-// slice (#2769).
+// KindMeeting is a meeting in a room. KindProblem, a scripted problem, is
+// the other kind (problem.go, #2769).
 const KindMeeting Kind = "meeting"
 
 // Origin says how a meeting came to be.
@@ -85,6 +86,7 @@ type Entry struct {
 	End     time.Time
 	Room    Room
 	Meeting *Meeting
+	Problem *Problem
 }
 
 // Jitter bounds: a booked meeting starts up to MaxEarlyStart before and
@@ -375,14 +377,18 @@ func (e Entry) Map() map[string]any {
 		m["slot_end"] = e.Meeting.SlotEnd.Unix()
 		m["recorded"] = e.Meeting.Recorded
 	}
+	if e.Problem != nil {
+		mapProblem(m, e.Problem)
+	}
 	return m
 }
 
 // Calendar is a seed and the knobs each room has: the whole lab's calendar,
 // derived on read.
 type Calendar struct {
-	seed  int64
-	knobs func(Room) (Knobs, bool)
+	seed     int64
+	knobs    func(Room) (Knobs, bool)
+	problems func(Room) []ProblemSpec
 }
 
 // New makes a calendar of the seed. knobs says what a room's meetings are
