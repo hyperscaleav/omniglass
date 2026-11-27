@@ -443,16 +443,38 @@ Devices that read the calendar:
   room is in use. Each sits at its noise floor otherwise. A device whose room holds no calendar
   (`hasCalendar`) keeps its earlier drift unchanged.
 
-- **Conferencing, the video bar, the codec and the meeting platform** (#2767): a held meeting is a
-  call. The Kestrel VRoom bar and the Relay C1 codec are in a call exactly when their room's meeting
-  has somebody in it (a no-show has none, a walk-in has one), at the first tick on or after it starts
-  and ends; participants open at half to all of who came and move inside it, content is shared now
-  and then, and a meeting that starts as the last one ends moves the call on in one tick. A dial or a
-  hang-up on the device holds against the calendar. The UCC platform reads each room it speaks for
-  through the system the room's id names, as in-call or idle with the meeting's id and who came, and
-  posts a signed `room.meeting.started` and `room.meeting.ended` at each boundary, one a tick, none
-  for what was already running when it was subscribed. A bar whose room has no calendar (the dev fleet
-  has no world) keeps #2754's own schedule, exactly as before.
+- **Conferencing, the video bar and the codec** (#2767): a held meeting is a call. The Kestrel VRoom
+  bar and the Relay C1 codec are in a call exactly when their room's meeting has somebody in it (a
+  no-show has none, a walk-in has one), at the first tick on or after it starts and ends; participants
+  open at half to all of who came and move inside it, content is shared now and then, and a meeting
+  that starts as the last one ends moves the call on in one tick. A dial or a hang-up on the device
+  holds against the calendar. A bar whose room has no calendar (the dev fleet has no world) keeps
+  #2754's own schedule, exactly as before.
+- **The meeting platform** (#2767, #2790): one account for the whole fleet, a conduit
+  ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)),
+  designed to the shape of a real cloud meeting platform's rooms and devices admin APIs under our own
+  names. The lab places it once, at the headquarters, covering every room of every site, and its
+  world owns the ids: a room is its system's name, a device has the stable id the world gives it.
+  - **The rooms list** is token-paged (`page_size`, `next_page_token`, the last room of the page, empty
+    on the last), one record per room: its `id` and `name`, its `status` (`available`, `in-meeting`,
+    `offline`), the `meeting` it holds (`id`, `topic`, `start`, `participants`, empty when there is none),
+    the `booking` that holds it now (a booked no-show leaves the room available with its booking) and the
+    `next` booked one, all from the calendar. A room is in a meeting exactly when somebody is in it.
+  - **The devices list** is paged the same way, one record per device in those rooms that a meeting
+    platform manages (a codec, bar, controller, scheduling panel, camera or microphone, not a display or an
+    amplifier): its `id`, `name`, `room_id`, `type`, `status` (`online`, `offline`), `firmware` (the version
+    the device itself reports) and `last_seen`. The world's devices read online; a device the platform
+    holds itself, which no room names, keeps the status its own route gave it.
+  - **Webhooks**, signed as every post is: `room.meeting.started` and `room.meeting.ended` at each
+    calendar boundary, one a tick, none for what was already running when it was subscribed;
+    `room.participant.joined` and `room.participant.left` and `device.status.changed` when the platform's
+    own routes post them. Each names its `room_id` (and the `device_id` where it applies).
+  - **Omniglass learns it from configuration.** The `ucc-rooms` driver walks both lists in one poll each
+    (`request.paginate`, [paged lists](/admin/drivers/#paged-lists)) and fans each room's call state and headcount to the
+    system the lab's installer bound its id to, and each device's platform status and firmware to the
+    component bound to its id; `ucc-webhook` routes a post by the same ids. A room id or a device id nobody
+    bound (`zr-boardroom-b`, `zd-spare-bar`) lands in the conduit's unbound inbox.
+  - A platform with no world (the dev fleet) keeps its own rooms and devices, as before.
 
 ### A simulated service posts from the start
 
@@ -463,7 +485,7 @@ the server's device list carries, for a simulated component with a webhook endpo
 path and signing secret, and the simulator calls the device's own subscribe route
 (`webhook.subscribe`) as the service's admin would. A webhook sender profile also names a provision
 route (`webhook.provision`), through which the simulator adds every identity bound on the component,
-so a meeting platform comes to speak for each system of its site (#1747).
+so a meeting platform comes to speak for each system it is bound to (#1747); a lab's account takes its rooms and devices from its world instead (#2790).
 
 The fence is two facts an outpost cannot assert: the database carries the lab mark, and the component
 sits in `127.60.0.0/16`, which only the seed allocates. Outside a lab nothing is handed out, and a real
@@ -471,7 +493,7 @@ device's webhook never is.
 
 The account-wide meeting platform is the face the
 [fan-out](/architecture/collection/#shared-api-collection-one-component-many-owners) is proven against:
-one service speaking for every room on its account, polled as records and posting batched state on a
+one service speaking for every room and device on its account, polled as paged records and posting batched state on a
 behavior every 30 seconds, so an account no one drives is still heard. One of its rooms is bound to
 nothing, so its values land in the conduit's unbound inbox until an operator binds it
 ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).

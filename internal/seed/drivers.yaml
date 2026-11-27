@@ -1234,6 +1234,26 @@ drivers:
           emits:
             - { name: call-ended, message: { value: "Meeting ended" } }
             - { name: call-state, extract: { jsonpath: event }, transform: { map: { room.meeting.ended: idle } } }
+        # A participant joins or leaves a room's meeting (#2790): the post names
+        # the room by id and the headcount after, which lands as the room's
+        # participant count.
+        - name: room-participant-joined
+          match: { header: { name: X-UCC-Event, equals: room.participant.joined } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: participant-count, extract: { jsonpath: participants } }
+        - name: room-participant-left
+          match: { header: { name: X-UCC-Event, equals: room.participant.left } }
+          identity: { key: ucc-room-id, extract: { jsonpath: room_id } }
+          emits:
+            - { name: participant-count, extract: { jsonpath: participants } }
+        # A device's status on the platform changes (#2790): the post names the
+        # device by its id, which lands on the component bound to it.
+        - name: device-status-changed
+          match: { header: { name: X-UCC-Event, equals: device.status.changed } }
+          identity: { key: ucc-device-id, extract: { jsonpath: device_id } }
+          emits:
+            - { name: platform-state, extract: { jsonpath: status } }
         # The batched report names every room at once: one record per room.
         - name: rooms-state
           match: { header: { name: X-UCC-Event, equals: rooms.state } }
@@ -1265,26 +1285,43 @@ drivers:
       polls:
         - name: rooms
           schedule: { every: 30s }
-          # TODO(#2789): the platform pages this list (next_page_token); the
-          # driver walks one page, the largest it allows, until the paging
-          # rule lands.
-          request: { path: /api/rooms, query: { page_size: "300" } }
+          # The room list pages (#2789): each answer carries the cursor of the
+          # next page in next_page_token, sent back as the query parameter of
+          # the same name, until an answer carries none; one poll walks every
+          # page and fans every room out. Ten rooms a page, so a small lab's
+          # list is visibly paged; 400 pages hold a four-thousand-room account.
+          request:
+            path: /api/rooms
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 10
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 400
           records: rooms
           identity: { key: sched-room-id, extract: { jsonpath: id } }
           emits:
             - { name: booking-state, extract: { jsonpath: state } }
             - { name: booking-count, extract: { jsonpath: remaining } }
   - id: ucc-rooms
-    label: UCC Rooms
+    label: UCC Rooms and Devices
     version: "1.0.0"
     spec:
       version: 1
-      # The account-wide meeting platform's room list (#1282): one poll of
-      # GET /api/rooms reads every room on the account, one record per room,
-      # each naming its room by id, so each room's call state and
-      # participant count land on the system or component bound to that id
-      # on this component (the conduit). The platform answers over https on
-      # 443, its key pinned on first use, every request carrying its token.
+      # The account-wide meeting platform's room list (#1282, #2790): one poll
+      # of GET /api/rooms reads every room on the account, one record per room,
+      # each naming its room by id, with the room's status (available, in a
+      # meeting, offline) and the meeting it holds, so each room's call state
+      # and participant count land on the system bound to that id on this
+      # component (the conduit). A second poll reads GET /api/devices the same
+      # way, one record per device naming it by the id the platform gives it
+      # (not the room's), so each device's status on the platform and the
+      # firmware it reports land on the component bound to that id. An endpoint
+      # is named for its transport and the account is one component, so both
+      # lists are one driver's polls on its one https endpoint. The platform
+      # answers over https on 443, its key pinned on first use, every request
+      # carrying its token.
       transport: https
       inputs:
         - { name: host, kind: string, required: true }
@@ -1307,11 +1344,29 @@ drivers:
             paginate:
               style: cursor
               size_param: page_size
-              size: 100
+              size: 10
               cursor_from: next_page_token
               cursor_param: next_page_token
+              max_pages: 400
           records: rooms
           identity: { key: ucc-room-id, extract: { jsonpath: id } }
           emits:
-            - { name: call-state, extract: { jsonpath: state }, transform: { map: { in-call: active, idle: idle } } }
-            - { name: participant-count, extract: { jsonpath: participants } }
+            - { name: call-state, extract: { jsonpath: status }, transform: { map: { in-meeting: active, available: idle, offline: idle } } }
+            - { name: participant-count, extract: { jsonpath: meeting.participants } }
+        - name: devices
+          schedule: { every: 30s }
+          request:
+            path: /api/devices
+            paginate:
+              style: cursor
+              size_param: page_size
+              size: 50
+              cursor_from: next_page_token
+              cursor_param: next_page_token
+              max_pages: 600
+              max_records: 50000
+          records: devices
+          identity: { key: ucc-device-id, extract: { jsonpath: id } }
+          emits:
+            - { name: platform-state, extract: { jsonpath: status } }
+            - { name: firmware-version, extract: { jsonpath: firmware } }

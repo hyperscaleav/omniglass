@@ -286,6 +286,11 @@ property_types:
     validation: { enum: [booked, free] }
     label: Booking State
     description: Whether a space is booked now (a meeting in progress) or free, as its scheduling service reports it.
+  - name: platform-state
+    data_type: string
+    validation: { enum: [online, offline] }
+    label: Platform State
+    description: Whether the cloud platform that manages a device hears from it (online) or has lost it (offline), as the platform lists it.
   - name: program-state
     data_type: string
     validation: { enum: [running, stopped] }
@@ -366,6 +371,14 @@ property_types:
       reports on. A driver on the service's component reads it off each
       record, and an identity binding on that component ties each id to the
       system or component it names.
+  - name: ucc-device-id
+    data_type: string
+    label: UCC device id
+    description: >-
+      The id a unified-communications service gives one of the devices it
+      lists. A driver on the service's component reads it off each record,
+      and an identity binding on that component ties each id to the component
+      it names.
   - name: sched-room-id
     data_type: string
     label: Scheduling room id

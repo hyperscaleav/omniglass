@@ -1136,7 +1136,7 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 		return err
 	}
 
-	tmpl, err := template.New(tmplPath).Funcs(templateFuncs).Parse(tmplContent)
+	tmpl, err := template.New(tmplPath).Funcs(templateFuncs).Funcs(d.listingFuncs()).Parse(tmplContent)
 	if err != nil {
 		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
 	}

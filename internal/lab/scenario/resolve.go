@@ -67,8 +67,9 @@ type PusherPlan struct {
 	Profile string
 	Systems []string
 	Webhook bool
-	// Service is a polled cloud service (#2765): a component seeded once a
-	// site, with no token and no webhook, covering Systems.
+	// Service is a polled cloud service (#2765): a component seeded once for
+	// the fleet, covering Systems. It is also a webhook sender (Webhook) when
+	// its profile posts webhooks as well (#2790).
 	Service bool
 }
 
@@ -114,6 +115,9 @@ type SlotFill struct {
 	// Control is a slot the standard wires with its product's control face
 	// as well (Standard.Control, #2649).
 	Control bool
+	// Platform is the kind a meeting platform lists the component as
+	// (PlatformDeviceType), "" when it lists none (#2790).
+	Platform string
 }
 
 // SystemPlan is one planned system: its name, its generated label, its
@@ -222,7 +226,11 @@ func Resolve(m *Manifest, cat Catalog, size int) (*Plan, error) {
 		}
 		hq := &plan.Sites[0]
 		for _, d := range m.Services {
-			hq.Pushers = append(hq.Pushers, PusherPlan{Name: fmt.Sprintf("%s-%s-1", hq.Name, d.Name.Name), Profile: d.Profile.Name, Systems: all, Service: true})
+			// A service whose profile also posts webhooks (the meeting
+			// platform, #2790) is a sender too: its signed posts name the
+			// rooms it covers as a polled list does.
+			sender := cat.Sender != nil && cat.Sender(d.Profile.Name)
+			hq.Pushers = append(hq.Pushers, PusherPlan{Name: fmt.Sprintf("%s-%s-1", hq.Name, d.Name.Name), Profile: d.Profile.Name, Systems: all, Service: true, Webhook: sender})
 			plan.Pushers = addCount(plan.Pushers, d.Profile.Name, 1)
 		}
 	}

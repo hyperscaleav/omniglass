@@ -257,13 +257,15 @@ outpost runs them:
 - **A token pusher.** `corporate` places one booking service a site, pushing four of its systems'
   bookings every 30 seconds through `POST /telemetry:push`. The lab mints its bearer token on every
   run, for a machine user that may push to those systems and do nothing else.
-- **A webhook sender.** `corporate` also places one meeting platform account a site (`ucc-platform`),
-  which speaks for every one of the site's systems. The lab seeds the account as a component with a
-  `ucc-webhook` endpoint and a signing key minted on every run (beside the product's polled
-  `ucc-rooms` endpoint on the site's outpost), and binds each system's room to its system;
-  the simulator subscribes the account to the endpoint, adds each bound room, and the account posts a
-  signed report naming every room's meeting state every 30 seconds. Its key is sealed in the server
-  and handed to the simulator alone: neither the plan, the seed's output nor a log shows it.
+- **A webhook sender.** `corporate` also places one meeting platform account for the whole fleet
+  (`ucc-platform`, a `services:` entry), at the headquarters, which speaks for every system of every
+  site. The lab seeds the account as a component with a `ucc-webhook` endpoint and a signing key minted
+  on every run (beside the product's polled `ucc-rooms` endpoint on the headquarters' outpost), and
+  binds each system's room id to its system and each device the account lists to its component, as an
+  installer would; the simulator subscribes the account to the endpoint, and the account posts a
+  signed report naming every room's meeting state every 30 seconds, besides the meeting boundaries the
+  calendar sets. Its key is sealed in the server and handed to the simulator alone: neither the plan,
+  the seed's output nor a log shows it.
 
 Both arrive on the server's [push lane](#reading-the-delivery-table), so `lab measure` reads their
 loss beside the outposts'.
@@ -611,8 +613,8 @@ Below the endpoints block, the delivery table says how much telemetry the lab lo
 `outpost` is what the outposts collected and shipped, `push` what was pushed to the server (`POST
 /telemetry:push` and the webhook receivers). The scale lab's push lane comes from the outside actors
 its scenario declares ([the manifest format](#the-manifest-format)): `corporate` places one booking
-service a site, each pushing its four systems' bookings, and one meeting platform account a site,
-each posting a signed report of its rooms' meeting state, both every 30 seconds from the simulator
+service a site, each pushing its four systems' bookings, and one meeting platform account for the
+fleet, posting a signed report of its rooms' meeting state, both every 30 seconds from the simulator
 beside the site's outpost. So every corporate lab reads push rows: metrics and properties from the
 bookings, properties and log lines from the reports. A report names the account's own demo rooms
 too, which no system binds, so the push lane's properties read some `unbound`, which is not loss.
@@ -1199,12 +1201,11 @@ pushers:                        # outside actors that report by pushing, placed 
     profile: booking-service    # a simulator profile with a push face
     per_site: 1                 # how many each site has
     systems: 4                  # how many of the site's systems each one pushes for
-  - name: ucc                   # each placed one is <site>-ucc-<k>
-    profile: ucc-platform       # a simulator profile with a webhook face: a signed-webhook sender
-    per_site: 1                 # systems omitted: it speaks for every one of the site's systems
 services:                       # polled cloud services: one account for the whole scenario (#2765)
   - name: scheduling            # placed once, at the headquarters, as <hq>-scheduling-1
     profile: scheduling-service # a product the simulator serves; it covers every system of every site
+  - name: meeting               # <hq>-meeting-1
+    profile: ucc-platform       # a profile with a webhook face is a signed-webhook sender as well (#2790)
 calendar:                       # what every room acts out on the simulator's clock (#2757)
   meetings:
     mr65:                       # a standard of this scenario; knobs per standard

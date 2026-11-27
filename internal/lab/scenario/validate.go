@@ -219,7 +219,7 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 			continue
 		}
 		cs.components = append(cs.components, Count{Name: f.Product, Count: f.Count})
-		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count, Control: control[f.Slot]})
+		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count, Control: control[f.Slot], Platform: PlatformDeviceType(cat, f.Product)})
 	}
 	return cs, probs
 }

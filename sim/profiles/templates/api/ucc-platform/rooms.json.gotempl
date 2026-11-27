@@ -1,18 +1,24 @@
-{{- /* Token paging, as a cloud room API pages: page_size caps the page, the
-   answer's next_page_token names the first room of the next page and is sent
-   back as next_page_token, empty on the last page. No page_size answers every room. */ -}}
-{{- $size := atoi (index .Request.Query "page_size") }}
-{{- $from := index .Request.Query "next_page_token" }}
-{{- $n := 0 }}{{ $next := "" }}{{ $sep := "" }}
+{{- /* Token paging, as a cloud rooms API pages: page_size caps the page, the
+   answer's next_page_token names the last room of the page and is sent back as
+   next_page_token, empty on the last page. No page_size answers the default page.
+   A room is available (nobody in a meeting), in-meeting or offline; its meeting is
+   always present, empty when there is none, and its booking is the booked slot
+   that holds it now, which a no-show leaves in place while the room reads available. */ -}}
+{{- $rooms := .State | get "status" | get "rooms" -}}
+{{- $p := pageKeys $rooms .Request.Query.next_page_token .Request.Query.page_size -}}
 {
   "rooms": [
-  {{- range $id, $r := (.State | get "status" | get "rooms") }}
-  {{- if lt $id $from }}{{ else if and $size (ge $n $size) }}{{ if eq $next "" }}{{ $next = $id }}{{ end }}{{ else }}{{ $sep }}
+  {{- $sep := "" }}
+  {{- range $id := $p.keys }}{{ $r := index $rooms $id }}{{ $sep }}
     {{/* @field status.rooms.*.state string "idle or in-call" */}}
-    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "state": {{ marshal (or (index $r "state") "idle") }}, "meeting": {{ marshal (or (index $r "meeting") "") }}, "participants": {{ or (index $r "participants") 0 }}}
-  {{- $sep = "," }}{{ $n = add $n 1 }}
-  {{- end }}
+    {{- $st := or (index $r "state") "idle" }}
+    {"id": {{ marshal $id }}, "name": {{ marshal (or (index $r "name") $id) }}, "status": {{ if eq $st "in-call" }}"in-meeting"{{ else if eq $st "offline" }}"offline"{{ else }}"available"{{ end }},
+     "meeting": {"id": {{ marshal (or (index $r "meeting") "") }}, "topic": {{ marshal (or (index $r "topic") "") }}, "start": {{ whole (index $r "start") }}, "participants": {{ whole (index $r "participants") }}},
+     "booking": {{ with index $r "booking" }}{{ marshal . }}{{ else }}{"topic": "", "start": 0, "end": 0}{{ end }},
+     "next": {{ with index $r "next" }}{{ marshal . }}{{ else }}{"topic": "", "start": 0}{{ end }}}
+  {{- $sep = "," }}
   {{- end }}
   ],
-  "next_page_token": {{ marshal $next }}
+  "page_size": {{ len $p.keys }},
+  "next_page_token": {{ marshal $p.next }}
 }
