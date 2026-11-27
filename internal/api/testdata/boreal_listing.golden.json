@@ -1,0 +1,415 @@
+{
+ "boreal-beam-340": {
+  "surface": [
+   {
+    "name": "web-admin",
+    "protocol": "http",
+    "port": 10080,
+    "summary": "Web-based management",
+    "auth_type": "digest",
+    "default_user": "admin",
+    "fireable": true,
+    "routes": [
+     {
+      "method": "GET",
+      "path": "/api/status",
+      "summary": "Projector status (identity, power, light source, shutter, input)"
+     },
+     {
+      "method": "POST",
+      "path": "/api/projector/power",
+      "summary": "Set projector power (on, standby)",
+      "example": "{\"power\": \"standby\"}\n",
+      "sets": [
+       {
+        "path": "status.device.power",
+        "field": "power",
+        "values": [
+         "on",
+         "standby"
+        ],
+        "default": "on"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/projector/shutter",
+      "summary": "Open or close the shutter (open, closed)",
+      "example": "{\"shutter\": \"closed\"}\n",
+      "sets": [
+       {
+        "path": "status.projector.shutter",
+        "field": "shutter",
+        "values": [
+         "open",
+         "closed"
+        ],
+        "default": "open"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/projector/input",
+      "summary": "Switch the projector input (hdmi1, hdmi2)",
+      "example": "{\"input\": \"hdmi2\"}\n",
+      "sets": [
+       {
+        "path": "status.projector.input",
+        "field": "input",
+        "values": [
+         "hdmi1",
+         "hdmi2"
+        ],
+        "default": "hdmi1"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/reboot",
+      "summary": "Reboot projector (clears uptime, opens the shutter)",
+      "example": "{}"
+     }
+    ]
+   },
+   {
+    "name": "snmp",
+    "protocol": "snmp",
+    "port": 10161,
+    "summary": "SNMP monitoring",
+    "fireable": true,
+    "oids": [
+     {
+      "oid": "1.3.6.1.2.1.1.1.0",
+      "path": "configuration.device.model"
+     },
+     {
+      "oid": "1.3.6.1.2.1.1.3.0",
+      "path": "status.device.uptime"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.1.1.1.0",
+      "path": "status.device.power"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.5.1.0",
+      "path": "configuration.firmware.version"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.5.2.0",
+      "path": "configuration.device.serial"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.6.1.0",
+      "path": "status.projector.light_source_hours"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.6.2.0",
+      "path": "status.projector.shutter"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.6.3.0",
+      "path": "status.projector.input"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.6.4.0",
+      "path": "status.projector.temperature"
+     }
+    ]
+   },
+   {
+    "name": "icmp",
+    "protocol": "icmp",
+    "port": 0,
+    "summary": "ICMP ping reachability",
+    "fireable": false
+   }
+  ],
+  "behaviors": [
+   {
+    "name": "room_meeting",
+    "interval": "30s",
+    "writes": [
+     "status.sim.busy",
+     "status.sim.known",
+     "status.sim.until",
+     "status.device.power",
+     "status.projector.input",
+     "status.sim.awake"
+    ]
+   },
+   {
+    "name": "light_source_aging",
+    "interval": "60s",
+    "writes": [
+     "status.projector.light_source_hours"
+    ]
+   },
+   {
+    "name": "temperature_drift",
+    "interval": "60s",
+    "writes": [
+     "status.projector.temperature"
+    ]
+   }
+  ]
+ },
+ "boreal-cast-m1": {
+  "surface": [
+   {
+    "name": "http-api",
+    "protocol": "http",
+    "port": 10080,
+    "summary": "Cast JSON API",
+    "auth_type": "header",
+    "fireable": true,
+    "routes": [
+     {
+      "method": "GET",
+      "path": "/api/status",
+      "summary": "Player identity, uptime and storage"
+     },
+     {
+      "method": "GET",
+      "path": "/api/playback",
+      "summary": "Playback state and the item playing"
+     },
+     {
+      "method": "POST",
+      "path": "/api/playback",
+      "summary": "Play, pause or stop the playlist",
+      "example": "{\"state\": \"paused\"}\n",
+      "sets": [
+       {
+        "path": "status.playback.state",
+        "field": "state",
+        "values": [
+         "playing",
+         "paused",
+         "stopped"
+        ],
+        "default": "playing"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/reboot",
+      "summary": "Reboot player (clears uptime, restarts the playlist)",
+      "example": "{}"
+     }
+    ]
+   },
+   {
+    "name": "icmp",
+    "protocol": "icmp",
+    "port": 0,
+    "summary": "ICMP ping reachability",
+    "fireable": false
+   }
+  ],
+  "behaviors": [
+   {
+    "name": "building_day",
+    "interval": "60s",
+    "writes": [
+     "status.playback.state",
+     "status.playback.index",
+     "status.playback.content",
+     "status.sim.open"
+    ]
+   },
+   {
+    "name": "playlist_advance",
+    "interval": "90s",
+    "writes": [
+     "status.playback.index",
+     "status.playback.content"
+    ]
+   },
+   {
+    "name": "storage_drift",
+    "interval": "300s",
+    "writes": [
+     "status.storage.used_percent"
+    ]
+   }
+  ]
+ },
+ "boreal-edge-86": {
+  "surface": [
+   {
+    "name": "web-admin",
+    "protocol": "http",
+    "port": 10080,
+    "summary": "Web-based management",
+    "auth_type": "digest",
+    "default_user": "admin",
+    "fireable": true,
+    "routes": [
+     {
+      "method": "GET",
+      "path": "/",
+      "summary": "Display dashboard"
+     },
+     {
+      "method": "GET",
+      "path": "/api/status",
+      "summary": "Device identity (model, serial, uptime, network)"
+     },
+     {
+      "method": "POST",
+      "path": "/api/display/power",
+      "summary": "Set display power state",
+      "example": "{\"power\": \"on\"}\n",
+      "sets": [
+       {
+        "path": "status.device.power",
+        "field": "power",
+        "values": [
+         "on",
+         "off",
+         "standby"
+        ],
+        "default": "on"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/display/input",
+      "summary": "Switch display input source",
+      "example": "{\"input\": \"hdmi1\"}\n",
+      "sets": [
+       {
+        "path": "status.display.input",
+        "field": "input",
+        "values": [
+         "hdmi1",
+         "hdmi2",
+         "hdmi3",
+         "dp1",
+         "usbc"
+        ],
+        "default": "hdmi1"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/display/brightness",
+      "summary": "Set display brightness (0-100)",
+      "example": "{\"brightness\": 80}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/audio/volume",
+      "summary": "Set audio volume (0-100)",
+      "example": "{\"volume\": 30}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/audio/mute",
+      "summary": "Toggle audio mute",
+      "example": "{\"mute\": true}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/reboot",
+      "summary": "Reboot display (clears uptime, resets display state)",
+      "example": "{}"
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/factory-reset",
+      "summary": "Factory reset (resets every status path to defaults)",
+      "example": "{}"
+     }
+    ]
+   },
+   {
+    "name": "snmp",
+    "protocol": "snmp",
+    "port": 10161,
+    "summary": "SNMP monitoring",
+    "fireable": true,
+    "oids": [
+     {
+      "oid": "1.3.6.1.2.1.1.1.0",
+      "path": "configuration.device.model"
+     },
+     {
+      "oid": "1.3.6.1.2.1.1.3.0",
+      "path": "status.device.uptime"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.1.1.1.0",
+      "path": "status.device.power"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.2.2.0",
+      "path": "status.display.input"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.2.3.0",
+      "path": "status.display.brightness"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.2.4.0",
+      "path": "status.display.temperature"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.3.1.0",
+      "path": "status.audio.volume"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.3.2.0",
+      "path": "status.audio.mute"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.4.1.0",
+      "path": "status.network.ipv4.address"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.4.2.0",
+      "path": "status.network.ipv4.mac"
+     },
+     {
+      "oid": "1.3.6.1.4.1.55520.5.2.0",
+      "path": "configuration.device.serial"
+     }
+    ]
+   },
+   {
+    "name": "icmp",
+    "protocol": "icmp",
+    "port": 0,
+    "summary": "ICMP ping reachability",
+    "fireable": false
+   }
+  ],
+  "behaviors": [
+   {
+    "name": "room_meeting",
+    "interval": "30s",
+    "writes": [
+     "status.sim.busy",
+     "status.sim.known",
+     "status.sim.until",
+     "status.device.power",
+     "status.display.input",
+     "status.sim.awake"
+    ]
+   },
+   {
+    "name": "temperature_drift",
+    "interval": "60s",
+    "writes": [
+     "status.display.temperature"
+    ]
+   }
+  ]
+ }
+}
