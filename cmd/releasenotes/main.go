@@ -1,9 +1,9 @@
 // Command releasenotes prints a release's notes, grouped by change type, from
-// the commits between the previous final release and the commit being tagged
-// (#2142). The release workflow passes the notes to `gh release create` and,
-// on a final release, comments on the PRs it lists.
+// the commits between the previous release and the commit being tagged
+// (#2142). release-please writes the published notes (ADR-2652); the release
+// workflow uses this for the PRs a release ships, which it comments on.
 //
-//	go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0-rc.1 -previous v0.0.0
+//	go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0 -previous v0.0.0
 //	go run ./cmd/releasenotes ... -prs-file prs.txt    # also write the PR numbers, one a line
 package main
 

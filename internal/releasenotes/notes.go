@@ -1,8 +1,9 @@
 // Package releasenotes renders a release's notes from the commits it ships,
 // grouped by conventional-commit type (#2142). The repo squash-merges, so each
-// commit subject on main is a PR title, `<type>(<scope>)!: <description> (#<n>)`,
-// and a cherry-pick onto a release branch keeps it. Nothing here touches git or
-// the network: the command reads the log and hands the commits in.
+// commit subject on main is a PR title, `<type>(<scope>)!: <description> (#<n>)`.
+// release-please writes the published notes (ADR-2652); this renders the same
+// grouping for a local preview and lists the PRs a release ships. Nothing here
+// touches git or the network: the command reads the log and hands the commits in.
 package releasenotes
 
 import (
@@ -56,8 +57,8 @@ type Change struct {
 
 // Parse reads a commit as a conventional commit, the shape a squash merge on
 // main has: `<type>(<scope>)!: <description> (#<n>)`. It reports false for an
-// empty subject. The notes and the release cut (#2711) both read commits here,
-// so the two always agree on what is breaking.
+// empty subject. cmd/releasenotes, the local preview and the list of PRs a
+// release ships, is the only reader.
 func Parse(c Commit) (Change, bool) {
 	subject := strings.TrimSpace(c.Subject)
 	if subject == "" {
