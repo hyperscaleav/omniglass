@@ -4,6 +4,7 @@ package lab
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
+	"github.com/hyperscaleav/omniglass/internal/labcheck"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -142,6 +144,47 @@ func TestIntegrationCorporateSchedulingReadsTheCalendar(t *testing.T) {
 		if v := fmt.Sprint(s.Value); !agrees(pat.CalRoom(), s.TS, 3*time.Minute, "state", v) {
 			t.Fatalf("panel %s reads %s at %s; the calendar's booked entries never say so in the minutes before", panel, v, s.TS)
 		}
+	}
+	// The scheduling service placed in a room serves it: its own API says the
+	// room's booked meetings of the day, as the calendar holds them.
+	var svcProduct, svcSystem string
+	var svcRoom calendar.Room
+	for _, st := range w.Sites {
+		for _, r := range st.Rooms {
+			for _, d := range r.Devices {
+				if strings.HasPrefix(d.Profile, "scheduling-serv") && svcProduct == "" {
+					svcProduct, svcSystem = d.Product, r.System
+				}
+			}
+		}
+	}
+	if svcProduct == "" {
+		t.Fatal("the world places no scheduling service")
+	}
+	sat, _ := w.PlaceSystem(svcSystem)
+	svcRoom = sat.CalRoom()
+	var bk struct {
+		Today       int `json:"today"`
+		RoomsServed int `json:"rooms_served"`
+	}
+	deadline := time.Now().Add(5 * time.Minute)
+	for {
+		body, err := labcheck.FireOnShowcaseBody(ctx, client, base, svcSystem, svcProduct, labcheck.Fire{Surface: "http-api", Method: "GET", Path: "/api/bookings"})
+		if err == nil {
+			if jerr := json.Unmarshal([]byte(body), &bk); jerr != nil {
+				t.Fatalf("GET /api/bookings answered %q: %v", body, jerr)
+			}
+			if bk.RoomsServed == 1 {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after five minutes the scheduling service in %s serves %d rooms (%v)", svcSystem, bk.RoomsServed, err)
+		}
+		time.Sleep(10 * time.Second)
+	}
+	if want := sim.RoomBookingsAt(cal, svcRoom, time.Now())["today"]; bk.Today != want {
+		t.Fatalf("the scheduling service in %s counts %d bookings today; the room's calendar holds %v", svcSystem, bk.Today, want)
 	}
 	t.Logf("%s: %d count and %d state samples agree with the calendar; panel %s: %d samples agree", covered.System, len(count.Samples), len(state.Samples), panel, len(judged))
 }

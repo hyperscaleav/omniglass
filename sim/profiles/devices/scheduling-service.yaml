@@ -15,7 +15,8 @@
 #
 # The sim is; Omniglass learns (#2757, #2765). The counts are the lab
 # calendar's booked entries (a walk-in is no booking, a no-show is one) for
-# the rooms the world says this service speaks for (coveredRooms), recomputed
+# the rooms the world says this service speaks for (a service the world
+# covers rooms for) or, placed in a room, that room (servedRooms), recomputed
 # each tick on the device's clock. A service the world covers no room for (the
 # dev fleet has no world file) has no calendar and keeps its previous
 # behavior exactly: today's count stays the fixed 8.
@@ -78,13 +79,13 @@ behaviors:
       interval: 30s
     mutations:
       - path: status.bookings.today
-        value: '{{ if coveredRooms }}{{ $n := 0 }}{{ range coveredRooms }}{{ $n = add $n (roomBookings .site .building .room).today }}{{ end }}{{ $n }}{{ else }}{{ .State.status.bookings.today }}{{ end }}'
+        value: '{{ if servedRooms }}{{ $n := 0 }}{{ range servedRooms }}{{ $n = add $n (roomBookings .site .building .room).today }}{{ end }}{{ $n }}{{ else }}{{ .State.status.bookings.today }}{{ end }}'
       - path: status.bookings.remaining
-        value: '{{ $n := 0 }}{{ range coveredRooms }}{{ $n = add $n (roomBookings .site .building .room).remaining }}{{ end }}{{ $n }}'
+        value: '{{ $n := 0 }}{{ range servedRooms }}{{ $n = add $n (roomBookings .site .building .room).remaining }}{{ end }}{{ $n }}'
       - path: status.bookings.in_progress
-        value: '{{ $n := 0 }}{{ range coveredRooms }}{{ if (roomBookings .site .building .room).booked }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ $n }}'
+        value: '{{ $n := 0 }}{{ range servedRooms }}{{ if (roomBookings .site .building .room).booked }}{{ $n = add $n 1 }}{{ end }}{{ end }}{{ $n }}'
       - path: configuration.rooms_served
-        value: '{{ len coveredRooms }}'
+        value: '{{ len servedRooms }}'
 
 defaults:
   status:

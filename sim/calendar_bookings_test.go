@@ -143,6 +143,12 @@ func TestRoomBookingsWithNoCalendarReadFree(t *testing.T) {
 // world of two rooms and (when service) the device covering both.
 func bookingEngine(t *testing.T, cal *calendar.Calendar, profileName string, service bool, at *time.Time) *Device {
 	t.Helper()
+	return bookingEngineIn(t, cal, profileName, service, !service, at)
+}
+
+// bookingEngineIn is bookingEngine with the choice of placing the device in a room.
+func bookingEngineIn(t *testing.T, cal *calendar.Calendar, profileName string, service, placed bool, at *time.Time) *Device {
+	t.Helper()
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +165,7 @@ func bookingEngine(t *testing.T, cal *calendar.Calendar, profileName string, ser
 	}
 	e.SetWorld(w)
 	snap := DeviceSnapshot{DeviceID: "svc-1", Hostname: "svc-1", LoopbackIP: "127.0.0.1", ProfileName: profileName, Version: 1}
-	if !service {
+	if placed {
 		snap.SiteCode, snap.Building, snap.Room = "hq", "tower", "r101"
 	}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
@@ -263,7 +269,7 @@ func TestSchedulingServiceCountsTheServedRoomsBookings(t *testing.T) {
 	// A service the world covers no room for has no calendar and keeps the
 	// previous fixed 8, whatever the calendar holds.
 	at = day
-	e := bookingEngine(t, cal, "scheduling-service", false, &at)
+	e := bookingEngineIn(t, cal, "scheduling-service", false, false, &at)
 	e.TickBehavior("bookings_sync")
 	if got := fmt.Sprint(e.ReadPath("status.bookings.today")); got != "8" {
 		t.Fatalf("a service covering no room counts %s bookings, want the previous 8", got)
@@ -368,5 +374,23 @@ func TestSlatePanelWithNoCalendarKeepsItsButtons(t *testing.T) {
 	d.TickBehavior("room_bookings")
 	if got := fmt.Sprint(d.ReadPath("status.room.booking")); got != "booked" {
 		t.Fatalf("a BOOK on a panel with no calendar did not hold: %s", got)
+	}
+}
+
+// A scheduling service placed in a room serves that room.
+func TestSchedulingServiceInARoomServesIt(t *testing.T) {
+	cal, _, _, held, _, _ := bookingDay(t)
+	at := held.Start.Add(time.Minute)
+	d := bookingEngine(t, cal, "scheduling-service", false, &at)
+	d.TickBehavior("bookings_sync")
+	b := RoomBookingsAt(cal, bookingRoom, at)
+	if got := fmt.Sprint(d.ReadPath("status.bookings.today")); got != fmt.Sprint(b["today"]) {
+		t.Fatalf("today = %s, the room's calendar says %v", got, b["today"])
+	}
+	if got := fmt.Sprint(d.ReadPath("configuration.rooms_served")); got != "1" {
+		t.Fatalf("rooms_served = %s, want 1", got)
+	}
+	if got := fmt.Sprint(d.ReadPath("status.bookings.in_progress")); got != "1" {
+		t.Fatalf("in_progress = %s, want 1 mid held meeting", got)
 	}
 }

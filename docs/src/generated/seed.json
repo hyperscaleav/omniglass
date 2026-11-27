@@ -2796,6 +2796,13 @@
       "accepted_types": [
        "scheduling-panel"
       ]
+     },
+     {
+      "name": "scheduling-service",
+      "label": "Scheduling Service",
+      "accepted_types": [
+       "generic-service"
+      ]
      }
     ],
     "metrics": [
@@ -4269,6 +4276,13 @@
    "label": "Shinra Recording Service",
    "vendor_id": "shinra-cloud",
    "driver_id": "recording-service-api",
+   "component_type": "generic-service",
+   "kind": "service"
+  },
+  {
+   "id": "scheduling-service",
+   "label": "Shinra Scheduling Platform",
+   "vendor_id": "shinra-cloud",
    "component_type": "generic-service",
    "kind": "service"
   },

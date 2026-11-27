@@ -209,6 +209,9 @@ templates:
         - name: scheduling-panel
           label: Scheduling Panel
           accepted_types: [scheduling-panel]
+        - name: scheduling-service
+          label: Scheduling Service
+          accepted_types: [generic-service]
       metrics:
         - { name: room-temperature }
         - { name: occupancy-count }

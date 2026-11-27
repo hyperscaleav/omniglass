@@ -45,6 +45,9 @@ refs: [2757, 2764, 2769, 2773]
     room); the storyline, the omnibot recording and the marketing shots that named components follow.
   - **Services.** A service resolves a push's `.Owner` system to a room through the world
     (`ownerRoom`, `ownerMeetingNow`, `ownerMeetingNext`) and reads the rooms it covers
-    (`coveredRooms`); Omniglass is not asked.
+    (`coveredRooms`); Omniglass is not asked. A grant names its systems by the server's uuid, which the
+    simulator does not hold, so a pusher the world covers pushes for the system names the world gives it
+    (`worldSystems`, #2765) and the server resolves each inside the pusher's grant; with no world it
+    pushes for its grant, as before.
   - **Deferred.** The inversion of ADR-0142, where the simulator decides which devices exist and
     Omniglass discovers them, is a separate definition; the world file is the seam it would grow from.

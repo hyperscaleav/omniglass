@@ -72,6 +72,8 @@ func RoomBookingsAt(c *calendar.Calendar, room calendar.Room, at time.Time) map[
 //
 //	bookings            -> the device's own room, as RoomBookingsAt reads it
 //	roomBookings s b r  -> the room site s, building b, room r
+//	servedRooms         -> the rooms a service speaks for (coveredRooms), else
+//	                       the device's own room when it has one, else none
 //	ownerBookings o     -> the room of the system o in the world (a push's
 //	                       .Owner); a system the world does not name reads as a
 //	                       room with no booking
@@ -84,6 +86,16 @@ func (d *Device) bookingFuncs() template.FuncMap {
 		return RoomBookingsAt(c, room, d.clock())
 	}
 	return template.FuncMap{
+		"servedRooms": func() []map[string]any {
+			var out []map[string]any
+			for _, p := range d.world().Covered(d.Hostname) {
+				out = append(out, map[string]any{"site": p.Site, "building": p.Building, "room": p.Room})
+			}
+			if len(out) == 0 && d.room != (calendar.Room{}) {
+				out = append(out, map[string]any{"site": d.room.Site, "building": d.room.Building, "room": d.room.Room})
+			}
+			return out
+		},
 		"bookings": func() map[string]any { return read(d.room) },
 		"roomBookings": func(site, building, room string) map[string]any {
 			return read(calendar.Room{Site: site, Building: building, Room: room})
