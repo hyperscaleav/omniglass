@@ -37,11 +37,18 @@ func Catalog(t testing.TB, extra ...spec.Spec) *spec.Catalog {
 // the shipped ones.
 func CatalogFrom(t testing.TB, store *profile.Store, extra ...spec.Spec) *spec.Catalog {
 	t.Helper()
-	cat, err := spec.NewCatalog(store, append(device.Families(), extra...)...)
+	cat, err := device.CatalogOver(store, extra...)
 	if err != nil {
 		t.Fatalf("a catalog of the shaped store and the shipped families: %v", err)
 	}
 	return cat
+}
+
+// EngineFrom is an engine over CatalogFrom: for a test that shaped the store
+// first and serves what it shaped.
+func EngineFrom(t testing.TB, store *profile.Store, extra ...spec.Spec) *sim.Engine {
+	t.Helper()
+	return sim.NewEngineOver(CatalogFrom(t, store, extra...), profiles.Templates())
 }
 
 // Engine is an engine over the shipped catalog, with the shipped templates.

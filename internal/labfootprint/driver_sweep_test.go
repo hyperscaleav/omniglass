@@ -5,10 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // A driver's cost per task is the slope of a straight line through the

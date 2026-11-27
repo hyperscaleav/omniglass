@@ -3,14 +3,13 @@ package simoutpost
 import (
 	"strings"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 

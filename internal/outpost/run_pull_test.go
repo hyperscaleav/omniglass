@@ -18,8 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
@@ -32,6 +30,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // failingWorklist is the gateway with a worklist read that fails while down

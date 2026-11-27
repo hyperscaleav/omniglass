@@ -5,11 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestEverySeededComponentIsSimulatedOrAccountedFor holds the lab to "every

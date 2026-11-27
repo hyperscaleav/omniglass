@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"golang.org/x/crypto/ssh"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -31,6 +29,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestOutpostSSHSessionPinsTheHostKeyAndRefusesAChange drives #1032 end to end:

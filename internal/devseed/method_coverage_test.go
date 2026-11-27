@@ -6,12 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestEveryCollectionMethodRunsOnAHealthyLabComponent holds the lab to "every

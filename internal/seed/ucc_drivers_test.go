@@ -8,10 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // shippedSpec is a seeded driver's spec, parsed as the write path parses it.

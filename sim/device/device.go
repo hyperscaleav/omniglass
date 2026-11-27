@@ -31,6 +31,12 @@ func CatalogWith(extra ...spec.Spec) (*spec.Catalog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load the simulator profiles: %w", err)
 	}
+	return CatalogOver(store, extra...)
+}
+
+// CatalogOver is a YAML store beside every shipped family and any extra: the
+// catalog of a test that shaped the store first (a profile's face altered).
+func CatalogOver(store *profile.Store, extra ...spec.Spec) (*spec.Catalog, error) {
 	cat, err := spec.NewCatalog(store, append(Families(), extra...)...)
 	if err != nil {
 		return nil, fmt.Errorf("register the simulator families: %w", err)

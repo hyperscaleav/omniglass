@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
-
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestTheShippedFerritePDUAPIDriverSwitchesAnOutlet (#1653): ferrite-pdu-api
