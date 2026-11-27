@@ -2,8 +2,8 @@ name: pr-title
 
 # The squash-merge subject is the PR title, and a release's generated notes
 # list it. This lints the title to the conventional-commit grammar the repo uses
-# so a malformed title cannot reach `main` or a release branch. The version
-# itself comes from the release branch, not the titles (#2139).
+# so a malformed title cannot reach `main`. release-please reads the same titles
+# to pick the next version and write the notes (ADR-2652).
 
 on:
   pull_request:

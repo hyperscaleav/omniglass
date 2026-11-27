@@ -182,7 +182,8 @@ minor or a patch, is cut from `main` by [release-please](https://github.com/goog
 
 **The notes** group each PR title by its type: Breaking changes, Features (`feat`), Fixes
 (`fix`), Performance (`perf`), and Reverts; the other types are left out. They are the release
-PR's body until it merges, and the Release's body after. To preview them locally for any range:
+PR's body until it merges, and the Release's body after. To preview the same grouping locally for any
+range (`cmd/releasenotes` renders its own format, close to release-please's but not identical):
 
 ```bash
 go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0 -previous v0.0.0

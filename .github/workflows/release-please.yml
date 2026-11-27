@@ -27,16 +27,18 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: release-please
-  cancel-in-progress: false
-
 jobs:
   release-please:
     if: vars.RELEASES_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: {}
+    # On the job, not the workflow, so a push to main refreshes the release PR
+    # while an earlier release is still building; release.yml serializes its
+    # own builds per tag.
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
