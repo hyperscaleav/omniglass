@@ -294,6 +294,12 @@ floors per site, systems of each standard and totals; each site's systems and co
 components of each product) and the [preflight](#how-big-a-lab-your-machine-can-run). Without
 `--systems`, a scenario asks for a size (one system per site at the fewest sites, up to 10,000).
 
+A scale lab's server serves the calendar its simulators act out: `omniglass lab calendar list --start <rfc3339> --end <rfc3339>`
+(`GET /lab/calendar`, at most 31 days, `--system`, `--room`, `--building` and `--site` narrow it) lists every
+meeting of the window by room, to lay beside what the console detected. The server reads the world file the seed
+wrote into the data volume it shares, so no setting carries it; a lab without a plan has an empty calendar. See
+[reading the calendar back](/architecture/simulation/#reading-the-calendar-back).
+
 ### Which fleet each level measures
 
 A figure from one lab level compares with a figure from the next only when both read the same fleet

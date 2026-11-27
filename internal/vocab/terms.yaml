@@ -562,6 +562,8 @@ not_terms:
     reason: sign-in and tokens, a mechanism rather than a thing an operator manages
   - collection: healthz
     reason: the liveness probe
+  - collection: lab
+    reason: the lab calendar a lab server serves for its simulators' ground truth, a read of the lab's own world rather than a thing an operator manages
   - collection: views
     reason: the read side that backs the console's pages
   - collection: search

@@ -29,10 +29,13 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 	// The files allowed to name a SKU: the seed's own contract pins and the
 	// demo fleet, whose fixtures staff rooms with catalog products on purpose.
 	pinFiles := map[string]bool{
-		"internal/seed/seed_test.go":        true,
-		"internal/seed/facts_test.go":       true,
-		"internal/devseed/devseed_test.go":  true,
-		"internal/devseed/identity_test.go": true,
+		// Holds GET /lab/calendar to what a simulated Gaze camera acts out in
+		// the room, so naming the simulator's own profile is what it tests (#2770).
+		"internal/api/labcalendar_sim_test.go": true,
+		"internal/seed/seed_test.go":           true,
+		"internal/seed/facts_test.go":          true,
+		"internal/devseed/devseed_test.go":     true,
+		"internal/devseed/identity_test.go":    true,
 		// The template dry-run holds the catalog's templates to the seeded
 		// catalogs, so naming a seeded SKU is what it tests (#1323).
 		"internal/template/check_test.go": true,

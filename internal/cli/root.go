@@ -41,7 +41,7 @@ func newRoot(version, imageDigest string) *cobra.Command {
 	// The two sets compose on the same root; regeneration touches only the
 	// generated set.
 	addClientFlags(root)
-	root.AddCommand(generatedCommands()...)
+	graftGeneratedOnto(root, generatedCommands())
 
 	// The edge run mode hangs off the generated `outpost` group rather than the
 	// root, so `outpost run` sits beside `outpost list`. Attached after generation
@@ -113,3 +113,20 @@ func Execute(version, imageDigest string) {
 // cfg resolves runtime configuration from the environment. Centralized here so
 // every run mode reads the same resolved Config.
 func cfg() config.Config { return config.Load() }
+
+// graftGeneratedOnto adds the generated commands to root. A generated group
+// that shares its name with a hand-written one (`lab`, whose calendar is an API
+// route beside the hand-written run modes) hands its children to the
+// hand-written group instead of shadowing it, so `omniglass lab calendar list`
+// sits beside `omniglass lab run`.
+func graftGeneratedOnto(root *cobra.Command, generated []*cobra.Command) {
+	for _, g := range generated {
+		if existing, _, err := root.Find([]string{g.Name()}); err == nil && existing != root && existing.Name() == g.Name() {
+			for _, child := range g.Commands() {
+				existing.AddCommand(child)
+			}
+			continue
+		}
+		root.AddCommand(g)
+	}
+}

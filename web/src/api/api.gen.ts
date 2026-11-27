@@ -4732,6 +4732,36 @@ export type Keybindings = {
   open_edit: string;
 };
 
+/**
+ * The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded.
+ */
+export type LabCalendarEntryPayload = {[key: string]: unknown};
+
+export type LabCalendarEntry = {
+  building: string;
+  /** When it ends. */
+  end: string;
+  /** What the entry is: meeting today; a scripted problem joins it (#2769). */
+  kind: string;
+  /** The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded. */
+  payload: LabCalendarEntryPayload;
+  room: string;
+  site: string;
+  /** When the entry begins on the simulator's clock. */
+  start: string;
+  /** The system built in the room. */
+  system: string;
+};
+
+export type LabCalendarOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  end: string;
+  /** What the simulator intends in the window, in start order, for the rooms whose system the caller may read. */
+  entries: LabCalendarEntry[];
+  start: string;
+};
+
 export type LabelChangeBody = {
   /** The label as stored now; empty when the entity has none */
   from: string;
@@ -10093,6 +10123,21 @@ export type RunEndpointPollParams = {
    * @maximum 30
    */
   timeout_seconds?: number;
+};
+
+export type GetLabCalendarParams = {
+  /** Start of the window (RFC 3339). */
+  start: string;
+  /** End of the window (RFC 3339), after start and at most 31 days past it. */
+  end: string;
+  /** Only rooms at this site. */
+  site?: string;
+  /** Only rooms in this building. */
+  building?: string;
+  /** Only this room. */
+  room?: string;
+  /** Only the room of this system, by name. */
+  system?: string;
 };
 
 export type GetLocationHealthParams = {
@@ -17302,6 +17347,57 @@ export const getGetHealthzUrl = () => {
 export const getHealthz = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getHealthzResponse> => {
 
   return ogFetch<getHealthzResponse>(getGetHealthzUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getLabCalendarResponse200 = {
+  data: LabCalendarOutputBody
+  status: 200
+}
+
+export type getLabCalendarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getLabCalendarResponseSuccess = (getLabCalendarResponse200) & {
+  headers: Headers;
+};
+export type getLabCalendarResponseError = (getLabCalendarResponseDefault) & {
+  headers: Headers;
+};
+
+export type getLabCalendarResponse = (getLabCalendarResponseSuccess | getLabCalendarResponseError)
+
+export const getGetLabCalendarUrl = (params: GetLabCalendarParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/lab/calendar?${stringifiedParams}` : `/lab/calendar`
+}
+
+/**
+ * The lab calendar (#2757) for a window: the meetings every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.
+ * @summary What the lab's simulator intends in a window
+ */
+export const getLabCalendar = async (params: GetLabCalendarParams, options?: Parameters<typeof ogFetch>[1]): Promise<getLabCalendarResponse> => {
+
+  return ogFetch<getLabCalendarResponse>(getGetLabCalendarUrl(params),
   {
     ...options,
     method: 'GET'

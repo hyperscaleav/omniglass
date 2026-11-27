@@ -4638,6 +4638,73 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "lab",
+			Short: "Commands for the lab resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "calendar",
+				Short: "Commands for the calendar resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var qStart string
+					var qEnd string
+					var qSite string
+					var qBuilding string
+					var qRoom string
+					var qSystem string
+					cmd := &cobra.Command{
+						Use:     "list",
+						Short:   "What the lab's simulator intends in a window",
+						Long:    "The lab calendar (#2757) for a window: the meetings every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.",
+						Example: "  omniglass lab calendar list",
+						Args:    pathArgs(0),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/lab/calendar")
+							q := url.Values{}
+							if cmd.Flags().Changed("start") {
+								q.Set("start", fmt.Sprintf("%v", qStart))
+							}
+							if cmd.Flags().Changed("end") {
+								q.Set("end", fmt.Sprintf("%v", qEnd))
+							}
+							if cmd.Flags().Changed("site") {
+								q.Set("site", fmt.Sprintf("%v", qSite))
+							}
+							if cmd.Flags().Changed("building") {
+								q.Set("building", fmt.Sprintf("%v", qBuilding))
+							}
+							if cmd.Flags().Changed("room") {
+								q.Set("room", fmt.Sprintf("%v", qRoom))
+							}
+							if cmd.Flags().Changed("system") {
+								q.Set("system", fmt.Sprintf("%v", qSystem))
+							}
+							if enc := q.Encode(); enc != "" {
+								path += "?" + enc
+							}
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					cmd.Flags().StringVar(&qStart, "start", "", "Start of the window (RFC 3339).")
+					_ = cmd.MarkFlagRequired("start")
+					cmd.Flags().StringVar(&qEnd, "end", "", "End of the window (RFC 3339), after start and at most 31 days past it.")
+					_ = cmd.MarkFlagRequired("end")
+					cmd.Flags().StringVar(&qSite, "site", "", "Only rooms at this site.")
+					cmd.Flags().StringVar(&qBuilding, "building", "", "Only rooms in this building.")
+					cmd.Flags().StringVar(&qRoom, "room", "", "Only this room.")
+					cmd.Flags().StringVar(&qSystem, "system", "", "Only the room of this system, by name.")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "location",
 			Short: "Commands for the location resource",
 		}

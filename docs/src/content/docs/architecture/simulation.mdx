@@ -486,6 +486,20 @@ Devices that read the calendar:
   busy room's rack reads more by evening than an idle one's. The mains voltage stays noise. A PDU
   whose room holds no calendar keeps its earlier random walk.
 
+#### Reading the calendar back
+
+The lab calendar is the ground truth a learner lays beside what Omniglass detected, so a lab server
+serves it: `GET /lab/calendar?start=&end=` (`omniglass lab calendar list`, #2770), gated by
+`simulation:read`, 404 on a server that is not a lab. It answers each entry's kind, window, site,
+building, room, system and an open `payload` (a meeting's origin, organizer, expected and actual
+headcount, outcome, slot and whether it is recorded), for rooms whose system is in the caller's system
+read scope, and `site`, `building`, `room` and `system` narrow it. A window is at most 31 days.
+
+The server does not ask a simulator and does not learn the calendar from collected data. It computes
+it with the functions the simulator uses, from the world file the lab's seed wrote into the data
+volume the server shares ([the world it holds](#the-world-it-holds)), so a route and a device in
+the same room cannot disagree. A lab with no world (no plan, the dev fleet) has an empty calendar.
+
 ### A simulated service posts from the start
 
 A webhook's URL carries a token the server mints when the endpoint is created, so no profile can name

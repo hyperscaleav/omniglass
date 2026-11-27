@@ -1434,6 +1434,16 @@ export interface paths {
       error: og.getHealthzResponseError["data"];
     };
   };
+  "/lab/calendar": {
+    get: {
+      path: never;
+      query: NonNullable<Parameters<typeof og.getLabCalendar>[0]>;
+      body: never;
+      bodyRequired: false;
+      data: og.getLabCalendarResponseSuccess["data"];
+      error: og.getLabCalendarResponseError["data"];
+    };
+  };
   "/location-types": {
     get: {
       path: never;
