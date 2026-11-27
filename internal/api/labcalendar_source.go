@@ -23,7 +23,7 @@ type LabCalendarRoom struct {
 // function of the lab's world and seed, so a source holds no state of its own.
 type LabCalendarSource interface {
 	Rooms() []LabCalendarRoom
-	Entries(room calendar.Room, from, to time.Time) []calendar.Entry
+	All(room calendar.Room, from, to time.Time) []calendar.Entry
 }
 
 // WithLabCalendar supplies the calendar GET /lab/calendar reads. Without it a
@@ -67,8 +67,8 @@ type worldsCalendar struct {
 
 func (m *worldsCalendar) Rooms() []LabCalendarRoom { return m.rooms }
 
-func (m *worldsCalendar) Entries(room calendar.Room, from, to time.Time) []calendar.Entry {
-	return m.cal[room].Entries(room, from, to)
+func (m *worldsCalendar) All(room calendar.Room, from, to time.Time) []calendar.Entry {
+	return m.cal[room].All(room, from, to)
 }
 
 // WorldDirCalendar is the lab calendar of the world files in dir (a scale lab's
@@ -114,6 +114,6 @@ func (d *dirCalendar) current() LabCalendarSource {
 
 func (d *dirCalendar) Rooms() []LabCalendarRoom { return d.current().Rooms() }
 
-func (d *dirCalendar) Entries(room calendar.Room, from, to time.Time) []calendar.Entry {
-	return d.current().Entries(room, from, to)
+func (d *dirCalendar) All(room calendar.Room, from, to time.Time) []calendar.Entry {
+	return d.current().All(room, from, to)
 }

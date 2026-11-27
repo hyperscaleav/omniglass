@@ -26,14 +26,14 @@ type labCalendarInput struct {
 }
 
 type labCalendarEntry struct {
-	Kind     string         `json:"kind" doc:"What the entry is: meeting today; a scripted problem joins it (#2769)."`
+	Kind     string         `json:"kind" doc:"What the entry is: meeting, or a scripted problem (#2769)."`
 	Start    time.Time      `json:"start" doc:"When the entry begins on the simulator's clock."`
 	End      time.Time      `json:"end" doc:"When it ends."`
 	Site     string         `json:"site"`
 	Building string         `json:"building"`
 	Room     string         `json:"room"`
 	System   string         `json:"system" doc:"The system built in the room."`
-	Payload  map[string]any `json:"payload" nullable:"false" doc:"The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded."`
+	Payload  map[string]any `json:"payload" nullable:"false" doc:"The entry's own fields, by kind. A meeting carries origin (booked or walk-in), organizer, expected, actual, outcome (held, no-show, ended-early, ended-late), slot_start, slot_end and recorded. A problem carries name, role, unplugged, loss_pct and, when it pins a path, pin_path and pin_value."`
 }
 
 type labCalendarOutput struct {
@@ -57,6 +57,16 @@ func labCalendarPayload(e calendar.Entry) map[string]any {
 		p["slot_end"] = m.SlotEnd.UTC().Format(time.RFC3339)
 		p["recorded"] = m.Recorded
 	}
+	if pr := e.Problem; pr != nil {
+		p["name"] = pr.Name
+		p["role"] = pr.Role
+		p["unplugged"] = pr.Impairment.Unplugged
+		p["loss_pct"] = pr.Impairment.LossPct
+		if pin := pr.Impairment.Pin; pin != nil {
+			p["pin_path"] = pin.Path
+			p["pin_value"] = pin.Value
+		}
+	}
 	return p
 }
 
@@ -66,7 +76,7 @@ func registerLabCalendarRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Method:      http.MethodGet,
 		Path:        "/lab/calendar",
 		Summary:     "What the lab's simulator intends in a window",
-		Description: "The lab calendar (#2757) for a window: the meetings every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.",
+		Description: "The lab calendar (#2757) for a window: the meetings and scripted problems every simulated room acts out, the ground truth to lay beside what Omniglass detected. Derived from the lab's scenario and seed (the same calendar the simulator computes), never stored or learned from collected data. Lab only: a server that is not a lab answers 404. Gated by simulation:read; entries are limited to rooms whose system is in the caller's system read scope. The window is at most 31 days; a wider one is a 422. site, building, room and system narrow it further.",
 	}, "simulation", "read"), func(ctx context.Context, in *labCalendarInput) (*labCalendarOutput, error) {
 		if !a.lab {
 			return nil, huma.Error404NotFound("not found")
@@ -100,7 +110,7 @@ func registerLabCalendarRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 				in.System != "" && in.System != r.System:
 				continue
 			}
-			for _, e := range src.Entries(r.Room, in.Start, in.End) {
+			for _, e := range src.All(r.Room, in.Start, in.End) {
 				out.Body.Entries = append(out.Body.Entries, labCalendarEntry{
 					Kind: string(e.Kind), Start: e.Start.UTC(), End: e.End.UTC(),
 					Site: r.Site, Building: r.Building, Room: r.Room.Room, System: r.System,

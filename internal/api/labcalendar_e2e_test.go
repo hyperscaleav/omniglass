@@ -121,6 +121,11 @@ func TestLabCalendarAPI(t *testing.T) {
 	bothRooms := grant("cal-sim-reader", "all", "")
 
 	w := labCalWorld()
+	// One scripted problem in every room (#2769): a display pinned off each
+	// afternoon, which the route lists beside the meetings.
+	w.Problems = []calendar.ProblemSpec{{Name: "afternoon-dark", Cadence: "daily", At: "13:30", For: 90 * time.Minute,
+		Scope:      calendar.Scope{Standard: "conference", Role: "main-display"},
+		Impairment: calendar.Impairment{Pin: &calendar.Pin{Path: "status.device.power", Value: "off"}}}}
 	lab := httptest.NewServer(api.NewHandler(gw, api.WithLab(true), api.WithLabCalendar(api.WorldsCalendar(w))))
 	defer lab.Close()
 	notLab := httptest.NewServer(api.NewHandler(gw, api.WithLabCalendar(api.WorldsCalendar(w))))
@@ -146,21 +151,40 @@ func TestLabCalendarAPI(t *testing.T) {
 	// The window's entries are what the world's own calendar derives.
 	want := map[string]int{}
 	for _, r := range []struct{ room, system string }{{"r101", "sys-a"}, {"r102", "sys-b"}} {
-		want[r.system] = len(w.Calendar().Entries(calendar.Room{Site: "hq", Building: "tower", Room: r.room}, day, day.Add(24*time.Hour)))
+		want[r.system] = len(w.Calendar().All(calendar.Room{Site: "hq", Building: "tower", Room: r.room}, day, day.Add(24*time.Hour)))
 	}
 	if want["sys-a"] == 0 || want["sys-b"] == 0 {
 		t.Fatalf("the pinned day holds no meetings: %v", want)
 	}
 	got := read(ownerTok, nil)
 	counts := map[string]int{}
+	problems := 0
 	for i, e := range got.Entries {
 		counts[e.System]++
-		if e.Kind != "meeting" || e.Site != "hq" || e.Building != "tower" || e.Payload["outcome"] == nil || e.Payload["organizer"] == nil {
+		if e.Site != "hq" || e.Building != "tower" {
 			t.Fatalf("entry %d = %+v", i, e)
+		}
+		switch e.Kind {
+		case "meeting":
+			if e.Payload["outcome"] == nil || e.Payload["organizer"] == nil {
+				t.Fatalf("meeting entry %d = %+v", i, e)
+			}
+		case "problem":
+			problems++
+			p := e.Payload
+			if p["name"] != "afternoon-dark" || p["role"] != "main-display" || p["unplugged"] != false || p["loss_pct"] != float64(0) ||
+				p["pin_path"] != "status.device.power" || p["pin_value"] != "off" || !e.End.Equal(e.Start.Add(90*time.Minute)) {
+				t.Fatalf("problem entry %d = %+v", i, e)
+			}
+		default:
+			t.Fatalf("entry %d has kind %q", i, e.Kind)
 		}
 		if i > 0 && e.Start.Before(got.Entries[i-1].Start) {
 			t.Fatalf("entries are not in start order at %d", i)
 		}
+	}
+	if problems != 2 {
+		t.Fatalf("the day lists %d problems, want one in each of the two rooms", problems)
 	}
 	if counts["sys-a"] != want["sys-a"] || counts["sys-b"] != want["sys-b"] {
 		t.Fatalf("entries per system = %v, want %v", counts, want)

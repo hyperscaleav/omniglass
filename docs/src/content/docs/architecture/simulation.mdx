@@ -524,7 +524,8 @@ The lab calendar is the ground truth a learner lays beside what Omniglass detect
 serves it: `GET /lab/calendar?start=&end=` (`omniglass lab calendar list`, #2770), gated by
 `simulation:read`, 404 on a server that is not a lab. It answers each entry's kind, window, site,
 building, room, system and an open `payload` (a meeting's origin, organizer, expected and actual
-headcount, outcome, slot and whether it is recorded), for rooms whose system is in the caller's system
+headcount, outcome, slot and whether it is recorded; a scripted problem's `name`, `role`, `unplugged`,
+`loss_pct` and, when it pins a path, `pin_path` and `pin_value`), for rooms whose system is in the caller's system
 read scope, and `site`, `building`, `room` and `system` narrow it. A window is at most 31 days.
 
 The server does not ask a simulator and does not learn the calendar from collected data. It computes
