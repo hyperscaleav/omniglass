@@ -3,7 +3,7 @@
 #
 # Boreal is the lab's fictional display manufacturer. The Cast M1 is the
 # small media player behind a lobby or corridor sign: it holds a playlist
-# on local storage and plays it to the display it drives, all day. What
+# on local storage and plays it to the display it drives, through the building's day. What
 # an operator watches it for is whether it is playing, what it is
 # playing, and whether its storage is filling up.
 #
