@@ -215,6 +215,7 @@ interfaces:
           - { path: status.device.boot_epoch, value: "{{ now }}" }
           - { path: status.call.active, value: false }
           - { path: status.call.participants, value: 0 }
+          - { path: status.sim.dialed, value: false }
           - { path: status.audio.mic_mute, value: "{{ .Defaults.status.audio.mic_mute }}" }
           - { path: status.audio.volume, value: "{{ .Defaults.status.audio.volume }}" }
           - { path: status.presentation.local_active, value: "{{ .Defaults.status.presentation.local_active }}" }
@@ -228,6 +229,7 @@ interfaces:
           - { path: status.device.boot_epoch, value: "{{ now }}" }
           - { path: status.call.active, value: "{{ .Defaults.status.call.active }}" }
           - { path: status.call.participants, value: "{{ .Defaults.status.call.participants }}" }
+          - { path: status.sim.dialed, value: false }
           - { path: status.audio.volume, value: "{{ .Defaults.status.audio.volume }}" }
           - { path: status.audio.mic_mute, value: "{{ .Defaults.status.audio.mic_mute }}" }
           - { path: status.audio.speaker_level, value: "{{ .Defaults.status.audio.speaker_level }}" }

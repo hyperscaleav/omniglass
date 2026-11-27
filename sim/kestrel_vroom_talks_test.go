@@ -40,7 +40,7 @@ func loadVRoom(t *testing.T, id string) *Device {
 func tickByName(t *testing.T, d *Device, name string) {
 	t.Helper()
 	if !d.TickBehavior(name) {
-		t.Fatalf("kestrel-vroom has no behavior %q", name)
+		t.Fatalf("%s has no behavior %q", d.DeviceID, name)
 	}
 }
 
@@ -565,5 +565,34 @@ func TestNoVRoomBehaviorTicksFasterThan15s(t *testing.T) {
 		if b.Interval < 15*time.Second {
 			t.Errorf("behavior %s ticks every %s, want 15 s or slower", b.Name, b.Interval)
 		}
+	}
+}
+
+// A reboot clears a dialed call's hold on the room, so the calendar's meeting
+// is joined again by the next tick (the bar rejoins after a restart).
+func TestTheVRoomRejoinsTheCalendarAfterARebootDuringADial(t *testing.T) {
+	day := time.Date(2026, 11, 26, 0, 0, 0, 0, time.UTC)
+	room, entries := busyDay(t, 7, day)
+	d, cal := loadVRoomIn(t, "hq-divisible-conference-1-videobar-1", room, 7)
+	var meeting calendar.Entry
+	for _, e := range entries {
+		if e.Meeting.Outcome != calendar.OutcomeNoShow && e.End.Sub(e.Start) >= 25*time.Minute {
+			meeting = e
+			break
+		}
+	}
+	at := tickUp(meeting.Start.Add(5 * time.Minute))
+	d.SetClock(func() time.Time { return at })
+	if res := d.Operate(Operation{Kind: "http", Method: "POST", Path: "/api/call/dial", Body: `{"id":"c50"}`}); res.Status != 200 {
+		t.Fatalf("dial = %+v", res)
+	}
+	if res := d.Operate(Operation{Kind: "http", Method: "POST", Path: "/api/admin/reboot", Body: `{}`}); res.Status != 200 {
+		t.Fatalf("reboot = %+v", res)
+	}
+	tickByName(t, d, "call_cycle")
+	// The meeting running when the dial began was never marked skipped (no tick
+	// saw the dial), so the rebooted bar joins it.
+	if _, running := held(cal, room, at); !running || d.ReadPath("status.call.active") != true {
+		t.Fatalf("after a reboot the bar is in a call (%v) with the meeting running (%v); want it back in", d.ReadPath("status.call.active"), running)
 	}
 }
