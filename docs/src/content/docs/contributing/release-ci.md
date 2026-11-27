@@ -189,12 +189,12 @@ range (`cmd/releasenotes` renders its own format, close to release-please's but 
 go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0 -previous v0.0.0
 ```
 
-**The first release's notes start late.** Everything since `v0.0.0` is over 650 PRs, more notes
-than a GitHub Release body holds (125,000 characters), and a Release that cannot be created leaves
-release-please stuck on an untagged release PR. So `last-release-sha` in the config starts the notes
-at the tip of `main` on the day release-please landed; the history before it is in git, not in any
-Release. Every later release starts from its own previous tag, which is newer, so the setting does
-nothing after the first.
+**v0.1.0 was cut by hand.** Everything since `v0.0.0` was over 650 PRs, more notes than a GitHub
+Release body holds (125,000 characters), so the first release's notes are a written summary of what
+Omniglass is, with a compare link for the full history. Its release commit set the manifest and
+`version.txt` to `0.1.0` like a release PR would, and the Release was created on it by hand, with
+releasing paused so release-please could not act in between. Every release after it is
+release-please's, counted from `v0.1.0`.
 
 **A release comments** "Released in" with a link to the Release on each PR it ships and each
 issue that PR closed, once per release. A release that ships more than 100 PRs, as the first
