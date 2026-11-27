@@ -9,10 +9,10 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/docslint"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/impair"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/simhub"
 )
 
 func TestSimulationBodyConnectedWindow(t *testing.T) {

@@ -34,6 +34,18 @@ export function spans<T extends string>(edges: Edge<T>[], current: T | null, now
   return out;
 }
 
+// withCarriedIn opens a window's edges at its start (#2741): the value in
+// force when the window opened (a read's carried_in) becomes an edge at
+// `from`, ahead of the first edge inside it, so the strip begins where the
+// range does rather than at the first change. With nothing carried in (the
+// owner is younger than the window) or an edge already at the start, the
+// edges are returned as they are.
+export function withCarriedIn<T extends string>(edges: Edge<T>[], carriedIn: T | null | undefined, from: number | undefined): Edge<T>[] {
+  if (!carriedIn || from === undefined) return edges;
+  if (edges.length && Date.parse(edges[0].ts) <= from) return edges;
+  return [{ ts: new Date(from).toISOString(), value: carriedIn }, ...edges];
+}
+
 // share is the fraction of the window spent in the states the predicate accepts, as
 // a whole-number percent. Null when the window holds nothing at all, which is not
 // the same as zero.

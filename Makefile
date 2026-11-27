@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: preflight all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs marketing-shots test-marketing-shots demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image and exports this machine's own binary to
@@ -441,7 +441,7 @@ compress-bench:
 # once rather than after the tests finish. The two module/build cache volumes
 # are shared across runs on purpose.
 NETADMIN_IMG ?= golang:1.26
-NETADMIN_PKGS ?= ./internal/sim/impair/ ./internal/e2e/
+NETADMIN_PKGS ?= ./sim/impair/ ./internal/e2e/
 NETADMIN_RUN ?= Netlink|Impair|Validate|PlanFor
 test-netadmin:
 	@set -e; net=omniglass-netadmin-$$$$; pg=$$net-pg; go=$$net-go; \
@@ -460,7 +460,7 @@ test-netadmin:
 # One simulator process serving a 1,000-device fleet: startup time, goroutines
 # and heap while serving, and goroutines left behind after it stops.
 bench-sim:
-	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./internal/sim/
+	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./sim/
 
 # Browser-driven e2e of the console against the built binary (#1267): builds
 # (make), brings up a throwaway lab of the empty scenario (web/e2e/lib/lab.sh)
@@ -489,6 +489,19 @@ walkthroughs: all
 
 test-walkthroughs: all
 	bash web/e2e/walkthroughs.sh selftest
+
+# Marketing captures (#2299): the stills and loops the hyperscaleav.com Omniglass
+# page plays, recorded from a corporate lab by web/e2e/marketing.sh from
+# web/e2e/marketing/shots.yaml (the shot list, as data). MARKETING_DEST names the
+# directory they are written to, by absolute path; it is checked before the lab
+# starts. make marketing-shots MARKETING_DEST=/path/to/landing/public/images/omniglass/shots
+# test-marketing-shots is the recorder's own test: each precondition fails up
+# front, naming its cause.
+marketing-shots: all
+	bash web/e2e/marketing.sh record
+
+test-marketing-shots: all
+	bash web/e2e/marketing.sh selftest
 
 # Demos (#1132): a demo is a recording of a feature working, by one of two
 # recorders. A terminal demo is a VHS tape, scripts/demo/<id>.tape, for CLI and
@@ -526,6 +539,16 @@ clean-testcontainers:
 # Releases are cut only by the release workflow (.github/workflows/release.yml),
 # dispatched on a release/<major>.<minor> branch, which builds the image and
 # stamps its digest into the binaries (#1257); there is no local publish target.
+# `release` cuts the next release branch with no judgment in it (#2711): it
+# reads the conventional commits on main since the newest release line branched,
+# previews the version, the commits that drove it and the release notes, and
+# asks before creating release/<major>.<minor> at main's tip on origin. Before
+# 1.0 a breaking change bumps the minor. A patch creates nothing; it lists the
+# fixes to cherry-pick onto the line's branch. DRY_RUN=1 previews only, YES=1
+# skips the question. It never dispatches the release workflow.
+release:
+	@go run ./cmd/release $(if $(DRY_RUN),-dry-run) $(if $(YES),-yes)
+
 # `release-plan` is the local preview: run from a release branch, it prints the
 # tag the next dispatch would cut, from the branch name and the tags (#2139).
 # FINAL=1 previews the final release of the newest candidate instead.

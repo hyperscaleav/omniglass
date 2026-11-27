@@ -61,6 +61,13 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// States the class-signal floor for the lab's seeded DSP, so naming
 		// the shipped product is what it tests (#1493).
 		"internal/lab/dsp_floor_integration_test.go": true,
+		// Pins the shipped Kestrel and Polaris drivers to what their
+		// simulated devices serve, so naming the shipped products is what
+		// it tests (#2754).
+		"internal/seed/vroom_talks_driver_test.go": true,
+		// States the showcase floor for the corporate lab's conference
+		// video bar, so naming the shipped product is what it tests (#2754).
+		"internal/lab/videobar_talks_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()
@@ -115,11 +122,11 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 			return err
 		}
 		text := string(src)
-		// The simulator's tests name its own profiles (internal/sim/profiles),
+		// The simulator's tests name its own profiles (sim/profiles),
 		// which share the seed's fictional model names but live in a separate
 		// embedded catalog: a seed rename cannot break them. A simulator test
 		// that reads the seed is borrowing it like any other.
-		if strings.HasPrefix(rel, "internal/sim/") && !strings.Contains(text, `"github.com/hyperscaleav/omniglass/internal/seed"`) {
+		if strings.HasPrefix(rel, "sim/") && !strings.Contains(text, `"github.com/hyperscaleav/omniglass/internal/seed"`) {
 			return nil
 		}
 		for _, sku := range skus {

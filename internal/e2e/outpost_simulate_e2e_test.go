@@ -21,9 +21,9 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
 const outpostSimulatePortShift = 25000

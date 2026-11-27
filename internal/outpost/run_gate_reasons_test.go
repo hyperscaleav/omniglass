@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestAGoneDeviceHoldsItsPollsUntilItReturns drives #1650 over the real

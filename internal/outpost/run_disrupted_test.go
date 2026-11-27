@@ -16,8 +16,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain drives #1651 over

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"testing"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
 // SeedPlan lands everything the plan planned: the systems in their rooms, the
@@ -137,8 +140,9 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		t.Errorf("%d endpoints in the database, result says %d and %d webhooks, %d on no component; want equal, non-zero, none", endpoints, res.Endpoints, res.Senders, orphaned)
 	}
 
-	// Control faces (#2649): one web admin on each controlled slot's device,
-	// and on no other component.
+	// Control faces (#2649, #2754): one second face on each controlled slot's
+	// device (the display's web admin, the bar's control socket), and on no
+	// other component.
 	wantControl := map[string]int{}
 	for _, site := range p.Sites {
 		for _, s := range site.Systems {
@@ -160,7 +164,7 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		join system_slot_assignment a on a.component_id = e.component
 		join system s on s.id = a.system_id
 		join system_slot r on r.id = a.slot_id
-		where d.name = 'boreal-edge-web'`)
+		where d.name = any($1)`, slices.Collect(maps.Values(simfleet.Control)))
 	if err != nil {
 		t.Fatal(err)
 	}

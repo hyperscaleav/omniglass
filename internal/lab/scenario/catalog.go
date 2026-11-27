@@ -5,9 +5,9 @@ import (
 	"sync"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/template"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // Catalog is what a manifest's names are checked against: the standards, the

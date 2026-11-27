@@ -66,6 +66,16 @@ coverage.txt
 /web/test-results/
 # walkthrough recordings (make walkthroughs)
 /web/e2e/walkthroughs/out/
+# marketing captures (make marketing-shots)
+/web/e2e/marketing/out/
+/web/e2e/marketing/compose/node_modules/
+/web/e2e/marketing/compose/public/
+/web/e2e/marketing/compose/out/
+# The camera project installs with pnpm (#2717); an npm lockfile is a mistake.
+/web/e2e/marketing/compose/package-lock.json
+# A pnpm store pnpm placed at the repository root (a container install with HOME
+# on another filesystem, #2719); the store belongs outside the tree.
+/.pnpm-store/
 # terminal demo recordings (make demo)
 /scripts/demo/out/
 /web/e2e/probe/out/

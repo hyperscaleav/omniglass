@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/hyperscaleav/omniglass/internal/config"
-	"github.com/hyperscaleav/omniglass/internal/mailsim"
-	"github.com/hyperscaleav/omniglass/internal/simoutpost"
+	"github.com/hyperscaleav/omniglass/sim/mailsim"
+	"github.com/hyperscaleav/omniglass/sim/simoutpost"
 )
 
 // newSimCmd is the simulator run mode's group. `sim run` serves the devices

@@ -9,9 +9,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 	"github.com/hyperscaleav/omniglass/internal/transport"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // TestEveryCollectionMethodRunsOnAHealthyLabComponent holds the lab to "every

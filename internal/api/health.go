@@ -161,7 +161,7 @@ type fleetHealthOutput struct {
 		Members         []healthMemberBody     `json:"members" doc:"Every member of a system with its own health, its open alarms, and whether it fills a slot; empty for a location"`
 		Systems         []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their health; empty for a system"`
 		Transitions     []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
-		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when the range opened: the last recorded edge before its start. Present when the caller bounded the start (an explicit since, or the one derived from until); absent on the default window, or when nothing was recorded before it. A timeline draws the stretch before the first transition from it"`
+		CarriedIn       string                 `json:"carried_in,omitempty" doc:"The health in force when the range opened: the last recorded edge before its start, whether the caller bounded the start (an explicit since, or the one derived from until) or the default window opened it. Absent when nothing was recorded before it. A timeline draws the stretch before the first transition from it, and uptime counts that stretch as it"`
 		FirstRecordedAt *time.Time             `json:"first_recorded_at,omitempty" doc:"When this owner's health was first recorded; absent if never. How long it has been watched, whatever the range"`
 	}
 }

@@ -31,6 +31,8 @@ templates:
         - name: main-display
           label: Main Display
           accepted_types: [display]
+          # A meeting room whose main display fails does not work (#2736).
+          impact: outage
         - name: touch-control
           label: Touch Control
           accepted_types: [touch-panel]
@@ -54,6 +56,8 @@ templates:
         - name: main-display
           label: Main Display
           accepted_types: [display]
+          # A meeting room whose main display fails does not work (#2736).
+          impact: outage
           pinned_products: [boreal-edge-55]
         - name: touch-control
           label: Touch Control
@@ -85,6 +89,8 @@ templates:
         - name: main-display
           label: Main Display
           accepted_types: [display]
+          # A meeting room whose main display fails does not work (#2736).
+          impact: outage
           pinned_products: [boreal-edge-65]
         - name: touch-control
           label: Touch Control
@@ -109,6 +115,8 @@ templates:
         - name: main-display
           label: Main Display
           accepted_types: [display]
+          # A meeting room whose main display fails does not work (#2736).
+          impact: outage
           pinned_products: [boreal-edge-75]
         - name: touch-control
           label: Touch Control
@@ -133,6 +141,8 @@ templates:
         - name: main-display
           label: Main Display
           accepted_types: [display]
+          # A meeting room whose main display fails does not work (#2736).
+          impact: outage
           pinned_products: [boreal-edge-86]
         - name: touch-control
           label: Touch Control
@@ -157,6 +167,8 @@ templates:
         - name: main-display
           label: Main Display
           accepted_types: [display]
+          # A meeting room whose main display fails does not work (#2736).
+          impact: outage
           pinned_products: [boreal-edge-98]
         - name: touch-control
           label: Touch Control

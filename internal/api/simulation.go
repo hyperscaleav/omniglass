@@ -9,8 +9,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/simhub"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/simhub"
 )
 
 // SimStatusFunc reports the simulator beside an outpost (bus.Server.SimStatus).

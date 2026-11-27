@@ -1,0 +1,13 @@
+# An install fails on any dependency install script not decided below (#2717);
+# scripts/web_pnpm_test.go (composeBuilds) records why each one runs or does not.
+# The pass installs in the Playwright container, so only the Linux binaries'
+# scripts are decided.
+strictDepBuilds: true
+allowBuilds:
+  '@ffmpeg-installer/linux-x64': true
+  '@ffmpeg-installer/linux-arm64': true
+  '@ffprobe-installer/linux-x64': true
+  '@ffprobe-installer/linux-arm64': true
+  '@revideo/telemetry': false
+  puppeteer: false
+  fsevents: false

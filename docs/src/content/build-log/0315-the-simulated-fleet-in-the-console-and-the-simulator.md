@@ -12,7 +12,7 @@ simulator beside the component's node, on a new subject of the node's own grant 
 one-reply response permission), and the device answers in process from its live state, so a command's
 change sticks and the fire lights up its row; the real-simulator e2e fires through the CLI and sees the
 answer and the hit. `POST /nodes/{name}/simulation/components` adds a simulated component through the dev seed's planner,
-promoted to `internal/simfleet`, and the simulator serves it on its next pull. The console shows a
+promoted to `sim/simfleet`, and the simulator serves it on its next pull. The console shows a
 Simulation page (a card per simulator, a table of its simulated components whose rows light up on a hit), a simulation drawer (status,
 impairment controls, the API surface and a fire form), and a Simulation section on a simulated
 component's page, all hidden while no simulator is connected. The docs gain the operator's guide

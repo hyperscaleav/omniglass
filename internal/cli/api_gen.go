@@ -11093,11 +11093,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var qBindings string
+				var qTopics string
+				var qTopicsCursor string
 				var qDurationSeconds int
 				cmd := &cobra.Command{
 					Use:     "watch",
 					Short:   "Follow view bindings live over one SSE stream",
-					Long:    "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most 16 watches open; past it the open is a 429.",
+					Long:    "Streams the rows that land for every binding, and a changed notice for every topic a write moved, as Server-Sent Events, one connection for all of them (ADR-1830, ADR-2731). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. A topic (kind:ref, a component or a system) needs <kind>:read and resolves in scope at connect as a literal ref does, an out-of-scope one the same 404; a changed event names it when a write moved its state (its health recomputed, a slot or member changed), at most once each 250 milliseconds, and carries no data: the client refetches the route it reads. The topics resume after topics_cursor (else Last-Event-ID, else now); a position the tail no longer holds is a reset with topics set, and the client refetches what they show. An event bears the stream's position only once every changed notice before it has gone out, so a reconnect from any id misses no change. One user holds at most 16 watches open; past it the open is a 429. On server shutdown each stream ends with a final mark.",
 					Example: "  omniglass view watch",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -11105,6 +11107,12 @@ func generatedCommands() []*cobra.Command {
 						q := url.Values{}
 						if cmd.Flags().Changed("bindings") {
 							q.Set("bindings", fmt.Sprintf("%v", qBindings))
+						}
+						if cmd.Flags().Changed("topics") {
+							q.Set("topics", fmt.Sprintf("%v", qTopics))
+						}
+						if cmd.Flags().Changed("topics-cursor") {
+							q.Set("topics_cursor", fmt.Sprintf("%v", qTopicsCursor))
 						}
 						if cmd.Flags().Changed("duration-seconds") {
 							q.Set("duration_seconds", fmt.Sprintf("%v", qDurationSeconds))
@@ -11115,8 +11123,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
-				cmd.Flags().StringVar(&qBindings, "bindings", "", "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)")
-				_ = cmd.MarkFlagRequired("bindings")
+				cmd.Flags().StringVar(&qBindings, "bindings", "", "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now). Give bindings, topics, or both")
+				cmd.Flags().StringVar(&qTopics, "topics", "", "The entities whose changes the stream names, comma separated, each kind:ref (component or system, by name, uuid or dotted address; at most 32). A changed event says one moved: refetch its route. Give bindings, topics, or both")
+				cmd.Flags().StringVar(&qTopicsCursor, "topics-cursor", "", "The position the topics resume after: the last event id the client received. Unset, Last-Event-ID; unset too, the topics follow from now")
 				cmd.Flags().IntVar(&qDurationSeconds, "duration-seconds", 0, "Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position")
 				return cmd
 			}()

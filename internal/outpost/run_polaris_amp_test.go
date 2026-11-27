@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostPolarisAmpReadsItsOperatingState (#898): the shipped

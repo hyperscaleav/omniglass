@@ -82,6 +82,9 @@ type options struct {
 	// viewWatch bounds the /views:watch streams (#1830); a zero field takes
 	// the default.
 	viewWatch viewWatchLimits
+	// streams is the server's shutdown signal to its open streams (#2731);
+	// nil is a handler whose streams end only with their clients.
+	streams *StreamShutdown
 	// lab marks a server `omniglass lab` started (#1195); /auth/status
 	// reports it so the console shows the lab banner.
 	lab bool
@@ -179,6 +182,12 @@ func WithViewWatchLimits(perUser int, lifetime, heartbeat time.Duration) Option 
 	return func(o *options) {
 		o.viewWatch = viewWatchLimits{perUser: perUser, lifetime: lifetime, heartbeat: heartbeat}
 	}
+}
+
+// WithStreamShutdown hands the handler the server's shutdown signal: its
+// streams end with a final mark when it closes (#2731).
+func WithStreamShutdown(s *StreamShutdown) Option {
+	return func(o *options) { o.streams = s }
 }
 
 // WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
@@ -511,7 +520,9 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	}
 	registerViewRoutes(api, a, gw, viewLog)
 	registerSearchRoutes(api, a, gw, viewLog)
-	registerViewRunRoutes(api, a, gw, viewLog, o.viewWatch)
+	watch := o.viewWatch
+	watch.shutdown = o.streams
+	registerViewRunRoutes(api, a, gw, viewLog, watch)
 	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
 	registerOutpostRoutes(api, a, gw, o.natsURL, o.simHub)
 	registerSecretRoutes(api, a, gw)

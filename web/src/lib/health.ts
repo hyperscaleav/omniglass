@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import type { FleetHealthOutputBody, HealthSlotBody, HealthTransitionBody } from "../api/api.gen";
+import { rangeQuery, type TimeRange } from "./time_range";
 
 // The health data layer: thin typed wrappers over the generated client plus the
 // pure read-time derivations the console renders.
@@ -41,8 +42,18 @@ export const LOCATION_HEALTH_PREFIX = ["location-health"] as const;
 export const systemHealthKey = (name: string) => [...SYSTEM_HEALTH_PREFIX, name] as const;
 export const locationHealthKey = (name: string) => [...LOCATION_HEALTH_PREFIX, name] as const;
 
-export async function systemHealth(name: string): Promise<FleetHealth> {
-  const { data, error } = await api.GET("/systems/{name}/health", { params: { path: { name } } });
+// systemHealthRangeKey is one system's report over one range (#2741): under
+// systemHealthKey, so an invalidation of the system (or of every system's
+// health) reaches each range it was read over.
+export const systemHealthRangeKey = (name: string, range: TimeRange) => [...systemHealthKey(name), range] as const;
+
+// systemHealth reads the system's report; with a range, its history (the
+// transitions, carried_in) covers that range, resolved at the read's own clock.
+// A bounded start is what makes the read carry carried_in, the health in force
+// when the range opened.
+export async function systemHealth(name: string, range?: TimeRange): Promise<FleetHealth> {
+  const query = range ? rangeQuery(range, Date.now()) : undefined;
+  const { data, error } = await api.GET("/systems/{name}/health", { params: { path: { name }, query } });
   if (error) throw error;
   return data as FleetHealth;
 }

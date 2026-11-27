@@ -10,8 +10,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
-	"github.com/hyperscaleav/omniglass/internal/sim"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // The outpost's request tally is the outpost half of the closed loop the scale lab

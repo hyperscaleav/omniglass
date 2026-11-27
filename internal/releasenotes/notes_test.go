@@ -98,3 +98,24 @@ func TestRenderEmpty(t *testing.T) {
 		t.Fatalf("got %q %v", got.Markdown, got.PRs)
 	}
 }
+
+func TestParse(t *testing.T) {
+	cases := []struct {
+		in   Commit
+		want Change
+	}{
+		{Commit{Subject: "feat(api)!: health replaces verdict (#2102)"}, Change{Type: "feat", Scope: "(api)", Breaking: true, Description: "health replaces verdict", PR: 2102}},
+		{Commit{Subject: "FIX: shouting (#3)", Body: "x\n\nBREAKING CHANGE: gone"}, Change{Type: "fix", Breaking: true, Description: "shouting", PR: 3}},
+		{Commit{Subject: "fix: inline BREAKING CHANGE: is not a footer"}, Change{Type: "fix", Description: "inline BREAKING CHANGE: is not a footer"}},
+		{Commit{Subject: "Wait for the first datagram (#1765)"}, Change{Description: "Wait for the first datagram", PR: 1765}},
+	}
+	for _, c := range cases {
+		got, ok := Parse(c.in)
+		if !ok || got != c.want {
+			t.Errorf("Parse(%q) = %+v %t, want %+v", c.in.Subject, got, ok, c.want)
+		}
+	}
+	if _, ok := Parse(Commit{Subject: "  "}); ok {
+		t.Error("an empty subject parses as nothing")
+	}
+}

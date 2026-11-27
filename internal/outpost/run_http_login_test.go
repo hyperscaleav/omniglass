@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // http logins and digest end to end (#1114): Postgres, the bus, a real

@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
-	"github.com/hyperscaleav/omniglass/internal/sim"
+	"github.com/hyperscaleav/omniglass/sim"
 )
 
 // The sim hop (#1694) against real sockets: a simulated SNMP agent and the

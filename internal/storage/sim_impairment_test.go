@@ -11,9 +11,9 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/sim/impair"
 )
 
 // TestSimImpairment proves an impairment is a persisted, audited fact about

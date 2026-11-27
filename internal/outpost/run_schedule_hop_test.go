@@ -16,7 +16,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/labfootprint"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss drives #1693

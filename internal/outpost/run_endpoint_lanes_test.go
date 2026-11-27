@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // countingDevice is an http device that counts what it is asked and the most

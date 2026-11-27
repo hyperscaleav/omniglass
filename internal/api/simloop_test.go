@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/simhub"
+	"github.com/hyperscaleav/omniglass/sim/simhub"
 )
 
 // The ring brackets only outposts whose simulator pulled inside the connected

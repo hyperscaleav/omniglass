@@ -1,6 +1,6 @@
 ---
 title: UI
-description: "How the operator console is built: a SolidJS SPA over the generated client, flat identity routes grouped by a sidebar, detail views and blades, and reads that poll or follow a view binding."
+description: "How the operator console is built: a SolidJS SPA over the generated client, flat identity routes grouped by a sidebar, detail views and blades, and reads that follow the tab's one live stream."
 sidebar:
   order: 51
   badge:
@@ -99,7 +99,7 @@ health, `GET /search` for the `⌘K` command palette.
 Where a surface draws samples, it binds a [view binding](/architecture/views/), whose answer is a
 `ViewResult`: typed series per entity and key for a metric or a property, a page of rows for events and
 logs. `createViewBinding` (`web/src/lib/binding.ts`) reads the history through the query cache, then
-folds in the live rows from the page's one `/views:watch` stream, so a chart moves as the server
+folds in the live rows from the tab's one `/views:watch` stream, so a chart moves as the server
 records rather than on a poll. Platform health's sparklines are drawn this way.
 
 ::::design[The renderer library and composable dashboards, tracked in #1826]
@@ -117,12 +117,34 @@ The field-mapping contract between a binding's result and each renderer.
 :::
 ::::
 
-## Live data: polling, and the tail where it matters
+## Live data: one stream per tab
 
-A read that changes is refetched on an interval by TanStack Query; a slow-changing one (a catalog, a
-setting) keeps a long stale time. A surface that draws samples follows the view binding's stream
-instead. A configured presentation, such as a severity level's label and color, resolves in the
-browser from its catalog read, so a result never bakes it in.
+Each tab holds one live stream, `/views:watch`, and the server says on it what changed; the console
+does not poll ([ADR-2731](/architecture/decisions/#adr-2731-the-console-follows-state-over-its-one-live-stream-and-polling-is-guarded-out)).
+Two kinds of read ride it, both through the tab's one hub (`web/src/lib/live.ts`):
+
+- **A read of state** (a system's health, its slots, its members) is `liveQuery`: `useQuery` with the
+  `topics` it shows, such as `system:<id>`. A `changed` notice for a topic refetches the query through
+  the route it already reads, debounced 250 ms, so a burst of writes is one request; a `reset` (the
+  stream could not resume) refetches everything the topics show.
+- **A chart of samples** is a view binding (`createViewBinding`), which folds the stream's rows into
+  the history it read.
+
+The hub owns the connection. It reconnects with jittered exponential backoff (1 s doubling to 30 s, so
+tabs do not all land together after a restart), closes the stream in a tab hidden for 30 s and resumes
+it from where it was on focus (a browser allows a few sockets per origin over HTTP/1.1), and only while
+no stream delivers (a refused open, the per-user cap, a buffering proxy that holds the first event past
+10 s) does it refresh what it holds every 30 s. A slow-changing read (a catalog, a setting) keeps a long
+stale time and follows nothing. A configured presentation, such as a severity level's label and color,
+resolves in the browser from its catalog read, so a result never bakes it in.
+
+A vitest guard (`web/src/polling-guard.test.ts`) fails on a `refetchInterval`, a `setInterval`, a
+`new EventSource` or a `setTimeout` that re-schedules a read anywhere in `web/src` but `lib/clock.ts`
+(the tick that moves ages on screen) and `lib/live.ts`. The pages that still poll while they move over
+are listed in `web/src/polling-allowlist.json`, and the list only shrinks: a file on it that no longer
+polls fails until it is taken off. The system page is the first moved; the commands in flight, the
+simulation page, the component, endpoint and location pages, alarms, the sidebar and inbox, and the
+rule lists follow.
 
 ## Handing the console to omnibot
 

@@ -1,0 +1,12 @@
+{
+  "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+  "manufacturer": "{{ .State | get "configuration" | get "device" | get "manufacturer" }}",
+  "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+  "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+  "hardware_revision": "{{ .State | get "configuration" | get "device" | get "hardware_revision" }}",
+  "hostname": "{{ .State | get "configuration" | get "network" | get "hostname" }}",
+  "ip_address": "{{ .State | get "status" | get "network" | get "ipv4" | get "address" }}",
+  "mac_address": "{{ .State | get "status" | get "network" | get "ipv4" | get "mac" }}",
+  "uptime": {{ .State | get "status" | get "device" | get "uptime" }},
+  "power": "{{ .State | get "status" | get "device" | get "power" }}"
+}

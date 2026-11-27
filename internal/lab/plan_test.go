@@ -5,7 +5,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/secret"
-	"github.com/hyperscaleav/omniglass/internal/simoutpost"
+	"github.com/hyperscaleav/omniglass/sim/simoutpost"
 
 	"fmt"
 	"slices"
@@ -764,6 +764,37 @@ func TestPlanScaleLabInducesAnUnregisteredKeyOnlyWhenAsked(t *testing.T) {
 	dev.InduceUnregistered = true
 	if _, err := Plan(dev); err == nil || !strings.Contains(err.Error(), "--systems") {
 		t.Fatalf("a dev lab with the knob: %v, want a refusal naming the scale lab", err)
+	}
+}
+
+// The scale lab's health storyline (#2728) is made-up history for a capture,
+// so the seed carries it only when asked, only for a throwaway lab, and only a
+// scale lab has a scenario storyline to seed.
+func TestPlanScaleLabSeedsHealthHistoryOnlyWhenAsked(t *testing.T) {
+	s, err := Plan(scaleOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(s.Seed.Cmd, "--health-history") {
+		t.Fatalf("the seed lands health history by default: %v", s.Seed.Cmd)
+	}
+	o := scaleOptions()
+	o.HealthHistory = true
+	if s, err = Plan(o); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(s.Seed.Cmd, "--health-history") {
+		t.Fatalf("the seed command %v does not carry the storyline", s.Seed.Cmd)
+	}
+	kept := scaleOptions()
+	kept.HealthHistory, kept.Ephemeral = true, false
+	if _, err := Plan(kept); err == nil || !strings.Contains(err.Error(), "--ephemeral") {
+		t.Fatalf("a kept scale lab with the storyline: %v, want a refusal naming --ephemeral", err)
+	}
+	dev := testOptions()
+	dev.HealthHistory = true
+	if _, err := Plan(dev); err == nil || !strings.Contains(err.Error(), "--systems") {
+		t.Fatalf("a dev lab with the storyline: %v, want a refusal naming the scale lab", err)
 	}
 }
 

@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/egress"
-	"github.com/hyperscaleav/omniglass/internal/mailsim"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
+	"github.com/hyperscaleav/omniglass/sim/mailsim"
 )
 
 // TestAnEmailReachesTheMailSimAndARetrySendsTheSameBytes drives the email

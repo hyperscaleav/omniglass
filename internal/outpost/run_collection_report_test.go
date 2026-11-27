@@ -16,7 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // runOutpostReporting starts the outpost with its own collection report window, as

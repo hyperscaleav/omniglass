@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/sim"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // A server-sent events stream end to end (#1038): Postgres, the bus, a real

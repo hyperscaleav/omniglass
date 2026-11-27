@@ -183,6 +183,19 @@ A read nobody could write a route for in advance (a dashboard widget pointed at 
 question) goes through a [view binding](/architecture/views/) instead: `POST /views:run` for history
 and `GET /views:watch` for the live tail, the one scoped read of the sample store.
 
+The same stream is how the console stays current without polling
+([ADR-2731](/architecture/decisions/#adr-2731-the-console-follows-state-over-its-one-live-stream-and-polling-is-guarded-out)):
+beside its bindings a watch names `topics` (`system:<ref>`, `component:<ref>`), and a `changed` event
+says a write moved one. A notice is an invalidation, not the data: the client refetches the route it
+already reads, so authorization, redaction and the answer's shape stay on that route. Each topic
+resolves in the caller's scope when the stream opens, an out-of-scope one the same 404 as a missing
+one, and a stream names a topic at most once each 250 ms.
+
+Every Server-Sent Events route keeps the same hygiene: it sends `X-Accel-Buffering: no` so a proxy
+does not hold its events, and sets a 10 second write deadline before each send, so a client that stops
+reading ends its stream rather than holding a goroutine. A resumable stream (the watch) also sends
+`retry:` and, when the server shuts down, ends with a final `mark` carrying its position.
+
 ## Health, and why
 
 A health read serves its reasons beside its value. `GET /systems/{name}/health` answers the system's

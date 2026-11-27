@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
-	"github.com/hyperscaleav/omniglass/internal/sim"
-	"github.com/hyperscaleav/omniglass/internal/sim/profile"
-	"github.com/hyperscaleav/omniglass/internal/sim/simtest"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
 // The line protocol over tls end to end (#1035): Postgres, the bus, a real

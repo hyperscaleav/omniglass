@@ -5,7 +5,7 @@ refs: [885, 886, 888]
 ---
 
 The device simulator that lived in the separate omniglass-lab project now ships in the omniglass
-binary (`internal/sim`), so a fleet of fictional devices can be collected from without real gear
+binary (`sim`), so a fleet of fictional devices can be collected from without real gear
 or a second stack. The first slice ports the engine: the embedded catalog of device and system
 profiles, templates and fleet manifests; the fleet compiler; and per-device listeners for HTTP(S),
 SNMP, SSH, Telnet, TCP line sessions and UDP over one live state per device. The lab's director,

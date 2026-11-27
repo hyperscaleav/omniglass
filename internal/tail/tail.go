@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -30,7 +31,16 @@ const (
 	LaneProperty Lane = "property"
 	LaneEvent    Lane = "event"
 	LaneLog      Lane = "log"
+	// LaneChange is a state-change notice (#2731): an entity a write changed,
+	// published after its transaction commits, so a live page refetches the
+	// read that shows it. It carries no data: OwnerKind and OwnerID name the
+	// entity, Key the operation.
+	LaneChange Lane = "change"
 )
+
+// ChangeUpdate is the operation a change notice names when an entity's state
+// moved (its health recomputed, a slot or member changed).
+const ChangeUpdate = "update"
 
 // Row is one landed sample, event, or log line, as the store kept it: owner
 // resolved to its uuid, timestamp capped, value normalized. Fields a lane
@@ -104,6 +114,11 @@ type Hub struct {
 	oldest   uint64
 	maxBytes int
 	wake     chan struct{}
+	// followers counts the streams following change notices (#2731).
+	followers atomic.Int64
+	// dropped is one past the sequence at which a notice last went unpublished for want
+	// of a follower.
+	dropped uint64
 }
 
 // New returns a hub whose ring holds the last commits commits, and of those
@@ -156,6 +171,82 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 	}
 	h.mu.Lock()
 	h.settle()
+	h.append(rows, size)
+	wake := h.wake
+	h.wake = make(chan struct{})
+	h.mu.Unlock()
+	close(wake)
+	return nil
+}
+
+// FollowChanges registers a stream that follows the change lane and returns
+// its release. While none is registered PublishChanges drops its notices, so
+// a recompute storm nobody follows never lands a commit on the ring and
+// evicts sample rows a binding's cursor resumes from (#2731).
+func (h *Hub) FollowChanges() func() {
+	if h == nil {
+		return func() {}
+	}
+	h.followers.Add(1)
+	var once sync.Once
+	return func() { once.Do(func() { h.followers.Add(-1) }) }
+}
+
+// Following reports whether any stream follows the change lane.
+func (h *Hub) Following() bool { return h != nil && h.followers.Load() > 0 }
+
+// PublishChanges publishes change notices, only while a stream follows them.
+// A notice dropped is remembered (ChangesDroppedSince), so a stream that
+// resumes across the gap is told to refetch rather than trusted to have
+// missed nothing.
+func (h *Hub) PublishChanges(rows []Row) {
+	if h == nil || len(rows) == 0 {
+		return
+	}
+	if h.Following() {
+		h.Publish(rows)
+		return
+	}
+	h.mu.Lock()
+	h.dropped = h.seq + 1
+	h.mu.Unlock()
+}
+
+// ChangesDroppedSince reports whether a change notice went unpublished at or
+// after the commit at seq, so a topics cursor at seq cannot vouch for it.
+func (h *Hub) ChangesDroppedSince(seq uint64) bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.dropped > 0 && h.dropped-1 >= seq
+}
+
+// Publish lands rows that are already durable as the next commit: the change
+// lane's notices, which a write's transaction publishes after it commits. It
+// takes no part in Mark's fence, which orders a snapshot against the sample
+// rows it reads; a notice is not in any snapshot, the client refetches its
+// route instead. No rows publishes nothing.
+func (h *Hub) Publish(rows []Row) {
+	if h == nil || len(rows) == 0 {
+		return
+	}
+	size := 0
+	for _, r := range rows {
+		size += RowBytes(r)
+	}
+	h.mu.Lock()
+	h.append(rows, size)
+	wake := h.wake
+	h.wake = make(chan struct{})
+	h.mu.Unlock()
+	close(wake)
+}
+
+// append slots rows as the next commit, dropping the oldest held past the
+// ring's bounds. The caller holds mu.
+func (h *Hub) append(rows []Row, size int) {
 	h.seq++
 	slots := uint64(len(h.ring))
 	if h.seq-h.oldest >= slots {
@@ -167,11 +258,6 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 	for h.maxBytes > 0 && h.held > h.maxBytes && h.oldest < h.seq {
 		h.drop()
 	}
-	wake := h.wake
-	h.wake = make(chan struct{})
-	h.mu.Unlock()
-	close(wake)
-	return nil
 }
 
 // finish ends a commit that publishes nothing.

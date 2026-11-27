@@ -6,6 +6,7 @@ import HealthBadge from "./HealthBadge";
 import HealthHistory from "./HealthHistory";
 import Eyebrow from "./Eyebrow";
 import DetailGate from "./DetailGate";
+import Button from "./Button";
 import LocationCard from "./LocationCard";
 import MemberRows from "./MemberRows";
 import HealthReason from "./HealthReason";
@@ -14,7 +15,7 @@ import AddComponentLink from "./AddComponentLink";
 import SystemEmpty from "./SystemEmpty";
 import OutlineWorkspace from "./OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
-import { systemHealth, systemHealthKey, healthOf } from "../lib/health";
+import { systemHealth, systemHealthKey, systemHealthRangeKey, healthOf } from "../lib/health";
 import { systemSlots, systemSlotsKey } from "../lib/system_slots";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
@@ -33,7 +34,7 @@ import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import { systemAlarms, systemAlarmsKey } from "../lib/alarms";
+import { systemAlarms, systemAlarmsRangeKey } from "../lib/alarms";
 import { useSeverity } from "../lib/severity";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
 import SeverityBadge from "./SeverityBadge";
@@ -41,16 +42,17 @@ import AlarmActions from "./AlarmActions";
 import { SnoozedBadge } from "./SnoozeButton";
 import { uptimeOver } from "../lib/uptime";
 import { stretchReasons, memberAlarmRows, stretchesOf, markerX, type MemberAlarms } from "../lib/system_history";
-import { spans as timelineSpans } from "../lib/timeline";
+import { spans as timelineSpans, withCarriedIn } from "../lib/timeline";
 import OccurrenceList from "./OccurrenceList";
 import TimeRangePicker from "./TimeRangePicker";
 import MetricsGrid from "./MetricsGrid";
 import TimelineOverlay from "./TimelineOverlay";
 import { CursorProvider } from "../lib/cursor";
-import { DEFAULT_RANGE, useHostTimeRange, type TimeRange } from "../lib/time_range";
+import { DEFAULT_RANGE, HISTORY_DEFAULT_RANGE, rangePhrase, resolveRange, useHostTimeRange, type TimeRange } from "../lib/time_range";
 import { memberModel, systemsAtLocation, type MemberContext } from "../lib/detail";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
+import { liveQuery } from "../lib/live";
 import { useBlades } from "../lib/blades";
 import { type DetailHost } from "../lib/tabstate";
 import { useEntityDelete } from "../lib/entity_delete";
@@ -81,10 +83,12 @@ import Tooltip from "./ui/Tooltip";
 // is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
-// HISTORY_TICK_MS is how often the history and the charts take a new now:
-// a thirty-day strip and a day's sparkline move too little in a second to
-// redraw on every tick.
-const HISTORY_TICK_MS = 60_000;
+// HISTORY_TICK_MS is how often the history and the charts take a new now: the
+// poll's cadence (#2723), so the record beside the header moves when the
+// health that feeds it does, and a recovery reaches Uptime and the bar within
+// one poll. A thirty-day strip still moves too little in a second to redraw on
+// every tick.
+const HISTORY_TICK_MS = LEAF_POLL_MS;
 // SystemDetail (#636, reoriented in #872, one body for both hosts since
 // #2423): a system's whole detail body, rendered by its page
 // (`/systems/:id`, host "page") and by the fleet blade (host "blade") alike.
@@ -107,12 +111,37 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
   const now = createClock(CLOCK_TICK_MS);
   const coarse = createClock(HISTORY_TICK_MS);
 
+  // The one time range (#2304), held in the address: the metrics grid, the
+  // timeline and the Activity tab's history read over it (#2741), and the
+  // picker on the tab rail writes it. With none given, Activity opens on the
+  // last 30 days a status page leads with and Overview and the Timeline on 24
+  // hours; a range once picked governs every tab, so every pick is written to
+  // the address, 24 hours included. A blade opens on its page's range and keeps
+  // its own.
+  const { given, setRange } = useHostTimeRange(props.host, { explicit: true });
+  // An absolute range reads through the views read, which needs view:read: a
+  // shared link opened by a caller without it reads each tab's default
+  // instead, and the host says why rather than drawing empty charts (#2304).
+  const canViews = () => can(me.data, "view", "read");
+  const rangeDenied = () => given()?.kind === "absolute" && !!me.data && !canViews();
+  const rangeOr = (fallback: TimeRange): TimeRange => {
+    const g = given();
+    return g && !rangeDenied() ? g : fallback;
+  };
+  const range = (): TimeRange => rangeOr(DEFAULT_RANGE);
+  const activityRange = (): TimeRange => rangeOr(HISTORY_DEFAULT_RANGE);
+
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
-  const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
-  // Each member's own health, polled off the system's members read: the
-  // fleet view's dots (read once) stand in until it answers.
-  const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
+  // The system's health, slots and members follow its topic on the tab's one
+  // live stream (#2731): every write that moves any of them recomputes the
+  // system, which names it, and each read refetches then, never on a timer.
+  const topics = () => [`system:${id()}`];
+  const health = liveQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), topics: topics() }));
+  const declared = liveQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), topics: topics() }));
+  // Each member's own health, off the system's members read (a member's
+  // health moving recomputes the system it staffs): the fleet view's dots
+  // (read once) stand in until it answers.
+  const membersQ = liveQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), topics: topics() }));
 
   const system = createMemo(() => (view.data?.systems ?? []).find((s) => s.id === id()));
 
@@ -173,43 +202,100 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
     const all = [...b.cards, ...b.groups.flatMap((g) => g.memberCards)];
     return all.map((c) => ({ name: c.name, componentId: c.componentId }));
   });
-  const alarmHistory = useQuery(() => ({
-    queryKey: systemAlarmsKey(id()),
-    queryFn: () => systemAlarms(id()),
-    enabled: tab() === "activity",
-    refetchInterval: LEAF_POLL_MS,
-  }));
-  // The one time range (#2304), held in the address: the metrics grid and the
-  // timeline read over it, and the picker on the tab rail writes it. A blade
-  // opens on the default and keeps its own.
-  const { range: asked, setRange } = useHostTimeRange(props.host);
-  // An absolute range reads through the views read, which needs view:read: a
-  // shared link opened by a caller without it reads the default instead, and
-  // the host says why rather than drawing empty charts (#2304).
-  const canViews = () => can(me.data, "view", "read");
-  const rangeDenied = () => asked().kind === "absolute" && !!me.data && !canViews();
-  const range = (): TimeRange => (rangeDenied() ? DEFAULT_RANGE : asked());
+  // The same report over Activity's range (#2741), read only on Activity: its
+  // transitions cover the range, and the health in force when it opened
+  // (carried_in) comes with it. A new range draws nothing until its own read
+  // lands, so no figure is the old range's report measured as the new one.
+  const history = liveQuery(() => {
+    const r = activityRange();
+    return {
+      topics: topics(),
+      queryKey: systemHealthRangeKey(id(), r),
+      queryFn: () => systemHealth(id(), r),
+      enabled: tab() === "activity",
+    };
+  });
+  const alarmHistory = liveQuery(() => {
+    const r = activityRange();
+    return {
+      topics: topics(),
+      queryKey: systemAlarmsRangeKey(id(), r),
+      queryFn: () => systemAlarms(id(), r),
+      enabled: tab() === "activity",
+    };
+  });
   // The history's now: the coarse clock, but never behind the report's own
   // last edge, which a poll can bring in between two ticks (a stretch that
   // opened seconds ago would otherwise have a negative length and vanish).
   const historyNow = createMemo(() => {
+    const t = history.data?.transitions ?? [];
+    return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
+  });
+  // Activity's window on the history's clock: a preset slides to now, a custom
+  // range that ended before now stops at its end, and then nothing in it is
+  // ongoing.
+  const historyWindow = createMemo(() => {
+    const { from, to } = resolveRange(activityRange(), historyNow());
+    const reachesNow = to >= historyNow();
+    return { from, end: reachesNow ? historyNow() : to, reachesNow };
+  });
+  // The current health stands for the window only when the window reaches
+  // now: a custom range that ended before it is drawn from its own record
+  // alone, so one from before the system existed is empty, not today's health.
+  const windowHealth = () => (historyWindow().reachesNow ? history.data?.health : undefined);
+  // The spans open at the window's start with the health carried in, so the
+  // bar, Uptime and the stretch list describe the same window.
+  const healthSpans = createMemo(() =>
+    timelineSpans(
+      withCarriedIn((history.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), history.data?.carried_in, historyWindow().from),
+      windowHealth() ?? null,
+      historyWindow().end,
+    ),
+  );
+  // What the range holds: measured only to tell an empty window from a
+  // healthy one; never shown as Uptime, which is the 30-day KPI below.
+  const rangeMeasure = createMemo(() =>
+    uptimeOver({
+      transitions: history.data?.transitions ?? [],
+      health: windowHealth(),
+      carriedIn: history.data?.carried_in,
+      firstRecordedAt: history.data?.first_recorded_at,
+      range: activityRange(),
+      now: historyNow(),
+    }),
+  );
+  // Uptime is the availability KPI over a fixed rolling 30 days (#2607,
+  // health.md's service levels), not a troubleshooting readout: it reads the
+  // current report, whose default window is those 30 days, whatever range the
+  // picker holds.
+  const kpiNow = createMemo(() => {
     const t = health.data?.transitions ?? [];
     return Math.max(coarse(), t.length ? Date.parse(t[t.length - 1].ts) : 0);
   });
-  const healthSpans = createMemo(() =>
-    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.health })), health.data?.health ?? null, historyNow()),
-  );
-  const uptimeWindow = createMemo(() =>
+  const uptimeKpi = createMemo(() =>
     uptimeOver({
       transitions: health.data?.transitions ?? [],
       health: health.data?.health,
       carriedIn: health.data?.carried_in,
       firstRecordedAt: health.data?.first_recorded_at,
-      now: historyNow(),
+      now: kpiNow(),
     }),
   );
-  const uptime = () => uptimeWindow().pct;
-  const stretches = createMemo(() => stretchesOf(healthSpans(), historyNow()));
+  const uptime = () => (health.data ? uptimeKpi().pct : null);
+  const stretches = createMemo(() => stretchesOf(healthSpans(), historyWindow().end, windowHealth()));
+  // What an empty stretch list says: still reading, nothing recorded in the
+  // window, or healthy all the way through it.
+  // A failed ranged read says why above the tab and offers Retry (the
+  // current read's failure is the page's, through DetailGate).
+  const historyError = () => (history.error && !history.data ? describeError(history.error) : null);
+  const quietWindow = () =>
+    historyError()
+      ? "The range could not be read."
+      : !history.data
+        ? "Reading the range."
+        : rangeMeasure().pct === null
+          ? "Nothing recorded in this window."
+          : "Nothing in this window. The system held healthy the whole way.";
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -227,7 +313,8 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
       componentId: m.componentId,
       alarms: byComponent.get(m.componentId) ?? [],
     }));
-    return memberAlarmRows(members, historyNow(), 30 * 24, scale().levels);
+    const w = historyWindow();
+    return memberAlarmRows(members, { from: w.from, to: w.reachesNow ? undefined : w.end }, scale().levels);
   });
   const otherAlarms = createMemo(() => {
     const inStretch = new Set(stretches().flatMap((inc) => stretchReasons(inc, windowAlarms()).map((r) => r.id)));
@@ -360,13 +447,13 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
               endRef={setRailEnd}
               state={tabState}
               guard={leave}
-              // The range governs Overview's metrics and the Timeline; Activity
-              // keeps its own fixed windows, so the control is not offered there.
-              end={tab() === "overview" || tab() === "timeline" ? <TimeRangePicker range={range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
+              // The range governs every tab but Configure; on Activity the
+              // picker shows the window Activity reads (#2741).
+              end={tab() !== "configure" ? <TimeRangePicker range={tab() === "activity" ? activityRange() : range()} onChange={setRange} allowCustom={canViews()} /> : undefined}
             />
             <Show when={rangeDenied()}>
               <p data-testid="range-denied" role="status" class="px-4 pt-2 text-xs text-warning">
-                This link's custom range is read through views, which needs view:read. Showing the last 24 hours instead.
+                This link's custom range is read through views, which needs view:read. Showing {rangePhrase(tab() === "activity" ? HISTORY_DEFAULT_RANGE : DEFAULT_RANGE)} instead.
               </p>
             </Show>
             <Show when={tab() === "configure"}>
@@ -403,9 +490,17 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
         </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
+            <Show when={historyError()}>
+              {(msg) => (
+                <div role="alert" data-testid="history-error" class="alert alert-error alert-soft text-sm">
+                  <span class="flex-1">{msg()}</span>
+                  <Button size="xs" loading={history.isFetching} onClick={() => void history.refetch()}>Retry</Button>
+                </div>
+              )}
+            </Show>
             <div class="flex flex-wrap items-stretch gap-3">
               <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
-                <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
+                <Eyebrow label="Uptime" hint="The healthy share of the last 30 days (or of the system's life, if younger): the availability KPI a status page leads with. It keeps its own fixed window; the time range above sets the history beside it, not this number." />
                 <span
                   class="font-mono text-3xl tabular-nums"
                   classList={{
@@ -418,10 +513,19 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                     {uptime()}<span class="text-lg">%</span>
                   </Show>
                 </span>
-                <span class="text-[10px] text-base-content/45">{uptimeWindow().label}</span>
+                <span class="text-[10px] text-base-content/45">{health.data ? uptimeKpi().label : "reading"}</span>
               </div>
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
-                <HealthHistory compact transitions={health.data?.transitions ?? []} health={health.data?.health} />
+                <HealthHistory
+                  compact
+                  now={historyWindow().end}
+                  from={historyWindow().from}
+                  carriedIn={history.data?.carried_in}
+                  endLabel={historyWindow().reachesNow ? undefined : fmtTime(new Date(historyWindow().end).toISOString())}
+                  window={`the recorded edges over ${rangePhrase(activityRange())}`}
+                  transitions={history.data?.transitions ?? []}
+                  health={windowHealth()}
+                />
                 <div class="relative mt-1 h-3" aria-label="Alarm raises on this timeline">
                   <Show when={windowAlarms().length > 0}>
                     <span class="absolute right-3 top-0 text-[10px] leading-3 text-base-content/40">▲ alarm raised</span>
@@ -432,7 +536,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
                         data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
-                        style={{ left: `${markerX(inc.raisedAt, historyNow(), Math.max(historyNow() - (healthSpans()[0]?.from ?? historyNow() - 30 * 24 * 3600_000), 1)) * 100}%` }}
+                        style={{ left: `${markerX(inc.raisedAt, historyWindow().end, Math.max(historyWindow().end - (healthSpans()[0]?.from ?? historyWindow().from), 1)) * 100}%` }}
                         content={`${inc.message} · ${inc.component}`}
                       />
                     )}
@@ -443,7 +547,7 @@ export default function SystemDetail(props: { id: string; host: DetailHost }) {
 
             <div>
               <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many health changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
+              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">{quietWindow()}</p>}>
                 <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
                   <For each={stretches()}>
                     {(inc, idx) => {

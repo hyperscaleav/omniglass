@@ -103,7 +103,9 @@ const (
 	// unreachable, a disruptive command it was sent holds it (#1651), or a
 	// path upstream holds it (#1652, which holds its due probes too, counted
 	// here): never sent, so not a failure and no backoff, counted once in
-	// each interval it waits through. Landed only when nonzero.
+	// each interval it waits through. A poll whose held session is still
+	// making its first connection counts here too (#2755). Landed only when
+	// nonzero.
 	PollHeldCount = "poll-held-count"
 	// HoldExpiryCount is how many disruptions (#1651) of an endpoint the
 	// hold backstop released in a report window: a disruptive command (a

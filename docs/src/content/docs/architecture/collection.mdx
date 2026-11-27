@@ -200,6 +200,11 @@ listeners:
         ts: { extract: { regex: "at (\\S+)$" }, layout: rfc3339 }
 ```
 
+One held feed can carry every lane. The Kestrel bar's server-sent events stream (`kestrel-api`) is
+claimed by event name: a `change` event lands the call's state and participant count as samples,
+`call-started`, `participant-joined` and their siblings land as `caught` events naming the call, and an
+`event: log` line lands as a log line, its severity, facility and text read off its JSON (#2754).
+
 The two non-sample lanes differ on a miss. A log line is raw arrival
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)), so it always
 lands: a message that misses falls back to the whole text, and a severity or attribute that misses is
@@ -274,8 +279,14 @@ keyed by the endpoint's id and runs on its own:
 There is **no session table**. Each transition lands as the `session-state` property on the endpoint's
 component (the endpoint's name as instance) and as an outpost self-log carrying the reason
 ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
-A poll that finds its session with no connection fails at once with a `collection-failed` naming the
-state, so a down device never stalls the outpost's tick, and it never dials a connection of its own.
+A poll that finds its session `recovering`, `down` or `rejected` fails at once with a `collection-failed`
+naming the state, so a down device never stalls the outpost's tick, and it never dials a connection of
+its own. A session's first connection is not a failure: a poll that arrives while the session is still
+`establishing` waits for the first dial up to its timeout, and if the session is still not `up` the poll
+is **held**, as a gate holds one (counted in `poll-held-count`, no `collection-failed`, no backoff), and
+runs the moment the session is up, released by the same sweep that releases a refused poll once its
+session is up again. A run now in that window answers that the session is still making its first
+connection.
 
 ### Listeners over a held session
 
@@ -421,7 +432,7 @@ A driver never emits a built-in key. So even a device that reports nothing of it
 | `poll-cpu-time` | the outpost | the mean CPU time charged to each of those runs on its own thread, in ms: a floor on a poll's cost | when a poll ran, where the platform has a thread clock |
 | `poll-due-count` | the outpost | the polls that fell due | when nonzero |
 | `poll-failure-count` | the outpost | polls that faulted and landed nothing, or were stopped by a refusal on the gate | when nonzero |
-| `poll-held-count` | the outpost | due polls held, not sent, while the gate held `unreachable` or `disrupted`: never a failure | when nonzero |
+| `poll-held-count` | the outpost | due polls held, not sent, while the gate held `unreachable` or `disrupted`, or while the held session was still making its first connection: never a failure | when nonzero |
 | `poll-skipped-count` | the outpost | due polls skipped because the last run was still in flight: skipped over due is the schedule's loss | when nonzero |
 | `hold-expiry-count` | the outpost | disruptions the backstop ended: a device that did not come back in time | when nonzero |
 | `push-message-count` | the outpost | messages its session or udp socket delivered that a listener claimed | every window while held |
