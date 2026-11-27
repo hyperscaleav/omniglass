@@ -1,11 +1,14 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -151,12 +154,31 @@ func TestLabCalendarAPI(t *testing.T) {
 	// The window's entries are what the world's own calendar derives.
 	want := map[string]int{}
 	for _, r := range []struct{ room, system string }{{"r101", "sys-a"}, {"r102", "sys-b"}} {
-		want[r.system] = len(w.Calendar().All(calendar.Room{Site: "hq", Building: "tower", Room: r.room}, day, day.Add(24*time.Hour)))
+		want[r.system] = len(w.Calendar().Entries(calendar.Room{Site: "hq", Building: "tower", Room: r.room}, day, day.Add(24*time.Hour), calendar.AllKinds))
 	}
 	if want["sys-a"] == 0 || want["sys-b"] == 0 {
 		t.Fatalf("the pinned day holds no meetings: %v", want)
 	}
 	got := read(ownerTok, nil)
+
+	// The wire is pinned (#2798): the pinned day's response is byte-identical
+	// to the one the route answered before an entry became a sum type. The
+	// golden is written by the same test with OMNIGLASS_UPDATE_GOLDEN=1.
+	// The $schema link names the test server's random port, so it is dropped.
+	raw := regexp.MustCompile(`"\$schema":"[^"]*",`).ReplaceAll(c.do(ownerTok, http.MethodGet, q(nil), nil, http.StatusOK), nil)
+	const golden = "testdata/labcalendar_pinned.golden.json"
+	if os.Getenv("OMNIGLASS_UPDATE_GOLDEN") != "" {
+		if err := os.WriteFile(golden, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wantRaw, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, wantRaw) {
+		t.Fatalf("GET /lab/calendar for the pinned day changed on the wire:\n got  %.400s\n want %.400s", raw, wantRaw)
+	}
 	counts := map[string]int{}
 	problems := 0
 	for i, e := range got.Entries {

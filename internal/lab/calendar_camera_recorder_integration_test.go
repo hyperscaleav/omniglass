@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // The PTZ camera and the recording service follow the lab calendar (#2775):
@@ -116,8 +117,8 @@ func TestIntegrationCorporateCameraAndRecorderFollowTheCalendar(t *testing.T) {
 		}
 		return fmt.Sprint(c.People), nil
 	}, func(at time.Time) string {
-		if e, ok := cal.Now(room, at); ok && e.Meeting.Outcome != calendar.OutcomeNoShow {
-			return fmt.Sprint(e.Meeting.Actual)
+		if e, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(e).Outcome != calendar.OutcomeNoShow {
+			return fmt.Sprint(caltest.M(e).Actual)
 		}
 		return "0"
 	})
@@ -131,7 +132,7 @@ func TestIntegrationCorporateCameraAndRecorderFollowTheCalendar(t *testing.T) {
 		}
 		return fmt.Sprint(r.InProgress), nil
 	}, func(at time.Time) string {
-		if e, ok := cal.Now(room, at); ok && e.Meeting.Recorded {
+		if e, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(e).Recorded {
 			return "1"
 		}
 		return "0"

@@ -16,6 +16,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -81,12 +82,12 @@ func fireOn(ctx context.Context, c *http.Client, base, system, component string,
 // from two minutes before a booked meeting someone will attend (at the start
 // of a walk-in) to five minutes after its end.
 func awakeAt(cal *calendar.Calendar, room calendar.Room, t time.Time) bool {
-	for _, e := range cal.Entries(room, t.Add(-time.Hour), t.Add(time.Hour)) {
-		if e.Meeting.Outcome == calendar.OutcomeNoShow {
+	for _, e := range cal.Entries(room, t.Add(-time.Hour), t.Add(time.Hour), calendar.MeetingKinds) {
+		if caltest.M(e).Outcome == calendar.OutcomeNoShow {
 			continue
 		}
 		lead := time.Duration(0)
-		if e.Meeting.Origin == calendar.OriginBooked {
+		if caltest.M(e).Origin == calendar.OriginBooked {
 			lead = 2 * time.Minute
 		}
 		if !t.Before(e.Start.Add(-lead)) && t.Before(e.End.Add(5*time.Minute)) {

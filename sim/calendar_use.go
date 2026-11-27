@@ -1,5 +1,7 @@
 package sim
 
+import "github.com/hyperscaleav/omniglass/sim/calendar"
+
 // How a room is used, read off its meetings (#2776). Two small, pure readings
 // the room's control system and its sources share, so a processor, a touch
 // panel and a switcher in one room agree on them without any asking another:
@@ -63,7 +65,7 @@ func (d *Device) meetingSharing() bool {
 		return false
 	}
 	at := d.clock()
-	e, ok := c.Now(d.room, at)
+	e, ok := c.Now(d.room, at, calendar.MeetingKinds)
 	if !ok {
 		return false
 	}

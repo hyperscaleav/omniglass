@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -58,7 +59,7 @@ func TestTheRelayFollowsTheLabCalendar(t *testing.T) {
 		if on != bar.ReadPath("status.call.active") {
 			t.Fatalf("at %s the codec's call is %v and the bar's %v, in one room", at.Format("15:04"), on, bar.ReadPath("status.call.active"))
 		}
-		if now, ok := cal.Now(room, at); ok && now.Meeting.Outcome == calendar.OutcomeNoShow {
+		if now, ok := cal.Now(room, at, calendar.MeetingKinds); ok && caltest.M(now).Outcome == calendar.OutcomeNoShow {
 			noShow++
 		}
 		sharing := relay.ReadPath("status.content.sharing")
@@ -69,8 +70,8 @@ func TestTheRelayFollowsTheLabCalendar(t *testing.T) {
 			continue
 		}
 		active++
-		if f, _, _ := toFloat(n); int(f) < 1 || int(f) > e.Meeting.Actual {
-			t.Fatalf("at %s the codec holds %v far-end participants, the meeting had %d come", at.Format("15:04"), n, e.Meeting.Actual)
+		if f, _, _ := toFloat(n); int(f) < 1 || int(f) > caltest.M(e).Actual {
+			t.Fatalf("at %s the codec holds %v far-end participants, the meeting had %d come", at.Format("15:04"), n, caltest.M(e).Actual)
 		}
 		if sharing == true {
 			shared++
@@ -95,20 +96,20 @@ func TestTheRelaysOwnCallsYieldTheCalendar(t *testing.T) {
 	cal := calendar.New(7, func(calendar.Room) (calendar.Knobs, bool) { return calTestKnobs(), true })
 	var meeting, next calendar.Entry
 	for i, e := range entries {
-		if e.Meeting.Outcome == calendar.OutcomeNoShow || e.End.Sub(e.Start) < 25*time.Minute {
+		if caltest.M(e).Outcome == calendar.OutcomeNoShow || e.End.Sub(e.Start) < 25*time.Minute {
 			continue
 		}
 		for _, n := range entries[i+1:] {
-			if n.Meeting.Outcome != calendar.OutcomeNoShow {
+			if caltest.M(n).Outcome != calendar.OutcomeNoShow {
 				meeting, next = e, n
 				break
 			}
 		}
-		if next.Meeting != nil {
+		if caltest.IsMeeting(next) {
 			break
 		}
 	}
-	if meeting.Meeting == nil || next.Meeting == nil {
+	if !caltest.IsMeeting(meeting) || !caltest.IsMeeting(next) {
 		t.Fatal("no two held meetings in the day")
 	}
 	at := tickUp(meeting.Start.Add(-4 * time.Minute))

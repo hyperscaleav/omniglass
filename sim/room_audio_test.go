@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
@@ -83,8 +84,8 @@ func (r *audioRig) is(path string) bool { return fmt.Sprint(r.dev.ReadPath(path)
 
 // occupied is the calendar's own answer: someone is in the room at at.
 func occupied(c *calendar.Calendar, at time.Time) (calendar.Entry, bool) {
-	e, ok := c.Now(audioRoom, at)
-	return e, ok && e.Meeting.Actual > 0
+	e, ok := c.Now(audioRoom, at, calendar.MeetingKinds)
+	return e, ok && caltest.M(e).Actual > 0
 }
 
 // audioDay finds a seed whose day holds what the tests need to tell apart: a
@@ -97,12 +98,12 @@ func audioDay(t *testing.T, k calendar.Knobs) (int64, time.Time) {
 		sizes := map[int]bool{}
 		for _, e := range calendar.Generate(audioRoom, k, seed, day, day.Add(24*time.Hour)) {
 			switch {
-			case e.Meeting.Outcome == calendar.OutcomeNoShow:
+			case caltest.M(e).Outcome == calendar.OutcomeNoShow:
 				noShow++
-			case e.Meeting.Origin == calendar.OriginWalkIn:
+			case caltest.M(e).Origin == calendar.OriginWalkIn:
 				walkIn++
 			default:
-				sizes[e.Meeting.Actual] = true
+				sizes[caltest.M(e).Actual] = true
 			}
 		}
 		if noShow > 0 && walkIn > 0 && len(sizes) >= 3 {
@@ -129,7 +130,7 @@ func TestTheCeilingMicFollowsTheLabCalendarThroughADay(t *testing.T) {
 		r.tick(t, at, "call_state", "level_drift")
 		e, use := occupied(r.cal, at)
 		if got := r.is("status.mic.active"); got != use {
-			t.Fatalf("%s: active = %v, the calendar says in use = %v (%+v)", at.Format("15:04"), got, use, e.Meeting)
+			t.Fatalf("%s: active = %v, the calendar says in use = %v (%+v)", at.Format("15:04"), got, use, caltest.M(e))
 		}
 		level := r.f(t, "status.mic.level_db")
 		muted := r.is("status.mic.mute")
@@ -145,12 +146,12 @@ func TestTheCeilingMicFollowsTheLabCalendarThroughADay(t *testing.T) {
 			if muted && level > -66 {
 				t.Errorf("%s: a muted mic reads %v dBFS, above the floor", at.Format("15:04"), level)
 			}
-			sawWalkIn = sawWalkIn || e.Meeting.Origin == calendar.OriginWalkIn
+			sawWalkIn = sawWalkIn || caltest.M(e).Origin == calendar.OriginWalkIn
 		default:
 			if level > -66 || (m > 0 && muted != wasMuted) {
 				t.Fatalf("%s: idle but mute moved to %v or level=%v", at.Format("15:04"), muted, level)
 			}
-			if ns, ok := r.cal.Now(audioRoom, at); ok && ns.Meeting.Outcome == calendar.OutcomeNoShow {
+			if ns, ok := r.cal.Now(audioRoom, at, calendar.MeetingKinds); ok && caltest.M(ns).Outcome == calendar.OutcomeNoShow {
 				sawNoShow = true
 			}
 		}
@@ -204,7 +205,7 @@ func TestTheWirelessMicTransmitsInMeetingsAndItsBatteryFollowsTheCalendar(t *tes
 func batteryOracle(c *calendar.Calendar, at time.Time) float64 {
 	const drain, charge = 0.4 / 60, 0.8 / 60 // percent per second
 	from := at.Add(-48 * time.Hour)
-	entries := c.Entries(audioRoom, from, at)
+	entries := c.Entries(audioRoom, from, at, calendar.MeetingKinds)
 	level := 100.0
 	i := 0
 	for s := from; s.Before(at); s = s.Add(time.Second) {
@@ -213,7 +214,7 @@ func batteryOracle(c *calendar.Calendar, at time.Time) float64 {
 		}
 		use := false
 		for j := i; j < len(entries) && !entries[j].Start.After(s); j++ {
-			use = use || (entries[j].Meeting.Actual > 0 && entries[j].End.After(s))
+			use = use || (caltest.M(entries[j]).Actual > 0 && entries[j].End.After(s))
 		}
 		if use {
 			level -= drain
@@ -329,11 +330,11 @@ func TestTheDSPsGatesAndLevelsScaleWithActualAttendees(t *testing.T) {
 		if !use {
 			continue
 		}
-		want := min(4, (e.Meeting.Actual+1)/2)
+		want := min(4, (caltest.M(e).Actual+1)/2)
 		if open != want {
-			t.Fatalf("%s: %d attendees open %d gates, want %d", at.Format("15:04"), e.Meeting.Actual, open, want)
+			t.Fatalf("%s: %d attendees open %d gates, want %d", at.Format("15:04"), caltest.M(e).Actual, open, want)
 		}
-		byActual[e.Meeting.Actual] = append(byActual[e.Meeting.Actual], sum/float64(open))
+		byActual[caltest.M(e).Actual] = append(byActual[caltest.M(e).Actual], sum/float64(open))
 	}
 	mean := func(xs []float64) float64 {
 		var s float64
@@ -436,7 +437,7 @@ func TestMeetingsBetweenReadsTheRoomsWindowOffTheCalendar(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	at := day.Add(12 * time.Hour)
 	e, d := calEngine(t, 11, audioRoom, &at)
-	want := len(e.Calendar().Entries(audioRoom, day, day.Add(24*time.Hour)))
+	want := len(e.Calendar().Entries(audioRoom, day, day.Add(24*time.Hour), calendar.MeetingKinds))
 	if want == 0 {
 		t.Fatal("the day holds no meeting")
 	}

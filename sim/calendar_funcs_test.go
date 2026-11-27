@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -65,21 +66,21 @@ func TestMeetingFuncsReadTheDevicesRoomThroughItsClock(t *testing.T) {
 	other := calendar.Room{Site: "hq", Building: "tower", Room: "r102"}
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	ref := calendar.New(11, func(calendar.Room) (calendar.Knobs, bool) { return calTestKnobs(), true })
-	es := ref.Entries(room, day, day.Add(24*time.Hour))
+	es := ref.Entries(room, day, day.Add(24*time.Hour), calendar.MeetingKinds)
 	var e calendar.Entry
 	for _, c := range es {
-		if c.Meeting.Origin == calendar.OriginBooked {
+		if caltest.M(c).Origin == calendar.OriginBooked {
 			e = c
 			break
 		}
 	}
-	if e.Meeting == nil {
+	if !caltest.IsMeeting(e) {
 		t.Fatal("no booked meeting in the day")
 	}
 	mid := e.Start.Add(e.End.Sub(e.Start) / 2)
 	at := mid
 	const now = `{{ with meetingNow }}{{ .organizer }}|{{ .outcome }}|{{ .origin }}{{ else }}none{{ end }}`
-	want := e.Meeting.Organizer + "|" + string(e.Meeting.Outcome) + "|booked"
+	want := caltest.M(e).Organizer + "|" + string(caltest.M(e).Outcome) + "|booked"
 
 	_, d1 := calEngine(t, 11, room, &at)
 	_, d2 := calEngine(t, 11, room, &at)
@@ -100,10 +101,10 @@ func TestMeetingFuncsReadTheDevicesRoomThroughItsClock(t *testing.T) {
 
 	// By room key a service reads another room's day.
 	at = mid
-	otherNow, ok := ref.Now(other, at)
+	otherNow, ok := ref.Now(other, at, calendar.MeetingKinds)
 	wantOther := "none"
 	if ok {
-		wantOther = otherNow.Meeting.Organizer
+		wantOther = caltest.M(otherNow).Organizer
 	}
 	if got := stampBehavior(t, d1, `{{ with roomMeetingNow "hq" "tower" "r102" }}{{ .organizer }}{{ else }}none{{ end }}`); got != wantOther {
 		t.Fatalf("roomMeetingNow reads %v, want %q", got, wantOther)
@@ -128,13 +129,13 @@ func TestServiceFuncsResolveASystemThroughTheWorld(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	ref := calendar.New(11, func(calendar.Room) (calendar.Knobs, bool) { return calTestKnobs(), true })
 	var e calendar.Entry
-	for _, c := range ref.Entries(room, day, day.Add(24*time.Hour)) {
-		if c.Meeting.Origin == calendar.OriginBooked {
+	for _, c := range ref.Entries(room, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
+		if caltest.M(c).Origin == calendar.OriginBooked {
 			e = c
 			break
 		}
 	}
-	if e.Meeting == nil {
+	if !caltest.IsMeeting(e) {
 		t.Fatal("no booked meeting in the day")
 	}
 	at := e.Start.Add(e.End.Sub(e.Start) / 2)
@@ -153,8 +154,8 @@ func TestServiceFuncsResolveASystemThroughTheWorld(t *testing.T) {
 	if got := stampBehavior(t, d, `{{ with ownerRoom "sys-999" }}some{{ else }}none{{ end }}`); got != "none" {
 		t.Fatalf("a system the world lacks resolves to %v", got)
 	}
-	if got := stampBehavior(t, d, `{{ with ownerMeetingNow "sys-102" }}{{ .organizer }}{{ else }}none{{ end }}`); got != e.Meeting.Organizer {
-		t.Fatalf("ownerMeetingNow reads %v, want %q", got, e.Meeting.Organizer)
+	if got := stampBehavior(t, d, `{{ with ownerMeetingNow "sys-102" }}{{ .organizer }}{{ else }}none{{ end }}`); got != caltest.M(e).Organizer {
+		t.Fatalf("ownerMeetingNow reads %v, want %q", got, caltest.M(e).Organizer)
 	}
 	if got := stampBehavior(t, d, `{{ range coveredRooms }}{{ .room }},{{ end }}`); got != "r101,r102," {
 		t.Fatalf("coveredRooms reads %v", got)

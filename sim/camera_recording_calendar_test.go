@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -85,11 +86,11 @@ func TestGazeFramesTheRoomsActualAttendeesOverADay(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	cal := gazeCal(seed, k)
 	var booked, walkIn, noShow int
-	for _, e := range cal.Entries(gazeRoom, day, day.Add(24*time.Hour)) {
+	for _, e := range cal.Entries(gazeRoom, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
 		switch {
-		case e.Meeting.Outcome == calendar.OutcomeNoShow:
+		case caltest.M(e).Outcome == calendar.OutcomeNoShow:
 			noShow++
-		case e.Meeting.Origin == calendar.OriginWalkIn:
+		case caltest.M(e).Origin == calendar.OriginWalkIn:
 			walkIn++
 		default:
 			booked++
@@ -105,12 +106,12 @@ func TestGazeFramesTheRoomsActualAttendeesOverADay(t *testing.T) {
 	for at = day; at.Before(day.Add(24 * time.Hour)); at = at.Add(time.Minute) {
 		d.TickBehavior("room_meeting")
 		people := 0
-		if e, ok := cal.Now(gazeRoom, at); ok {
-			if e.Meeting.Outcome == calendar.OutcomeNoShow {
+		if e, ok := cal.Now(gazeRoom, at, calendar.MeetingKinds); ok {
+			if caltest.M(e).Outcome == calendar.OutcomeNoShow {
 				noShowMinutes++
 			} else {
-				people = e.Meeting.Actual
-				if e.Meeting.Origin == calendar.OriginWalkIn {
+				people = caltest.M(e).Actual
+				if caltest.M(e).Origin == calendar.OriginWalkIn {
 					walkInSeen++
 				}
 			}
@@ -173,7 +174,7 @@ func TestGazeKeepsAnOperatorsFramingUntilTheNextEdge(t *testing.T) {
 	cal := gazeCal(8, k)
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	var m calendar.Entry
-	for _, e := range cal.Entries(gazeRoom, day, day.Add(24*time.Hour)) {
+	for _, e := range cal.Entries(gazeRoom, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
 		m = e
 		break
 	}
@@ -206,7 +207,7 @@ func TestGazeTracksOnlyWhileSomeoneIsThere(t *testing.T) {
 	k.NoShowRate = 0
 	cal := gazeCal(8, k)
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
-	m := cal.Entries(gazeRoom, day, day.Add(24*time.Hour))[0]
+	m := cal.Entries(gazeRoom, day, day.Add(24*time.Hour), calendar.MeetingKinds)[0]
 	at := m.Start.Add(-time.Hour)
 	d := calDevice(t, "kestrel-gaze-p2", "cam-1", gazeRoom, cal, nil, &at)
 	for i := 0; i < 30; i++ {
@@ -271,8 +272,8 @@ const recQueueWindow = 600 // seconds a finished recording waits to be written
 func recWant(cal *calendar.Calendar, covers []world.Cover, t time.Time) (inProgress, queued int) {
 	for _, c := range covers {
 		room := calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}
-		for _, e := range cal.Entries(room, t.Add(-time.Hour), t.Add(time.Hour)) {
-			if !e.Meeting.Recorded {
+		for _, e := range cal.Entries(room, t.Add(-time.Hour), t.Add(time.Hour), calendar.MeetingKinds) {
+			if !caltest.M(e).Recorded {
 				continue
 			}
 			if !t.Before(e.Start) && t.Before(e.End) {
@@ -296,8 +297,8 @@ func TestRecordingServiceCarriesTheCalendarsRecordingsOverADay(t *testing.T) {
 	w, cal := recWorld(k, seed, covers, "rec-1")
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	for _, c := range covers {
-		for _, e := range cal.Entries(calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}, day, day.Add(24*time.Hour)) {
-			if e.Meeting.Outcome == calendar.OutcomeNoShow && e.Meeting.Recorded {
+		for _, e := range cal.Entries(calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
+			if caltest.M(e).Outcome == calendar.OutcomeNoShow && caltest.M(e).Recorded {
 				t.Fatal("a no-show is recorded")
 			}
 		}
@@ -356,12 +357,12 @@ func TestRecordingServiceShareHoldsOverAMonth(t *testing.T) {
 	end := month.AddDate(0, 0, 30)
 	var held, recorded int
 	for _, c := range covers {
-		for _, e := range cal.Entries(calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}, month, end) {
-			if e.Meeting.Outcome == calendar.OutcomeNoShow {
+		for _, e := range cal.Entries(calendar.Room{Site: c.Site, Building: c.Building, Room: c.Room}, month, end, calendar.MeetingKinds) {
+			if caltest.M(e).Outcome == calendar.OutcomeNoShow {
 				continue
 			}
 			held++
-			if e.Meeting.Recorded {
+			if caltest.M(e).Recorded {
 				recorded++
 			}
 		}
@@ -414,8 +415,8 @@ func TestRecordingServiceInARoomRecordsItsOwnRoom(t *testing.T) {
 	for at = day; at.Before(day.Add(24 * time.Hour)); at = at.Add(time.Minute) {
 		d.TickBehavior("room_recordings")
 		wantIn, wantQ := 0, 0
-		for _, e := range cal.Entries(gazeRoom, at.Add(-time.Hour), at.Add(time.Hour)) {
-			if !e.Meeting.Recorded {
+		for _, e := range cal.Entries(gazeRoom, at.Add(-time.Hour), at.Add(time.Hour), calendar.MeetingKinds) {
+			if !caltest.M(e).Recorded {
 				continue
 			}
 			if !at.Before(e.Start) && at.Before(e.End) {

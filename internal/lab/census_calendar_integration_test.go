@@ -16,6 +16,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 )
 
 // censusFireCommand runs one command line on a simulated component's surface
@@ -145,14 +146,14 @@ func TestIntegrationCensusOccupancyFollowsItsRoomsCalendar(t *testing.T) {
 	allowed := func(lo, hi time.Time) map[int]bool {
 		ok := map[int]bool{}
 		for τ := lo.Add(-25 * time.Second); !τ.After(hi); τ = τ.Add(time.Second) {
-			e, in := cal.Now(room, τ)
-			if !in || e.Meeting.Outcome == calendar.OutcomeNoShow {
+			e, in := cal.Now(room, τ, calendar.MeetingKinds)
+			if !in || caltest.M(e).Outcome == calendar.OutcomeNoShow {
 				ok[0] = true
 				continue
 			}
-			ok[e.Meeting.Actual] = true
-			if e.Meeting.Actual > 1 {
-				ok[e.Meeting.Actual-1] = true
+			ok[caltest.M(e).Actual] = true
+			if caltest.M(e).Actual > 1 {
+				ok[caltest.M(e).Actual-1] = true
 			}
 		}
 		return ok

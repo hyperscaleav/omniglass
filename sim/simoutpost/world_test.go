@@ -9,6 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
+	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -60,7 +61,7 @@ func TestARunWithAWorldFileInstallsTheCalendarItImplies(t *testing.T) {
 	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
 	for _, r := range []calendar.Room{{Site: "hq", Building: "tower", Room: "r1"}, {Site: "hq", Building: "annex", Room: "r2"}} {
 		want := calendar.Generate(r, w.Meetings["huddle"], 42, day, day.Add(24*time.Hour))
-		got := cal.Entries(r, day, day.Add(24*time.Hour))
+		got := cal.Entries(r, day, day.Add(24*time.Hour), calendar.MeetingKinds)
 		if len(want) == 0 {
 			t.Fatalf("no meetings generated for %v; the fixture proves nothing", r)
 		}
@@ -68,7 +69,7 @@ func TestARunWithAWorldFileInstallsTheCalendarItImplies(t *testing.T) {
 			t.Fatalf("%v: %d entries, Generate gives %d", r, len(got), len(want))
 		}
 		for i := range want {
-			if got[i].Start != want[i].Start || got[i].End != want[i].End || *got[i].Meeting != *want[i].Meeting {
+			if got[i].Start != want[i].Start || got[i].End != want[i].End || caltest.M(got[i]) != caltest.M(want[i]) {
 				t.Fatalf("%v entry %d = %+v, Generate gives %+v", r, i, got[i], want[i])
 			}
 		}

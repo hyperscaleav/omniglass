@@ -35,9 +35,9 @@ func RoomBookingsAt(c *calendar.Calendar, room calendar.Room, at time.Time) map[
 	at = at.UTC()
 	day := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC)
 	today, remaining := 0, 0
-	for _, e := range c.Entries(room, day, day.Add(bookingHorizon)) {
-		m := e.Meeting
-		if e.Kind != calendar.KindMeeting || m == nil || m.Origin != calendar.OriginBooked {
+	for _, e := range c.Entries(room, day, day.Add(bookingHorizon), calendar.MeetingKinds) {
+		m, ok := e.AsMeeting()
+		if !ok || m.Origin != calendar.OriginBooked {
 			continue
 		}
 		from, to := e.Start, e.End
