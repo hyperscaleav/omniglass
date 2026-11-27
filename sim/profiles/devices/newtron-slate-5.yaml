@@ -89,6 +89,7 @@ behaviors:
   - name: room_bookings
     schedule:
       interval: 10s
+      on_start: true
     mutations:
       - path: status.room.booking
         value: '{{ $cal := "free" }}{{ if (bookings).booked }}{{ $cal = "booked" }}{{ end }}{{ if ne $cal .State.status.room.cal_booking }}{{ $cal }}{{ else }}{{ .State.status.room.booking }}{{ end }}'

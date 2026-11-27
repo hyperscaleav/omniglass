@@ -89,6 +89,7 @@ behaviors:
   - name: call_state
     schedule:
       interval: 15s
+      on_start: true
     mutations:
       - path: status.mic.transmitting
         value: '{{ if not hasCalendar }}{{ .State.status.mic.transmitting }}{{ else }}{{ gt (roomPhase).attendees 0 }}{{ end }}'

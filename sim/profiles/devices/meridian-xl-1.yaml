@@ -91,6 +91,7 @@ behaviors:
   - name: room_meeting
     schedule:
       interval: 30s
+      on_start: true
     mutations:
       - path: status.extender.signal
         value: '{{ if hasCalendar }}{{ if (roomPhase).call_active }}present{{ else }}absent{{ end }}{{ else }}{{ .State.status.extender.signal }}{{ end }}'

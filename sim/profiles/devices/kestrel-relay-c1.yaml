@@ -135,6 +135,7 @@ behaviors:
   - name: call_cycle
     schedule:
       interval: 60s
+      on_start: true
     mutations:
       - path: status.sim.skip
         value: '{{ $s := .State.status.sim }}{{ $skip := $s.skip }}{{ if or $s.dialed $s.hungup }}{{ with (roomPhase).meeting }}{{ $skip = .start }}{{ end }}{{ end }}{{ $skip }}'

@@ -123,6 +123,7 @@ behaviors:
   - name: room_meeting
     schedule:
       interval: 20s
+      on_start: true
     mutations:
       - path: status.sim.known
         value: '{{ if hasCalendar }}true{{ else }}false{{ end }}'

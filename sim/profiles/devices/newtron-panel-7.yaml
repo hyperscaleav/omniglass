@@ -304,6 +304,7 @@ behaviors:
   - name: room_meeting
     schedule:
       interval: 30s
+      on_start: true
     mutations:
       - path: status.panel.awake
         value: '{{ if hasCalendar }}{{ (roomPhase).in_use }}{{ else }}{{ .State.status.panel.awake }}{{ end }}'

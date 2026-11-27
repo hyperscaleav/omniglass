@@ -97,6 +97,7 @@ behaviors:
   - name: room_meeting
     schedule:
       interval: 30s
+      on_start: true
     mutations:
       - path: status.control.macro
         value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := (roomPhase).in_use }}{{ if and $on (eq $c.room_power "standby") }}start-meeting{{ else if and (not $on) (eq $c.room_power "on") }}end-meeting{{ else }}{{ $c.macro }}{{ end }}{{ else }}{{ $c.macro }}{{ end }}'

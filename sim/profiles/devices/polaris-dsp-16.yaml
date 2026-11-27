@@ -457,6 +457,7 @@ behaviors:
   - name: room_signal
     schedule:
       interval: 15s
+      on_start: true
     mutations:
       - path: status.dsp.active_channels
         value: '{{ if not hasCalendar }}{{ .State.status.dsp.active_channels }}{{ else }}{{ $a := (roomPhase).attendees }}{{ $g0 := 0 }}{{ if and (gt $a 0) (not (eq (print (index .State.status.channels 0 | get "mute")) "true")) }}{{ $g0 = 1 }}{{ end }}{{ $g1 := 0 }}{{ if and (gt $a 2) (not (eq (print (index .State.status.channels 1 | get "mute")) "true")) }}{{ $g1 = 1 }}{{ end }}{{ $g2 := 0 }}{{ if and (gt $a 4) (not (eq (print (index .State.status.channels 2 | get "mute")) "true")) }}{{ $g2 = 1 }}{{ end }}{{ $g3 := 0 }}{{ if and (gt $a 6) (not (eq (print (index .State.status.channels 3 | get "mute")) "true")) }}{{ $g3 = 1 }}{{ end }}{{ add (add $g0 $g1) (add $g2 $g3) }}{{ end }}'

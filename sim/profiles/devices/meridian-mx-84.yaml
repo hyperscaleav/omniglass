@@ -122,6 +122,7 @@ behaviors:
   - name: room_meeting
     schedule:
       interval: 30s
+      on_start: true
     mutations:
       - path: status.sim.prev
         value: '{{ .State.status.sim.want }}'

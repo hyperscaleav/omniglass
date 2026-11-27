@@ -13,6 +13,8 @@ world: a branch room in the headquarters' world and in its own site's world read
 which a new scenario test now holds.
 
 A behavior may now declare `schedule.on_start: true` and ticks once as the device starts serving,
-before it answers anything. The three services set it on the behavior that reads the calendar. The
+before it answers anything. The three services set it on the behavior that reads the calendar, and so do the room devices whose
+state follows the meeting (the bar, the panels, the display, the DSP, the scheduling panel and the
+building-day readers), which had the same cold start. The
 meeting platform lab test no longer depends on the hour: it offsets the simulator's clock into a held
 meeting of a judged room, so the in-meeting fan-out is always exercised.

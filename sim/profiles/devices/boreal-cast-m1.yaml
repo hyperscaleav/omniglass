@@ -89,6 +89,7 @@ behaviors:
   - name: building_day
     schedule:
       interval: 60s
+      on_start: true
     mutations:
       - path: status.playback.state
         value: '{{ $was := .State.status.sim.open }}{{ $cur := .State.status.playback.state }}{{ with buildingHours }}{{ if eq .open $was }}{{ $cur }}{{ else if .open }}playing{{ else }}stopped{{ end }}{{ else }}{{ $cur }}{{ end }}'

@@ -140,6 +140,7 @@ behaviors:
   - name: room_meeting
     schedule:
       interval: 30s
+      on_start: true
     mutations:
       - path: status.sim.busy
         value: '{{ $p := roomPhase }}{{ or $p.call_active (eq $p.occupancy "waking") }}'
