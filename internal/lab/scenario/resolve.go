@@ -5,8 +5,10 @@ import (
 	"sort"
 )
 
-// MaxSystems bounds the size knob: the name generator's space of distinct
-// labels is about 13,500, and the scale lab's largest target is 3,000 (#1357).
+// MaxSystems bounds the size knob: headroom over the scale lab's largest
+// target, 3,000 systems (#1357). Above about 4,000 the account-wide platforms'
+// paged polls reach their declared max_pages and refuse the poll, so a lab
+// that large raises those caps first (#2805).
 const MaxSystems = 10000
 
 // Count is how many of a named thing: systems of a standard, or components
