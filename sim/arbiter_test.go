@@ -233,3 +233,30 @@ func TestShutdownPutsEveryPinBack(t *testing.T) {
 		t.Errorf("level %s, sources %v after shutdown", r.read("level"), r.a.Sources())
 	}
 }
+
+// A device reads the arbiter (Offline) while holding its own lock, and Settle
+// writes to devices, so the arbiter must never hold its state lock across a
+// device call. Run under -race, with a pin on the reading device itself.
+func TestSettleAndOfflineDoNotDeadlockOrRace(t *testing.T) {
+	r := newArbRig(t)
+	l := world.Listing{Name: r.d.Hostname}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			r.d.mu.Lock() // as a platform device's template does while it reads
+			r.a.Offline(l, r.now)
+			r.d.mu.Unlock()
+		}
+	}()
+	for i := 0; i < 200; i++ {
+		v := fmt.Sprint(i)
+		r.a.Set("a", map[string]Want{"d-1": {Impairment: impair.Impairment{Unplugged: i%2 == 0}, Pins: []Pin{{Path: "level", Value: v}}}})
+		r.settle(t)
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Offline and Settle deadlocked")
+	}
+}

@@ -75,15 +75,19 @@ type devState struct {
 type Arbiter struct {
 	clock func() time.Time
 
-	mu      sync.Mutex
-	wants   map[string]map[string]Want // source -> device id -> want
-	since   map[string]map[string]time.Time
-	pinSeq  map[string]map[pathKey]uint64 // source -> (device, path) -> seq
-	next    uint64
-	devs    map[string]*devState
-	hostID  map[string]string // hostname -> device id, as of the last settle
-	derived []derivation
-	sink    NetSink
+	// settleMu serializes Settle and Shutdown, which call into devices and the
+	// sink; mu guards the wants and is never held across such a call, since a
+	// device that reads the arbiter (Offline) holds its own lock when it does.
+	settleMu sync.Mutex
+	mu       sync.Mutex
+	wants    map[string]map[string]Want // source -> device id -> want
+	since    map[string]map[string]time.Time
+	pinSeq   map[string]map[pathKey]uint64 // source -> (device, path) -> seq
+	next     uint64
+	devs     map[string]*devState
+	hostID   map[string]string // hostname -> device id, as of the last settle
+	derived  []derivation
+	sink     NetSink
 }
 
 type derivation struct {
@@ -279,18 +283,20 @@ func (a *Arbiter) winnersLocked(id string) map[string]pinHeld {
 // to the sink. It returns the resolved network by device id. Devices not
 // listed are forgotten.
 func (a *Arbiter) Settle(devices []*Device) (map[string]impair.Impairment, []error) {
+	a.settleMu.Lock()
+	defer a.settleMu.Unlock()
+	errs := a.settlePins(devices)
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	errs := a.settlePinsLocked(devices)
-	net := a.resolvedLocked()
-	if a.sink != nil {
+	net, sink := a.resolvedLocked(), a.sink
+	a.mu.Unlock()
+	if sink != nil {
 		served := map[string]netip.Addr{}
 		for _, d := range devices {
 			if ip, ok := netip.AddrFromSlice(d.LoopbackIP.To4()); ok {
 				served[d.DeviceID] = ip
 			}
 		}
-		a.sink.Reconcile(served, net)
+		sink.Reconcile(served, net)
 	}
 	return net, errs
 }
@@ -298,26 +304,34 @@ func (a *Arbiter) Settle(devices []*Device) (map[string]impair.Impairment, []err
 // Shutdown releases every source and puts every pinned path back, for a
 // simulator that stops. The network is the sink's to clear.
 func (a *Arbiter) Shutdown(devices []*Device) []error {
+	a.settleMu.Lock()
+	defer a.settleMu.Unlock()
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.wants = map[string]map[string]Want{}
 	a.since = map[string]map[string]time.Time{}
 	a.pinSeq = map[string]map[pathKey]uint64{}
-	return a.settlePinsLocked(devices)
+	a.mu.Unlock()
+	return a.settlePins(devices)
 }
 
-func (a *Arbiter) settlePinsLocked(devices []*Device) []error {
+func (a *Arbiter) settlePins(devices []*Device) []error {
 	var errs []error
 	live := map[string]bool{}
-	a.hostID = make(map[string]string, len(devices))
+	hosts := make(map[string]string, len(devices))
 	for _, d := range devices {
 		live[d.DeviceID] = true
-		a.hostID[d.Hostname] = d.DeviceID
-		if err := a.settleDeviceLocked(d); err != nil {
-			errs = append(errs, err...)
-		}
+		hosts[d.Hostname] = d.DeviceID
 	}
-	for id := range a.devs {
+	a.mu.Lock()
+	a.hostID = hosts
+	a.mu.Unlock()
+	for _, d := range devices {
+		a.mu.Lock()
+		want := a.winnersLocked(d.DeviceID)
+		a.mu.Unlock()
+		errs = append(errs, a.settleDevice(d, want)...)
+	}
+	for id := range a.devs { // only Settle and Shutdown touch devs, under settleMu
 		if !live[id] {
 			delete(a.devs, id)
 		}
@@ -325,8 +339,7 @@ func (a *Arbiter) settlePinsLocked(devices []*Device) []error {
 	return errs
 }
 
-func (a *Arbiter) settleDeviceLocked(d *Device) []error {
-	want := a.winnersLocked(d.DeviceID)
+func (a *Arbiter) settleDevice(d *Device, want map[string]pinHeld) []error {
 	st := a.devs[d.DeviceID]
 	if st == nil {
 		if len(want) == 0 {
@@ -409,7 +422,7 @@ func (a *Arbiter) Offline(l world.Listing, now time.Time) (int64, bool) {
 		return 0, false
 	}
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	derived := append([]derivation(nil), a.derived...)
 	var since int64
 	found := false
 	take := func(s int64) {
@@ -424,7 +437,8 @@ func (a *Arbiter) Offline(l world.Listing, now time.Time) (int64, bool) {
 			}
 		}
 	}
-	for _, dv := range a.derived {
+	a.mu.Unlock()
+	for _, dv := range derived { // outside the lock: a derivation reads the engine
 		if s, ok := dv.fn(l, now); ok {
 			take(s)
 		}
