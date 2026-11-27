@@ -125,9 +125,9 @@ behaviors:
       interval: 20s
     mutations:
       - path: status.sim.known
-        value: '{{ if or meetingNow meetingNext }}true{{ else }}false{{ end }}'
+        value: '{{ if hasCalendar }}true{{ else }}false{{ end }}'
       - path: status.camera.people
-        value: '{{ if or meetingNow meetingNext }}{{ $n := 0 }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $n = .actual }}{{ end }}{{ end }}{{ $n }}{{ else }}{{ .State.status.camera.people }}{{ end }}'
+        value: '{{ if hasCalendar }}{{ $n := 0 }}{{ with meetingNow }}{{ if ne .outcome "no-show" }}{{ $n = .actual }}{{ end }}{{ end }}{{ $n }}{{ else }}{{ .State.status.camera.people }}{{ end }}'
       - path: status.camera.presence
         value: '{{ ne (printf "%v" .State.status.camera.people) "0" }}'
       - path: status.camera.magnification
