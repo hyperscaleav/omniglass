@@ -469,6 +469,20 @@ Devices that read the calendar:
   recording service carries a recording in progress for each recorded meeting in the rooms it covers
   (else its own room) and queues it for ten minutes after it ends. A room with no calendar keeps the
   old drift. The recording failure feed stays route-driven; scheduled failures are #2769.
+- **Room control and switching** (#2776): the room is started and ended for its meetings. The Newtron
+  control processor holds the room's system power (`status.control.room_power`, read as `GET ROOMPOWER`) on
+  from two minutes before a booked meeting someone attends (at the start of a walk-in) to five minutes after
+  it ends, the window the displays wake in, and runs the start-meeting macro as it goes on and the end-meeting
+  macro as it goes to standby, the last one and the second it ran held beside it (`GET MACRO`). The touch
+  panel wakes in the same window and its active page is idle, in-call while the meeting is held, and sharing
+  through the middle third of a meeting of half an hour or more, a no-show leaving it idle. The switcher routes
+  the conferencing input while a meeting is held, the lectern laptop through the sharing stretch and the empty
+  input between meetings and through a no-show, so it is on a real source exactly when the video bar in the
+  room is in a call; an operator's route inside a meeting holds until the meeting asks for another. The
+  extender carries a signal exactly while a meeting is held, its link staying the cable's. `roomInUse` and
+  `meetingSharing` are the two readings the room's devices share. A device whose room has no calendar keeps
+  its previous state. The bar's own content sharing is still its own random draw, not yet the sharing
+  stretch the panel and switcher read.
 
 ### A simulated service posts from the start
 

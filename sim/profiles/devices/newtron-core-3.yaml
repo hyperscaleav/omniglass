@@ -7,6 +7,14 @@
 # connect to it. A touch panel's surface is a subset of its own, so the
 # panel's room and source control is the shared nvp-room surface (#896), and
 # the program, ports and connected panels are the processor's alone.
+#
+# It starts and ends the room's meetings off the lab calendar (#2757, #2776):
+# the room's system power is on from two minutes before a booked meeting
+# someone attends (at the start of a walk-in) to five minutes after it ends,
+# the same window the displays wake in, and standby otherwise; the start-meeting
+# macro runs as it goes on and the end-meeting macro as it goes to standby, the
+# last one and when it ran held beside it. A no-show runs nothing. A processor
+# whose room has no calendar runs no macro and leaves the room as it was.
 
 name: newtron-core-3
 manufacturer: Newtron
@@ -58,6 +66,13 @@ interfaces:
         response: 'PORTS {{ .State | get "status" | get "control" | get "ports" }}'
       - match: "GET PANELS"
         response: 'PANELS {{ .State | get "status" | get "control" | get "panels" }}'
+      # The room's system power (on or standby) and the last macro run, with
+      # the unix second it ran: "MACRO start-meeting 1793700000", or
+      # "MACRO none 0" before the first.
+      - match: "GET ROOMPOWER"
+        response: 'ROOMPOWER {{ .State | get "status" | get "control" | get "room_power" }}'
+      - match: "GET MACRO"
+        response: 'MACRO {{ .State | get "status" | get "control" | get "macro" }} {{ .State | get "status" | get "control" | get "macro_at" }}'
       - match: "SUBSCRIBE PROGRAM"
         action: subscribe
         subject: "status.control.program"
@@ -75,6 +90,20 @@ interfaces:
 # Read-derived uptime: now - boot_epoch, seeded at device start. No timer.
 computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+behaviors:
+  # The macro ran this tick, then the power it left the room in: the macro is
+  # chosen against the power the room had, so it fires on the edge only.
+  - name: room_meeting
+    schedule:
+      interval: 30s
+    mutations:
+      - path: status.control.macro
+        value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := roomInUse 120 300 }}{{ if and $on (eq $c.room_power "standby") }}start-meeting{{ else if and (not $on) (eq $c.room_power "on") }}end-meeting{{ else }}{{ $c.macro }}{{ end }}{{ else }}{{ $c.macro }}{{ end }}'
+      - path: status.control.macro_at
+        value: '{{ $c := .State.status.control }}{{ if hasCalendar }}{{ $on := roomInUse 120 300 }}{{ if or (and $on (eq $c.room_power "standby")) (and (not $on) (eq $c.room_power "on")) }}{{ now }}{{ else }}{{ $c.macro_at }}{{ end }}{{ else }}{{ $c.macro_at }}{{ end }}'
+      - path: status.control.room_power
+        value: '{{ if hasCalendar }}{{ if roomInUse 120 300 }}on{{ else }}standby{{ end }}{{ else }}{{ .State.status.control.room_power }}{{ end }}'
 
 defaults:
   status:
@@ -95,6 +124,11 @@ defaults:
       program: "running"
       ports: "com1=connected com2=connected ir1=idle relay1=open"
       panels: 3
+      # The room's system power, on or standby, and the last macro the program
+      # ran (start-meeting, end-meeting or none) with the unix second it ran.
+      room_power: "standby"
+      macro: "none"
+      macro_at: 0
   configuration:
     device:
       serial: ""
