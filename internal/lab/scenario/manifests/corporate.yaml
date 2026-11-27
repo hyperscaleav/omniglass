@@ -67,6 +67,7 @@ standards:
       control-system: newtron-core-3
       video-switcher: meridian-mx-84
       display-endpoint: meridian-xl-1
+      power: ferrite-pdu-4c
       touch-control: newtron-panel-7
       scheduling-panel: newtron-slate-5
       people-counter: tessellate-census-c1

@@ -51,6 +51,14 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 	// Each platform (#1747) is a component of its own, staffing no slot.
 	senders, _ := senderSites(p)
 	wantComponents += len(senders)
+	// The polled services (#2765) are components of their own too, staffing no slot.
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			if ps.Service {
+				wantComponents++
+			}
+		}
+	}
 	if res.Systems != wantSystems || res.Components != wantComponents || res.Slots != wantSlots {
 		t.Fatalf("result = %d systems, %d components, %d slots; want %d, %d, %d", res.Systems, res.Components, res.Slots, wantSystems, wantComponents, wantSlots)
 	}
@@ -355,8 +363,8 @@ func TestSeedPlanGrantsEachPlannedPusherItsSystems(t *testing.T) {
 	want := map[string][]string{}
 	for _, site := range p.Sites {
 		for _, ps := range site.Pushers {
-			if ps.Webhook {
-				continue // a platform posts as its component, holding no grant (#1747)
+			if ps.IsComponent() {
+				continue // a platform or a polled service is a component, holding no grant (#1747, #2765)
 			}
 			want[ps.Name] = append([]string(nil), ps.Systems...)
 			sort.Strings(want[ps.Name])
@@ -480,6 +488,14 @@ func TestSeedPlanSeedsEachPlatformItsWebhookAndRooms(t *testing.T) {
 		var conduit, value, sys, key string
 		if err := rows.Scan(&conduit, &value, &sys, &key); err != nil {
 			t.Fatal(err)
+		}
+		if _, platform := conduitSite[conduit]; !platform {
+			// The polled scheduling service's bindings (#2765) are its own
+			// room ids, on its driver's key, not a platform's.
+			if value != sys || key != "sched-room-id" {
+				t.Errorf("service binding %s=%s owned by %s, want sched-room-id named for its system", key, value, sys)
+			}
+			continue
 		}
 		if value != sys || key != "ucc-room-id" {
 			t.Errorf("binding %s=%s owned by %s, want ucc-room-id named for its system", key, value, sys)
@@ -613,6 +629,15 @@ func TestSeedPlanOnboardsEveryComponentUnderTheWorldsName(t *testing.T) {
 		}
 		for _, svc := range w.Services {
 			if svc.Webhook {
+				want++
+			}
+		}
+	}
+	// A polled service (#2765) is placed once for the account, though every
+	// site's world lists it among the rooms it speaks for.
+	for _, site := range p.Sites {
+		for _, ps := range site.Pushers {
+			if ps.Service {
 				want++
 			}
 		}

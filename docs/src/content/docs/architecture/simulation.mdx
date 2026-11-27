@@ -483,6 +483,15 @@ Devices that read the calendar:
   `meetingSharing` are the two readings the room's devices share. A device whose room has no calendar keeps
   its previous state. The bar's own content sharing is still its own random draw, not yet the sharing
   stretch the panel and switcher read.
+- **Rack power** (#2777): the Ferrite PDU's outlet load is a pure function of the calendar, not a
+  walk. Its outlets map to the room's gear by a fixed table in the profile (outlet 1 the video chain
+  of display, bar and codec, outlet 2 the DSP and the control processor, outlet 3 the amplifier,
+  outlet 4 nothing plugged in), so no new function and no look at another device: the gear is awake
+  by the displays' rule above (`roomInUse`, shared with the control processor) and each outlet reads a level for it (the video outlet and the
+  amplifier rise again while a meeting has somebody in the room). A switched-off outlet draws
+  nothing, the total is the outlets', and the energy counter accrues the total's draw each tick, so a
+  busy room's rack reads more by evening than an idle one's. The mains voltage stays noise. A PDU
+  whose room holds no calendar keeps its earlier random walk.
 
 ### A simulated service posts from the start
 
