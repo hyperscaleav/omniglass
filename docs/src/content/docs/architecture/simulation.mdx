@@ -645,7 +645,7 @@ it in advance. The simulator plays the outside service, and so holds what that s
 the server's device list carries, for a simulated component with a webhook endpoint, the endpoint's
 path and signing secret, and the simulator calls the device's own subscribe route
 (`webhook.subscribe`) as the service's admin would. A webhook sender profile also names a provision
-route (`webhook.provision`), through which the simulator adds every identity bound on the component,
+route (`webhook.provision`), through which the simulator adds every identity bound to a system on the component (a device id bound to a component is no room),
 so a meeting platform comes to speak for each system it is bound to (#1747); a lab's account takes its rooms and devices from its world instead (#2790).
 
 The fence is two facts an outpost cannot assert: the database carries the lab mark, and the component

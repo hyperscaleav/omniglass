@@ -136,7 +136,7 @@ interfaces:
     protocol: tcp
     port: 5000
     doc:
-      summary: "Raw-TCP occupancy feed (CR-delimited ASCII, push subscriptions)"
+      summary: "Raw-TCP occupancy feed (CRLF-delimited ASCII, push subscriptions)"
       tags: [control, persistent-session, raw-tcp, data]
     api_surface: tessellate-census-control
     persistent: true
