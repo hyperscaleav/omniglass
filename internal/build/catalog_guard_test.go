@@ -68,6 +68,10 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// States the showcase floor for the corporate lab's conference
 		// video bar, so naming the shipped product is what it tests (#2754).
 		"internal/lab/videobar_talks_integration_test.go": true,
+		// Reads the corporate lab's conference video bar off the live
+		// simulator to prove the world reaches it, so naming the shipped
+		// product is what it tests (#2773).
+		"internal/lab/world_integration_test.go": true,
 	}
 
 	raw, err := seed.FactsJSON()

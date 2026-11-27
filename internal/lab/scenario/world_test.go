@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -137,4 +138,29 @@ func sameWorld(t *testing.T, a, b *world.World) bool {
 		t.Fatal(err)
 	}
 	return string(x) == string(y)
+}
+
+// A name the platform would refuse, or one the world gave twice, is refused
+// when the world is planned, not when the seed meets it.
+func TestSiteWorldRefusesANameThePlatformWouldRefuse(t *testing.T) {
+	m, cat := corporate(t)
+	plan, err := Resolve(m, cat, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := plan.Sites[0].Name
+	long := *plan
+	long.Sites = append([]SitePlan(nil), plan.Sites...)
+	long.Sites[0].Systems = append([]SystemPlan(nil), plan.Sites[0].Systems...)
+	long.Sites[0].Systems[0].Name = strings.Repeat("x", 95)
+	if _, err := SiteWorld(m, cat, &long, site); err == nil || !strings.Contains(err.Error(), "over 100") {
+		t.Fatalf("a 95-character system gave %v, want a refusal for the name's length", err)
+	}
+	dup := *plan
+	dup.Sites = append([]SitePlan(nil), plan.Sites...)
+	dup.Sites[0].Systems = append([]SystemPlan(nil), plan.Sites[0].Systems...)
+	dup.Sites[0].Systems[1].Name = dup.Sites[0].Systems[0].Name
+	if _, err := SiteWorld(m, cat, &dup, site); err == nil || !strings.Contains(err.Error(), "twice") {
+		t.Fatalf("two systems of one name gave %v, want a refusal", err)
+	}
 }

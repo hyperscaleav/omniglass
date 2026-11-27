@@ -33,6 +33,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // newLabCmd is `omniglass lab`: a working omniglass on Docker with one
@@ -970,7 +971,11 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 		if !keep {
 			return errors.New("lab seed: a throwaway scale lab seeds an empty database, and this one holds data; start it again with --keep to keep that data, or with --fresh to start over")
 		}
-		return reenrollKeptScaleLab(ctx, out, gw, plan, hashes, pushers, user, pwHash)
+		worlds, err := labscenario.SiteWorlds(m, cat, plan)
+		if err != nil {
+			return err
+		}
+		return reenrollKeptScaleLab(ctx, out, gw, plan, worlds, hashes, pushers, user, pwHash)
 	}
 	if err := bootstrapLabOwner(ctx, gw, user, pwHash); err != nil {
 		return err
@@ -1026,7 +1031,7 @@ func runLabScaleSeed(ctx context.Context, out io.Writer, scenario string, system
 // scenario and is refused, naming --fresh. Then each site outpost is enrolled
 // with this run's hash, each pusher given this run's token, the login is
 // reset, and nothing is seeded.
-func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway, plan *labscenario.Plan, hashes map[string]string, pushers map[string]lab.PusherToken, user, pwHash string) error {
+func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway, plan *labscenario.Plan, worlds map[string]*world.World, hashes map[string]string, pushers map[string]lab.PusherToken, user, pwHash string) error {
 	all := scope.Set{All: true}
 	notThisPlan := func(why string) error {
 		return fmt.Errorf("lab seed: this kept scale lab's fleet is not scenario %s at %d systems (%s); "+
@@ -1059,6 +1064,15 @@ func reenrollKeptScaleLab(ctx context.Context, out io.Writer, gw storage.Gateway
 		// A webhook sender (#1747) is a component on its site's outpost too.
 		if len(devices) != site.Simulated() {
 			return notThisPlan(fmt.Sprintf("%s simulates %d components, the plan's site %d", outpost, len(devices), site.Simulated()))
+		}
+		// The world names every component (#2773): a fleet kept from before
+		// that holds names the world does not, and its simulator would place
+		// none of them in a room.
+		w := worlds[outpost]
+		for _, d := range devices {
+			if _, placed := w.PlaceDevice(d.Name); !placed && w.Covered(d.Name) == nil {
+				return notThisPlan(fmt.Sprintf("%s simulates %s, which the plan's world does not name", outpost, d.Name))
+			}
 		}
 	}
 	for _, site := range plan.Sites {

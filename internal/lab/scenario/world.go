@@ -17,6 +17,9 @@ func calendarSeed(scenario string) int64 {
 	return int64(h.Sum64() >> 1)
 }
 
+// maxComponentNameLen is the longest name the platform takes for an entity.
+const maxComponentNameLen = 100
+
 // ComponentName is the name the world gives the n-th (from 1) component that
 // fills a slot of a system: "<system>-<slot>-<n>". A system's name is unique
 // across a plan, so the name is too, which is what lets a simulator join a
@@ -78,6 +81,17 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 		p, _ := cat.SimProfile(product)
 		return p
 	}
+	names := map[string]bool{}
+	claim := func(name string) error {
+		switch {
+		case len(name) > maxComponentNameLen:
+			return fmt.Errorf("scenario %s: the world's name %q is over %d characters, which the platform refuses", plan.Scenario, name, maxComponentNameLen)
+		case names[name]:
+			return fmt.Errorf("scenario %s: the world names %q twice", plan.Scenario, name)
+		}
+		names[name] = true
+		return nil
+	}
 	rooms := make([]world.Room, 0, len(sp.Systems))
 	cover := map[string]world.Cover{}
 	for _, sys := range sp.Systems {
@@ -87,6 +101,9 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 		}
 		for _, fill := range sys.Slots {
 			for i := 1; i <= fill.Count; i++ {
+				if err := claim(ComponentName(sys.Name, fill.Slot, i)); err != nil {
+					return nil, err
+				}
 				r.Devices = append(r.Devices, world.Device{
 					Name: ComponentName(sys.Name, fill.Slot, i), Product: fill.Product, Profile: profileOf(fill.Product),
 				})
@@ -99,6 +116,11 @@ func siteWorld(m *Manifest, cat Catalog, plan *Plan, sp SitePlan) (*world.World,
 	for _, p := range sp.Pushers {
 		// A sender is a component named for its pusher; a token pusher is a
 		// device of its own name apart from the fleet.
+		if p.Webhook {
+			if err := claim(p.Name); err != nil {
+				return nil, err
+			}
+		}
 		svc := world.Service{Name: p.Name, Profile: p.Profile, Webhook: p.Webhook}
 		for _, s := range p.Systems {
 			c, ok := cover[s]
