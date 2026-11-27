@@ -519,6 +519,9 @@ drivers:
             - { name: content-sharing-state, extract: { jsonpath: app.local_presentation }, transform: { map: { "true": sharing, "false": idle } } }
             - { name: camera-state, extract: { jsonpath: video.camera_on }, transform: { map: { "true": "on", "false": "off" } } }
             - { name: video-resolution, extract: { jsonpath: video.resolution } }
+            # The camera's count of the people in the room (#2757): the
+            # room's occupancy-count reads it by a calc rule.
+            - { name: people-count, extract: { jsonpath: video.people_count } }
             - { name: cpu-utilization, extract: { jsonpath: device.cpu_load }, transform: { scale: 0.01 } }
             - { name: temperature, extract: { jsonpath: device.temperature } }
             - { name: fan-speed, extract: { jsonpath: device.fan_rpm } }

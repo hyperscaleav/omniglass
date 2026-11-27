@@ -33,7 +33,9 @@
   },
   "video": {
     "camera_on": {{ .State | get "status" | get "video" | get "camera_on" }},
-    "resolution": "{{ .State | get "status" | get "video" | get "resolution" }}"
+    "resolution": "{{ .State | get "status" | get "video" | get "resolution" }}",
+    {{/* @field status.video.people_count number "People the camera counts in the room" */}}
+    "people_count": {{ .State | get "status" | get "video" | get "people_count" }}
   },
   "media": {
     {{/* @field status.media.packet_loss number "Packet loss of the call's media, a ratio (0 to 1); 0 when idle" */}}

@@ -85,6 +85,29 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 	if len(targets) == 0 {
 		t.Fatalf("the world has no conference room with %v", slots)
 	}
+	// The huddle rooms of hq with a video bar: their occupancy is the bar's
+	// camera count alone, there being no separate counter (#2757).
+	type huddle struct {
+		system string
+		room   calendar.Room
+	}
+	var huddles []huddle
+	for _, s := range w.Sites {
+		for _, r := range s.Rooms {
+			if r.Standard != "huddle-room" {
+				continue
+			}
+			for _, d := range r.Devices {
+				if strings.HasPrefix(d.Name, r.System+"-conf-bar-") {
+					huddles = append(huddles, huddle{r.System, calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}})
+					break
+				}
+			}
+		}
+	}
+	if len(huddles) == 0 {
+		t.Fatal("the world has no huddle room with a video bar")
+	}
 	var ucc string
 	for _, svc := range w.Services {
 		if svc.Webhook && svc.Profile == "ucc-platform" {
@@ -104,6 +127,11 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 	const into = 30 * time.Second
 	var tgt target
 	var meeting calendar.Entry
+	// Beside it, a huddle room whose own held meeting runs through the first
+	// half an hour after the lab starts, so its bar counts people while
+	// the lab comes up and is read.
+	var hud huddle
+	var hudMeeting calendar.Entry
 	from := time.Now().Add(24 * time.Hour).Truncate(time.Hour)
 	for _, c := range targets {
 		for _, e := range cal.Entries(c.room, from, from.Add(10*24*time.Hour), calendar.MeetingKinds) {
@@ -114,13 +142,26 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 			if len(cal.Entries(c.room, e.Start.Add(-time.Hour), e.End.Add(time.Hour), calendar.ProblemKinds)) > 0 {
 				continue
 			}
-			if tgt.system == "" || e.Start.Before(meeting.Start) {
-				tgt, meeting = c, e
+			if tgt.system != "" && !e.Start.Before(meeting.Start) {
+				continue
+			}
+			at := e.Start.Add(into)
+			for _, h := range huddles {
+				for _, he := range cal.Entries(h.room, at.Add(-time.Hour), at.Add(time.Hour), calendar.MeetingKinds) {
+					hm := caltest.M(he)
+					if hm.Outcome != calendar.OutcomeHeld || hm.Actual < 2 || he.Start.After(at) || he.End.Before(at.Add(30*time.Minute)) {
+						continue
+					}
+					if len(cal.Entries(h.room, he.Start.Add(-time.Hour), he.End.Add(time.Hour), calendar.ProblemKinds)) > 0 {
+						continue
+					}
+					tgt, meeting, hud, hudMeeting = c, e, h, he
+				}
 			}
 		}
 	}
 	if tgt.system == "" {
-		t.Fatal("the plan's calendar holds no long, held, attended meeting in a conference room in the next ten days")
+		t.Fatal("the plan's calendar holds no long, held, attended meeting in a conference room, with a huddle room's meeting beside it, in the next ten days")
 	}
 	offset := time.Until(meeting.Start.Add(into)).Round(time.Second)
 	t.Logf("%s: the offset %v puts the simulator at %s, %v into %s's meeting of %d (%s to %s)", tgt.system, offset,
@@ -238,6 +279,34 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 		}
 		if n := int(newest.Value); n < 1 || n > caltest.M(meeting).Actual {
 			return fmt.Sprintf("%d (outside 1 to %d)", n, caltest.M(meeting).Actual), nil
+		}
+		return "attended", nil
+	}, func(time.Time) []string { return []string{"attended"} })
+
+	// A huddle room has a video bar and no separate counter: the bar's
+	// camera counts the room, and the same room-occupancy rule carries it up
+	// to the huddle room's occupancy-count (#2757), the meeting's attendees.
+	agrees("huddle room's occupancy-count at its meeting's attendees", func() (string, error) {
+		var series struct {
+			Samples []struct {
+				TS    time.Time `json:"ts"`
+				Value float64   `json:"value"`
+			} `json:"samples"`
+		}
+		if err := censusGetJSON(ctx, client, base, "/systems/"+url.PathEscape(hud.system)+"/metrics/occupancy-count/samples?hours=1", &series); err != nil {
+			return "", err
+		}
+		if len(series.Samples) == 0 {
+			return "", fmt.Errorf("%s has no occupancy-count sample yet", hud.system)
+		}
+		newest := series.Samples[0]
+		for _, sm := range series.Samples {
+			if sm.TS.After(newest.TS) {
+				newest = sm
+			}
+		}
+		if n := int(newest.Value); n < 1 || n > caltest.M(hudMeeting).Actual {
+			return fmt.Sprintf("%d (outside 1 to %d)", n, caltest.M(hudMeeting).Actual), nil
 		}
 		return "attended", nil
 	}, func(time.Time) []string { return []string{"attended"} })

@@ -870,6 +870,56 @@ func TestSeedPlanRoomOccupancyFollowsItsPeopleCounter(t *testing.T) {
 	t.Fatalf("%s declares no occupancy-count", system)
 }
 
+// A video bar counts people too (#2757): its camera reports people-count, so
+// a huddle room, which has a bar and no separate counter, fills its
+// occupancy-count by the same one rule, with no rule of its own.
+func TestSeedPlanHuddleOccupancyFollowsItsVideoBar(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	plan := corporatePlan(t, 20)
+	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	var system string
+	for _, sp := range plan.Sites {
+		for _, sys := range sp.Systems {
+			if sys.Standard == "huddle-room" && system == "" {
+				system = sys.Name
+			}
+		}
+	}
+	if system == "" {
+		t.Fatal("the corporate plan holds no huddle room")
+	}
+	var bar, sysID string
+	if err := conn.QueryRow(ctx, `select c.id::text, s.id::text from component c, system s where c.name = $1 and s.name = $2`,
+		scenario.ComponentName(system, "conf-bar", 1), system).Scan(&bar, &sysID); err != nil {
+		t.Fatalf("the plan seeds no video bar in %s: %v", system, err)
+	}
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: bar, Key: "people-count", Value: 4, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.DrainCalcPending(ctx, 1000); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName != "occupancy-count" {
+			continue
+		}
+		if !m.IsSampled || string(m.Value) != "4" || m.SourceRule != "room-occupancy" {
+			t.Fatalf("%s occupancy-count = %s (sampled %v, by rule %q), want the bar's 4 by room-occupancy", system, m.Value, m.IsSampled, m.SourceRule)
+		}
+		return
+	}
+	t.Fatalf("%s declares no occupancy-count", system)
+}
+
 // A corporate room's room-temperature follows its control processor (#2757).
 // The standard declares room-temperature on the system, and the processor
 // reports it on its component, so the plan seeds the one calc rule that

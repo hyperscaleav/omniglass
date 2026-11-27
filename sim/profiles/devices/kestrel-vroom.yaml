@@ -384,6 +384,19 @@ behaviors:
       - name: log
         data: '{{ $e := .State.status.sim.event }}{{ $n := .State.status.call.participants }}{{ $id := .State.status.call.id }}{{ if or (eq $e "start") (eq $e "turn") }}{"severity":"INFO","facility":"kvroom.call","text":"Call started (id={{ $id }}, protocol=sip, peers={{ $n }})"}{{ else if eq $e "join" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant joined (call={{ $id }}, peers={{ $n }})"}{{ else if eq $e "leave" }}{"severity":"INFO","facility":"kvroom.call","text":"Participant left (call={{ $id }}, peers={{ $n }})"}{{ end }}'
 
+  # The camera counts the room (#2757): the lab calendar's attendees in a held
+  # meeting or a walk-in, less the one it misses 15% of ticks, and 0 in a
+  # no-show or outside any meeting. With no calendar (the dev fleet, a bar in
+  # no room) it counts only the call it is in, a steady 0 when idle.
+  - name: people_count
+    schedule:
+      interval: 30s
+      on_start: true
+    mutations:
+      - path: status.video.people_count
+        value: >-
+          {{ if hasCalendar }}{{ $a := (roomPhase).attendees }}{{ if and (gt $a 1) (chance 0.15) }}{{ sub $a 1 }}{{ else }}{{ $a }}{{ end }}{{ else if .State.status.call.active }}{{ .State.status.call.participants }}{{ else }}0{{ end }}
+
   # A status line every 15 minutes, call or none, so the log stream is not
   # only a call's.
   - name: status_log
@@ -495,6 +508,9 @@ defaults:
     video:
       camera_on: true
       resolution: "3840x2160"
+      # People the camera counts in the room (people_count follows the lab
+      # calendar's attendees).
+      people_count: 0
     # The media a call carries (#2754), drifted by media_stats while a call
     # is up and zero when idle: packet loss a ratio (0 to 1), jitter in ms,
     # the send bitrate in kbps and the frame rate.

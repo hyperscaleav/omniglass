@@ -510,7 +510,13 @@ Devices that read the calendar:
   open at half to all of who came and move inside it, content is shared now and then, and a meeting
   that starts as the last one ends moves the call on in one tick. A dial or a hang-up on the device
   holds against the calendar. A bar whose room has no calendar (the dev fleet has no world) keeps
-  #2754's own schedule, exactly as before.
+  #2754's own schedule, exactly as before. The bar's camera also counts the room (`status.video.people_count`,
+  in its status snapshot): the calendar's attendees in a held meeting or a walk-in, one fewer now and then as
+  the camera misses someone, and 0 in a no-show and outside any meeting; with no calendar it counts only the
+  call it is in (a dial's participants) and reads a steady 0 when idle. Its driver collects it as the
+  existing `people-count`, so the plan's `room-occupancy` rule fills `occupancy-count` in every room with
+  a bar, a huddle room included, with no rule of its own. A huddle room's temperature stays empty: no
+  device in it is the source of one.
 - **The meeting platform** (#2767, #2790): one account for the whole fleet, a conduit
   ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)),
   designed to the shape of a real cloud meeting platform's rooms and devices admin APIs under our own
