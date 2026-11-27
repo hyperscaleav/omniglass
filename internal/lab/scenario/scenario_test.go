@@ -1050,7 +1050,8 @@ standards:
 // The corporate lab's second faces (#2649, #2754): every mr86 system's
 // main-display fill is marked for its control face (the boardroom display
 // takes commands), every divisible-conference system's video-bar fill for
-// its control socket (the bar talks over two protocols), and no other fill
+// its control socket (the bar talks over two protocols), every people-counter
+// fill for its raw-TCP head-count band (#2757), and no other fill
 // of any system is.
 func TestCorporateControlsOnlyTheBoardroomDisplaysAndConferenceBars(t *testing.T) {
 	m, cat := corporate(t)
@@ -1063,8 +1064,9 @@ func TestCorporateControlsOnlyTheBoardroomDisplaysAndConferenceBars(t *testing.T
 		for _, f := range s.Slots {
 			display := s.Standard == "mr86" && f.Slot == "main-display"
 			bar := s.Standard == "divisible-conference" && f.Slot == "video-bar"
-			if f.Control != (display || bar) {
-				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, display || bar)
+			counter := s.Standard == "divisible-conference" && f.Slot == "people-counter"
+			if f.Control != (display || bar || counter) {
+				t.Fatalf("system %s (%s) slot %s: control = %v, want %v", s.Name, s.Standard, f.Slot, f.Control, display || bar || counter)
 			}
 			if display {
 				boardrooms++

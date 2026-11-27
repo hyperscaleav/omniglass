@@ -67,6 +67,15 @@
       "label": "Bar control socket"
     },
     {
+      "method": "tessellate-census-feed",
+      "kind": "driver",
+      "transport": "tcp",
+      "component": "census-a",
+      "placeKey": "boardroom-a",
+      "place": "Boardroom A",
+      "label": "People counter feed"
+    },
+    {
       "method": "boreal-edge-web",
       "kind": "driver",
       "transport": "http",

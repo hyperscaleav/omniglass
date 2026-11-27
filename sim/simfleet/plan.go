@@ -57,6 +57,9 @@ var AttachSecret = map[string]string{
 	"kestrel-relay-api":      KestrelLoginSecret,
 	"kestrel-gaze-api":       KestrelLoginSecret,
 	"tessellate-census-http": CensusKeySecret,
+	// Its raw-TCP band is the same sensor, offered to whoever may read the
+	// sensor's key (#2757).
+	"tessellate-census-feed": CensusKeySecret,
 	"ucc-rooms":              UCCTokenSecret,
 	"scheduling-service-api": SchedTokenSecret,
 	"boreal-cast-api":        CastKeySecret,
@@ -83,6 +86,9 @@ var AttachSecret = map[string]string{
 var Control = map[string]string{
 	"boreal-edge-snmp": "boreal-edge-web",
 	"kestrel-api":      "kestrel-ws",
+	// The Tessellate sensor's http API reads whether the room is vacant; its
+	// raw-TCP control band is the one that answers the head-count (#2757).
+	"tessellate-census-http": "tessellate-census-feed",
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -239,6 +245,11 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// face (Control), never a product's own driver. 9443 needs no lift.
 	"kestrel-ws": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(9443)), "login": KestrelLoginSecret}
+	},
+	// The Tessellate sensor's raw-TCP control band on 5000 (#2757), its
+	// second face (Control): the band that answers COUNT?. 5000 needs no lift.
+	"tessellate-census-feed": func(addr string, shift func(int) int) map[string]string {
+		return map[string]string{"host": addr, "port": strconv.Itoa(shift(5000))}
 	},
 	// The Boreal display's web admin on 80, behind its digest login: its
 	// control face (Control), never a product's own driver.

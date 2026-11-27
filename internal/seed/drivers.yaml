@@ -1018,6 +1018,36 @@ drivers:
           request: { path: /api/occupancy }
           emits:
             - { name: occupancy-state, extract: { jsonpath: vacant }, transform: { map: { "true": vacant, "false": occupied } } }
+  - id: tessellate-census-feed
+    label: Tessellate Census Feed
+    version: "1.0.0"
+    spec:
+      version: 1
+      # The Tessellate Census's raw-TCP control band on 5000 (#2757): the only
+      # place the live head-count is exposed, as the device's own HTTP API
+      # carries the vacant flag alone. One line asks, `COUNT?`, and one line
+      # answers, `#COUNT=<n>`; the sensor's welcome banner and its pushes are
+      # other lines and are left unread.
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "5000" }
+      polls:
+        - name: count
+          schedule: { every: 30s }
+          request: { line: "COUNT?", reply: { prefix: "#COUNT=" } }
+          emits:
+            - { name: people-count, extract: { regex: "^#COUNT=(\\d+)$" } }
+      # The poll rides a held session (#816), which the standing listener is what
+      # makes the outpost hold: a one-shot exchange would read the sensor's
+      # welcome banner as its answer. The sensor also pushes the count on each
+      # change once subscribed, which lands the same key.
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE COUNT"]
+          match: { prefix: "#COUNT=" }
+          emits:
+            - { name: people-count, extract: { regex: "^#COUNT=(\\d+)$" } }
   - id: boreal-cast-api
     label: Boreal Cast API
     version: "1.0.0"

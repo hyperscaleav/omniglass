@@ -1285,6 +1285,12 @@
    "description": "People detected in the space by the room's occupancy source."
   },
   {
+   "name": "people-count",
+   "data_type": "int",
+   "label": "People Count",
+   "description": "People a counter detects in its field of view, as the device reports them."
+  },
+  {
    "name": "booking-count",
    "data_type": "int",
    "label": "Booking Count",
@@ -4042,6 +4048,14 @@
    "version": "1.0.0",
    "transport": "http",
    "polls": 2
+  },
+  {
+   "id": "tessellate-census-feed",
+   "label": "Tessellate Census Feed",
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 1,
+   "listeners": 1
   },
   {
    "id": "boreal-cast-api",

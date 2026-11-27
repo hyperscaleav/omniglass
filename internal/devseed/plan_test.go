@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -824,5 +825,75 @@ func TestSeedPlanLabelsComponentsWithTheirOrdinalAndServicesByManifest(t *testin
 		if got := labels[name]; got != svc.Label {
 			t.Errorf("service %s reads %q, want the manifest's %q", name, got, svc.Label)
 		}
+	}
+}
+
+// A corporate room's occupancy-count follows its people counter (#2757). The
+// standard declares occupancy-count on the system, and nothing but a rule can
+// carry a member's reading up to it: the counter's raw-TCP feed reports
+// people-count on the component, and the plan seeds the one calc rule that
+// reads it from the system's slot-bound members. Land a count on a conference
+// room's counter and the room's own occupancy-count follows it, by that rule.
+func TestSeedPlanRoomOccupancyFollowsItsPeopleCounter(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	if _, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 20), devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	const system = "hq-divisible-conference-1"
+	var counter, sysID string
+	if err := conn.QueryRow(ctx, `select c.id::text, s.id::text from component c, system s where c.name = $1 and s.name = $2`,
+		scenario.ComponentName(system, "people-counter", 1), system).Scan(&counter, &sysID); err != nil {
+		t.Fatalf("the plan seeds no people counter in %s: %v", system, err)
+	}
+	if err := gw.InsertMetricSamples(ctx, storage.PushWriter(), []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: counter, Key: "people-count", Value: 7, Source: "test", TS: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gw.DrainCalcPending(ctx, 1000); err != nil {
+		t.Fatal(err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, scope.Set{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName != "occupancy-count" {
+			continue
+		}
+		if !m.IsSampled || string(m.Value) != "7" || m.SourceRule != "room-occupancy" {
+			t.Fatalf("%s occupancy-count = %s (sampled %v, by rule %q), want the counter's 7 by room-occupancy", system, m.Value, m.IsSampled, m.SourceRule)
+		}
+		return
+	}
+	t.Fatalf("%s declares no occupancy-count", system)
+}
+
+// The counter's feed rides the counter's own second face: a corporate
+// conference room's people counter has the http API's endpoint and the raw-TCP
+// feed's, the one that reports the head-count (#2757).
+func TestSeedPlanWiresThePeopleCountersFeed(t *testing.T) {
+	t.Parallel()
+	ctx, gw, conn := openSeededGateway(t)
+	if _, err := devseed.SeedPlan(ctx, gw, "", corporatePlan(t, 20), devseed.PlanOptions{Endpoints: true}); err != nil {
+		t.Fatal(err)
+	}
+	name := scenario.ComponentName("hq-divisible-conference-1", "people-counter", 1)
+	rows, err := conn.Query(ctx, `select d.name from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component where c.name = $1 order by 1`, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, d)
+	}
+	rows.Close()
+	if want := []string{"tessellate-census-feed", "tessellate-census-http"}; !slices.Equal(got, want) {
+		t.Errorf("%s has endpoints on drivers %v, want %v", name, got, want)
 	}
 }

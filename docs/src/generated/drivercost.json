@@ -742,6 +742,12 @@
       "reason": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
+      "driver": "tessellate-census-feed",
+      "kind": "tcp",
+      "measured": false,
+      "reason": "no shipped product defaults to this driver, so only an endpoint that picks it runs it; #1943 costs it by its kind of work"
+    },
+    {
       "driver": "tessellate-census-http",
       "kind": "http",
       "product": "tessellate-census-c1",

@@ -214,6 +214,34 @@ func TestIntegrationCorporateRoomIsMidMeetingOnAClockOffset(t *testing.T) {
 		return "attended", nil
 	}, func(time.Time) []string { return []string{"attended"} })
 
+	// The room's own occupancy-count follows its people counter, which follows
+	// the calendar: the counter's raw-TCP feed lands people-count, the plan's
+	// room-occupancy rule carries it up to the system (#2757).
+	agrees("room system's occupancy-count at the attendees", func() (string, error) {
+		var series struct {
+			Samples []struct {
+				TS    time.Time `json:"ts"`
+				Value float64   `json:"value"`
+			} `json:"samples"`
+		}
+		if err := censusGetJSON(ctx, client, base, "/systems/"+url.PathEscape(tgt.system)+"/metrics/occupancy-count/samples?hours=1", &series); err != nil {
+			return "", err
+		}
+		if len(series.Samples) == 0 {
+			return "", fmt.Errorf("%s has no occupancy-count sample yet", tgt.system)
+		}
+		newest := series.Samples[0]
+		for _, sm := range series.Samples {
+			if sm.TS.After(newest.TS) {
+				newest = sm
+			}
+		}
+		if n := int(newest.Value); n < 1 || n > caltest.M(meeting).Actual {
+			return fmt.Sprintf("%d (outside 1 to %d)", n, caltest.M(meeting).Actual), nil
+		}
+		return "attended", nil
+	}, func(time.Time) []string { return []string{"attended"} })
+
 	agrees("display awake", func() (string, error) {
 		return fireOn(ctx, client, base, tgt.system, tgt.dev["main-display"], map[string]string{"surface": "snmp", "oid": "1.3.6.1.4.1.55520.1.1.1.0"})
 	}, func(time.Time) []string { return []string{"on"} })

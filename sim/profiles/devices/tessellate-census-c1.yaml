@@ -140,7 +140,7 @@ interfaces:
       tags: [control, persistent-session, raw-tcp, data]
     api_surface: tessellate-census-control
     persistent: true
-    line_ending: "\r"
+    line_ending: "\r\n"
     welcome: "TESSELLATE CENSUS C1 FEED READY"
     limits:
       max_subs_per_session: 64

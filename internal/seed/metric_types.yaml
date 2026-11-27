@@ -497,6 +497,12 @@ metric_types:
     data_type: int
     label: Occupancy Count
     description: People detected in the space by the room's occupancy source.
+  # What a people counter itself reports: the component's reading, which the
+  # room's occupancy-count is derived from by a calc rule (#2757).
+  - name: people-count
+    data_type: int
+    label: People Count
+    description: People a counter detects in its field of view, as the device reports them.
   # A space's bookings, as its scheduling service pushes them (#1370): the
   # lab's simulated booking service pushes them to a system.
   - name: booking-count

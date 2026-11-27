@@ -2,10 +2,12 @@ package devseed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
+	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -332,5 +334,39 @@ func seedRows(ctx context.Context, gw storage.Gateway, actorID string, rows plan
 		}
 	}
 	run.done("slots")
+	if err := seedRoomOccupancyRule(ctx, gw, actorID); err != nil {
+		return nil, nil, err
+	}
+	run.done("rules")
 	return sysIDs, compIDs, nil
+}
+
+// roomOccupancyRule is the calc rule that carries a people counter's reading up
+// to its room (#2757): the standard declares occupancy-count on the system,
+// and a counter reports people-count on its component, so the rule reads that
+// from every counter the system's slots hold and writes the most any sees as
+// the room's own. Seeded with the plan, as the plan's components are, and
+// inert in a room with no counter.
+const roomOccupancyRule = "room-occupancy"
+
+// seedRoomOccupancyRule seeds roomOccupancyRule once; a plan seeded again finds
+// it and leaves it as it is.
+func seedRoomOccupancyRule(ctx context.Context, gw storage.Gateway, actorID string) error {
+	if _, err := gw.GetCalcRule(ctx, roomOccupancyRule); err == nil {
+		return nil
+	} else if !errors.Is(err, storage.ErrCalcRuleNotFound) {
+		return fmt.Errorf("devseed: look up calc rule %q: %w", roomOccupancyRule, err)
+	}
+	_, err := gw.CreateCalcRule(ctx, actorID, storage.CalcRuleSpec{
+		Name: roomOccupancyRule, Label: "Room occupancy",
+		Description: "A room's occupancy-count is the most people any of its people counters reports.",
+		OwnerKind:   "system",
+		Inputs:      []rules.CalcInput{{Alias: "c", Key: "people-count"}},
+		Reduce:      rules.CalcReduce{Expr: "max(c)"},
+		OutputKey:   "occupancy-count",
+	}, scope.Set{All: true})
+	if err != nil && !errors.Is(err, storage.ErrCalcRuleExists) {
+		return fmt.Errorf("devseed: create calc rule %q: %w", roomOccupancyRule, err)
+	}
+	return nil
 }

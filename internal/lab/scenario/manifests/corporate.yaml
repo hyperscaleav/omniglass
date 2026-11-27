@@ -73,8 +73,9 @@ standards:
       projection: boreal-beam-340
     # The conference rooms' video bars talk over two protocols (#2754): the
     # https API and the websocket control socket the touch panel drives,
-    # each its own endpoint on the bar.
-    control: [video-bar]
+    # each its own endpoint on the bar. The people counter's raw-TCP control
+    # band is the one that answers the head-count (#2757), beside its http API.
+    control: [video-bar, people-counter]
   - name: ds55
     system_type: sign
     products:

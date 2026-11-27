@@ -2424,6 +2424,12 @@ sim_endpoints:
     driver: kestrel-ws
     label: Bar control socket
     inputs: { login: sim-kestrel-login }
+  # The people counter's raw-TCP band, the one that answers its head-count
+  # (#2757), beside its http API.
+  - component: census-a
+    driver: tessellate-census-feed
+    label: People counter feed
+    inputs: {}
   # The display's web admin over http digest.
   - component: panel-a
     driver: boreal-edge-web
