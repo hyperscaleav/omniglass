@@ -160,8 +160,12 @@ func (f *Family) nativeOIDs() map[string]string {
 func (f *Family) Handlers() Handlers {
 	return Handlers{HTTP: f.s.HTTP, Commands: f.s.Commands, Animate: f.s.Animate, Surface: f.s.Surface, Ticks: f.s.Ticks}
 }
+
+// Products lists the products the family simulates, its model rows in order.
+// The family's own name is the wire API it serves, not a product a component
+// could be assigned, so it is not listed (#2846 review).
 func (f *Family) Products() []string {
-	out := []string{f.s.Name}
+	out := make([]string, 0, len(f.s.Models))
 	for _, m := range f.s.Models {
 		out = append(out, m.Product)
 	}

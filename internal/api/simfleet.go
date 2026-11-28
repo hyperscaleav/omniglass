@@ -71,7 +71,7 @@ type simProfileBody struct {
 	Model        string   `json:"model"`
 	DeviceType   string   `json:"device_type"`
 	Summary      string   `json:"summary"`
-	Products     []string `json:"products" doc:"The products this profile simulates, its own first, then its variants."`
+	Products     []string `json:"products" doc:"The products this profile simulates. A YAML profile leads with the product it is named for; a Go family, named for its wire API, lists its model products only."`
 	Protocols    []string `json:"protocols" doc:"The protocols its surfaces speak."`
 }
 
@@ -383,7 +383,8 @@ func simProfileBodies(cat *spec.Catalog) []simProfileBody {
 	return out
 }
 
-// variantsOf is the products a profile simulates, its own first.
+// variantsOf is the products a definition simulates: a YAML profile's own
+// first, a Go family's model products only (never its wire-API name).
 func variantsOf(p spec.Definition) []string { return p.Products() }
 
 func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, hub SimHub) {
