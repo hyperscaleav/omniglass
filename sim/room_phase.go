@@ -6,6 +6,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
@@ -36,6 +37,10 @@ type roomMemoEntry struct {
 	state     calendar.RoomState
 	bookOnce  sync.Once
 	book      map[string]any
+	// typedOnce and typed are the same booked-meetings reading as a Go family
+	// reads it (spec.Rooms), computed once beside the template's.
+	typedOnce sync.Once
+	typed     behave.Bookings
 }
 
 // roomMemo is the engine-level memo of room readings: the room state and the

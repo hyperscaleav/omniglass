@@ -21,6 +21,12 @@ type Fake struct {
 	Clock time.Time
 	// Writes lists every WriteMany, Write counting as one of one.
 	Writes [][]surface.Change
+	// Posts lists every webhook the device was asked to send, Reports every
+	// event it was asked to name on its stream (name, data).
+	Posts   []spec.Post
+	Reports [][2]string
+	// RoomsRead is what the device reads of its rooms, none when nil.
+	RoomsRead spec.Rooms
 
 	state, defaults map[string]any
 }
@@ -49,6 +55,24 @@ func (f *Fake) Now() time.Time        { return f.Clock }
 func (f *Fake) Read(p string) any     { return look(f.state, p) }
 func (f *Fake) Default(p string) any  { return look(f.defaults, p) }
 func (f *Fake) State() map[string]any { return clone(f.state) }
+
+// Post records the webhook, as the engine's device would send it.
+func (f *Fake) Post(p spec.Post) {
+	if p.URL != "" {
+		f.Posts = append(f.Posts, p)
+	}
+}
+
+// Report records the event.
+func (f *Fake) Report(name, data string) { f.Reports = append(f.Reports, [2]string{name, data}) }
+
+// Rooms is what the fake reads of its rooms: none unless the test gives it some.
+func (f *Fake) Rooms() spec.Rooms {
+	if f.RoomsRead != nil {
+		return f.RoomsRead
+	}
+	return spec.RoomsOf(struct{ spec.Device }{f})
+}
 
 func (f *Fake) Write(path string, v any) error {
 	return f.WriteMany(surface.Change{Path: path, Value: v})
