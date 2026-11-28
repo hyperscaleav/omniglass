@@ -111,6 +111,16 @@ Written once here, so the next family repeats no workaround.
   to that guard's `pinFiles` with a one-line reason and the issue; a behavior test mints its own product
   (`storagetest.MintProduct`) instead. Converting a family moves no pin: the SKU is the same.
 - **Uptime is `spec.Elapsed`.** A family never registers a YAML `Computed` field.
+- **Named events are published after the writes they follow.** A route calls `d.Publish(spec.Event{Name,
+  Data})` after its `WriteMany`; a tick names its events in `Tick.Emit`, which reads the device once the
+  tick's changes are written. The transcripts record them (`events`, `#events`), so they are held byte for
+  byte. A route a web page calls but does not advertise is `Private: true`.
+- **A document that kept a template's comment lines keeps them.** `httpapi.Annotated` writes a whitespace-only
+  line before a `Noted` key, because a collector reads the bytes; a document with no comment is
+  `httpapi.Document`.
+- **A correction to the profile is written down and pinned.** The replay's `Body` and `Diverges` hooks map the
+  recorded transcript to what the family means to say, and fail when the recording no longer holds what they
+  correct; the divergence is an ADR.
 
 `sim/spec/spectest` is also a small family used by the engine's tests.
 
