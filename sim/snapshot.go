@@ -16,7 +16,7 @@ type DeviceSnapshot struct {
 	State   map[string]any `json:"state"`
 	// SiteCode, Room and Building locate the device for per-room identity
 	// token expansion in a profile's defaults ({site}, {building}, {room},
-	// {room-device:<profile>}). Empty where the source carries none.
+	// {room-device:<product or profile>}). Empty where the source carries none.
 	SiteCode string `json:"site_code,omitempty"`
 	Room     string `json:"room,omitempty"`
 	Building string `json:"building,omitempty"`

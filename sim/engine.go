@@ -122,6 +122,11 @@ func roomPeers(snapshots []DeviceSnapshot) map[roomKey]map[string]string {
 			peersByRoom[k] = peers
 		}
 		peers[snap.ProfileName] = snap.Hostname
+		// A family profile simulates several products; a peer is named by
+		// the product it is ({room-device:newtron-panel-7}), so key that too.
+		if snap.Product != "" {
+			peers[snap.Product] = snap.Hostname
+		}
 	}
 	return peersByRoom
 }
