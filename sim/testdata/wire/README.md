@@ -32,6 +32,13 @@ and `sim/boreal_parity_test.go` the worked example of a conversion.
    product. It fails with one line per difference (status, headers, bytes, state,
    SNMP, drift, room day).
 
+A device with more wire than HTTP and SNMP records the rest through
+`wireFamily.Extra` (`sim/wire_extra_test.go`): `wireConverse` plays a
+conversation on a line-protocol face (what it says on connect, each command's
+answer, the lines it pushes when state moves), `wireStream` an event stream, and
+`wireRecv` is a webhook receiver that records each post and whether its signature
+verifies. Each is a named value in the transcript's `extra`, replayed the same way.
+
 A family replacing a profile sets `Frozen` once the profile is deleted: the
 recorder then refuses it, because recording the family from itself would make
 the hold on the profile vacuous.
