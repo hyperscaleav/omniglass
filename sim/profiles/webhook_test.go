@@ -49,6 +49,8 @@ func TestEveryWebhookSenderDeclaresItsSubscribeRoute(t *testing.T) {
 		}
 	}
 	if senders == 0 {
-		t.Fatal("no profile posts webhooks; the check checked nothing")
+		// Every webhook sender is a Go family now; sim/device holds the same
+		// invariant over the families (TestEveryWebhookFaceNamesItsRoutes).
+		t.Skip("no YAML profile posts webhooks")
 	}
 }

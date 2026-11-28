@@ -47,10 +47,11 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		}
 		checked++
 		// A YAML profile is named for the product it leads with; a Go family is
-		// named for its wire API, and leads with its first model.
+		// named for its wire API, and leads with its first model, unless it is a
+		// family of one named for its only product.
 		products := def.Products()
 		lead := products[0]
-		if def.Kind() == spec.KindGo {
+		if def.Kind() == spec.KindGo && len(products) > 1 {
 			products = products[1:]
 			lead = products[0]
 		}
