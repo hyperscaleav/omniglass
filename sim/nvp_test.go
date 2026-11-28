@@ -22,7 +22,7 @@ func TestPanelSpeaksTheNVPLineProtocol(t *testing.T) {
 	e := newCatalogEngine(t)
 	ip := "127.88.9.1"
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
-		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		ProfileName: profileOf(t, e, "newtron-panel-7"), Product: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	target := faceAddr(t, e.Devices()[0], "nvp")
@@ -65,7 +65,7 @@ func TestPanelPushesInputChangesAfterTheReply(t *testing.T) {
 	e := newCatalogEngine(t)
 	ip := "127.88.9.2"
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
-		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		ProfileName: profileOf(t, e, "newtron-panel-7"), Product: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	target := faceAddr(t, e.Devices()[0], "nvp")

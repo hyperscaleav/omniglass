@@ -11,6 +11,11 @@ import (
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
 	fam_ferritepdu "github.com/hyperscaleav/omniglass/sim/device/ferritepdu"
 	fam_genericdevice "github.com/hyperscaleav/omniglass/sim/device/genericdevice"
+	fam_meridianextender "github.com/hyperscaleav/omniglass/sim/device/meridianextender"
+	fam_meridianswitcher "github.com/hyperscaleav/omniglass/sim/device/meridianswitcher"
+	fam_newtroncore "github.com/hyperscaleav/omniglass/sim/device/newtroncore"
+	fam_newtronpanel "github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
+	fam_newtronslate "github.com/hyperscaleav/omniglass/sim/device/newtronslate"
 	fam_recordingservice "github.com/hyperscaleav/omniglass/sim/device/recordingservice"
 	fam_schedulingservice "github.com/hyperscaleav/omniglass/sim/device/schedulingservice"
 	fam_tessellatecensus "github.com/hyperscaleav/omniglass/sim/device/tessellatecensus"
@@ -26,6 +31,11 @@ func families() []spec.Spec {
 		fam_borealedge.Spec(),
 		fam_ferritepdu.Spec(),
 		fam_genericdevice.Spec(),
+		fam_meridianextender.Spec(),
+		fam_meridianswitcher.Spec(),
+		fam_newtroncore.Spec(),
+		fam_newtronpanel.Spec(),
+		fam_newtronslate.Spec(),
 		fam_recordingservice.Spec(),
 		fam_schedulingservice.Spec(),
 		fam_tessellatecensus.Spec(),

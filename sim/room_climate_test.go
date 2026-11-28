@@ -86,7 +86,7 @@ func TestControlProcessorRoomTemperatureIsDeterministicForACalendarAndClock(t *t
 
 func TestControlProcessorRoomTemperatureIsSteadyWithNoCalendar(t *testing.T) {
 	e := shippedEngine(t)
-	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "d", LoopbackIP: "127.0.0.1", ProfileName: "newtron-core-3", Version: 1}}); err != nil {
+	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "d", LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, "newtron-core-3"), Product: "newtron-core-3", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]

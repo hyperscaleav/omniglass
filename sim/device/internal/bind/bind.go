@@ -23,6 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
 )
 
 // The state paths of a room-following device.
@@ -102,5 +103,18 @@ func DriftWhole(name string, every time.Duration, path string, band behave.Band)
 		Run: func(d spec.Device, c spec.TickContext) []surface.Change {
 			return []surface.Change{{Path: path, Value: int64(behave.Drift(spec.Float(d, path), band, c.Rand, behave.Places(0)))}}
 		},
+	}
+}
+
+// NVPRoom is the NVP room surface (sim/surface/nvp) over the device's own state:
+// the input and the scene it reads are the paths the surface names, and the
+// changes a command reports are applied by the engine, so the surface's own Set
+// has nothing to write.
+func NVPRoom(d spec.Device) nvp.Room {
+	read := func(path string) func() string { return func() string { return spec.String(d, path) } }
+	return nvp.Room{
+		Inputs: nvp.DefaultInputs, Scenes: nvp.DefaultScenes,
+		Input: nvp.Field[string]{Get: read(nvp.PathInput), Set: func(string) {}},
+		Scene: nvp.Field[string]{Get: read(nvp.PathScene), Set: func(string) {}},
 	}
 }

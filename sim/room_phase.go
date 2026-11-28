@@ -37,8 +37,7 @@ type roomMemoEntry struct {
 	state     calendar.RoomState
 	bookOnce  sync.Once
 	book      map[string]any
-	// typedOnce and typed are the same booked-meetings reading as a Go family
-	// reads it (spec.Rooms), computed once beside the template's.
+	// typed is the same reading as behave.Bookings, for a Go family's tick.
 	typedOnce sync.Once
 	typed     behave.Bookings
 }
@@ -137,4 +136,23 @@ func (d *Device) roomPhaseFuncs() template.FuncMap {
 			return d.roomState(p.CalRoom()).Map()
 		},
 	}
+}
+
+// bookingsRead is the device's room's booked meetings at its clock as a Go
+// family's tick reads them (spec.TickContext.Bookings): the typed form of the
+// `bookings` template function, memoized per room per second beside it. A
+// device in no room, or with no calendar, reads a free and empty room.
+func (d *Device) bookingsRead() behave.Bookings {
+	c, room := d.calendarSrc(), d.room
+	if c == nil || room == (calendar.Room{}) {
+		return behave.Bookings{State: behave.StateFree}
+	}
+	at := d.clock().UTC().Truncate(time.Second)
+	memo := d.roomMemo()
+	e := memo.entry(roomMemoKey{cal: c, w: nil, room: room, sec: at.Unix()})
+	e.typedOnce.Do(func() {
+		memo.books.Add(1)
+		e.typed = behave.BookingsAt(c, room, at)
+	})
+	return e.typed
 }

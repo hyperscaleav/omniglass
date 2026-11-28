@@ -1,0 +1,4340 @@
+{
+ "product": "newtron-panel-7",
+ "source": "recorded from the YAML profile before its deletion (#2833); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "manufacturer": "Newtron",
+    "model": "Panel 7",
+    "serial": "SN-73659AD388"
+   },
+   "firmware": {
+    "version": "4.1.2"
+   },
+   "network": {
+    "hostname": "wire-newtron-panel-7"
+   },
+   "room": {
+    "config_version": "rcfg-2026.05-7f3a"
+   }
+  },
+  "status": {
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   },
+   "diagnostics": {
+    "log": ""
+   },
+   "network": {
+    "ipv4": {
+     "address": "127.0.0.1",
+     "mac": "02:5f:b6:3a:e5:d7"
+    }
+   },
+   "panel": {
+    "awake": false,
+    "brightness": 85,
+    "occupancy": false,
+    "page": "idle"
+   },
+   "room": {
+    "scene": "idle",
+    "source": "none"
+   },
+   "video": {
+    "input": "hdmi1"
+   }
+  }
+ },
+ "http": [
+  {
+   "Name": "the dashboard at rest",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/html"
+    ]
+   },
+   "response": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>wire-newtron-panel-7, Newtron Panel 7</title>\n<style>\n  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #faf9f6; color: #2a2a30; margin: 0; }\n  .bar { background: #2a2a30; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }\n  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #e85d24; }\n  .bar .model { opacity: 0.7; font-size: 13px; }\n  main { max-width: 760px; margin: 24px auto; padding: 0 16px; }\n  .card { background: #fff; border: 1px solid #e2dfd6; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }\n  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8a7a66; margin: 0 0 10px; }\n  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f3efe6; gap: 16px; }\n  .row:last-child { border-bottom: none; }\n  .row .k { color: #8a7a66; }\n  .row .v { font-weight: 500; }\n  .scene-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }\n  .scene-grid button { padding: 14px 10px; border: 2px solid #e2dfd6; background: #fbf9f1; color: #2a2a30; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; }\n  .scene-grid button:hover { border-color: #e85d24; }\n  .scene-grid button.active { background: #e85d24; border-color: #c44a18; color: #fff; }\n  .source-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }\n  .source-grid button { padding: 10px; border: 1px solid #d5cfbe; background: #fff; color: #2a2a30; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 13px; }\n  .source-grid button:hover { background: #f3efe6; }\n  .source-grid button.active { background: #2a2a30; border-color: #2a2a30; color: #fff; }\n  input[type=range] { width: 240px; vertical-align: middle; }\n  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; margin-left: 8px; }\n  .toast { position: fixed; bottom: 20px; right: 20px; background: #e85d24; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: 600; }\n  .toast.show { opacity: 1; }\n  .toast.err { background: #7a2c2c; }\n</style>\n</head>\n<body>\n<div class=\"bar\">\n  <div><span class=\"brand\">NEWTRON</span> &middot; wire-newtron-panel-7</div>\n  <div class=\"model\">Panel 7</div>\n</div>\n<main>\n  <div class=\"card\">\n    <h2>Scene</h2>\n    \n    <div class=\"scene-grid\">\n      <button class=\"scene-btn active\" data-scene=\"idle\">Idle</button>\n      <button class=\"scene-btn \" data-scene=\"presentation\">Presentation</button>\n      <button class=\"scene-btn \" data-scene=\"vc\">Video call</button>\n      <button class=\"scene-btn \" data-scene=\"cleanup\">Cleanup</button>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Source</h2>\n    \n    <div class=\"source-grid\">\n      <button class=\"source-btn active\" data-source=\"none\">None</button>\n      <button class=\"source-btn \" data-source=\"laptop\">Laptop (HDMI)</button>\n      <button class=\"source-btn \" data-source=\"wireless\">Wireless cast</button>\n      <button class=\"source-btn \" data-source=\"room-pc\">Room PC</button>\n      <button class=\"source-btn \" data-source=\"vc\">VC codec</button>\n      <button class=\"source-btn \" data-source=\"doc-cam\">Doc camera</button>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Panel</h2>\n    <div class=\"row\">\n      <span class=\"k\">backlight</span>\n      <span class=\"ctrl\">\n        <input type=\"range\" id=\"brightness\" min=\"0\" max=\"100\" value=\"85\">\n        <span class=\"slider-val\" id=\"brightness-val\">85%</span>\n      </span>\n    </div>\n    <div class=\"row\"><span class=\"k\">occupancy</span><span class=\"v\">false</span></div>\n    <div class=\"row\"><span class=\"k\">firmware</span><span class=\"v\">4.1.2</span></div>\n    <div class=\"row\"><span class=\"k\">serial</span><span class=\"v\">SN-73659AD388</span></div>\n    <div class=\"row\"><span class=\"k\">uptime (s)</span><span class=\"v\">3600</span></div>\n    <div class=\"row\"><span class=\"k\">ip</span><span class=\"v\">127.0.0.1</span></div>\n    <!-- WEB-DRIVER-ONLY teaching surface: room config version. The value\n         is NOT in any API route, SNMP OID, or SSH `show` command, it\n         ships ONLY as the base64 blob in data-cfgblob below. A plaintext\n         `curl GET /` sees the encoded blob and the \"loading…\"\n         placeholder, never the value; client JS atob()-decodes it into\n         the DOM, so only a real (or headless-JS) browser renders it. -->\n    <div class=\"row\"><span class=\"k\">room config version</span><span class=\"v\" id=\"config-version\" data-cfgblob=\"cmNmZy0yMDI2LjA1LTdmM2E=\">loading…</span></div>\n  </div>\n</main>\n<div id=\"toast\" class=\"toast\"></div>\n<script>\n  const toast = document.getElementById('toast');\n  function flash(msg, isErr) {\n    toast.textContent = msg;\n    toast.className = 'toast show' + (isErr ? ' err' : '');\n    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);\n  }\n  // This page is served by the simulated device's own HTTP listener.\n  // apiURL() resolves absolute \"/api/...\" paths against the page's own\n  // path, so API calls stay relative to wherever the page is served.\n  function apiURL(path) {\n    if (!path.startsWith('/')) return path;\n    const base = location.pathname.replace(/\\/$/, '');\n    return base + path;\n  }\n  async function send(path, body) {\n    try {\n      const r = await fetch(apiURL(path), {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify(body),\n      });\n      if (!r.ok) { flash('error: ' + r.status, true); return false; }\n      flash('applied');\n      return true;\n    } catch (e) { flash('network error', true); return false; }\n  }\n  function reload() { setTimeout(() => location.reload(), 250); }\n\n  document.querySelectorAll('.scene-btn').forEach(btn => {\n    btn.onclick = async () => {\n      if (await send('/api/room/scene', { scene: btn.dataset.scene })) reload();\n    };\n  });\n  document.querySelectorAll('.source-btn').forEach(btn => {\n    btn.onclick = async () => {\n      if (await send('/api/room/source', { source: btn.dataset.source })) reload();\n    };\n  });\n  const slider = document.getElementById('brightness');\n  const sliderVal = document.getElementById('brightness-val');\n  slider.oninput = () => { sliderVal.textContent = slider.value + '%'; };\n  slider.onchange = async () => {\n    await send('/api/panel/brightness', { brightness: Number(slider.value) });\n  };\n\n  // WEB-DRIVER-ONLY datapoint: decode the room config version. The\n  // server embeds it as a base64 blob in data-cfgblob; nothing in the\n  // served HTML carries it in plaintext, so a curl scrape never sees\n  // the value. atob() runs only in a real browser (or a headless\n  // JS-executing driver), which renders it into the DOM here.\n  (() => {\n    const el = document.getElementById('config-version');\n    if (!el) return;\n    const blob = el.dataset.cfgblob || '';\n    try {\n      el.textContent = blob ? atob(blob) : '(unset)';\n    } catch (e) {\n      el.textContent = '(decode error)';\n    }\n  })();\n</script>\n</body>\n</html>\n",
+   "state_change": false
+  },
+  {
+   "Name": "the status document",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"uptime\": 3600,\n    \"model\": \"Panel 7\",\n    \"serial\": \"SN-73659AD388\",\n    \"firmware\": \"4.1.2\"\n  },\n  \"panel\": {\n    \"brightness\": 85,\n    \"occupancy\": false,\n    \"awake\": false,\n    \"page\": \"idle\"\n  }\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "an unknown path",
+   "Method": "GET",
+   "Path": "/nope",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the removed room read",
+   "Method": "GET",
+   "Path": "/api/room",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the wrong method on a route",
+   "Method": "GET",
+   "Path": "/api/room/scene",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "a head request on the root",
+   "Method": "HEAD",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ]
+   },
+   "response": "",
+   "state_change": false
+  },
+  {
+   "Name": "the root with no session",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 302,
+   "headers": {
+    "Content-Type": [
+     "text/html; charset=utf-8"
+    ],
+    "Location": [
+     "/login"
+    ]
+   },
+   "response": "<a href=\"/login\">Found</a>.\n\n",
+   "state_change": false
+  },
+  {
+   "Name": "the status with no session",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 302,
+   "headers": {
+    "Content-Type": [
+     "text/html; charset=utf-8"
+    ],
+    "Location": [
+     "/login"
+    ]
+   },
+   "response": "<a href=\"/login\">Found</a>.\n\n",
+   "state_change": false
+  },
+  {
+   "Name": "a write with no session",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"vc\"}",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 302,
+   "headers": {
+    "Location": [
+     "/login"
+    ]
+   },
+   "response": "",
+   "state_change": false
+  },
+  {
+   "Name": "the sign-in page",
+   "Method": "GET",
+   "Path": "/login",
+   "Body": "",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/html; charset=utf-8"
+    ]
+   },
+   "response": "<!doctype html>\n<html><head><title>wire-newtron-panel-7 sign in</title></head>\n<body><h1>wire-newtron-panel-7</h1>\n<form method=\"post\" action=\"/login\">\n<label>User <input name=\"username\" autocomplete=\"username\"></label>\n<label>Password <input name=\"password\" type=\"password\" autocomplete=\"current-password\"></label>\n<button type=\"submit\">Sign in</button>\n</form></body></html>\n",
+   "state_change": false
+  },
+  {
+   "Name": "scene presentation",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"presentation\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"presentation\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "presentation",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "scene vc",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"vc\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"vc\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "scene cleanup",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"cleanup\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"cleanup\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "cleanup",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "scene a word the panel never listed",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"karaoke\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"karaoke\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "karaoke",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "scene with a space",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"movie night\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"movie night\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "movie night",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "scene idle",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"idle\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "source laptop",
+   "Method": "POST",
+   "Path": "/api/room/source",
+   "Body": "{\"source\": \"laptop\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "source room pc",
+   "Method": "POST",
+   "Path": "/api/room/source",
+   "Body": "{\"source\": \"room-pc\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "room-pc"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "source a word the panel never listed",
+   "Method": "POST",
+   "Path": "/api/room/source",
+   "Body": "{\"source\": \"projector-cart\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "projector-cart"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "source none",
+   "Method": "POST",
+   "Path": "/api/room/source",
+   "Body": "{\"source\": \"none\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness 0",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": 0}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 0,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness 100",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": 100}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 100,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness 55",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": 55}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 55,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness a fraction",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": 72.5}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 72.5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness as text",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": \"40\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 40,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness out of range",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": 250}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 250,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness negative",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": -5}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"idle\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "log a line",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{\"line\": \"WARN backlight driver reset\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "WARN backlight driver reset"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "log a line with spaces",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{\"line\": \"INFO  two   spaces  \"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  two   spaces  "
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "log refused for a newline",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{\"line\": \"a\\nb\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.diagnostics.log\",\"value\":\"a\\nb\",\"pattern\":\"^[^\\\\r\\\\n]{1,200}$\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  two   spaces  "
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "log refused for being empty",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{\"line\": \"\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.diagnostics.log\",\"value\":\"\",\"pattern\":\"^[^\\\\r\\\\n]{1,200}$\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  two   spaces  "
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "log refused for being long",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{\"line\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.diagnostics.log\",\"value\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"pattern\":\"^[^\\\\r\\\\n]{1,200}$\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  two   spaces  "
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "log a line of the longest length",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{\"line\": \"yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": -5,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "set it all away from default",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": \"vc\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Hand": {
+    "status.panel.awake": true,
+    "status.panel.occupancy": true,
+    "status.panel.page": "in-call"
+   },
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"vc\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": -5,
+      "occupancy": true,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status away from default",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"uptime\": 3600,\n    \"model\": \"Panel 7\",\n    \"serial\": \"SN-73659AD388\",\n    \"firmware\": \"4.1.2\"\n  },\n  \"panel\": {\n    \"brightness\": -5,\n    \"occupancy\": true,\n    \"awake\": true,\n    \"page\": \"in-call\"\n  }\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "the dashboard away from default",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/html"
+    ]
+   },
+   "response": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>wire-newtron-panel-7, Newtron Panel 7</title>\n<style>\n  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #faf9f6; color: #2a2a30; margin: 0; }\n  .bar { background: #2a2a30; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }\n  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #e85d24; }\n  .bar .model { opacity: 0.7; font-size: 13px; }\n  main { max-width: 760px; margin: 24px auto; padding: 0 16px; }\n  .card { background: #fff; border: 1px solid #e2dfd6; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }\n  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8a7a66; margin: 0 0 10px; }\n  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f3efe6; gap: 16px; }\n  .row:last-child { border-bottom: none; }\n  .row .k { color: #8a7a66; }\n  .row .v { font-weight: 500; }\n  .scene-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }\n  .scene-grid button { padding: 14px 10px; border: 2px solid #e2dfd6; background: #fbf9f1; color: #2a2a30; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; }\n  .scene-grid button:hover { border-color: #e85d24; }\n  .scene-grid button.active { background: #e85d24; border-color: #c44a18; color: #fff; }\n  .source-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }\n  .source-grid button { padding: 10px; border: 1px solid #d5cfbe; background: #fff; color: #2a2a30; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 13px; }\n  .source-grid button:hover { background: #f3efe6; }\n  .source-grid button.active { background: #2a2a30; border-color: #2a2a30; color: #fff; }\n  input[type=range] { width: 240px; vertical-align: middle; }\n  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; margin-left: 8px; }\n  .toast { position: fixed; bottom: 20px; right: 20px; background: #e85d24; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: 600; }\n  .toast.show { opacity: 1; }\n  .toast.err { background: #7a2c2c; }\n</style>\n</head>\n<body>\n<div class=\"bar\">\n  <div><span class=\"brand\">NEWTRON</span> &middot; wire-newtron-panel-7</div>\n  <div class=\"model\">Panel 7</div>\n</div>\n<main>\n  <div class=\"card\">\n    <h2>Scene</h2>\n    \n    <div class=\"scene-grid\">\n      <button class=\"scene-btn \" data-scene=\"idle\">Idle</button>\n      <button class=\"scene-btn \" data-scene=\"presentation\">Presentation</button>\n      <button class=\"scene-btn active\" data-scene=\"vc\">Video call</button>\n      <button class=\"scene-btn \" data-scene=\"cleanup\">Cleanup</button>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Source</h2>\n    \n    <div class=\"source-grid\">\n      <button class=\"source-btn active\" data-source=\"none\">None</button>\n      <button class=\"source-btn \" data-source=\"laptop\">Laptop (HDMI)</button>\n      <button class=\"source-btn \" data-source=\"wireless\">Wireless cast</button>\n      <button class=\"source-btn \" data-source=\"room-pc\">Room PC</button>\n      <button class=\"source-btn \" data-source=\"vc\">VC codec</button>\n      <button class=\"source-btn \" data-source=\"doc-cam\">Doc camera</button>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Panel</h2>\n    <div class=\"row\">\n      <span class=\"k\">backlight</span>\n      <span class=\"ctrl\">\n        <input type=\"range\" id=\"brightness\" min=\"0\" max=\"100\" value=\"-5\">\n        <span class=\"slider-val\" id=\"brightness-val\">-5%</span>\n      </span>\n    </div>\n    <div class=\"row\"><span class=\"k\">occupancy</span><span class=\"v\">true</span></div>\n    <div class=\"row\"><span class=\"k\">firmware</span><span class=\"v\">4.1.2</span></div>\n    <div class=\"row\"><span class=\"k\">serial</span><span class=\"v\">SN-73659AD388</span></div>\n    <div class=\"row\"><span class=\"k\">uptime (s)</span><span class=\"v\">3600</span></div>\n    <div class=\"row\"><span class=\"k\">ip</span><span class=\"v\">127.0.0.1</span></div>\n    <!-- WEB-DRIVER-ONLY teaching surface: room config version. The value\n         is NOT in any API route, SNMP OID, or SSH `show` command, it\n         ships ONLY as the base64 blob in data-cfgblob below. A plaintext\n         `curl GET /` sees the encoded blob and the \"loading…\"\n         placeholder, never the value; client JS atob()-decodes it into\n         the DOM, so only a real (or headless-JS) browser renders it. -->\n    <div class=\"row\"><span class=\"k\">room config version</span><span class=\"v\" id=\"config-version\" data-cfgblob=\"cmNmZy0yMDI2LjA1LTdmM2E=\">loading…</span></div>\n  </div>\n</main>\n<div id=\"toast\" class=\"toast\"></div>\n<script>\n  const toast = document.getElementById('toast');\n  function flash(msg, isErr) {\n    toast.textContent = msg;\n    toast.className = 'toast show' + (isErr ? ' err' : '');\n    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);\n  }\n  // This page is served by the simulated device's own HTTP listener.\n  // apiURL() resolves absolute \"/api/...\" paths against the page's own\n  // path, so API calls stay relative to wherever the page is served.\n  function apiURL(path) {\n    if (!path.startsWith('/')) return path;\n    const base = location.pathname.replace(/\\/$/, '');\n    return base + path;\n  }\n  async function send(path, body) {\n    try {\n      const r = await fetch(apiURL(path), {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify(body),\n      });\n      if (!r.ok) { flash('error: ' + r.status, true); return false; }\n      flash('applied');\n      return true;\n    } catch (e) { flash('network error', true); return false; }\n  }\n  function reload() { setTimeout(() => location.reload(), 250); }\n\n  document.querySelectorAll('.scene-btn').forEach(btn => {\n    btn.onclick = async () => {\n      if (await send('/api/room/scene', { scene: btn.dataset.scene })) reload();\n    };\n  });\n  document.querySelectorAll('.source-btn').forEach(btn => {\n    btn.onclick = async () => {\n      if (await send('/api/room/source', { source: btn.dataset.source })) reload();\n    };\n  });\n  const slider = document.getElementById('brightness');\n  const sliderVal = document.getElementById('brightness-val');\n  slider.oninput = () => { sliderVal.textContent = slider.value + '%'; };\n  slider.onchange = async () => {\n    await send('/api/panel/brightness', { brightness: Number(slider.value) });\n  };\n\n  // WEB-DRIVER-ONLY datapoint: decode the room config version. The\n  // server embeds it as a base64 blob in data-cfgblob; nothing in the\n  // served HTML carries it in plaintext, so a curl scrape never sees\n  // the value. atob() runs only in a real browser (or a headless\n  // JS-executing driver), which renders it into the DOM here.\n  (() => {\n    const el = document.getElementById('config-version');\n    if (!el) return;\n    const blob = el.dataset.cfgblob || '';\n    try {\n      el.textContent = blob ? atob(blob) : '(unset)';\n    } catch (e) {\n      el.textContent = '(decode error)';\n    }\n  })();\n</script>\n</body>\n</html>\n",
+   "state_change": false
+  },
+  {
+   "Name": "reboot",
+   "Method": "POST",
+   "Path": "/api/admin/reboot",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"action\": \"reboot\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status after a reboot",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"uptime\": 0,\n    \"model\": \"Panel 7\",\n    \"serial\": \"SN-73659AD388\",\n    \"firmware\": \"4.1.2\"\n  },\n  \"panel\": {\n    \"brightness\": 85,\n    \"occupancy\": false,\n    \"awake\": true,\n    \"page\": \"in-call\"\n  }\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "set it away again",
+   "Method": "POST",
+   "Path": "/api/room/source",
+   "Body": "{\"source\": \"laptop\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Hand": {
+    "status.panel.occupancy": true
+   },
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"vc\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 85,
+      "occupancy": true,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness again",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": 12}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"vc\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 12,
+      "occupancy": true,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "factory reset",
+   "Method": "POST",
+   "Path": "/api/admin/factory-reset",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"action\": \"factory-reset\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the dashboard after a factory reset",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/html"
+    ]
+   },
+   "response": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>wire-newtron-panel-7, Newtron Panel 7</title>\n<style>\n  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #faf9f6; color: #2a2a30; margin: 0; }\n  .bar { background: #2a2a30; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }\n  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #e85d24; }\n  .bar .model { opacity: 0.7; font-size: 13px; }\n  main { max-width: 760px; margin: 24px auto; padding: 0 16px; }\n  .card { background: #fff; border: 1px solid #e2dfd6; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }\n  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8a7a66; margin: 0 0 10px; }\n  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f3efe6; gap: 16px; }\n  .row:last-child { border-bottom: none; }\n  .row .k { color: #8a7a66; }\n  .row .v { font-weight: 500; }\n  .scene-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }\n  .scene-grid button { padding: 14px 10px; border: 2px solid #e2dfd6; background: #fbf9f1; color: #2a2a30; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; }\n  .scene-grid button:hover { border-color: #e85d24; }\n  .scene-grid button.active { background: #e85d24; border-color: #c44a18; color: #fff; }\n  .source-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }\n  .source-grid button { padding: 10px; border: 1px solid #d5cfbe; background: #fff; color: #2a2a30; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 13px; }\n  .source-grid button:hover { background: #f3efe6; }\n  .source-grid button.active { background: #2a2a30; border-color: #2a2a30; color: #fff; }\n  input[type=range] { width: 240px; vertical-align: middle; }\n  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; margin-left: 8px; }\n  .toast { position: fixed; bottom: 20px; right: 20px; background: #e85d24; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: 600; }\n  .toast.show { opacity: 1; }\n  .toast.err { background: #7a2c2c; }\n</style>\n</head>\n<body>\n<div class=\"bar\">\n  <div><span class=\"brand\">NEWTRON</span> &middot; wire-newtron-panel-7</div>\n  <div class=\"model\">Panel 7</div>\n</div>\n<main>\n  <div class=\"card\">\n    <h2>Scene</h2>\n    \n    <div class=\"scene-grid\">\n      <button class=\"scene-btn active\" data-scene=\"idle\">Idle</button>\n      <button class=\"scene-btn \" data-scene=\"presentation\">Presentation</button>\n      <button class=\"scene-btn \" data-scene=\"vc\">Video call</button>\n      <button class=\"scene-btn \" data-scene=\"cleanup\">Cleanup</button>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Source</h2>\n    \n    <div class=\"source-grid\">\n      <button class=\"source-btn active\" data-source=\"none\">None</button>\n      <button class=\"source-btn \" data-source=\"laptop\">Laptop (HDMI)</button>\n      <button class=\"source-btn \" data-source=\"wireless\">Wireless cast</button>\n      <button class=\"source-btn \" data-source=\"room-pc\">Room PC</button>\n      <button class=\"source-btn \" data-source=\"vc\">VC codec</button>\n      <button class=\"source-btn \" data-source=\"doc-cam\">Doc camera</button>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Panel</h2>\n    <div class=\"row\">\n      <span class=\"k\">backlight</span>\n      <span class=\"ctrl\">\n        <input type=\"range\" id=\"brightness\" min=\"0\" max=\"100\" value=\"85\">\n        <span class=\"slider-val\" id=\"brightness-val\">85%</span>\n      </span>\n    </div>\n    <div class=\"row\"><span class=\"k\">occupancy</span><span class=\"v\">false</span></div>\n    <div class=\"row\"><span class=\"k\">firmware</span><span class=\"v\">4.1.2</span></div>\n    <div class=\"row\"><span class=\"k\">serial</span><span class=\"v\">SN-73659AD388</span></div>\n    <div class=\"row\"><span class=\"k\">uptime (s)</span><span class=\"v\">0</span></div>\n    <div class=\"row\"><span class=\"k\">ip</span><span class=\"v\">127.0.0.1</span></div>\n    <!-- WEB-DRIVER-ONLY teaching surface: room config version. The value\n         is NOT in any API route, SNMP OID, or SSH `show` command, it\n         ships ONLY as the base64 blob in data-cfgblob below. A plaintext\n         `curl GET /` sees the encoded blob and the \"loading…\"\n         placeholder, never the value; client JS atob()-decodes it into\n         the DOM, so only a real (or headless-JS) browser renders it. -->\n    <div class=\"row\"><span class=\"k\">room config version</span><span class=\"v\" id=\"config-version\" data-cfgblob=\"cmNmZy0yMDI2LjA1LTdmM2E=\">loading…</span></div>\n  </div>\n</main>\n<div id=\"toast\" class=\"toast\"></div>\n<script>\n  const toast = document.getElementById('toast');\n  function flash(msg, isErr) {\n    toast.textContent = msg;\n    toast.className = 'toast show' + (isErr ? ' err' : '');\n    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);\n  }\n  // This page is served by the simulated device's own HTTP listener.\n  // apiURL() resolves absolute \"/api/...\" paths against the page's own\n  // path, so API calls stay relative to wherever the page is served.\n  function apiURL(path) {\n    if (!path.startsWith('/')) return path;\n    const base = location.pathname.replace(/\\/$/, '');\n    return base + path;\n  }\n  async function send(path, body) {\n    try {\n      const r = await fetch(apiURL(path), {\n        method: 'POST',\n        headers: { 'Content-Type': 'application/json' },\n        body: JSON.stringify(body),\n      });\n      if (!r.ok) { flash('error: ' + r.status, true); return false; }\n      flash('applied');\n      return true;\n    } catch (e) { flash('network error', true); return false; }\n  }\n  function reload() { setTimeout(() => location.reload(), 250); }\n\n  document.querySelectorAll('.scene-btn').forEach(btn => {\n    btn.onclick = async () => {\n      if (await send('/api/room/scene', { scene: btn.dataset.scene })) reload();\n    };\n  });\n  document.querySelectorAll('.source-btn').forEach(btn => {\n    btn.onclick = async () => {\n      if (await send('/api/room/source', { source: btn.dataset.source })) reload();\n    };\n  });\n  const slider = document.getElementById('brightness');\n  const sliderVal = document.getElementById('brightness-val');\n  slider.oninput = () => { sliderVal.textContent = slider.value + '%'; };\n  slider.onchange = async () => {\n    await send('/api/panel/brightness', { brightness: Number(slider.value) });\n  };\n\n  // WEB-DRIVER-ONLY datapoint: decode the room config version. The\n  // server embeds it as a base64 blob in data-cfgblob; nothing in the\n  // served HTML carries it in plaintext, so a curl scrape never sees\n  // the value. atob() runs only in a real browser (or a headless\n  // JS-executing driver), which renders it into the DOM here.\n  (() => {\n    const el = document.getElementById('config-version');\n    if (!el) return;\n    const blob = el.dataset.cfgblob || '';\n    try {\n      el.textContent = blob ? atob(blob) : '(unset)';\n    } catch (e) {\n      el.textContent = '(decode error)';\n    }\n  })();\n</script>\n</body>\n</html>\n",
+   "state_change": false
+  },
+  {
+   "Name": "reboot with the wrong method",
+   "Method": "GET",
+   "Path": "/api/admin/reboot",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "scene missing",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote <no value> into state",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"<no value>\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": "\u003cno value\u003e",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "scene a number",
+   "Method": "POST",
+   "Path": "/api/room/scene",
+   "Body": "{\"scene\": 7}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote the number into state as a scene",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"7\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": 7,
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "source missing",
+   "Method": "POST",
+   "Path": "/api/room/source",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote <no value> into state",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"7\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": 7,
+      "source": "\u003cno value\u003e"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness a word",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{\"brightness\": \"abc\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote the word into state and the status document was not JSON",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"7\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": "abc",
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": 7,
+      "source": "\u003cno value\u003e"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "brightness missing",
+   "Method": "POST",
+   "Path": "/api/panel/brightness",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote <no value> into state",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"scene\": \"7\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": "\u003cno value\u003e",
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": 7,
+      "source": "\u003cno value\u003e"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "log missing",
+   "Method": "POST",
+   "Path": "/api/diagnostics/log",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the template wrote <no value> into the log",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "\u003cno value\u003e"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": true,
+      "brightness": "\u003cno value\u003e",
+      "occupancy": false,
+      "page": "in-call"
+     },
+     "room": {
+      "scene": 7,
+      "source": "\u003cno value\u003e"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   },
+   "state_change": true
+  }
+ ],
+ "snmp": {
+  "rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Panel 7"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.1.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.2.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.5.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.5.2.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   }
+  ],
+  "written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Panel 7"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.1.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.2.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.5.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55510.5.2.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   }
+  ]
+ },
+ "walks": {
+  "1.3.6.1.2.1.1@rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Panel 7"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ],
+  "1.3.6.1.2.1.1@written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "Panel 7"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "0"
+   }
+  ],
+  "1.3.6.1.4.1.55510@rest": [],
+  "1.3.6.1.4.1.55510@written": []
+ },
+ "ticks": {
+  "room_meeting": [
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   },
+   {
+    "status.panel.awake": false,
+    "status.panel.page": "idle"
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.panel.awake",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.panel.awake",
+    "value": true
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.panel.page",
+    "value": "sharing"
+   },
+   {
+    "at": "08:49:30",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.panel.awake",
+    "value": false
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.panel.awake",
+    "value": true
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.panel.awake",
+    "value": false
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.panel.awake",
+    "value": true
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "10:22:00",
+    "path": "status.panel.page",
+    "value": "sharing"
+   },
+   {
+    "at": "10:40:00",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.panel.awake",
+    "value": false
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.panel.awake",
+    "value": true
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.panel.awake",
+    "value": false
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.panel.awake",
+    "value": true
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.panel.awake",
+    "value": false
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.panel.awake",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.panel.page",
+    "value": "idle"
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.panel.awake",
+    "value": true
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.panel.page",
+    "value": "in-call"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.panel.page",
+    "value": "idle"
+   }
+  ]
+ },
+ "lines": [
+  {
+   "name": "the input at rest",
+   "line": "GET INPUT",
+   "reply": "INPUT hdmi1",
+   "state_change": false
+  },
+  {
+   "name": "input dp1",
+   "line": "SET INPUT dp1",
+   "reply": "INPUT dp1",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "input hdmi2",
+   "line": "SET INPUT hdmi2",
+   "reply": "INPUT hdmi2",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi2"
+     }
+    }
+   }
+  },
+  {
+   "name": "input hdmi3",
+   "line": "SET INPUT hdmi3",
+   "reply": "INPUT hdmi3",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi3"
+     }
+    }
+   }
+  },
+  {
+   "name": "input usbc",
+   "line": "SET INPUT usbc",
+   "reply": "INPUT usbc",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "input hdmi1",
+   "line": "SET INPUT hdmi1",
+   "reply": "INPUT hdmi1",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "input refused",
+   "line": "SET INPUT vga",
+   "reply": "-ERR unknown command: SET INPUT vga",
+   "state_change": false
+  },
+  {
+   "name": "input with no value",
+   "line": "SET INPUT",
+   "reply": "-ERR unknown command: SET INPUT",
+   "state_change": false
+  },
+  {
+   "name": "input in another case",
+   "line": "SET INPUT HDMI1",
+   "reply": "-ERR unknown command: SET INPUT HDMI1",
+   "state_change": false
+  },
+  {
+   "name": "the input after",
+   "line": "GET INPUT",
+   "reply": "INPUT hdmi1",
+   "state_change": false
+  },
+  {
+   "name": "the scene at rest",
+   "line": "GET SCENE",
+   "reply": "SCENE idle",
+   "state_change": false
+  },
+  {
+   "name": "scene presentation",
+   "line": "SET SCENE presentation",
+   "reply": "SCENE presentation",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "presentation",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "scene vc",
+   "line": "SET SCENE vc",
+   "reply": "SCENE vc",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "scene idle",
+   "line": "SET SCENE idle",
+   "reply": "SCENE idle",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "scene refused",
+   "line": "SET SCENE cleanup",
+   "reply": "-ERR unknown command: SET SCENE cleanup",
+   "state_change": false
+  },
+  {
+   "name": "the scene after",
+   "line": "GET SCENE",
+   "reply": "SCENE idle",
+   "state_change": false
+  },
+  {
+   "name": "a lower-case verb",
+   "line": "get input",
+   "reply": "-ERR unknown command: get input",
+   "state_change": false
+  },
+  {
+   "name": "a verb with trailing space",
+   "line": "GET INPUT ",
+   "reply": "INPUT hdmi1",
+   "state_change": false
+  },
+  {
+   "name": "an unknown verb",
+   "line": "NOPE",
+   "reply": "-ERR unknown command: NOPE",
+   "state_change": false
+  },
+  {
+   "name": "a blank line",
+   "line": "  ",
+   "reply": "",
+   "state_change": false
+  },
+  {
+   "name": "subscribe input",
+   "line": "SUBSCRIBE INPUT",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "a change is pushed",
+   "line": "SET INPUT dp1",
+   "reply": "INPUT dp1",
+   "pushed": [
+    "EVT INPUT dp1"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "the same input again",
+   "line": "SET INPUT dp1",
+   "reply": "INPUT dp1",
+   "pushed": [
+    "EVT INPUT dp1"
+   ],
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "subscribe log",
+   "line": "SUBSCRIBE LOG",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "subscribe scene",
+   "line": "SUBSCRIBE SCENE",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "a scene is pushed",
+   "line": "SET SCENE vc",
+   "reply": "SCENE vc",
+   "pushed": [
+    "EVT SCENE vc"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe scene",
+   "line": "UNSUBSCRIBE SCENE",
+   "reply": "-ERR unknown command: UNSUBSCRIBE SCENE",
+   "state_change": false
+  },
+  {
+   "name": "a scene after unsubscribe",
+   "line": "SET SCENE presentation",
+   "reply": "SCENE presentation",
+   "pushed": [
+    "EVT SCENE presentation"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "presentation",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe input",
+   "line": "UNSUBSCRIBE INPUT",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "an input after unsubscribe",
+   "line": "SET INPUT usbc",
+   "reply": "INPUT usbc",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "presentation",
+      "source": "none"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe log",
+   "line": "UNSUBSCRIBE LOG",
+   "reply": "-ERR unknown command: UNSUBSCRIBE LOG",
+   "state_change": false
+  },
+  {
+   "name": "the program is not the panel's",
+   "line": "GET PROGRAM",
+   "reply": "-ERR unknown command: GET PROGRAM",
+   "state_change": false
+  },
+  {
+   "name": "the booking is not the panel's",
+   "line": "GET BOOKING",
+   "reply": "-ERR unknown command: GET BOOKING",
+   "state_change": false
+  },
+  {
+   "name": "subscribe, then a log line over the web API",
+   "line": "SUBSCRIBE LOG",
+   "reply": "OK",
+   "pushed": [
+    "LOG WARN backlight driver reset"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "WARN backlight driver reset"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "presentation",
+      "source": "none"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "a scene over the web API is pushed",
+   "line": "SUBSCRIBE SCENE",
+   "reply": "OK",
+   "pushed": [
+    "EVT SCENE vc"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "WARN backlight driver reset"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "vc",
+      "source": "none"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "an input over the line, a log over the web API",
+   "line": "SUBSCRIBE INPUT",
+   "reply": "OK",
+   "pushed": [
+    "LOG INFO  second"
+   ],
+   "state_change": true
+  },
+  {
+   "name": "only the web API acts",
+   "line": "",
+   "reply": "",
+   "pushed": [
+    "EVT SCENE idle"
+   ],
+   "state_change": true
+  },
+  {
+   "name": "show status",
+   "line": "show status",
+   "direct": true,
+   "reply": "hostname      : wire-newtron-panel-7\nmodel         : Panel 7\nfirmware      : 4.1.2\nserial        : SN-73659AD388\nuptime (s)    : 3600\nbrightness    : 85%\noccupancy     : false\nawake         : false\npage          : idle\n",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "show room",
+   "line": "show room",
+   "direct": true,
+   "reply": "scene     : idle\nsource    : none\noccupancy : false\n",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "show room with an occupant",
+   "line": "show room",
+   "direct": true,
+   "reply": "scene     : idle\nsource    : laptop\noccupancy : true\n",
+   "state_change": false
+  },
+  {
+   "name": "an unknown show",
+   "line": "show nothing",
+   "direct": true,
+   "reply": "",
+   "unknown": true,
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": true,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "an nvp verb in the shell",
+   "line": "GET INPUT",
+   "direct": true,
+   "reply": "INPUT usbc",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": true,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "an nvp set in the shell",
+   "line": "SET INPUT dp1",
+   "direct": true,
+   "reply": "INPUT dp1",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": true,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "an nvp subscribe in the shell",
+   "line": "SUBSCRIBE INPUT",
+   "direct": true,
+   "reply": "OK",
+   "action": "subscribe",
+   "subject": "status.video.input",
+   "token": "INPUT",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": true,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "reboot",
+   "line": "reboot",
+   "direct": true,
+   "reply": "OK\n",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "laptop"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "factory reset after changes",
+   "line": "factory-reset",
+   "direct": true,
+   "reply": "OK\n",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "reboot with no hand",
+   "line": "reboot",
+   "direct": true,
+   "reply": "OK\n",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "an unknown command",
+   "line": "frobnicate",
+   "direct": true,
+   "reply": "",
+   "unknown": true,
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Panel 7",
+      "serial": "SN-73659AD388"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     },
+     "network": {
+      "hostname": "wire-newtron-panel-7"
+     },
+     "room": {
+      "config_version": "rcfg-2026.05-7f3a"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "diagnostics": {
+      "log": "INFO  second"
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:5f:b6:3a:e5:d7"
+      }
+     },
+     "panel": {
+      "awake": false,
+      "brightness": 85,
+      "occupancy": false,
+      "page": "idle"
+     },
+     "room": {
+      "scene": "idle",
+      "source": "none"
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  }
+ ],
+ "help": [
+  "show status",
+  "show room",
+  "reboot",
+  "factory-reset",
+  "GET INPUT",
+  "SET INPUT hdmi1",
+  "SET INPUT hdmi2",
+  "SET INPUT hdmi3",
+  "SET INPUT dp1",
+  "SET INPUT usbc",
+  "SUBSCRIBE INPUT",
+  "UNSUBSCRIBE INPUT",
+  "SUBSCRIBE LOG",
+  "GET SCENE",
+  "SET SCENE idle",
+  "SET SCENE presentation",
+  "SET SCENE vc",
+  "SUBSCRIBE SCENE"
+ ]
+}

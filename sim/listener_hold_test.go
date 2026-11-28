@@ -52,7 +52,7 @@ func TestPanelListenerHearsPushesAndReArms(t *testing.T) {
 	e := newCatalogEngine(t)
 	ip := simtest.ClaimLoopback(t)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
-		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		ProfileName: profileOf(t, e, "newtron-panel-7"), Product: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	panel := e.Devices()[0]

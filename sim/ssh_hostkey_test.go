@@ -20,7 +20,7 @@ func TestSSHHostKeyIsTheSameAcrossASimulatorRestart(t *testing.T) {
 	key := func(id, ip string) string {
 		t.Helper()
 		e := newCatalogEngine(t)
-		if err := e.Sync([]DeviceSnapshot{{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		if err := e.Sync([]DeviceSnapshot{{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: profileOf(t, e, "newtron-panel-7"), Product: "newtron-panel-7", Version: 1}}); err != nil {
 			t.Fatal(err)
 		}
 		d := e.Devices()[0]
@@ -40,7 +40,7 @@ func TestSSHHostKeyIsTheSameAcrossASimulatorRestart(t *testing.T) {
 	}
 
 	e := newCatalogEngine(t)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel-1", Hostname: "panel-1", LoopbackIP: "127.88.9.21", ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel-1", Hostname: "panel-1", LoopbackIP: "127.88.9.21", ProfileName: profileOf(t, e, "newtron-panel-7"), Product: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]

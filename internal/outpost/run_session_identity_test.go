@@ -24,10 +24,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // The connection fingerprint and the layered gate end to end (#1056 ruling,
@@ -55,9 +57,10 @@ func newGateStack(t *testing.T, ip, outpostName string, extraIPs ...string) *gat
 	return newGateStackWith(t, ip, outpostName, nil, extraIPs...)
 }
 
-// newGateStackWith is newGateStack over a catalog the test shapes first (a
-// face's certificate window, say).
-func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*profile.Store), extraIPs ...string) *gateStack {
+// newGateStackWith is newGateStack over a panel the test shapes first (a
+// face's certificate window, say): a copy of the panel family served under a
+// name of its own.
+func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*spec.Spec), extraIPs ...string) *gateStack {
 	t.Helper()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
@@ -73,16 +76,21 @@ func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*profile.
 	if err != nil {
 		t.Fatal(err)
 	}
+	panelProfile := nvpProfile(t, store)
+	var shaped []spec.Spec
 	if shape != nil {
-		shape(store)
+		fam := newtronpanel.Spec()
+		shape(&fam)
+		fam.Name, fam.Models = newtronpanel.Name+"-shaped", nil
+		shaped, panelProfile = append(shaped, fam), fam.Name
 	}
-	engine := shipped.EngineFrom(t, store)
+	engine := shipped.EngineFrom(t, store, shaped...)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
-	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: nvpProfile(t, store), Version: 1}}
+	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: panelProfile, Version: 1}}
 	for i, extra := range extraIPs {
 		snaps = append(snaps, sim.DeviceSnapshot{DeviceID: fmt.Sprintf("panel-%d", i+2), Hostname: fmt.Sprintf("panel-%d", i+2),
-			LoopbackIP: extra, ProfileName: nvpProfile(t, store), Version: 1})
+			LoopbackIP: extra, ProfileName: panelProfile, Version: 1})
 	}
 	if err := engine.Sync(snaps); err != nil {
 		t.Fatal(err)

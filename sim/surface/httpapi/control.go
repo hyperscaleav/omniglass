@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -22,8 +23,9 @@ const (
 	Number
 	// Flag is a boolean: true or false, or the text "true" or "false".
 	Flag
-	// Text is any string: a field that is not a JSON string (a number, a
-	// boolean, null, missing) is refused as not text.
+	// Text is a string written as sent, whatever it says, the typed form of a
+	// route's mutation that lists no values; a Pattern refuses what does not
+	// match. A body field that is not a string is refused.
 	Text
 )
 
@@ -35,6 +37,9 @@ type Field struct {
 	// Values are the values a Choice accepts, in the order the console offers
 	// them.
 	Values []string
+	// Pattern is the expression a Text must match, as the engine's validation
+	// names it; empty accepts any string.
+	Pattern string
 }
 
 // Control is a POST route that sets state from fields of its JSON body and
@@ -44,20 +49,32 @@ type Field struct {
 type Control struct {
 	Match, Summary, Example string
 	Fields                  []Field
+	// Also derives writes from the values the request set, keyed by state path:
+	// they are made in the same change, after the fields, and only once every
+	// field has been accepted.
+	Also func(d spec.Device, set map[string]any) []surface.Change
 	// Ack is the document answered, read from the device after the writes.
 	Ack func(d spec.Device) any
 	// Indented answers Ack as an indented document, as a GET of the same
 	// thing does, instead of the one-line acknowledgment.
 	Indented bool
+	// patterns are the Text fields' compiled expressions, by field name.
+	patterns map[string]*regexp.Regexp
 }
 
 // Route is the control as a family route. The quick sets the console offers
 // are the Choice fields, so the listing and the handler cannot differ.
 func (c Control) Route() spec.HTTPRoute {
 	var sets []profile.Set
+	c.patterns = map[string]*regexp.Regexp{}
 	for _, f := range c.Fields {
-		if f.Kind == Choice {
+		switch f.Kind {
+		case Choice:
 			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), f.Values...)})
+		case Text:
+			if f.Pattern != "" {
+				c.patterns[f.Name] = regexp.MustCompile(f.Pattern)
+			}
 		}
 	}
 	return spec.HTTPRoute{Match: c.Match, Summary: c.Summary, Example: c.Example, Sets: sets, Handle: c.handle}
@@ -99,11 +116,22 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 			if !ok {
 				return badField(f, "text")
 			}
+			if re := c.patterns[f.Name]; re != nil && !re.MatchString(text) {
+				refused = append(refused, refusedField{Path: f.Path, Value: text, Pattern: f.Pattern})
+				continue
+			}
 			changes = append(changes, surface.Change{Path: f.Path, Value: text})
 		}
 	}
 	if len(refused) > 0 {
 		return refusal(refused)
+	}
+	if c.Also != nil {
+		set := make(map[string]any, len(changes))
+		for _, ch := range changes {
+			set[ch.Path] = ch.Value
+		}
+		changes = append(changes, c.Also(d, set)...)
 	}
 	if err := d.WriteMany(changes...); err != nil {
 		return spec.Failure(500, err.Error())
