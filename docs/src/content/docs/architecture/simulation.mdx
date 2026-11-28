@@ -130,6 +130,16 @@ one JSON route, one control, SNMP uptime and one tick.
 4. **Account for it.** A seeded product on the network that no family serves is listed in
    `sim/device/coverage.go` with its issue; a product served by a family is dropped from that list.
 
+What proves a family answers what the shipped drivers read is the **driver contract test**
+(`TestEveryShippedDriverPollResolvesAgainstItsSimulatedFamily`, `internal/collection/drivercontract_test.go`). It is
+generated from the boot seed and the shipped catalog, with no list to keep: for every seeded product that
+has a polled driver and a family that serves it, the test starts the device on loopback and runs each of
+the driver's polls through the real collection path (the SNMP, HTTP, HTTPS and line clients, with the
+simulated fleet's own credentials), then requires every metric and property the poll declares to resolve
+to a value. A family that stops answering a field a driver reads fails naming the product, driver, poll
+and signal. The test logs what it skipped and why (a product with no driver, a driver that only listens
+or is pushed to, a driver that rides a held websocket).
+
 ### Coverage is accounted, not hoped for
 
 Every seeded product on the network is a model of a family or is listed, with its issue, in the
