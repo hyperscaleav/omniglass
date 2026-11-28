@@ -23,7 +23,7 @@ func TestGenericDeviceServesSysDescrAndSysUpTime(t *testing.T) {
 	if !ok {
 		t.Fatal("no profile resolves for the generic-device product")
 	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "generic-1", Hostname: "generic-1", LoopbackIP: ip, ProfileName: name, Version: 1}}); err != nil {

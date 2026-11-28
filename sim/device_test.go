@@ -167,7 +167,7 @@ func TestEngineLoadTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading catalog: %v", err)
 	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	seen := 0
 	for name, prof := range store.Devices {
 		for _, iface := range prof.Interfaces {

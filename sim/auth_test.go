@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // newAuthDevice builds a minimal device with one route for auth tests.
@@ -336,33 +335,34 @@ func TestHTTPAuthFromProfile_HeaderEnforced(t *testing.T) {
 	}
 }
 
-// TestHTTPAuthFromProfile_CatalogProfiles loads the embedded catalog and
-// asserts each HTTP interface produces the auth mode its YAML claims. This
+// TestHTTPAuthFromProfile_CatalogProfiles loads the shipped catalog (profiles
+// and families) and asserts each HTTP interface produces the auth mode it
+// claims. This
 // is the regression catch for "I changed the YAML and forgot to flip
 // enforce" or "I renamed a field".
 func TestHTTPAuthFromProfile_CatalogProfiles(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("LoadStore: %v", err)
-	}
+	cat := shippedEngine(t).cat
 
 	expected := map[string]HTTPAuthMode{
-		"boreal-edge-86":  HTTPAuthDigest,
+		"boreal-edge":     HTTPAuthDigest,
+		"boreal-beam":     HTTPAuthDigest,
+		"boreal-cast":     HTTPAuthHeader,
 		"kestrel-vroom":   HTTPAuthBasic,
 		"polaris-dsp-16":  HTTPAuthHeader,
 		"newtron-panel-7": HTTPAuthForm,
 	}
 
 	for name, want := range expected {
-		dp := store.Devices[name]
-		if dp == nil {
-			t.Errorf("profile %q not loaded", name)
+		def, ok := cat.Lookup(name)
+		if !ok {
+			t.Errorf("definition %q not loaded", name)
 			continue
 		}
+		surfaces := def.Surfaces()
 		var httpIface *profile.Interface
-		for i := range dp.Interfaces {
-			if dp.Interfaces[i].Protocol == "http" {
-				httpIface = &dp.Interfaces[i]
+		for i := range surfaces {
+			if surfaces[i].Protocol == "http" {
+				httpIface = &surfaces[i]
 				break
 			}
 		}

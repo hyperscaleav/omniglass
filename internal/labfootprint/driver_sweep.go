@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // SweepPoint is one step of a driver sweep (#1871): the outpost's task count
@@ -159,12 +159,23 @@ func PlanDriverSweep(polls map[string][]time.Duration, products []seed.ShippedPr
 // products, the simulator's own profiles, and the simulated fleet's
 // attaches.
 func ShippedDriverSweep() ([]DriverTarget, []DriverSkip) {
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		panic("labfootprint: load simulator profiles: " + err.Error())
 	}
-	return PlanDriverSweep(seed.ShippedDriverPolls(), seed.ShippedProducts(),
-		func(p string) bool { _, _, ok := store.ForProduct(p); return ok },
+	return driverSweepOver(cat)
+}
+
+// simulatedBy is whether the catalog simulates a product, by a YAML profile or
+// a Go family.
+func simulatedBy(cat *spec.Catalog) func(product string) bool {
+	return func(p string) bool { _, ok := cat.ForProduct(p); return ok }
+}
+
+// driverSweepOver plans the sweep with the simulator's definitions read from
+// cat, YAML profiles and Go families alike (#2829).
+func driverSweepOver(cat *spec.Catalog) ([]DriverTarget, []DriverSkip) {
+	return PlanDriverSweep(seed.ShippedDriverPolls(), seed.ShippedProducts(), simulatedBy(cat),
 		func(d string) bool { _, ok := simfleet.Attach[d]; return ok })
 }
 

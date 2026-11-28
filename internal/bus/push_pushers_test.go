@@ -19,8 +19,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestAMeasuredCorporateLabReadsItsPushLane is the scale lab's push lane end
@@ -94,11 +93,7 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 	apiSrv := httptest.NewServer(api.NewHandler(seedGW, api.WithTelemetryPublisher(srv)))
 	defer apiSrv.Close()
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	var snaps []sim.DeviceSnapshot
 	tokens := map[string]string{}
 	pushes := 0
@@ -161,7 +156,7 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 	for comp := range hooks {
 		platforms = append(platforms, sim.DeviceSnapshot{DeviceID: comp, Hostname: comp, LoopbackIP: "127.0.0.1", ProfileName: platformProfile, Version: 1})
 	}
-	senders := sim.NewEngine(store, profiles.Templates())
+	senders := shipped.Engine(t)
 	if err := senders.LoadDevices(platforms); err != nil {
 		t.Fatalf("load the platforms: %v", err)
 	}

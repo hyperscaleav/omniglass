@@ -10,8 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // shippedSpec is a seeded driver's spec, parsed as the write path parses it.
@@ -41,11 +40,7 @@ func bake(fn string, records string, id *driver.IdentitySpec, emits []driver.Emi
 // catalog admits and a numeric participant count, and ucc-webhook's
 // batched-report listener reads every room of a report the same way.
 func TestTheShippedUCCDriversReadThePlatform(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "p", Hostname: "p", LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -119,11 +114,7 @@ func TestTheShippedRoomListDeclaresTokenPaging(t *testing.T) {
 	if pg == nil || pg.Style != driver.PageCursor || pg.CursorFrom != "next_page_token" || pg.CursorParam != "next_page_token" || pg.SizeParam != "page_size" {
 		t.Fatalf("ucc-rooms paginate = %+v", pg)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "p", Hostname: "p", LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -173,11 +164,7 @@ func TestTheShippedDriverReadsThePlatformsDevices(t *testing.T) {
 	if pg := poll.Request.Paginate; pg == nil || pg.Style != driver.PageCursor || pg.CursorFrom != "next_page_token" || pg.CursorParam != "next_page_token" || pg.SizeParam != "page_size" {
 		t.Fatalf("the devices poll paginate = %+v", pg)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "p", Hostname: "p", LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}

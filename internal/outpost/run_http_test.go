@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,8 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -39,6 +42,22 @@ import (
 // read by drivers authored here, behind a bearer token and a query key. A
 // refused credential is sent once per connection fingerprint, and a changed
 // https key is held beneath the gate until an operator trusts it.
+
+// familyVariants holds, per profile store, the Go families a test derived from a
+// shipped one (a copy that logs in another way), served beside the profiles.
+// A store is one test's, so the table never crosses tests.
+var familyVariants sync.Map // *profile.Store -> []spec.Spec
+
+// catalogOf is the simulator's catalog a test serves from: the store's YAML
+// profiles, every shipped Go family, and the variants derived for the store.
+func catalogOf(t testing.TB, store *profile.Store) *spec.Catalog {
+	t.Helper()
+	var variants []spec.Spec
+	if v, ok := familyVariants.Load(store); ok {
+		variants = v.([]spec.Spec)
+	}
+	return shipped.CatalogFrom(t, store, variants...)
+}
 
 // httpStack is one test's server, simulated components and outpost.
 type httpStack struct {
@@ -75,7 +94,7 @@ func newHTTPStack(t *testing.T, outpostName string, shape func(*profile.Store), 
 		shape(store)
 	}
 	names := pick(store)
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := sim.NewEngineOver(catalogOf(t, store), profiles.Templates())
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	ips := map[string]string{}
@@ -169,8 +188,8 @@ func driverProfile(t *testing.T, store *profile.Store, driver string) string {
 		if p.DriverID != driver {
 			continue
 		}
-		if name, _, ok := store.ForProduct(p.ID); ok {
-			names = append(names, name)
+		if r, ok := catalogOf(t, store).ForProduct(p.ID); ok {
+			names = append(names, r.Definition.ID())
 		}
 	}
 	if len(names) == 0 {

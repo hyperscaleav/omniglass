@@ -155,10 +155,15 @@ type Interface struct {
 	// Include names the surfaces (surfaces/<name>.yaml) this face serves in
 	// front of its own subjects and commands: what two devices answer alike
 	// is defined once. See Surface.
-	Include       []string          `yaml:"include"`
-	Routes        []Route           `yaml:"routes"`
-	Commands      []Command         `yaml:"commands"`
-	OIDMap        map[string]string `yaml:"oid_map"`
+	Include  []string          `yaml:"include"`
+	Routes   []Route           `yaml:"routes"`
+	Commands []Command         `yaml:"commands"`
+	OIDMap   map[string]string `yaml:"oid_map"`
+	// NativeOIDs are the OIDs a Go family's surface serves (state path to
+	// OID, as OIDMap), listed where the console lists a profile's but never
+	// served from the map: the family's own surface answers them. Never read
+	// from YAML.
+	NativeOIDs    map[string]string `yaml:"-"`
 	ReachableWhen string            `yaml:"reachable_when"`
 
 	// MIB names the SNMP MIB file this device's enterprise OID arc is
@@ -238,6 +243,11 @@ type Subject struct {
 	Path         string `yaml:"path"`
 	PublishToken string `yaml:"publish_token"`
 	PushFormat   string `yaml:"push_format"`
+
+	// Push is the line a Go-declared subject pushes (sim/surface, #2831),
+	// a function of the new value in place of PushFormat's template. Never
+	// read from YAML.
+	Push func(value any) string `yaml:"-"`
 }
 
 // SessionLimits caps resource use on a Persistent interface. All
@@ -392,6 +402,15 @@ type Route struct {
 	Mutations []Mutation     `yaml:"mutations"`
 	Example   string         `yaml:"example"`
 
+	// Native marks a route a Go family answers in Go (#2829): it is listed
+	// where a profile's routes are (the console's surface), and the engine
+	// does not render a template for it. Never set from YAML.
+	Native bool `yaml:"-"`
+
+	// NativeSets are the quick sets a Go family declares for a native route,
+	// the Go counterpart of the sets its mutations carry. Never read from YAML.
+	NativeSets []Set `yaml:"-"`
+
 	// Visibility marks a route as part of the device's advertised
 	// public API surface or as a private route the device's own web
 	// UI calls internally but that is not advertised as a public API.
@@ -452,6 +471,10 @@ type Command struct {
 	Mutate    map[string]any `yaml:"mutate"`
 	Mutations []Mutation     `yaml:"mutations"`
 	Example   string         `yaml:"example"`
+
+	// Native marks a command a Go family answers in Go (#2829); see
+	// Route.Native. Never set from YAML.
+	Native bool `yaml:"-"`
 
 	// MatchHex is an alternative to Match for protocols whose
 	// commands include literal control bytes that don't survive

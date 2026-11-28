@@ -6,8 +6,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/template"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/device"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // Catalog is what a manifest's names are checked against: the standards, the
@@ -57,11 +57,17 @@ func ShippedCatalog() (Catalog, error) {
 }
 
 func loadShipped() (Catalog, error) {
-	tc := template.Shipped()
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		return Catalog{}, fmt.Errorf("scenario: load the simulator profiles: %w", err)
 	}
+	return shippedOver(cat), nil
+}
+
+// shippedOver is the shipped catalog with the simulator's definitions read
+// from cat, YAML profiles and Go families alike (#2829).
+func shippedOver(cat *spec.Catalog) Catalog {
+	tc := template.Shipped()
 	products := map[string]string{}
 	for _, p := range seed.ShippedProducts() {
 		products[p.Name] = p.ComponentType
@@ -84,38 +90,38 @@ func loadShipped() (Catalog, error) {
 			return ct, ok
 		},
 		Simulated: func(product string) bool {
-			_, _, ok := store.ForProduct(product)
+			_, ok := cat.ForProduct(product)
 			return ok
 		},
 		SimProfile: func(product string) (string, bool) {
-			name, _, ok := store.ForProduct(product)
-			return name, ok
+			r, ok := cat.ForProduct(product)
+			if !ok {
+				return "", false
+			}
+			return r.Definition.ID(), true
 		},
 		Firmware: func(product string) string {
-			name, overlay, ok := store.ForProduct(product)
+			r, ok := cat.ForProduct(product)
 			if !ok {
 				return ""
 			}
-			if v := firmwareOf(overlay); v != "" {
+			if v := firmwareOf(r.Overlay); v != "" {
 				return v
 			}
-			if p, ok := store.Devices[name]; ok {
-				return firmwareOf(p.Defaults)
-			}
-			return ""
+			return firmwareOf(r.Definition.InitialState())
 		},
 		Within:     func(have, accepted string) bool { return within(parents, have, accepted) },
 		SystemType: func(name string) bool { return systemTypes[name] },
 		Pusher: func(name string) bool {
-			p, ok := store.Devices[name]
-			return ok && p.Push != nil
+			d, ok := cat.Lookup(name)
+			return ok && d.PushFace() != nil
 		},
 		Sender: func(name string) bool {
-			p, ok := store.Devices[name]
+			d, ok := cat.Lookup(name)
 			_, product := products[name]
-			return ok && product && p.Webhook != nil && p.Webhook.Driver != ""
+			return ok && product && d.WebhookFace() != nil && d.WebhookFace().Driver != ""
 		},
-	}, nil
+	}
 }
 
 // within walks have's ancestry (have included) looking for accepted. The walk

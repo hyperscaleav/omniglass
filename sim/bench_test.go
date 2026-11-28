@@ -51,7 +51,7 @@ func BenchmarkServeThousandDevices(b *testing.B) {
 		runtime.ReadMemStats(&before)
 		baseG := runtime.NumGoroutine()
 
-		e := NewEngine(store, profiles.Templates())
+		e := shippedEngine(b)
 		e.SetPortMap(EphemeralPorts)
 		start := time.Now()
 		if err := e.Sync(snaps); err != nil {

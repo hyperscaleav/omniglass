@@ -23,6 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestAWebhookEndpointReportsItsOwnPosts drives #1369's push half over the
@@ -89,7 +90,7 @@ func TestAWebhookEndpointReportsItsOwnPosts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	uccProfile := ""

@@ -10,8 +10,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -86,11 +84,7 @@ func TestACloudServiceReadsTheCalendarFromItsFirstRequest(t *testing.T) {
 		}},
 	} {
 		t.Run(tc.profile, func(t *testing.T) {
-			store, err := profile.LoadStoreFS(profiles.FS)
-			if err != nil {
-				t.Fatal(err)
-			}
-			e := NewEngine(store, profiles.Templates())
+			e := shippedEngine(t)
 			t.Cleanup(e.StopAll)
 			e.SetCalendar(cal)
 			e.SetClock(Clock{Offset: time.Until(at)})

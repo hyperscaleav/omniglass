@@ -7,8 +7,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // censusDevice is the shipped tessellate-census-c1 in a room, its clock pinned
@@ -16,11 +14,7 @@ import (
 // occupancy behavior, exactly as authored.
 func censusDevice(t *testing.T, seed int64, room calendar.Room, at *time.Time) (*Device, *calendar.Calendar, *Engine) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	k := calTestKnobs()
 	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 	e.SetCalendar(cal)

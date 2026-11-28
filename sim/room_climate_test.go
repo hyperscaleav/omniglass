@@ -6,9 +6,6 @@ import (
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // The control processor reports the room's temperature (#2757), as a real
@@ -88,11 +85,7 @@ func TestControlProcessorRoomTemperatureIsDeterministicForACalendarAndClock(t *t
 }
 
 func TestControlProcessorRoomTemperatureIsSteadyWithNoCalendar(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "d", LoopbackIP: "127.0.0.1", ProfileName: "newtron-core-3", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}

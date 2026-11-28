@@ -32,6 +32,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestOutpostHoldsASessionThroughADeviceOutage drives #816 end to end over the
@@ -67,7 +68,7 @@ func TestOutpostHoldsASessionThroughADeviceOutage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
@@ -235,7 +236,7 @@ func TestOutpostLandsPushedSamplesThroughARecover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,
@@ -371,8 +372,8 @@ func nvpProfile(t *testing.T, store *profile.Store) string {
 		if p.DriverID != "newtron-panel-nvp" {
 			continue
 		}
-		if name, _, ok := store.ForProduct(p.ID); ok {
-			names = append(names, name)
+		if r, ok := catalogOf(t, store).ForProduct(p.ID); ok {
+			names = append(names, r.Definition.ID())
 		}
 	}
 	if len(names) == 0 {
@@ -503,7 +504,7 @@ func TestOutpostRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	nvp := nvpProfile(t, store)

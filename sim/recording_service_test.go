@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -24,11 +22,7 @@ const recordingKey = "recording-lab-key"
 func startRecordingService(t *testing.T) *Device {
 	t.Helper()
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "rec-1", Hostname: "rec-1", LoopbackIP: ip, ProfileName: "recording-service", Version: 1}}); err != nil {

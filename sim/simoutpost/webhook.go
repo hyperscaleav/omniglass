@@ -9,6 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // subscriber points the simulated services at their webhook endpoints
@@ -26,7 +27,7 @@ import (
 // next pull and a restarted device has every room added again.
 type subscriber struct {
 	server  string
-	store   *profile.Store
+	cat     *spec.Catalog
 	held    map[*sim.Device]subscription
 	rooms   map[*sim.Device]map[string]bool
 	operate func(*sim.Device, sim.Operation) sim.OperationResult
@@ -36,9 +37,9 @@ type subscriber struct {
 // sent again.
 type subscription struct{ path, scheme, secret string }
 
-func newSubscriber(server string, store *profile.Store) *subscriber {
+func newSubscriber(server string, cat *spec.Catalog) *subscriber {
 	return &subscriber{
-		server: strings.TrimRight(server, "/"), store: store,
+		server: strings.TrimRight(server, "/"), cat: cat,
 		held:    map[*sim.Device]subscription{},
 		rooms:   map[*sim.Device]map[string]bool{},
 		operate: func(d *sim.Device, op sim.Operation) sim.OperationResult { return d.Operate(op) },
@@ -63,20 +64,24 @@ func (s *subscriber) reconcile(listed []collection.SimDevice, served []*sim.Devi
 		if !ok {
 			continue
 		}
-		p := s.store.Devices[d.ProfileName]
-		if p == nil || p.Webhook == nil {
+		def, found := s.cat.Lookup(d.ProfileName)
+		var wh *profile.WebhookSubscribe
+		if found {
+			wh = def.WebhookFace()
+		}
+		if wh == nil {
 			errs = append(errs, fmt.Errorf("%s holds a webhook endpoint, but its profile %q declares no subscribe route", d.Hostname, d.ProfileName))
 			continue
 		}
 		sub := subscription{hook.Path, hook.Scheme, hook.Secret}
 		if had, done := s.held[d]; !done || had != sub {
-			if err := s.subscribe(d, p.Webhook.Subscribe, hook); err != nil {
+			if err := s.subscribe(d, wh.Subscribe, hook); err != nil {
 				errs = append(errs, err)
 				continue
 			}
 			s.held[d] = sub
 		}
-		errs = append(errs, s.provision(d, p.Webhook.Provision, hook.Identities)...)
+		errs = append(errs, s.provision(d, wh.Provision, hook.Identities)...)
 	}
 	for d := range s.held {
 		if !live[d] {

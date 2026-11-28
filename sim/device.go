@@ -29,6 +29,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -304,6 +306,15 @@ type Device struct {
 
 	routes   []routeEntry
 	commands []commandEntry
+	// fam is what the device's Go family answers in Go (#2829), nil for a
+	// device of a YAML profile.
+	fam *goHandlers
+
+	// The Go-declared surfaces (sim/surface, #2831), attached before the
+	// device serves; see gosurface.go.
+	goCommands []surface.Commander
+	goRoutes   []surface.Route
+	goOIDs     []surface.OID
 
 	// behaviorMu guards the behaviors slice, the overrides slice, and
 	// every entry's stop/done channels. Separate from mu (which guards
@@ -325,7 +336,7 @@ type Device struct {
 	// computedLocked / resolvedStateCopyLocked. Installed once at startup
 	// via AddComputedFromProfile, read-only thereafter (so no separate
 	// lock is needed for the slice; reads of d.state still take d.mu).
-	computed []computedEntry
+	computed []spec.Elapsed
 	// push is the profile's push face (push.go), nil when it declares none.
 	push *pushFace
 	// rand is the per-device math/rand source used by the behavior
@@ -456,6 +467,9 @@ func (d *Device) CommandList() []string {
 	out := make([]string, 0, len(d.commands))
 	for _, c := range d.commands {
 		out = append(out, c.Match)
+	}
+	for _, c := range d.goCommands {
+		out = append(out, c.Commands()...)
 	}
 	return out
 }
@@ -655,9 +669,12 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // routeEntry pairs a parsed route match with a compiled template and
 // pre-compiled mutations.
 type routeEntry struct {
-	Method    string
-	Path      string
-	Template  *template.Template
+	Method   string
+	Path     string
+	Template *template.Template
+	// Go answers the route in place of Template when a Go family registered
+	// it (#2829).
+	Go        spec.HTTPHandler
 	Mutations []mutation
 	// Events are the named events the route reports after its mutations
 	// (#1145), each data template compiled once.
@@ -703,7 +720,10 @@ func compileNamedEvents(owner string, events []profile.RouteEvent, funcs templat
 // the resolved subject by device identity even without per-call
 // argument capture (which is a planned follow-up).
 type commandEntry struct {
-	Match      string
+	Match string
+	// Go answers the command in place of Template when a Go family
+	// registered it (#2829).
+	Go         spec.LineHandler
 	Template   *template.Template
 	Mutations  []mutation
 	Action     string
@@ -1033,31 +1053,24 @@ func (d *Device) clock() time.Time {
 	return d.now()
 }
 
-// computedEntry is the compiled form of a profile.Computed field.
-type computedEntry struct {
-	Path  string
-	Kind  string
-	Since string
+// AddComputedFromProfile registers a YAML profile's read-derived field; its
+// only kind is elapsed, which AddElapsed serves.
+func (d *Device) AddComputedFromProfile(c *profile.Computed) error {
+	return d.AddElapsed(spec.Elapsed{Path: c.Path, Since: c.Since})
 }
 
-// AddComputedFromProfile registers a read-derived field and seeds its
-// anchor. For kind:elapsed, if the Since path is absent or non-positive
-// the anchor is set to "now" so a freshly-booted device reads ~0 uptime
-// and counts up from there. The engine calls this once per device at
-// startup, before StartBehaviors.
-func (d *Device) AddComputedFromProfile(c *profile.Computed) error {
-	entry := computedEntry{Path: c.Path, Kind: c.Kind, Since: c.Since}
-	d.computed = append(d.computed, entry)
-
-	if c.Kind == "elapsed" {
-		d.mu.Lock()
-		if toInt64(lookupStatePath(d.state, c.Since)) <= 0 {
-			if err := SetPath(d.state, c.Since, d.clock().Unix()); err != nil {
-				d.mu.Unlock()
-				return fmt.Errorf("seeding computed anchor %q: %w", c.Since, err)
-			}
+// AddElapsed registers a read-derived uptime and seeds its anchor: if the
+// Since path is absent or non-positive the anchor is set to "now" so a
+// freshly-booted device reads ~0 uptime and counts up from there. The engine
+// calls this once per device at startup, before StartBehaviors.
+func (d *Device) AddElapsed(e spec.Elapsed) error {
+	d.computed = append(d.computed, e)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if toInt64(lookupStatePath(d.state, e.Since)) <= 0 {
+		if err := SetPath(d.state, e.Since, d.clock().Unix()); err != nil {
+			return fmt.Errorf("seeding computed anchor %q: %w", e.Since, err)
 		}
-		d.mu.Unlock()
 	}
 	return nil
 }
@@ -1074,21 +1087,8 @@ func (d *Device) computedLocked(path string) (any, bool) {
 }
 
 // evalComputedLocked computes one field's current value. Caller holds d.mu.
-func (d *Device) evalComputedLocked(c *computedEntry) any {
-	switch c.Kind {
-	case "elapsed":
-		epoch := toInt64(lookupStatePath(d.state, c.Since))
-		if epoch <= 0 {
-			return int64(0)
-		}
-		elapsed := d.clock().Unix() - epoch
-		if elapsed < 0 {
-			return int64(0)
-		}
-		return elapsed
-	default:
-		return int64(0)
-	}
+func (d *Device) evalComputedLocked(c *spec.Elapsed) any {
+	return c.At(toInt64(lookupStatePath(d.state, c.Since)), d.clock())
 }
 
 // ReadPath resolves a single state path, preferring a computed field over
@@ -1331,9 +1331,17 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 
 	reqCtx := parseRequestContext(r)
 
+	if d.serveGoRoute(rec, r) {
+		return
+	}
+
 	for _, route := range d.routes {
 		if r.Method != route.Method || r.URL.Path != route.Path {
 			continue
+		}
+		if route.Go != nil {
+			d.serveFamilyRoute(rec, r, route.Go, reqCtx)
+			return
 		}
 
 		// Mutations and render both touch state. Hold the write lock
@@ -1871,6 +1879,9 @@ func (d *Device) RunCommand(cmd string) (result CommandResult, ok bool, err erro
 		if ce.Match != cmd {
 			continue
 		}
+		if ce.Go != nil {
+			return d.runFamilyCommand(ce), true, nil
+		}
 		d.mu.Lock()
 		data := templateData{
 			State:    d.state,
@@ -1954,7 +1965,7 @@ func (d *Device) RunCommand(cmd string) (result CommandResult, ok bool, err erro
 		result.Response = buf.String()
 		return result, true, nil
 	}
-	return CommandResult{}, false, nil
+	return d.runGoCommand(cmd)
 }
 
 // parseMatch splits "GET /path" into method and path.

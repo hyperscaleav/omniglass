@@ -15,9 +15,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
 )
 
@@ -71,7 +70,7 @@ func SimSecretSpecs() []storage.SecretSpec {
 // fault on the Simulation page finds it still lifted after a restart.
 func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int, only map[string]bool, faults map[string]impair.Impairment) error {
 	all := scope.Set{All: true}
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		return fmt.Errorf("devseed: load simulator catalog: %w", err)
 	}
@@ -99,13 +98,6 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 		if c.ProductHandle != nil && only[c.ID] {
 			cands = append(cands, simfleet.Component{ID: c.ID, Product: *c.ProductHandle})
 		}
-	}
-	profileFor := func(p string) (*profile.DeviceProfile, bool) {
-		name, _, ok := store.ForProduct(p)
-		if !ok {
-			return nil, false
-		}
-		return store.Devices[name], true
 	}
 	// Components already wired keep their endpoints; every address any
 	// endpoint targets is taken.
@@ -137,7 +129,7 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 			unwired = append(unwired, c)
 		}
 	}
-	plan, err := simfleet.Plan(unwired, used, simfleet.Catalog{ProfileFor: profileFor, DriverOf: func(p string) string { return drivers[p] }, PortOffset: portOffset})
+	plan, err := simfleet.Plan(unwired, used, simfleet.Catalog{ProfileFor: cat.ProfileFor, DriverOf: func(p string) string { return drivers[p] }, PortOffset: portOffset})
 	if err != nil {
 		return err
 	}

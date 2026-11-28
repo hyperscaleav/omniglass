@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -43,16 +44,12 @@ func TestARunWithAWorldFileInstallsTheCalendarItImplies(t *testing.T) {
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	loaded, err := LoadWorld(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	installWorld(e, loaded)
 	cal := e.Calendar()
 	if cal == nil {
@@ -82,7 +79,7 @@ func TestARunWithAWorldFileInstallsTheCalendarItImplies(t *testing.T) {
 	if err != nil || none != nil {
 		t.Fatalf("no path loaded %v, %v", none, err)
 	}
-	bare := sim.NewEngine(store, profiles.Templates())
+	bare := shipped.Engine(t)
 	installWorld(bare, none)
 	if bare.Calendar() != nil || bare.World() != nil {
 		t.Fatal("with no world file the engine holds a calendar or a world")
@@ -138,7 +135,7 @@ func TestClockOffsetEnvReachesThePushersEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, err := startPushers(store, "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
+	e, err := startPushers(catalogOf(t, store), "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
 	if err != nil {
 		t.Fatal(err)
 	}

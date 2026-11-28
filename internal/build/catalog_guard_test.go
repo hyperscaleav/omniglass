@@ -32,10 +32,14 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Holds GET /lab/calendar to what a simulated Gaze camera acts out in
 		// the room, so naming the simulator's own profile is what it tests (#2770).
 		"internal/api/labcalendar_sim_test.go": true,
-		"internal/seed/seed_test.go":           true,
-		"internal/seed/facts_test.go":          true,
-		"internal/devseed/devseed_test.go":     true,
-		"internal/devseed/identity_test.go":    true,
+		// Holds a simulated component's simulation route to the identity of
+		// the shipped Boreal Edge size it is, served by its family, so naming
+		// the shipped products is what it tests (#2832).
+		"internal/api/simfleet_identity_e2e_test.go": true,
+		"internal/seed/seed_test.go":                 true,
+		"internal/seed/facts_test.go":                true,
+		"internal/devseed/devseed_test.go":           true,
+		"internal/devseed/identity_test.go":          true,
 		// The template dry-run holds the catalog's templates to the seeded
 		// catalogs, so naming a seeded SKU is what it tests (#1323).
 		"internal/template/check_test.go": true,

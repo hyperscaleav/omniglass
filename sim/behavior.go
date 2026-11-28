@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // behaviorEntry holds a compiled behavior ready to run on its own
@@ -133,12 +134,14 @@ func (d *Device) StartBehaviors() {
 	for _, b := range first {
 		d.tickBehavior(b)
 	}
+	d.startAnimator()
 }
 
 // StopBehaviors cancels every running behavior and waits for the
 // goroutines to exit. Idempotent: calling on a device with no started
 // behaviors returns immediately.
 func (d *Device) StopBehaviors() {
+	d.stopAnimator()
 	d.behaviorMu.Lock()
 	stops := make([]*behaviorEntry, 0, len(d.behaviors))
 	for i := range d.behaviors {
@@ -279,8 +282,8 @@ func (d *Device) tickBehavior(b *behaviorEntry) {
 	}
 }
 
-// TickBehavior fires one tick of the named behavior now, as its timer would,
-// and reports whether the device has it: a test stepping a device through
+// TickBehavior fires one tick of the named behavior now, as its timer would
+// (a YAML behavior or a Go family's tick), and reports whether the device has it: a test stepping a device through
 // its cycle without waiting on the clock.
 func (d *Device) TickBehavior(name string) bool {
 	d.behaviorMu.Lock()
@@ -290,11 +293,23 @@ func (d *Device) TickBehavior(name string) bool {
 			b = &d.behaviors[i]
 		}
 	}
+	var t *spec.Tick
+	if b == nil && d.fam != nil {
+		for i := range d.fam.ticks {
+			if d.fam.ticks[i].Name == name {
+				t = &d.fam.ticks[i]
+			}
+		}
+	}
 	d.behaviorMu.Unlock()
-	if b == nil {
+	switch {
+	case b != nil:
+		d.tickBehavior(b)
+	case t != nil:
+		d.applyTick(*t)
+	default:
 		return false
 	}
-	d.tickBehavior(b)
 	return true
 }
 
@@ -342,6 +357,11 @@ func (d *Device) Behaviors() []string {
 	out := make([]string, 0, len(d.behaviors))
 	for _, b := range d.behaviors {
 		out = append(out, b.Name)
+	}
+	if d.fam != nil {
+		for _, t := range d.fam.ticks {
+			out = append(out, t.Name)
+		}
 	}
 	return out
 }

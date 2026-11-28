@@ -12,20 +12,13 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // bookingService builds the shipped booking-service profile's device on a
 // fixed clock.
 func bookingService(t *testing.T, at time.Time) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "hq-booking", Hostname: "hq-booking", LoopbackIP: "127.0.0.1", ProfileName: "booking-service", Version: 1}}); err != nil {
 		t.Fatalf("load device: %v", err)
 	}

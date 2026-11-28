@@ -21,11 +21,7 @@ import (
 // seen joins it, which is how the lab hears an unbound room.
 func uccPlatform(t *testing.T) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "ucc-plat-1", Hostname: "ucc-plat-1", LoopbackIP: "127.0.0.1", ProfileName: "ucc-platform", Version: 1}}); err != nil {
 		t.Fatalf("load device: %v", err)
 	}

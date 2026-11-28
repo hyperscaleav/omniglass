@@ -7,8 +7,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestEverySeededComponentIsSimulatedOrAccountedFor holds the lab to "every
@@ -33,10 +33,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	cov, err := profiles.LoadCoverage()
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +59,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 	pendingProducts := 0
 	for _, p := range products {
 		comps := byProduct[p]
-		_, _, served := store.ForProduct(p)
+		_, served := cat.ForProduct(p)
 		_, isPending := cov.Unsimulated[p]
 		_, isPassive := cov.Passive[p]
 		switch {

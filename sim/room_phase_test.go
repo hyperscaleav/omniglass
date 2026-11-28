@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -35,16 +33,12 @@ func phaseAt(h, m, s int) time.Time { return time.Date(2026, 11, 3, h, m, s, 0, 
 
 func phaseRoomEngine(t *testing.T, k calendar.Knobs, at *time.Time, profileNames ...string) (*Engine, map[string]*Device) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(calendar.New(phaseDaySeed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
 	var snaps []DeviceSnapshot
 	for i, name := range profileNames {
 		id := fmt.Sprintf("d-%d", i)
-		snaps = append(snaps, DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: name, Version: 1,
+		snaps = append(snaps, DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, name), Product: name, Version: 1,
 			SiteCode: phaseRoom.Site, Building: phaseRoom.Building, Room: phaseRoom.Room})
 	}
 	if err := e.LoadDevices(snaps); err != nil {
@@ -53,7 +47,7 @@ func phaseRoomEngine(t *testing.T, k calendar.Knobs, at *time.Time, profileNames
 	out := map[string]*Device{}
 	for _, d := range e.Devices() {
 		d.SetClock(pinned(at))
-		out[d.ProfileName] = d
+		out[d.Product] = d
 	}
 	return e, out
 }

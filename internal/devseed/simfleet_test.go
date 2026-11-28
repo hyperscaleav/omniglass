@@ -5,9 +5,8 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // A driver that has a spec and simulated products is one the seed attaches,
@@ -24,10 +23,7 @@ func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer gw.Close()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	drivers, err := gw.ListDrivers(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +43,7 @@ func TestSpecdDriversWithSimulatedProductsAreAttached(t *testing.T) {
 		if p.DriverName == nil || !specd[*p.DriverName] {
 			continue
 		}
-		if _, _, ok := store.ForProduct(p.Name); !ok {
+		if _, ok := cat.ForProduct(p.Name); !ok {
 			continue
 		}
 		checked++

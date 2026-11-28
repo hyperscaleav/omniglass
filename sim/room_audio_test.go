@@ -9,7 +9,6 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
 	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // A room's audio chain shows its meeting (#2774): the ceiling and wireless
@@ -42,11 +41,7 @@ type audioRig struct {
 
 func newAudioRig(t *testing.T, profileName string, seed int64, k calendar.Knobs) *audioRig {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 	e.SetCalendar(cal)
 	id := profileName + "-1"

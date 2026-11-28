@@ -11,8 +11,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -150,11 +148,7 @@ func bookingEngine(t *testing.T, cal *calendar.Calendar, profileName string, ser
 // bookingEngineIn is bookingEngine with the choice of placing the device in a room.
 func bookingEngineIn(t *testing.T, cal *calendar.Calendar, profileName string, service, placed bool, at *time.Time) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	e.SetCalendar(cal)

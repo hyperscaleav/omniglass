@@ -8,9 +8,9 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // plannedEndpoint is one endpoint a plan's component takes: the simulated
@@ -27,7 +27,7 @@ type plannedEndpoint struct {
 // in creation order: the same plan then hands out the same addresses to the same
 // components on every run, which a uuid sort would not.
 func planDevices(ctx context.Context, gw storage.Gateway, rows planRows, portOffset int) ([]plannedEndpoint, error) {
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := device.Catalog()
 	if err != nil {
 		return nil, fmt.Errorf("devseed: load simulator catalog: %w", err)
 	}
@@ -41,18 +41,18 @@ func planDevices(ctx context.Context, gw storage.Gateway, rows planRows, portOff
 			drivers[p.Name] = *p.DriverName
 		}
 	}
+	return planDevicesOver(cat, rows, drivers, portOffset)
+}
+
+// planDevicesOver is planDevices with the simulator's catalog (YAML profiles
+// and Go families alike, #2829) and the products' drivers given.
+func planDevicesOver(cat *spec.Catalog, rows planRows, drivers map[string]string, portOffset int) ([]plannedEndpoint, error) {
 	cands := make([]simfleet.Component, len(rows.Components))
 	for i, c := range rows.Components {
 		cands[i] = simfleet.Component{ID: fmt.Sprintf("%09d", i), Product: c.Product, Control: c.Control}
 	}
 	devs, err := simfleet.Plan(cands, nil, simfleet.Catalog{
-		ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
-			name, _, ok := store.ForProduct(p)
-			if !ok {
-				return nil, false
-			}
-			return store.Devices[name], true
-		},
+		ProfileFor: cat.ProfileFor,
 		DriverOf:   func(p string) string { return drivers[p] },
 		PortOffset: portOffset,
 	})

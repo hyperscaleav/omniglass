@@ -12,7 +12,7 @@ import (
 	"strconv"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // CommunitySecret is the platform secret an SNMP attach references for its
@@ -140,7 +140,7 @@ type Device struct {
 // attach needs its community secret to exist), and the lift the simulator
 // applies to ports below 1024.
 type Catalog struct {
-	ProfileFor func(product string) (*profile.DeviceProfile, bool)
+	ProfileFor func(product string) (spec.Definition, bool)
 	DriverOf   func(product string) string
 	Attachable func(driver string) bool
 	PortOffset int
@@ -280,14 +280,14 @@ func snmpAttach(addr string, shift func(int) int) map[string]string {
 // probeFor picks a reachability probe from what the profile serves: HTTP
 // where it serves plain HTTP, else a TCP port check (a TLS-only API, a line
 // protocol).
-func probeFor(prof *profile.DeviceProfile, addr string, shift func(int) int) (Endpoint, bool) {
+func probeFor(prof spec.Definition, addr string, shift func(int) int) (Endpoint, bool) {
 	target := func(port int) string { return fmt.Sprintf("%s:%d", addr, shift(port)) }
-	for _, iface := range prof.Interfaces {
+	for _, iface := range prof.Surfaces() {
 		if iface.Protocol == "http" && !iface.TLS {
 			return Endpoint{Transport: "http", Target: target(iface.Port)}, true
 		}
 	}
-	for _, iface := range prof.Interfaces {
+	for _, iface := range prof.Surfaces() {
 		if iface.Protocol == "http" || iface.Protocol == "tcp" {
 			return Endpoint{Transport: "tcp", Target: target(iface.Port)}, true
 		}

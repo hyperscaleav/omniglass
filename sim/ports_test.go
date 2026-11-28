@@ -11,9 +11,6 @@ import (
 	"time"
 
 	"github.com/gosnmp/gosnmp"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // servingSide is one simulator serving one device, with the hits and session
@@ -29,13 +26,9 @@ type servingSide struct {
 // face of both binds with no collision and reports the address it got, and
 // each answers there on its own engine, reporting the port it bound.
 func TestTwoEnginesServeOneAddressSideBySide(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	ip := "127.88.10.1"
 	start := func(id string) (servingSide, error) {
-		e := NewEngine(store, profiles.Templates())
+		e := shippedEngine(t)
 		e.SetPortMap(EphemeralPorts)
 		t.Cleanup(e.StopAll)
 		s := servingSide{hits: make(chan Hit, 256), sessions: make(chan SessionEvent, 64)}

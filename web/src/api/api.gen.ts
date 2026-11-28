@@ -8778,7 +8778,7 @@ export type SimProfileBody = {
   model: string;
   name: string;
   /**
-     * The products this profile simulates, its own first, then its variants.
+     * The products this profile simulates. A YAML profile leads with the product it is named for; a Go family, named for its wire API, lists its model products only.
      * @nullable
      */
   products: string[] | null;

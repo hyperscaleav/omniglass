@@ -16,8 +16,6 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -26,11 +24,7 @@ import (
 // another run on the host (#1066).
 func newCatalogEngine(t *testing.T) *Engine {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("loading catalog: %v", err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	return e
@@ -420,7 +414,7 @@ func TestEngineSyncAppliesAProductsOverlay(t *testing.T) {
 	e := newCatalogEngine(t)
 	ip := "127.88.8.1"
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
-		ProfileName: "boreal-edge-86", Product: "boreal-edge-55", Version: 1}}); err != nil {
+		ProfileName: "boreal-edge", Product: "boreal-edge-55", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	model := e.Devices()[0].State()["configuration"].(map[string]any)["device"].(map[string]any)["model"]
@@ -449,7 +443,7 @@ func TestEngineSyncRebuildsADeviceWhoseProductChanged(t *testing.T) {
 	e := newCatalogEngine(t)
 	ip := "127.88.8.2"
 	snap := func(product string) DeviceSnapshot {
-		return DeviceSnapshot{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: "boreal-edge-86", Product: product, Version: 1}
+		return DeviceSnapshot{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: "boreal-edge", Product: product, Version: 1}
 	}
 	if err := e.Sync([]DeviceSnapshot{snap("boreal-edge-55")}); err != nil {
 		t.Fatal(err)

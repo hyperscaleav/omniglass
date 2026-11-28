@@ -24,6 +24,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestOutpostTelnetSessionRejectsThenRecoversOnTheFix drives #1049 and #1033 end
@@ -55,7 +56,7 @@ func TestOutpostTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load profiles: %v", err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: panelIP,

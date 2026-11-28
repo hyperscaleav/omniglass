@@ -27,7 +27,7 @@ var bodyFieldRE = regexp.MustCompile(`^\{\{-?\s*\.Request\.Body\.([A-Za-z_][A-Za
 // straight from a body field and lists the values it accepts. A mutation that
 // computes its value, takes any value, or sets a constant is not a set.
 func (r *Route) Sets() []Set {
-	var out []Set
+	out := append([]Set(nil), r.NativeSets...)
 	for _, m := range r.Mutations {
 		tmpl, ok := m.Value.(string)
 		if !ok || len(m.Enum) == 0 {

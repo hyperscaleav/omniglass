@@ -8,24 +8,18 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // offsetEngine is calEngine's twin on the engine's own clock (#2800): the
 // device's clock is not pinned, the engine's is offset.
 func offsetEngine(t *testing.T, seed int64, room calendar.Room, offset time.Duration) (*Engine, *Device) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetClock(Clock{Offset: offset})
 	k := calTestKnobs()
 	e.SetCalendar(calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
 	snap := DeviceSnapshot{DeviceID: "d-" + room.Room, Hostname: "d-" + room.Room, LoopbackIP: "127.0.0.1",
-		ProfileName: "boreal-edge-86", Version: 1, SiteCode: room.Site, Building: room.Building, Room: room.Room}
+		ProfileName: "boreal-edge", Product: "boreal-edge-86", Version: 1, SiteCode: room.Site, Building: room.Building, Room: room.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}
@@ -130,11 +124,7 @@ func TestClockOffsetKeepsUptimeAndCollectionStampsReal(t *testing.T) {
 
 // With no clock set an engine reads real time, as it did before the offset.
 func TestEngineWithoutAClockReadsRealTime(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if d := time.Since(e.Now()); d < -time.Second || d > time.Second {
 		t.Fatalf("an engine with no clock reads %v from real time", d)
 	}

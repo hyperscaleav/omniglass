@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // http logins and digest end to end (#1114): Postgres, the bus, a real
@@ -28,10 +30,10 @@ import (
 func loginProfile(t *testing.T, store *profile.Store, typ string, routes ...string) string {
 	t.Helper()
 	var names []string
-	for name, d := range store.Devices {
-		for _, iface := range d.Interfaces {
+	for _, d := range catalogOf(t, store).Definitions() {
+		for _, iface := range d.Surfaces() {
 			if iface.Protocol == "http" && iface.Auth.Enforce && iface.Auth.Type == typ && servesRoutes(iface, routes) {
-				names = append(names, name)
+				names = append(names, d.ID())
 			}
 		}
 	}
@@ -61,6 +63,10 @@ func servesRoutes(iface profile.Interface, routes []string) bool {
 // loginVariant adds a copy of a profile under name whose http face logs in
 // by auth.
 func loginVariant(store *profile.Store, from, name string, auth profile.Auth) {
+	if _, yaml := store.Devices[from]; !yaml {
+		familyLoginVariant(store, from, name, auth)
+		return
+	}
 	base := *store.Devices[from]
 	base.Name = name
 	base.Interfaces = append([]profile.Interface(nil), base.Interfaces...)
@@ -74,12 +80,47 @@ func loginVariant(store *profile.Store, from, name string, auth profile.Auth) {
 
 // faceAuth is a profile's http face's auth block.
 func faceAuth(store *profile.Store, name string) profile.Auth {
-	for _, iface := range store.Devices[name].Interfaces {
-		if iface.Protocol == "http" {
-			return iface.Auth
+	if d, ok := store.Devices[name]; ok {
+		for _, iface := range d.Interfaces {
+			if iface.Protocol == "http" {
+				return iface.Auth
+			}
+		}
+		return profile.Auth{}
+	}
+	for _, fam := range device.Families() {
+		if fam.Name != name {
+			continue
+		}
+		for _, iface := range fam.Interfaces {
+			if iface.Protocol == "http" {
+				return iface.Auth
+			}
 		}
 	}
 	return profile.Auth{}
+}
+
+// familyLoginVariant is loginVariant for a Go family: a copy of the family
+// under name, with no models of its own, whose http face logs in by auth.
+func familyLoginVariant(store *profile.Store, from, name string, auth profile.Auth) {
+	for _, fam := range device.Families() {
+		if fam.Name != from {
+			continue
+		}
+		fam.Name, fam.Models = name, nil
+		fam.Interfaces = append([]profile.Interface(nil), fam.Interfaces...)
+		for i := range fam.Interfaces {
+			if fam.Interfaces[i].Protocol == "http" {
+				fam.Interfaces[i].Auth = auth
+			}
+		}
+		prev, _ := familyVariants.Load(store)
+		list, _ := prev.([]spec.Spec)
+		familyVariants.Store(store, append(list, fam))
+		return
+	}
+	panic("no profile or family " + from)
 }
 
 // quickDriver authors a copy of a shipped driver whose polls run every

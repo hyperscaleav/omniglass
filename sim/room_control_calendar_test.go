@@ -7,8 +7,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // Room control and switching follow the lab calendar (#2776): the control
@@ -27,11 +25,7 @@ const (
 // each named profile in roomHQ, all on one pinned clock and one calendar.
 func roomEngine(t *testing.T, seed int64, k calendar.Knobs, at *time.Time, profileNames ...string) map[string]*Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetCalendar(calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
 	var snaps []DeviceSnapshot
 	for i, name := range profileNames {

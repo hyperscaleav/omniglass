@@ -27,6 +27,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // The connection fingerprint and the layered gate end to end (#1056 ruling,
@@ -75,7 +76,7 @@ func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*profile.
 	if shape != nil {
 		shape(store)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.EngineFrom(t, store)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: nvpProfile(t, store), Version: 1}}

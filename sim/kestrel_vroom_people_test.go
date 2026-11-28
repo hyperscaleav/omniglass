@@ -8,8 +8,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // The video bar's camera counts the people in its room (#2757): the calendar's
@@ -77,11 +75,7 @@ func TestVideoBarCountsNobodyInANoShow(t *testing.T) {
 }
 
 func TestVideoBarWithNoCalendarCountsOnlyItsCall(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "d", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}

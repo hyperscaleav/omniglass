@@ -17,8 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -72,11 +71,7 @@ func TestLabCalendarRouteMatchesWhatTheRoomsDeviceActsOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	e.SetCalendar(sw.Calendar())
 	e.SetWorld(sw)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "sys-a-cam-1", Hostname: "sys-a-cam-1", LoopbackIP: "127.0.0.1",

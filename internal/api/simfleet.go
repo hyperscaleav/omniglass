@@ -17,10 +17,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
 	"github.com/hyperscaleav/omniglass/sim/simhub"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // SimHub is the server's line to the simulators beside its outposts
@@ -44,9 +45,9 @@ func WithSimHub(h SimHub) Option {
 	}
 }
 
-// simCatalog is the simulator's profile catalog, the same one the simulator
-// embeds, loaded once.
-var simCatalog = sync.OnceValues(func() (*profile.Store, error) { return profile.LoadStoreFS(profiles.FS) })
+// simCatalog is the simulator's catalog, the same one the simulator embeds:
+// its YAML profiles and its Go families, loaded once.
+var simCatalog = sync.OnceValues(device.Catalog)
 
 type simOutpostBody struct {
 	Outpost      string                         `json:"outpost"`
@@ -70,7 +71,7 @@ type simProfileBody struct {
 	Model        string   `json:"model"`
 	DeviceType   string   `json:"device_type"`
 	Summary      string   `json:"summary"`
-	Products     []string `json:"products" doc:"The products this profile simulates, its own first, then its variants."`
+	Products     []string `json:"products" doc:"The products this profile simulates. A YAML profile leads with the product it is named for; a Go family, named for its wire API, lists its model products only."`
 	Protocols    []string `json:"protocols" doc:"The protocols its surfaces speak."`
 }
 
@@ -131,9 +132,9 @@ type simBehaviorBody struct {
 }
 
 // simBehaviors lists what the profile changes on its own over time.
-func simBehaviors(p *profile.DeviceProfile) []simBehaviorBody {
+func simBehaviors(p spec.Definition) []simBehaviorBody {
 	var out []simBehaviorBody
-	for _, b := range p.Behaviors {
+	for _, b := range p.BehaviorList() {
 		bb := simBehaviorBody{Name: b.Name, Interval: b.Schedule.Interval, Emits: b.Emit != nil}
 		for _, m := range b.Mutations {
 			if !slices.Contains(bb.Writes, m.Path) {
@@ -142,7 +143,22 @@ func simBehaviors(p *profile.DeviceProfile) []simBehaviorBody {
 		}
 		out = append(out, bb)
 	}
+	// A Go family's typed ticks are listed beside its YAML-style behaviors.
+	if g, ok := p.(spec.Served); ok {
+		for _, t := range g.Handlers().Ticks {
+			out = append(out, simBehaviorBody{Name: t.Name, Interval: tickInterval(t.Interval), Writes: slices.Clone(t.Writes)})
+		}
+	}
 	return out
+}
+
+// tickInterval writes a tick's interval as a profile writes a schedule's: whole
+// seconds as 30s, 300s.
+func tickInterval(d time.Duration) string {
+	if d%time.Second == 0 {
+		return fmt.Sprintf("%ds", int64(d/time.Second))
+	}
+	return d.String()
 }
 
 type componentSimOutput struct {
@@ -248,7 +264,7 @@ func simComponentPlanner(ctx context.Context, a *authenticator, gw storage.Gatew
 	if err != nil {
 		return nil, huma.Error500InternalServerError("load simulator catalog")
 	}
-	if _, _, ok := store.ForProduct(product); !ok {
+	if _, ok := store.ForProduct(product); !ok {
 		return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("no simulator profile simulates the product %q", product))
 	}
 	products, err := gw.ListProducts(ctx)
@@ -257,10 +273,7 @@ func simComponentPlanner(ctx context.Context, a *authenticator, gw storage.Gatew
 	}
 	drivers := simDrivers(products)
 	cat := simfleet.Catalog{
-		ProfileFor: func(p string) (*profile.DeviceProfile, bool) {
-			name, _, ok := store.ForProduct(p)
-			return store.Devices[name], ok
-		},
+		ProfileFor: store.ProfileFor,
 		DriverOf:   func(p string) string { return drivers[p] },
 		Attachable: simAttachable(ctx, a, gw),
 		PortOffset: portOffset,
@@ -292,10 +305,10 @@ func fireKind(protocol string) (string, bool) {
 
 // simSurface renders a profile's protocol surfaces as the console lists them, with
 // each port as the simulator binds it.
-func simSurface(p *profile.DeviceProfile, portOffset int) []simSurfaceBody {
+func simSurface(p spec.Definition, portOffset int) []simSurfaceBody {
 	shift := sim.PrivilegedPortShift(portOffset)
-	out := make([]simSurfaceBody, 0, len(p.Interfaces))
-	for _, iface := range p.Interfaces {
+	out := make([]simSurfaceBody, 0, len(p.Surfaces()))
+	for _, iface := range p.Surfaces() {
 		port := iface.Port
 		if shift != nil && port > 0 {
 			port = shift(port)
@@ -314,7 +327,7 @@ func simSurface(p *profile.DeviceProfile, portOffset int) []simSurfaceBody {
 			rb := simRouteBody{Method: method, Path: path, Summary: r.Doc.Summary,
 				Example: r.Example, Private: r.Visibility == "private"}
 			for _, set := range r.Sets() {
-				def, _ := profile.DefaultAt(p.Defaults, set.Path)
+				def, _ := profile.DefaultAt(p.InitialState(), set.Path)
 				rb.Sets = append(rb.Sets, simSetBody{Path: set.Path, Field: set.Field, Values: set.Values, Default: def})
 			}
 			b.Routes = append(b.Routes, rb)
@@ -327,6 +340,9 @@ func simSurface(p *profile.DeviceProfile, portOffset int) []simSurfaceBody {
 			b.Commands = append(b.Commands, simCommandBody{Match: match, Summary: c.Doc.Summary, Example: c.Example, Action: c.Action})
 		}
 		for path, oid := range iface.OIDMap {
+			b.OIDs = append(b.OIDs, simOIDBody{OID: oid, Path: path})
+		}
+		for path, oid := range iface.NativeOIDs {
 			b.OIDs = append(b.OIDs, simOIDBody{OID: oid, Path: path})
 		}
 		sort.Slice(b.OIDs, func(i, j int) bool { return oidBefore(b.OIDs[i].OID, b.OIDs[j].OID) })
@@ -349,14 +365,27 @@ func oidBefore(a, b string) bool {
 	return len(as) < len(bs)
 }
 
-// variantsOf is the products a profile simulates, its own first.
-func variantsOf(p *profile.DeviceProfile) []string {
-	out := []string{p.Name}
-	for _, v := range p.Products {
-		out = append(out, v.Name)
+// simProfileBodies lists every definition of the catalog, YAML profile and Go
+// family alike, by name.
+func simProfileBodies(cat *spec.Catalog) []simProfileBody {
+	defs := cat.Definitions()
+	out := make([]simProfileBody, 0, len(defs))
+	for _, p := range defs {
+		protos := []string{}
+		for _, iface := range p.Surfaces() {
+			protos = append(protos, iface.Protocol)
+		}
+		id := p.Identity()
+		out = append(out, simProfileBody{Name: p.ID(), Manufacturer: id.Manufacturer, Model: id.Model,
+			DeviceType: id.DeviceType, Summary: id.Summary, Products: variantsOf(p), Protocols: protos})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
+
+// variantsOf is the products a definition simulates: a YAML profile's own
+// first, a Go family's model products only (never its wire-API name).
+func variantsOf(p spec.Definition) []string { return p.Products() }
 
 func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, hub SimHub) {
 	status := func(outpost string) (simhub.Status, bool) {
@@ -415,16 +444,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, huma.Error500InternalServerError("load simulator catalog")
 		}
 		out := &simProfilesOutput{}
-		out.Body.Profiles = make([]simProfileBody, 0, len(store.Devices))
-		for _, p := range store.Devices {
-			protos := []string{}
-			for _, iface := range p.Interfaces {
-				protos = append(protos, iface.Protocol)
-			}
-			out.Body.Profiles = append(out.Body.Profiles, simProfileBody{Name: p.Name, Manufacturer: p.Manufacturer, Model: p.Model,
-				DeviceType: p.DeviceType, Summary: p.Doc.Summary, Products: variantsOf(p), Protocols: protos})
-		}
-		sort.Slice(out.Body.Profiles, func(i, j int) bool { return out.Body.Profiles[i].Name < out.Body.Profiles[j].Name })
+		out.Body.Profiles = simProfileBodies(store)
 		return out, nil
 	})
 
@@ -437,7 +457,10 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		// device's, which is what the simulator knows.
 		servedBy string
 		device   storage.SimDevice
-		prof     *profile.DeviceProfile
+		prof     spec.Definition
+		// identity is the product's own: its model row's for a family, the
+		// profile's otherwise.
+		identity spec.Identity
 	}
 	resolve := func(ctx context.Context, name string, action scope.Set) (*simulated, error) {
 		id, err := gw.ResolveActionTarget(ctx, "component", name, a.scopeFor(ctx, "component", "read"), action)
@@ -478,8 +501,8 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if err != nil {
 			return nil, huma.Error500InternalServerError("load simulator catalog")
 		}
-		if name, _, ok := store.ForProduct(s.device.Product); ok {
-			s.prof = store.Devices[name]
+		if r, ok := store.ForProduct(s.device.Product); ok {
+			s.prof, s.identity = r.Definition, r.Identity
 		}
 		return s, nil
 	}
@@ -507,7 +530,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			b.ServedByID = s.id
 		}
 		b.Activity = &view.Devices[0]
-		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.Name, s.device.Address, s.prof.Doc.Summary
+		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.ID(), s.device.Address, s.identity.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments
 		b.Surface = simSurface(s.prof, view.Capabilities.PortOffset)
 		b.Behaviors = simBehaviors(s.prof)
@@ -529,9 +552,10 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, huma.Error409Conflict(fmt.Sprintf("%s is not simulated: it needs an endpoint on an outpost and a product a simulator profile simulates", in.Name))
 		}
 		var iface *profile.Interface
-		for i := range s.prof.Interfaces {
-			if s.prof.Interfaces[i].Name == in.Body.Surface {
-				iface = &s.prof.Interfaces[i]
+		surfaces := s.prof.Surfaces()
+		for i := range surfaces {
+			if surfaces[i].Name == in.Body.Surface {
+				iface = &surfaces[i]
 			}
 		}
 		if iface == nil {

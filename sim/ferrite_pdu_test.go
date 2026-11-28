@@ -13,8 +13,6 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -38,11 +36,7 @@ func ferriteOutletOID(column, n int) string {
 func startPDU(t *testing.T) *Device {
 	t.Helper()
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "pdu-1", Hostname: "pdu-1", LoopbackIP: ip, ProfileName: "ferrite-pdu-4c", Version: 1}}); err != nil {

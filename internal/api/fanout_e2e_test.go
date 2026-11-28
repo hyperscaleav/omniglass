@@ -19,6 +19,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestFanOutEndToEnd drives the fan-out over the real wire (#1282): the
@@ -102,7 +103,7 @@ func TestFanOutEndToEnd(t *testing.T) {
 			platProfile = name
 		}
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc-plat", Hostname: "ucc-plat", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: platProfile, Version: 1}}); err != nil {

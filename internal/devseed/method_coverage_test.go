@@ -10,8 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestEveryCollectionMethodRunsOnAHealthyLabComponent holds the lab to "every
@@ -30,10 +29,7 @@ func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
 	}
 	ctx, _, gw := seededFleet(t)
 	all := scope.Set{All: true}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	dev, err := devseed.LookupScenario("dev")
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +51,7 @@ func TestEveryCollectionMethodRunsOnAHealthyLabComponent(t *testing.T) {
 		if c.ProductHandle == nil {
 			continue
 		}
-		if _, _, ok := store.ForProduct(*c.ProductHandle); ok {
+		if _, ok := cat.ForProduct(*c.ProductHandle); ok {
 			simulated[c.ID] = true
 		}
 	}

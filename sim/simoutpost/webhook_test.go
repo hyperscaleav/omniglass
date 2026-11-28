@@ -11,6 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // The simulator subscribes a simulated service to its webhook endpoint
@@ -28,7 +29,7 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	// A profile that posts webhooks, found by its subscribe route.
@@ -51,7 +52,7 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key"}}}
 
 	calls := 0
-	s := newSubscriber("http://server:8080", store)
+	s := newSubscriber("http://server:8080", catalogOf(t, store))
 	op := s.operate
 	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
 	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {
@@ -72,7 +73,7 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 	// The simulator restarts: the device's state begins again from its
 	// defaults, and it is subscribed again.
 	engine.StopAll()
-	engine = sim.NewEngine(store, profiles.Templates())
+	engine = shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	if err := engine.Sync([]sim.DeviceSnapshot{snap}); err != nil {
@@ -124,7 +125,7 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 	if platform == "" {
 		t.Fatal("no profile's webhook face names a provision route and the ucc-webhook driver")
 	}
-	engine := sim.NewEngine(store, profiles.Templates())
+	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	ip := simtest.ClaimLoopback(t)
@@ -136,7 +137,7 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key",
 			Identities: []string{"hq-conf-1", "zr-huddle-north"}}}}
 	calls := 0
-	s := newSubscriber("http://server:8080", store)
+	s := newSubscriber("http://server:8080", catalogOf(t, store))
 	op := s.operate
 	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
 	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {

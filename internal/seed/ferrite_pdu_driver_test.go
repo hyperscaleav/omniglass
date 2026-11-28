@@ -11,8 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestTheShippedFerritePDUAPIDriverSwitchesAnOutlet (#1653): ferrite-pdu-api
@@ -61,11 +60,7 @@ func TestTheShippedFerritePDUAPIDriverSwitchesAnOutlet(t *testing.T) {
 		t.Fatal("outlet-off rendered with no outlet param, want a refusal")
 	}
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := sim.NewEngine(store, profiles.Templates())
+	e := shipped.Engine(t)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "pdu", Hostname: "pdu", LoopbackIP: "127.0.0.1", ProfileName: "ferrite-pdu-4c", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}

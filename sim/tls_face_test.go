@@ -159,7 +159,7 @@ func TestTLSFaceValidityComesFromTheProfile(t *testing.T) {
 	if !found {
 		t.Fatal("the panel profile declares no nvp-tls interface")
 	}
-	e := NewEngine(store, profiles.Templates())
+	e := shippedEngineFrom(t, store)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	start := time.Now()
