@@ -79,3 +79,26 @@ func PlanSenders(p *scenario.Plan) ([]PlannedSender, error) { return shippedSend
 func SlotLabels(doc Doc, typeLabels map[string]string) map[string]string {
 	return slotLabels(doc, typeLabels)
 }
+
+// ScopedLabel is one component of a plan as the console labels it, with the
+// room, system and name it is found by (#2847). System is "" for a component
+// that fills no slot.
+type ScopedLabel struct{ Label, Room, System, Component string }
+
+// PlannedComponentLabels is every component of a plan as the console labels it:
+// the seed's own label where it gives one, else the component type's label bare,
+// which is how the platform reads a slot of one.
+func PlannedComponentLabels(p *scenario.Plan) []ScopedLabel {
+	typeLabels := componentTypeLabelsByProduct()
+	var out []ScopedLabel
+	for _, c := range rowsOf(p).Components {
+		l := c.label(typeLabels)
+		if l == "" {
+			l = typeLabels[c.Product]
+		}
+		if l != "" {
+			out = append(out, ScopedLabel{Label: l, Room: c.Room, System: c.System, Component: c.Name})
+		}
+	}
+	return out
+}

@@ -41,7 +41,7 @@ What each stage means and what "ready" checks is in [the lab](/developer/lab/#wh
 
 ## Break a device, in ten steps
 
-Everything here is in the console. The fleet is the dev fleet; the device is Touch Panel 2 in Media
+Everything here is in the console. The fleet is the dev fleet; the device is the Touch Panel in Media
 Lab, which serves the system Media Lab Teaching 2.
 
 1. **Sign in.** Open the console address and sign in as `dev`, password `dev`. You land on **Home**.
@@ -55,7 +55,7 @@ Lab, which serves the system Media Lab Teaching 2.
    built from what this device can do.
 6. **Read the fault chip.** The row now carries an **unplugged** chip with how long it has held. The
    panel has gone dark on every protocol, as if its cable were pulled.
-7. **Open the panel.** Press Ctrl-K, type `panel-2` and press Enter. Touch Panel 2's page shows the
+7. **Open the panel.** Press Ctrl-K, type `panel-2` and press Enter. The Touch Panel's page shows the
    same chip beside its health. It still reads healthy: the reachability rule waits for the failure to
    hold 15 seconds, so one missed probe never pages anyone.
 8. **Watch the alarm open.** Within about a minute the page shows a **High** alarm on the panel and

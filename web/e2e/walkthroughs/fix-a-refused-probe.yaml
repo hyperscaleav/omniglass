@@ -12,7 +12,7 @@ description: A touch panel's SNMP agent refused the endpoint's community, so the
 steps:
   - goto: /systems/auditorium
     caption: This location's system. Its touch panel fills the touch-control slot, and an outpost collects it.
-  - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
+  - click: 'button:has([data-label]:text-is("Touch Panel"))'
     caption: Open the touch panel.
   - click: 'aside[data-blade] button[aria-label=Expand]'
     caption: Expand it to the component's view, where collection is read.
