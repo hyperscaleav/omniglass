@@ -51,6 +51,9 @@ type wireStep struct {
 	NoKey bool
 	// Snapshot records the device's whole state after the step.
 	Snapshot bool
+	// Hand is state set on the device before the request, an operator's hand
+	// (a cable pulled, a link down).
+	Hand map[string]any `json:"Hand,omitempty"`
 	// Quirk marks a request the YAML profile answered with an accident of its
 	// templates (an unquoted word in a JSON document, "<no value>" written to
 	// state); the family refuses it instead, and the replay checks that
@@ -92,6 +95,10 @@ type wireTranscript struct {
 	Walks    map[string][]wireOID    `json:"walks,omitempty"`
 	Ticks    map[string][]any        `json:"ticks,omitempty"`
 	RoomDays map[string][]wireChange `json:"room_days,omitempty"`
+	// Lines are the steps of a line protocol's script, Help the commands the
+	// device lists (see wire_lines_test.go).
+	Lines []wireLineResult `json:"lines,omitempty"`
+	Help  []string         `json:"help,omitempty"`
 }
 
 // defaultWireDir is where a family's goldens live unless it says otherwise.
@@ -126,6 +133,10 @@ type wireFamily struct {
 	OIDs, Walks []string
 	// Ticks are the drifting behaviors ticked tickRuns times each.
 	Ticks []tickPlan
+	// Lines is the script of the family's line protocol, played on the TCP face
+	// named LineFace ("nvp" when empty) or direct against its command table.
+	Lines    []wireLine
+	LineFace string
 	// RoomDay walks the device through the parity room day and returns what
 	// moved; the harness runs it once with the lab calendar and once without.
 	// Nil for a family that does not follow a room.
@@ -220,6 +231,9 @@ func wireDevice(t *testing.T, fam wireFamily, product string) *Device {
 // fires an operation: past a login face, with an api key's header set.
 func wireRequest(t *testing.T, d *Device, st wireStep) wireResult {
 	t.Helper()
+	if st.Hand != nil {
+		handSet(t, d, st.Hand)
+	}
 	req := httptest.NewRequest(st.Method, st.Path, strings.NewReader(st.Body))
 	req.RemoteAddr = "console"
 	if st.NoKey {
@@ -458,6 +472,11 @@ func collectWire(t *testing.T, fam wireFamily, product string) wireTranscript {
 		d = wireDevice(t, fam, product)
 	}
 	tr.HTTP = runWireHTTP(t, d, fam.Script)
+	if len(fam.Lines) > 0 {
+		ld := wireDevice(t, fam, product)
+		tr.Help = ld.CommandList()
+		tr.Lines = runWireLines(t, ld, fam.LineFace, fam.Lines)
+	}
 	if len(fam.Ticks) > 0 {
 		tr.Ticks = recordTicks(wireDevice(t, fam, product), fam.Ticks)
 	}
@@ -519,6 +538,10 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 		if w.State != nil && canon(t, have.State) != canon(t, w.State) {
 			add("%s: %s: state after:\n got %s\nwant %s", product, name, canon(t, have.State), canon(t, w.State))
 		}
+	}
+	out = append(out, diffWireLines(t, product, got.Lines, want.Lines)...)
+	if !reflect.DeepEqual(got.Help, want.Help) {
+		add("%s: the command list (a shell's help) differs:\n got %v\nwant %v", product, got.Help, want.Help)
 	}
 	if !sameJSON(t, got.Ticks, want.Ticks) {
 		add("%s: drift sequences differ from the recorded seeded run:\n got %v\nwant %v", product, got.Ticks, want.Ticks)
