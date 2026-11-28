@@ -22,6 +22,9 @@ const (
 	Number
 	// Flag is a boolean: true or false, or the text "true" or "false".
 	Flag
+	// Text is any string: a field that is not a JSON string (a number, a
+	// boolean, null, missing) is refused as not text.
+	Text
 )
 
 // Field is one state path a control route sets from a field of its JSON body.
@@ -91,6 +94,12 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 				return badField(f, "true or false")
 			}
 			changes = append(changes, surface.Change{Path: f.Path, Value: b})
+		case Text:
+			text, ok := raw.(string)
+			if !ok {
+				return badField(f, "text")
+			}
+			changes = append(changes, surface.Change{Path: f.Path, Value: text})
 		}
 	}
 	if len(refused) > 0 {
