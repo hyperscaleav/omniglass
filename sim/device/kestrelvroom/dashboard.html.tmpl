@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Kestrel {{ .Model }}</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0e1727; color: #d6e0ed; margin: 0; }
+  .bar { background: #05090f; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #1a2744; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #ffb54a; }
+  .bar .model { opacity: 0.7; font-size: 13px; color: #a6b5cc; }
+  main { max-width: 820px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #151f36; border: 1px solid #1a2744; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c8aa5; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid rgba(26,39,68,0.6); gap: 16px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #7c8aa5; }
+  .row .v { font-weight: 500; color: #eaf0fa; }
+  .ctrl { display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .pill.active { background: #1f4837; color: #6fd6c9; }
+  .pill.idle { background: #1a2744; color: #7c8aa5; }
+  .pill.standby { background: #4a3a14; color: #ffb54a; }
+  button { font-family: inherit; font-size: 13px; padding: 6px 12px; border: 1px solid #2c3a5a; background: #1f2a44; color: #d6e0ed; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #28365a; }
+  button.primary { background: #ffb54a; border-color: #cc8d2f; color: #2a1a05; font-weight: 600; }
+  button.primary:hover { background: #f3a936; }
+  button.danger { background: #c83e3e; border-color: #a72f2f; color: #fff; font-weight: 600; }
+  button.danger:hover { background: #b13838; }
+  input[type=range] { width: 220px; vertical-align: middle; }
+  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; margin-left: 8px; color: #eaf0fa; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #ffb54a; color: #2a1a05; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: 600; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: #c83e3e; color: #fff; }
+  .logs { margin: 0; padding: 0; list-style: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; }
+  .logs li { padding: 3px 0; border-bottom: 1px solid rgba(26,39,68,0.4); color: #b9c6dc; white-space: pre-wrap; word-break: break-word; }
+  .logs li:last-child { border-bottom: none; }
+  .logs .muted { color: #7c8aa5; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">KESTREL</span> &middot; {{ .Hostname }}</div>
+  <div class="model">{{ .Model }}</div>
+</div>
+<main>
+  <div class="card">
+    <h2>Call</h2>
+    {{ if .InCall }}
+    <div class="row">
+      <span class="k">status</span>
+      <span class="v"><span class="pill active">In call</span></span>
+      <span class="ctrl"><button id="hangup" class="danger">End call</button></span>
+    </div>
+    <div class="row"><span class="k">participants</span><span class="v">{{ .Participants }}</span></div>
+    {{ else }}
+    <div class="row">
+      <span class="k">status</span>
+      <span class="v"><span class="pill idle">idle</span></span>
+    </div>
+    {{ end }}
+  </div>
+
+  <div class="card">
+    <h2>Audio / Video</h2>
+    <div class="row">
+      <span class="k">microphone</span>
+      <span class="ctrl">
+        <button id="mute-toggle" class="{{ if .Muted }}danger{{ end }}">
+          {{ if .Muted }}Mic muted{{ else }}Mute mic{{ end }}
+        </button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">speaker level</span>
+      <span class="ctrl">
+        <input type="range" id="speaker" min="0" max="100" value="{{ .SpeakerLevel }}">
+        <span class="slider-val" id="speaker-val">{{ .SpeakerLevel }}</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">camera</span>
+      <span class="ctrl">
+        <button id="cam-toggle" class="{{ if .CameraOn }}primary{{ end }}">
+          {{ if .CameraOn }}Camera on &mdash; click to hide{{ else }}Camera hidden &mdash; click to show{{ end }}
+        </button>
+      </span>
+    </div>
+    <div class="row"><span class="k">video resolution</span><span class="v">{{ .Resolution }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Application</h2>
+    <div class="row"><span class="k">mode</span><span class="v">{{ .AppMode }}</span></div>
+    <div class="row"><span class="k">UCC sign-in</span><span class="v">{{ with .UCCSignIn }}{{ . }}{{ else }}signed out{{ end }}</span></div>
+    <div class="row"><span class="k">paired touch panel</span><span class="v">{{ with .TouchPair }}{{ . }}{{ else }}none{{ end }}</span></div>
+    <div class="row">
+      <span class="k">local presentation</span>
+      <span class="v">{{ if .Presenting }}<span class="pill active">active</span>{{ else }}<span class="pill idle">idle</span>{{ end }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>System</h2>
+    <div class="row">
+      <span class="k">power state</span>
+      <span class="v">
+        {{ if .Standby }}
+        <span class="pill standby">standby</span>
+        {{ else }}
+        <span class="pill active">active</span>
+        {{ end }}
+      </span>
+      <span class="ctrl">
+        {{ if .Standby }}
+        <button id="standby-off" class="primary">Wake</button>
+        {{ else }}
+        <button id="standby-on">Enter standby</button>
+        {{ end }}
+      </span>
+    </div>
+    <div class="row"><span class="k">model</span><span class="v">{{ .Model }}</span></div>
+    <div class="row"><span class="k">serial</span><span class="v">{{ .Serial }}</span></div>
+    <div class="row"><span class="k">firmware</span><span class="v">{{ .Firmware }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .Uptime }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent logs</h2>
+    <ul id="logs" class="logs"><li class="muted">loading…</li></ul>
+  </div>
+</main>
+<div id="toast" class="toast"></div>
+<script>{{ .Script }}</script>
+</body>
+</html>

@@ -137,6 +137,10 @@ type wireFamily struct {
 	// a difference the family means (a product naming its own model where the
 	// profile named one for all). Nil compares the bytes as recorded.
 	Body func(t *testing.T, product, golden string) string
+	// Diverges maps a recorded transcript to what the family means to say now,
+	// for a difference that is not a response body (a log line the profile
+	// wrote wrongly, in a room day). Nil compares the transcript as recorded.
+	Diverges func(t *testing.T, product string, golden wireTranscript) wireTranscript
 }
 
 func (f wireFamily) dir() string {
@@ -580,7 +584,11 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 // replayWire holds one product of a family to its golden transcript.
 func replayWire(t *testing.T, fam wireFamily, product string) {
 	t.Helper()
-	for _, d := range diffWire(t, fam, product, collectWire(t, fam, product), readGolden(t, fam, product)) {
+	want := readGolden(t, fam, product)
+	if fam.Diverges != nil {
+		want = fam.Diverges(t, product, want)
+	}
+	for _, d := range diffWire(t, fam, product, collectWire(t, fam, product), want) {
 		t.Error(d)
 	}
 }

@@ -346,7 +346,7 @@ const kestrelFrozen = ""
 
 var (
 	vroomWire = wireFamily{Name: "kestrel-vroom-bar", Products: []string{kestrelVRoomProduct}, Engine: shippedEngineOf, Source: wireKestrelSource, Frozen: kestrelFrozen,
-		Script: vroomScript(), Ticks: vroomTicks(), RoomDay: vroomRoomDay}
+		Script: vroomScript(), Ticks: vroomTicks(), RoomDay: vroomRoomDay, Diverges: vroomDiverges}
 	relayWire = wireFamily{Name: "kestrel-relay", Products: []string{kestrelRelayProduct}, Engine: shippedEngineOf, Source: wireKestrelSource, Frozen: kestrelFrozen,
 		Script: relayScript(), Ticks: relayTicks(), RoomDay: relayRoomDay}
 	gazeWire = wireFamily{Name: "kestrel-gaze", Products: []string{kestrelGazeProduct}, Engine: shippedEngineOf, Source: wireKestrelSource, Frozen: kestrelFrozen,
