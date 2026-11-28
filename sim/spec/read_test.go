@@ -47,3 +47,11 @@ func TestTypedReadsOfAStatePath(t *testing.T) {
 		t.Error("Int(i) != 7")
 	}
 }
+
+func TestWholeReadsAnyValueOutOfATreeAsANumber(t *testing.T) {
+	for in, want := range map[any]int64{int(3): 3, int64(4): 4, 5.9: 5, uint32(6): 6, true: 1, false: 0, "7": 0, nil: 0} {
+		if got := spec.Whole(in); got != want {
+			t.Errorf("Whole(%#v) = %d, want %d", in, got, want)
+		}
+	}
+}

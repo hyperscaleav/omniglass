@@ -34,6 +34,11 @@ func Int64(d Device, path string) int64 { return whole(d.Read(path)) }
 // Int reads a path as Int64 does.
 func Int(d Device, path string) int { return int(Int64(d, path)) }
 
+// Whole reads a value out of a state tree as a whole number, as Int64 reads a
+// path: a float is truncated toward zero, a boolean is 1 or 0, anything not a
+// number is 0.
+func Whole(v any) int64 { return whole(v) }
+
 func whole(v any) int64 {
 	switch x := v.(type) {
 	case int:
