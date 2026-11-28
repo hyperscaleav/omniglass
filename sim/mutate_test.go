@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 func TestCompileAndApplyMutations(t *testing.T) {
@@ -465,37 +464,19 @@ func TestResolveValue_JSONDecoding(t *testing.T) {
 	}
 }
 
-// TestKestrelRebootRouteAppliesDefaults loads the actual kestrel-vroom
-// profile from disk, builds a Device with `defaults` installed by the
-// engine wiring, applies the POST /api/admin/reboot route's mutations,
-// and asserts the volatile paths come back to their declared defaults.
-// This is the cross-package check that the .Defaults plumbing reaches
-// the route mutation pipeline end-to-end without booting a live
-// listener.
-func TestKestrelRebootRouteAppliesDefaults(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("LoadStore: %v", err)
-	}
-	dp := store.Devices["kestrel-vroom"]
-	if dp == nil {
-		t.Fatal("kestrel-vroom profile not loaded")
-	}
-	var rebootRoute *profile.Route
-	for i := range dp.Interfaces {
-		for j := range dp.Interfaces[i].Routes {
-			if dp.Interfaces[i].Routes[j].Match == "POST /api/admin/reboot" {
-				rebootRoute = &dp.Interfaces[i].Routes[j]
-				break
-			}
-		}
-		if rebootRoute != nil {
-			break
-		}
-	}
-	if rebootRoute == nil {
-		t.Fatal("reboot route not found on kestrel-vroom profile")
-	}
+// TestRebootRouteAppliesDefaults builds a Device with `defaults` installed by
+// the engine wiring, applies a reboot route's mutations (the shape the
+// profiles' reboot routes have: re-anchor the uptime, restore the volatile
+// paths from .Defaults), and asserts the volatile paths come back to their
+// declared defaults. This is the check that the .Defaults plumbing reaches the
+// route mutation pipeline end-to-end without booting a live listener.
+func TestRebootRouteAppliesDefaults(t *testing.T) {
+	rebootRoute := &profile.Route{Match: "POST /api/admin/reboot", Mutations: []profile.Mutation{
+		{Path: "status.device.boot_epoch", Value: "{{ now }}"},
+		{Path: "status.audio.mic_mute", Value: "{{ .Defaults.status.audio.mic_mute }}"},
+		{Path: "status.audio.volume", Value: "{{ .Defaults.status.audio.volume }}"},
+	}}
+	defaults := map[string]any{"status": map[string]any{"audio": map[string]any{"volume": 50, "mic_mute": false}}}
 
 	// Pre-mutation state: uptime advanced, audio.volume bumped, mic muted.
 	state := map[string]any{
@@ -509,7 +490,7 @@ func TestKestrelRebootRouteAppliesDefaults(t *testing.T) {
 
 	dev := NewDevice("kestrel-1", "kestrel-1.lab", net.IPv4(127, 0, 0, 1),
 		"kestrel-vroom", 1, state)
-	dev.SetDefaults(dp.Defaults)
+	dev.SetDefaults(defaults)
 
 	muts, err := compileMerged(rebootRoute.Mutate, rebootRoute.Mutations)
 	if err != nil {

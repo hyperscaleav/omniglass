@@ -136,7 +136,11 @@ func (f *Family) Surfaces() []profile.Interface {
 			iface.NativeOIDs = f.nativeOIDs()
 		case "http":
 			for _, r := range f.s.HTTP {
-				iface.Routes = append(iface.Routes, profile.Route{Match: r.Match, Doc: profile.Doc{Summary: r.Summary}, Example: r.Example, Native: true, NativeSets: r.Sets})
+				route := profile.Route{Match: r.Match, Doc: profile.Doc{Summary: r.Summary}, Example: r.Example, Native: true, NativeSets: r.Sets}
+				if r.Private {
+					route.Visibility = "private"
+				}
+				iface.Routes = append(iface.Routes, route)
 			}
 		case "ssh", "telnet", "tcp", "udp":
 			for _, c := range f.s.Commands {

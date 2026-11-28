@@ -132,7 +132,7 @@ func roomOf(body map[string]any, field string) (string, bool) {
 
 // badSegment is the refusal of a name that is no state path segment.
 func badSegment(field string) spec.HTTPResponse {
-	return httpapi.BadField(field, "a state path segment (letters, digits, - and _, at most 64)")
+	return httpapi.Refuse(field + " must be a state path segment (letters, digits, - and _, at most 64)")
 }
 
 // textField is a body field that must be a string when it is present; ok is false
@@ -154,22 +154,22 @@ func webhooksRoute(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 		return httpapi.Unreadable()
 	}
 	url, scheme, fault := text(r.Body["url"]), orText(r.Body["scheme"], "hmac"), orText(r.Body["fault"], "")
-	var refused []httpapi.RefusedField
+	var refused []httpapi.Invalid
 	if !urlPattern.MatchString(url) {
-		refused = append(refused, httpapi.RefusedField{Path: pathTarget, Value: url, Pattern: urlSource})
+		refused = append(refused, httpapi.Invalid{Path: pathTarget, Value: url, Pattern: urlSource})
 	}
 	if !contains(schemes, scheme) {
-		refused = append(refused, httpapi.RefusedField{Path: pathScheme, Value: scheme, Enum: schemes})
+		refused = append(refused, httpapi.Invalid{Path: pathScheme, Value: scheme, Enum: schemes})
 	}
 	if !contains(faults, fault) {
-		refused = append(refused, httpapi.RefusedField{Path: pathFault, Value: fault, Enum: faults})
+		refused = append(refused, httpapi.Invalid{Path: pathFault, Value: fault, Enum: faults})
 	}
 	if len(refused) > 0 {
-		return httpapi.Refuse(refused...)
+		return httpapi.Reject(refused...)
 	}
 	secret, ok := r.Body["secret"].(string)
 	if truthy(r.Body["secret"]) && !ok {
-		return httpapi.BadField("secret", "text")
+		return httpapi.Refuse("secret must be " + "text")
 	}
 	if err := d.WriteMany(
 		surface.Change{Path: pathTarget, Value: url}, surface.Change{Path: pathScheme, Value: scheme},
@@ -206,7 +206,7 @@ func addRoomRoute(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 		}
 	}
 	if !contains(states, state) {
-		return httpapi.Refuse(httpapi.RefusedField{Path: roomPath(id, "state"), Value: state, Enum: states})
+		return httpapi.Reject(httpapi.Invalid{Path: roomPath(id, "state"), Value: state, Enum: states})
 	}
 	if err := d.Write(roomPath(id, "state"), state); err != nil {
 		return spec.Failure(500, err.Error())
@@ -238,25 +238,25 @@ func startRoute(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	}
 	id, idOK := textField(r.Body, "id")
 	if !idOK {
-		return httpapi.BadField("id", "text")
+		return httpapi.Refuse("id must be " + "text")
 	}
 	topic, topicOK := textField(r.Body, "topic")
 	if !topicOK {
-		return httpapi.BadField("topic", "text")
+		return httpapi.Refuse("topic must be " + "text")
 	}
 	participants, countOK := count(r.Body["participants"], 1)
-	var refused []httpapi.RefusedField
+	var refused []httpapi.Invalid
 	if !idPattern.MatchString(id) {
-		refused = append(refused, httpapi.RefusedField{Path: roomPath(room, "meeting"), Value: text(r.Body["id"]), Pattern: idSource})
+		refused = append(refused, httpapi.Invalid{Path: roomPath(room, "meeting"), Value: text(r.Body["id"]), Pattern: idSource})
 	}
 	if !countOK {
-		refused = append(refused, httpapi.RefusedField{Path: roomPath(room, "participants"), Value: orText(r.Body["participants"], "1"), Pattern: countSource})
+		refused = append(refused, httpapi.Invalid{Path: roomPath(room, "participants"), Value: orText(r.Body["participants"], "1"), Pattern: countSource})
 	}
 	if !topicPattern.MatchString(topic) {
-		refused = append(refused, httpapi.RefusedField{Path: roomPath(room, "topic"), Value: orText(r.Body["topic"], ""), Pattern: topicSource})
+		refused = append(refused, httpapi.Invalid{Path: roomPath(room, "topic"), Value: orText(r.Body["topic"], ""), Pattern: topicSource})
 	}
 	if len(refused) > 0 {
-		return httpapi.Refuse(refused...)
+		return httpapi.Reject(refused...)
 	}
 	now := d.Now().Unix()
 	if err := d.WriteMany(
@@ -303,7 +303,7 @@ func participantRoute(event string, def int64) spec.HTTPHandler {
 		}
 		n, ok := count(r.Body["participants"], def)
 		if !ok {
-			return httpapi.Refuse(httpapi.RefusedField{Path: roomPath(room, "participants"), Value: orText(r.Body["participants"], strconv.FormatInt(def, 10)), Pattern: countSource})
+			return httpapi.Reject(httpapi.Invalid{Path: roomPath(room, "participants"), Value: orText(r.Body["participants"], strconv.FormatInt(def, 10)), Pattern: countSource})
 		}
 		if err := d.Write(roomPath(room, "participants"), n); err != nil {
 			return spec.Failure(500, err.Error())
@@ -325,7 +325,7 @@ func deviceStatusRoute(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	}
 	status := text(r.Body["status"])
 	if !contains(online, status) {
-		return httpapi.Refuse(httpapi.RefusedField{Path: devicePath(device, "status"), Value: status, Enum: online})
+		return httpapi.Reject(httpapi.Invalid{Path: devicePath(device, "status"), Value: status, Enum: online})
 	}
 	now := d.Now().Unix()
 	if err := d.WriteMany(surface.Change{Path: devicePath(device, "status"), Value: status}, surface.Change{Path: devicePath(device, "last_seen"), Value: now}); err != nil {

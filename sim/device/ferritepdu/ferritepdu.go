@@ -248,7 +248,7 @@ func switchRoute(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	path := fmt.Sprintf("%s.%s.state", pathOutlets, index)
 	state := httpapi.FieldText(r.Body["state"])
 	if state != "on" && state != "off" {
-		return httpapi.Refuse(httpapi.RefusedField{Path: path, Value: state, Enum: states})
+		return httpapi.Reject(httpapi.Invalid{Path: path, Value: state, Enum: states})
 	}
 	if index == "" {
 		return httpapi.MutationFailed(httpapi.FailedMutation{Path: path, Error: fmt.Sprintf("setting %q: segment 2 (\"\"): \"\" is not an integer index", path)})

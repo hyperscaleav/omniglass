@@ -1,4 +1,0 @@
-{
-  {{/* @field status.logs.recent array "Recent device log lines (private route; web UI log panel)" */}}
-  "recent": {{ .State | get "status" | get "logs" | get "recent" | marshal }}
-}

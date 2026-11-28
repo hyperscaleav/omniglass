@@ -28,6 +28,8 @@ type Fake struct {
 	Reports [][2]string
 	// RoomsRead is what the device reads of its rooms, none when nil.
 	RoomsRead spec.Rooms
+	// Events lists every event published, in order.
+	Events []spec.Event
 
 	state, defaults map[string]any
 }
@@ -74,6 +76,7 @@ func (f *Fake) Rooms() spec.Rooms {
 	}
 	return spec.RoomsOf(struct{ spec.Device }{f})
 }
+func (f *Fake) Publish(e spec.Event) { f.Events = append(f.Events, e) }
 
 func (f *Fake) Write(path string, v any) error {
 	return f.WriteMany(surface.Change{Path: path, Value: v})
@@ -186,6 +189,11 @@ func (f *Fake) Ticks(c spec.TickContext) (undeclared []string) {
 				undeclared = append(undeclared, fmt.Sprintf("%s writes %s", t.Name, ch.Path))
 			}
 			set(f.state, ch.Path, ch.Value)
+		}
+		if t.Emit != nil {
+			for _, e := range t.Emit(f, c) {
+				f.Publish(e)
+			}
 		}
 	}
 	return undeclared

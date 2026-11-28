@@ -31,21 +31,16 @@ func TestADeviceWithNoWorldReadsNoRooms(t *testing.T) {
 	}
 }
 
-// A device that cannot send a webhook or name an event drops them, so a handler
-// is written once; the fake records them for a test to read.
-func TestWebhooksAndEventsAreDroppedByADeviceThatCannotSendThem(t *testing.T) {
+// A device that cannot send a webhook drops it, so a handler is written once;
+// the fake records it for a test to read.
+func TestWebhooksAreDroppedByADeviceThatCannotSendThem(t *testing.T) {
 	bare := struct{ spec.Device }{spectest.NewFake(spectest.Spec(), "")}
 	spec.Send(bare, spec.Post{URL: "http://x", Body: []byte("{}")})
-	spec.Report(bare, "e", "{}")
 
 	f := spectest.NewFake(spectest.Spec(), "")
 	spec.Send(f, spec.Post{URL: "http://x/y", Body: []byte("{}")})
 	spec.Send(f, spec.Post{Body: []byte("{}")})
-	spec.Report(f, "recording-failed", `{"id":"r"}`)
 	if len(f.Posts) != 1 || f.Posts[0].URL != "http://x/y" {
 		t.Errorf("posts = %+v, want the one with a target", f.Posts)
-	}
-	if len(f.Reports) != 1 || f.Reports[0][0] != "recording-failed" {
-		t.Errorf("reports = %+v", f.Reports)
 	}
 }

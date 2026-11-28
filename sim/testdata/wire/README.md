@@ -43,6 +43,8 @@ A family replacing a profile sets `Frozen` once the profile is deleted: the
 recorder then refuses it, because recording the family from itself would make
 the hold on the profile vacuous.
 
+A device with a live feed also records the named events a request or a tick published (`events`, `#events`), after its state changes, in the order the feed numbered them; a device with none records no such key.
+
 The device is deterministic: loopback address 127.0.0.1, id and hostname
 `wire-<product>`, clock pinned to 2026-11-03 12:00 UTC, uptime anchor an hour
 earlier, behaviors held still.

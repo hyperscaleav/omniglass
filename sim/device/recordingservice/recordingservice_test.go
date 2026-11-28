@@ -44,8 +44,8 @@ func TestAFailureIsRecordedAndNamedOnTheFeed(t *testing.T) {
 	if f.Read(pathFailID) != "r-9001" || f.Read(pathFailWhy) != "disk full" || len(f.Writes) != 1 || len(f.Writes[0]) != 2 {
 		t.Errorf("last failure = %v %v in %d writes", f.Read(pathFailID), f.Read(pathFailWhy), len(f.Writes))
 	}
-	if len(f.Reports) != 1 || f.Reports[0] != [2]string{"recording-failed", `{"id":"r-9001","reason":"disk full"}`} {
-		t.Errorf("reports = %v", f.Reports)
+	if len(f.Events) != 1 || f.Events[0] != (spec.Event{Name: "recording-failed", Data: `{"id":"r-9001","reason":"disk full"}`}) {
+		t.Errorf("reports = %v", f.Events)
 	}
 }
 
@@ -58,8 +58,8 @@ func TestARefusedFailureChangesAndNamesNothing(t *testing.T) {
 		`{"id": "r-123456789012345678901234567890123", "reason": "x"}`,
 	} {
 		f := spectest.NewFake(Spec(), Name)
-		if res := fail(t, f, body); res.Status != 400 || len(f.Writes) != 0 || len(f.Reports) != 0 {
-			t.Errorf("%s: status %d, %d writes, %d reports; want a 400 that changes and names nothing", body, res.Status, len(f.Writes), len(f.Reports))
+		if res := fail(t, f, body); res.Status != 400 || len(f.Writes) != 0 || len(f.Events) != 0 {
+			t.Errorf("%s: status %d, %d writes, %d reports; want a 400 that changes and names nothing", body, res.Status, len(f.Writes), len(f.Events))
 		}
 	}
 	f := spectest.NewFake(Spec(), Name)

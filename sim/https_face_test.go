@@ -17,7 +17,7 @@ import (
 // restart, and a test can replace it to model a replaced component.
 func TestAnHTTPSFaceKeyIsTheDevicesOwn(t *testing.T) {
 	ip := simtest.ClaimLoopback(t)
-	snap := DeviceSnapshot{DeviceID: "bar-1", Hostname: "bar-1", LoopbackIP: ip, ProfileName: "kestrel-vroom", Version: 1}
+	snap := DeviceSnapshot{DeviceID: "bar-1", Hostname: "bar-1", LoopbackIP: ip, ProfileName: "kestrel-bar", Version: 1}
 	offered := func() string {
 		e := shippedEngine(t)
 		e.SetPortMap(EphemeralPorts)

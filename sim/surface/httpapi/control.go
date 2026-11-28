@@ -88,14 +88,14 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 		return unreadable()
 	}
 	var changes []surface.Change
-	var refused []refusedField
+	var refused []Invalid
 	for _, f := range c.Fields {
 		raw := r.Body[f.Name]
 		switch f.Kind {
 		case Choice:
-			text := fieldText(raw)
+			text := FieldText(raw)
 			if !contains(f.Values, text) {
-				refused = append(refused, refusedField{Path: f.Path, Value: text, Enum: f.Values})
+				refused = append(refused, Invalid{Path: f.Path, Value: text, Enum: f.Values})
 				continue
 			}
 			changes = append(changes, surface.Change{Path: f.Path, Value: text})
@@ -117,7 +117,7 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 				return badField(f, "text")
 			}
 			if re := c.patterns[f.Name]; re != nil && !re.MatchString(text) {
-				refused = append(refused, refusedField{Path: f.Path, Value: text, Pattern: f.Pattern})
+				refused = append(refused, Invalid{Path: f.Path, Value: text, Pattern: f.Pattern})
 				continue
 			}
 			changes = append(changes, surface.Change{Path: f.Path, Value: text})
@@ -178,20 +178,25 @@ func jsonResponse(b []byte) spec.HTTPResponse {
 	return spec.HTTPResponse{ContentType: "application/json", Body: b}
 }
 
-type refusedField struct {
+// Invalid is one field a request set to a value its route does not take: the
+// state path it was bound for, the value as text, and what the value was held
+// to, a list it is one of or a pattern it matches.
+type Invalid struct {
 	Path    string   `json:"path"`
 	Value   string   `json:"value"`
 	Enum    []string `json:"enum,omitempty"`
 	Pattern string   `json:"pattern,omitempty"`
 }
 
-// refusal is the 400 a simulated device answers a value outside a fixed list
-// with: the engine's validation body, naming each path, the value it was given
-// and the values it takes.
-func refusal(fields []refusedField) spec.HTTPResponse {
+// Reject is the 400 a simulated device answers a value outside what a route
+// takes with: the engine's validation body, naming each path, the value it was
+// given and the list or pattern it was held to. Nothing is written.
+func Reject(fields ...Invalid) spec.HTTPResponse { return refusal(fields) }
+
+func refusal(fields []Invalid) spec.HTTPResponse {
 	body, _ := json.Marshal(struct {
-		Error  string         `json:"error"`
-		Fields []refusedField `json:"fields"`
+		Error  string    `json:"error"`
+		Fields []Invalid `json:"fields"`
 	}{"validation failed", fields})
 	return spec.HTTPResponse{Status: 400, ContentType: "application/json", Body: body}
 }
@@ -204,15 +209,21 @@ func unreadable() spec.HTTPResponse {
 }
 
 func badField(f Field, want string) spec.HTTPResponse {
+	return Refuse(fmt.Sprintf("%s must be %s", f.Name, want))
+}
+
+// Refuse is the 400 a route answers a request it cannot act on with: the
+// message in the engine's error body. Nothing is written.
+func Refuse(message string) spec.HTTPResponse {
 	body, _ := json.Marshal(struct {
 		Error string `json:"error"`
-	}{fmt.Sprintf("%s must be %s", f.Name, want)})
+	}{message})
 	return spec.HTTPResponse{Status: 400, ContentType: "application/json", Body: body}
 }
 
-// fieldText is a body field as a refusal names it: text as itself, a missing
+// FieldText is a body field as a refusal names it, and as a template wrote it: text as itself, a missing
 // field as <no value>, any other value as written.
-func fieldText(v any) string {
+func FieldText(v any) string {
 	switch x := v.(type) {
 	case nil:
 		return "<no value>"

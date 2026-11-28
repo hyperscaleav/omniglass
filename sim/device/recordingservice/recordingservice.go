@@ -186,26 +186,26 @@ func failRoute(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	}
 	id, idText := r.Body["id"].(string)
 	reason, reasonText := r.Body["reason"].(string)
-	var refused []httpapi.RefusedField
+	var refused []httpapi.Invalid
 	if (idText || r.Body["id"] == nil) && !idPattern.MatchString(id) {
-		refused = append(refused, httpapi.RefusedField{Path: pathFailID, Value: httpapi.FieldText(r.Body["id"]), Pattern: idSource})
+		refused = append(refused, httpapi.Invalid{Path: pathFailID, Value: httpapi.FieldText(r.Body["id"]), Pattern: idSource})
 	}
 	if (reasonText || r.Body["reason"] == nil) && !reasonPattern.MatchString(reason) {
-		refused = append(refused, httpapi.RefusedField{Path: pathFailWhy, Value: httpapi.FieldText(r.Body["reason"]), Pattern: reasonSource})
+		refused = append(refused, httpapi.Invalid{Path: pathFailWhy, Value: httpapi.FieldText(r.Body["reason"]), Pattern: reasonSource})
 	}
 	if len(refused) > 0 {
-		return httpapi.Refuse(refused...)
+		return httpapi.Reject(refused...)
 	}
 	if !idText {
-		return httpapi.BadField("id", "text")
+		return httpapi.Refuse("id must be " + "text")
 	}
 	if !reasonText {
-		return httpapi.BadField("reason", "text")
+		return httpapi.Refuse("reason must be " + "text")
 	}
 	if err := d.WriteMany(surface.Change{Path: pathFailID, Value: id}, surface.Change{Path: pathFailWhy, Value: reason}); err != nil {
 		return spec.Failure(500, err.Error())
 	}
-	spec.Report(d, "recording-failed", fmt.Sprintf(`{"id":"%s","reason":"%s"}`, id, reason))
+	d.Publish(spec.Event{Name: "recording-failed", Data: fmt.Sprintf(`{"id":"%s","reason":"%s"}`, id, reason)})
 	return spec.HTTPResponse{ContentType: "application/json", Body: httpapi.Spaced(struct {
 		OK bool `json:"ok"`
 	}{true})}

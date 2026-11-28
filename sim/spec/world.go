@@ -118,13 +118,3 @@ func Send(d Device, p Post) {
 		s.Post(p)
 	}
 }
-
-type reporter interface{ Report(name, data string) }
-
-// Report names an event on the device's event stream, after the state changes
-// that came with it, when the device has a stream.
-func Report(d Device, name, data string) {
-	if s, ok := d.(reporter); ok {
-		s.Report(name, data)
-	}
-}

@@ -156,7 +156,7 @@ func interpretAll(t *testing.T, cat shippedCatalog, fn *driver.BakedFunction, p 
 func vroomInACall(t *testing.T) *sim.Device {
 	t.Helper()
 	e := shipped.Engine(t)
-	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "bar", Hostname: "hq-conf-1-videobar-1", LoopbackIP: "127.60.0.9", ProfileName: "kestrel-vroom", Version: 1}}); err != nil {
+	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "bar", Hostname: "hq-conf-1-videobar-1", LoopbackIP: "127.60.0.9", ProfileName: "kestrel-bar", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]

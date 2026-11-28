@@ -38,7 +38,7 @@ func roomsSpec(target string) spec.Spec {
 		HTTP: []spec.HTTPRoute{{Match: "POST /go", Handle: func(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 			spec.Send(d, spec.Post{URL: target, Body: []byte(`{"event":"go"}`), Headers: map[string]string{"X-Wire-Event": "go"},
 				Sign: &spec.Signing{Scheme: "hmac", Secret: "wire-key", Header: "X-UCC-Signature", Prefix: "sha256=", Timestamp: "X-UCC-Timestamp", Delivery: "X-UCC-Delivery"}})
-			spec.Report(d, "went", `{"ok":true}`)
+			d.Publish(spec.Event{Name: "went", Data: `{"ok":true}`})
 			return spec.JSON(map[string]bool{"ok": true})
 		}}},
 		Push: &spec.PushFace{Every: 30 * time.Second, Body: func(d spec.Device, owner string) ([]byte, error) {

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"sync"
 	"time"
 
@@ -102,13 +101,23 @@ func (d *Device) runTick(t spec.Tick, stop <-chan struct{}, done *sync.WaitGroup
 	}
 }
 
-// applyTick runs a tick and writes what it returns: only the paths whose value
-// changed, never one an operator override holds.
+// applyTick runs a tick, writes what it returns (only the paths whose value
+// changed, never one an operator override holds) and then reports the events it
+// names, read from the state the writes left.
 func (d *Device) applyTick(t spec.Tick) {
 	now := d.clock()
 	span, known := behave.BuildingSpan(d.world(), d.calendarSrc(), d.room)
 	c := spec.TickContext{Room: d.roomState(d.room), Now: now, Rand: d.fam.src, Hours: behave.ReadBuildingHours(span, known, now), Bookings: d.bookingsRead}
-	changes := t.Run(goDevice{d}, c)
+	d.writeTick(t, t.Run(goDevice{d}, c))
+	if t.Emit != nil {
+		for _, e := range t.Emit(goDevice{d}, c) {
+			goDevice{d}.Publish(e)
+		}
+	}
+}
+
+// writeTick writes a tick's changes as a behavior's mutations are written.
+func (d *Device) writeTick(t spec.Tick, changes []surface.Change) {
 	if len(changes) == 0 {
 		return
 	}
@@ -120,7 +129,7 @@ func (d *Device) applyTick(t spec.Tick) {
 		if _, over := held[ch.Path]; over {
 			continue
 		}
-		if reflect.DeepEqual(lookupStatePath(d.state, ch.Path), ch.Value) {
+		if sameValue(lookupStatePath(d.state, ch.Path), ch.Value) {
 			continue
 		}
 		if err := SetPath(d.state, ch.Path, ch.Value); err != nil {
@@ -178,6 +187,15 @@ func (g goDevice) Default(path string) any {
 }
 func (g goDevice) State() map[string]any { return g.d.State() }
 func (g goDevice) Now() time.Time        { return g.d.clock() }
+
+// Publish reports a named event on the device's live feed, none when its face
+// declares no feed or the event has no name (a tick's quiet turn).
+func (g goDevice) Publish(e spec.Event) {
+	if g.d.events == nil || e.Name == "" {
+		return
+	}
+	g.d.events.publish(e.Name, e.Data)
+}
 func (g goDevice) Write(path string, v any) error {
 	return g.WriteMany(surface.Change{Path: path, Value: v})
 }

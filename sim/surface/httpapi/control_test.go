@@ -28,6 +28,7 @@ func (f *fake) Read(p string) any           { return f.state[p] }
 func (f *fake) Default(p string) any        { return f.defaults[p] }
 func (f *fake) State() map[string]any       { return f.state }
 func (f *fake) Now() time.Time              { return f.now }
+func (f *fake) Publish(spec.Event)          {}
 func (f *fake) Write(p string, v any) error { return f.WriteMany(surface.Change{Path: p, Value: v}) }
 func (f *fake) WriteMany(cs ...surface.Change) error {
 	f.writes = append(f.writes, cs)
@@ -247,5 +248,27 @@ func TestATextFieldTakesOnlyAString(t *testing.T) {
 				t.Errorf("status %d with %d writes, want %d (written: %v)", status, len(f.writes), tc.want, tc.wrote)
 			}
 		})
+	}
+}
+
+// A control writes the changes it makes beside its fields in the same change,
+// read from the values its fields were checked to hold, and a path it names
+// again takes the later value (#2834).
+func TestControlWritesItsAlsoChangesWithTheFieldsInOneChange(t *testing.T) {
+	c := Control{Match: "POST /x", Fields: []Field{{Path: "p", Name: "power", Kind: Choice, Values: []string{"on", "off"}}},
+		Also: func(_ spec.Device, w map[string]any) []surface.Change {
+			return []surface.Change{{Path: "n", Value: int64(len(w["p"].(string)))}, {Path: "p", Value: "typed-" + w["p"].(string)}}
+		},
+		Ack: func(spec.Device) any { return ack{} }}
+	d := newFake()
+	if res := c.Route().Handle(d, spec.HTTPRequest{Body: map[string]any{"power": "off"}}); res.Status != 0 || len(d.writes) != 1 || len(d.writes[0]) != 3 {
+		t.Fatalf("status %d, writes %+v: want one write of three", res.Status, d.writes)
+	}
+	if d.state["n"] != int64(3) || d.state["p"] != "typed-off" {
+		t.Fatalf("state %v: the also change did not land", d.state)
+	}
+	d = newFake()
+	if res := c.Route().Handle(d, spec.HTTPRequest{Body: map[string]any{"power": "dim"}}); res.Status != 400 || len(d.writes) != 0 {
+		t.Fatalf("a refused field still ran the also change: %d, %+v", res.Status, d.writes)
 	}
 }

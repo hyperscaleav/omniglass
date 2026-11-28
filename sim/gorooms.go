@@ -12,7 +12,7 @@ import (
 
 // What a Go family reads of the rooms it speaks for, and the webhooks and events
 // it sends (#2836): the device as a handler sees it answers spec.Rooms,
-// spec.Post and spec.Report beside spec.Device, from the same world, calendar,
+// spec.Post beside spec.Device, from the same world, calendar,
 // memo and sender a YAML profile's template functions read.
 
 // Rooms is the rooms the device speaks for, as spec.RoomsOf reads them.
@@ -110,11 +110,4 @@ func (g goDevice) Post(p spec.Post) {
 			slog.Warn("webhook post failed", "device_id", g.d.DeviceID, "error", err)
 		}
 	}()
-}
-
-// Report names an event on the device's event stream, if it has one.
-func (g goDevice) Report(name, data string) {
-	if g.d.events != nil {
-		g.d.events.publish(name, data)
-	}
 }
