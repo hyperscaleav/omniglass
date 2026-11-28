@@ -14,8 +14,8 @@
 // disconnect on a meeting is not rejoined. With no calendar, or in no room, it
 // never calls by itself.
 //
-// The family replaced the kestrel-relay-c1 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the kestrel-relay-c1 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package kestrelrelay
 
 import (

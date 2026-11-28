@@ -36,8 +36,8 @@
 // world does not name (the dev fixture's, an id a demo invents) keeps the state its
 // routes gave it.
 //
-// The family replaced the ucc-platform YAML profile; wire parity with it is held by
-// golden transcripts (sim/testdata/wire).
+// The family replaced the ucc-platform YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package uccplatform
 
 import (

@@ -7,11 +7,10 @@
 // now and then, while the room is in use; idle and at its noise floor between
 // meetings.
 //
-// The wireless HX-1 speaks the same API with a battery beside it but is another
-// kind of device with its own collector, so it is its own family (lyrahx); the
-// body they share is sim/device/internal/lyra. The family replaced the
-// lyra-arc-a2 YAML profile; wire parity with it is held by golden transcripts
-// (sim/testdata/wire).
+// The wireless HX-1 speaks the same API with a battery beside it but is another kind of device with
+// its own collector, so it is its own family (lyrahx); the body they share is
+// sim/device/internal/lyra. The family replaced the lyra-arc-a2 YAML profile; its wire matched the
+// profile's before the profile was deleted (#2826); the driver contract test now holds it.
 package lyraarc
 
 import (

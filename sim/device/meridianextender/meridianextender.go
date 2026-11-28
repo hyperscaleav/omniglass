@@ -11,12 +11,11 @@
 // route, and its API does not take one, which is why it is a family of its own
 // beside meridianswitcher.
 //
-// The signal follows the room's meetings off the lab calendar: present while a
-// meeting is held, the switcher routing a source onto the cable, and absent
-// between meetings and through a no-show. The link is the cable's and stays up;
-// a scenario that pulls it is not undone, and a reboot retrains it. The family
-// replaced the meridian-xl-1 YAML profile; wire parity with it is held by golden
-// transcripts (sim/testdata/wire).
+// The signal follows the room's meetings off the lab calendar: present while a meeting is held, the
+// switcher routing a source onto the cable, and absent between meetings and through a no-show. The
+// link is the cable's and stays up; a scenario that pulls it is not undone, and a reboot retrains
+// it. The family replaced the meridian-xl-1 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package meridianextender
 
 import (

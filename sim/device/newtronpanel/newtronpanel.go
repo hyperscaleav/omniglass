@@ -13,8 +13,8 @@
 // and its active page is the call while the meeting is held, sharing through
 // the stretch content is shared, and idle otherwise.
 //
-// The family replaced the newtron-panel-7 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the newtron-panel-7 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package newtronpanel
 
 import (

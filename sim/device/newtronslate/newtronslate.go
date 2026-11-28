@@ -10,8 +10,8 @@
 // own. BOOK and RELEASE are its own buttons, a momentary override that holds
 // until the calendar's reading of the room next changes.
 //
-// The family replaced the newtron-slate-5 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the newtron-slate-5 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package newtronslate
 
 import (

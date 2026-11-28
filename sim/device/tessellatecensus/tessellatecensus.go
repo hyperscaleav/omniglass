@@ -21,8 +21,8 @@
 // The head-count is who the lab calendar says is in the device's own room, never a
 // walk of its own (behave.PeopleCount); with no calendar it walks.
 //
-// The family replaced the tessellate-census-c1 YAML profile; wire parity with it
-// is held by golden transcripts (sim/testdata/wire).
+// The family replaced the tessellate-census-c1 YAML profile; its wire matched the profile's before
+// the profile was deleted (#2826); the driver contract test now holds it.
 package tessellatecensus
 
 import (

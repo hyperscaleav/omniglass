@@ -11,10 +11,10 @@
 // draining in use and recharging between meetings, so the charge reads the same
 // at any instant on any run.
 //
-// The ceiling Arc A2 speaks the same API with no pack but is another kind of
-// device with its own collector, so it is its own family (lyraarc); the body they
-// share is sim/device/internal/lyra. The family replaced the lyra-hx-1 YAML
-// profile; wire parity with it is held by golden transcripts (sim/testdata/wire).
+// The ceiling Arc A2 speaks the same API with no pack but is another kind of device with its own
+// collector, so it is its own family (lyraarc); the body they share is sim/device/internal/lyra.
+// The family replaced the lyra-hx-1 YAML profile; its wire matched the profile's before the profile
+// was deleted (#2826); the driver contract test now holds it.
 package lyrahx
 
 import (

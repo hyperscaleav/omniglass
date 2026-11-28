@@ -759,7 +759,7 @@ calendar is read only by the few readers that say so.
 
 Each primitive has a table test over the pinned room day of the calendar's own phase tests (a booked meeting, a
 walk-in, a back-to-back pair, a meeting that shares, a no-show, a scripted impairment, and a room with no calendar),
-and a **parity test** (`sim/behave_parity_test.go`) that drives the family through the engine on a pinned clock, a tick at a time over that
+and a **family test** (`sim/behave_family_test.go`) that drives the family through the engine on a pinned clock, a tick at a time over that
 day, runs the primitive from the typed state the device holds with a twin of its random source, and compares every
 path the primitive owns. The two cannot drift apart unseen: a tick that draws a different number of times fails the
 next comparison.

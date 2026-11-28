@@ -19,8 +19,8 @@
 // system the room belongs to; a driver walks the pages once and each record's values
 // land on the system its room id is bound to.
 //
-// The family replaced the recording-service YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the recording-service YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package recordingservice
 
 import (

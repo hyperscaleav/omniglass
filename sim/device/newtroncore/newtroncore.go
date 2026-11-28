@@ -7,12 +7,12 @@
 // program, control ports, connected panels, room power, temperature and the
 // last macro it ran.
 //
-// It follows the lab calendar: the room's system power is on from the wake lead
-// before a booked meeting someone attends (at the start of a walk-in) to the
-// cooldown after it, and standby otherwise; the start-meeting macro runs as it
-// goes on and the end-meeting macro as it goes to standby. The room's climate
-// warms with the people in it. The family replaced the newtron-core-3 YAML
-// profile; wire parity with it is held by golden transcripts (sim/testdata/wire).
+// It follows the lab calendar: the room's system power is on from the wake lead before a booked
+// meeting someone attends (at the start of a walk-in) to the cooldown after it, and standby
+// otherwise; the start-meeting macro runs as it goes on and the end-meeting macro as it goes to
+// standby. The room's climate warms with the people in it. The family replaced the newtron-core-3
+// YAML profile; its wire matched the profile's before the profile was deleted (#2826); the driver
+// contract test now holds it.
 package newtroncore
 
 import (

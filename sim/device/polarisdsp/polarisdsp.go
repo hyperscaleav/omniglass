@@ -12,8 +12,8 @@
 // two attendees actually in the room and rise with the head count, and sit shut
 // at the noise floor in an empty room.
 //
-// The family replaced the polaris-dsp-16 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the polaris-dsp-16 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package polarisdsp
 
 import (

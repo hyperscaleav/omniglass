@@ -17,8 +17,8 @@
 // day (behave.OutletCurrent): outlet 1 the video chain, 2 the processors, 3 the
 // amplifier, 4 nothing plugged in. A PDU with no calendar random-walks.
 //
-// The family replaced the ferrite-pdu-4c YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the ferrite-pdu-4c YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package ferritepdu
 
 import (

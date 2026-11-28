@@ -14,8 +14,8 @@
 // basic auth the VRoom speaks (admin / kestrel), with the routes a camera has:
 // no SNMP, no command line.
 //
-// The family replaced the kestrel-gaze-p2 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the kestrel-gaze-p2 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package kestrelgaze
 
 import (

@@ -13,5 +13,9 @@ served them are deleted. ADR-2832 to ADR-2836 still record what diverged from th
 What stays is the replay half: the transcript format and `replayWire` in `sim/wire_replay_test.go`, the seam a
 capture from a real device plugs into, with one small test (`sim/wire_replay_seam_test.go`) that replays a
 transcript against `borealedge` and fails on an altered expectation. A family's own behavior is now held by
-its own tests and the driver contract test. The behavior parity tests against `sim/behave` stay, and so do the
-`SessionConfig` tests that lived beside the recorder helpers.
+its own tests and by the driver contract test (`TestEveryShippedDriverPollResolvesAgainstItsSimulatedFamily`,
+`internal/collection`): for every seeded product a family serves, the device starts on loopback, its shipped
+driver's polls run through the real collection path, and every metric and property the driver declares must
+resolve in every record, generated from the seed and the catalog (25 products, 23 drivers, 60 polls and 188
+signals today). The tests of the families against `sim/behave` stay (`sim/behave_family_test.go`), and so do
+the line-session tests that lived beside the recorder helpers (`sim/line_session_test.go`).

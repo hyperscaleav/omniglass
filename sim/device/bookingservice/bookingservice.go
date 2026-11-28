@@ -20,8 +20,8 @@
 // the meeting day in configuration.calendar.bookings, windows in UTC that repeat
 // every day.
 //
-// The family replaced the booking-service YAML profile; its pushed batches are held
-// to golden transcripts (sim/testdata/wire).
+// The family replaced the booking-service YAML profile; its pushed batches matched the profile's
+// before the profile was deleted (#2826).
 package bookingservice
 
 import (

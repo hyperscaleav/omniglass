@@ -20,8 +20,8 @@
 // schedule. A dial makes it talk now and a hang-up leaves the meeting it ended:
 // the calendar yields to both.
 //
-// The family replaced the kestrel-vroom YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the kestrel-vroom YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package kestrelvroom
 
 import (

@@ -5,9 +5,9 @@
 // state; the panel follows its room's meetings through the shared behavior
 // primitives.
 //
-// The family replaced the boreal-edge-86 YAML profile and its `products:`
-// overrides. Wire parity with that profile is held by golden transcripts
-// (sim/testdata/wire) the profile recorded before it was deleted.
+// The family replaced the boreal-edge-86 YAML profile and its `products:` overrides. Its wire
+// matched that profile's, proven by transcripts the profile recorded before it was deleted (#2826);
+// the driver contract test now holds it.
 package borealedge
 
 import (

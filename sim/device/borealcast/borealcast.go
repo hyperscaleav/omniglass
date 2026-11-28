@@ -6,8 +6,8 @@
 // (X-Boreal-Key), the way signage players are integrated with a content
 // management system: no SNMP, no command line.
 //
-// The family replaced the boreal-cast-m1 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the boreal-cast-m1 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package borealcast
 
 import (
