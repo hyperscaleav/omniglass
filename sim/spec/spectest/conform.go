@@ -31,7 +31,12 @@ func Conform(t *testing.T, s spec.Spec) {
 	if len(s.Models) == 0 {
 		t.Fatalf("family %s has no models: a family is a table", s.Name)
 	}
-	products := append([]string{s.Name}, modelProducts(s)...)
+	products := []string{s.Name}
+	for _, p := range modelProducts(s) {
+		if p != s.Name {
+			products = append(products, p)
+		}
+	}
 	for _, product := range products {
 		t.Run(product, func(t *testing.T) {
 			t.Helper()

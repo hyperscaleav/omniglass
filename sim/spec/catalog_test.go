@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
@@ -147,5 +148,60 @@ func TestTableKeepsEachRowBesideItsModel(t *testing.T) {
 	}
 	if _, ok := spec.Row[int](ms[0]); ok {
 		t.Fatal("a row read back as another type")
+	}
+}
+
+// A family of one product may be named for it: the product resolves to the
+// family itself with the row's identity, listed once, and a product listed twice
+// is refused.
+func TestAFamilyOfOneIsNamedForItsProduct(t *testing.T) {
+	one := spec.Spec{
+		Name:     "solo-box",
+		Identity: spec.Identity{Manufacturer: "Acme", Model: "Box", DeviceType: "box"},
+		Models: []spec.Model{{Product: "solo-box", Model: "Box 1", Summary: "the only one",
+			State: map[string]any{"configuration": map[string]any{"device": map[string]any{"model": "Box 1"}}}}},
+	}
+	cat, err := spec.NewCatalog(nil, one)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := cat.ForProduct("solo-box")
+	if !ok || r.Definition.ID() != "solo-box" || r.Identity.Model != "Box 1" || r.Identity.Summary != "the only one" || r.Model.Product != "solo-box" {
+		t.Fatalf("solo-box resolves to %+v (ok=%v)", r, ok)
+	}
+	if got := r.Definition.Products(); !reflect.DeepEqual(got, []string{"solo-box"}) {
+		t.Errorf("products = %v, want the one product once", got)
+	}
+	one.Models = append(one.Models, one.Models[0])
+	if _, err := spec.NewCatalog(nil, one); err == nil || !strings.Contains(err.Error(), "twice") {
+		t.Errorf("a product listed twice: err = %v, want a refusal", err)
+	}
+}
+
+// A push face a family declares must have a body and a cadence a sender of record
+// would keep.
+func TestAFamilyPushFaceNeedsABodyAndACadence(t *testing.T) {
+	body := func(spec.Device, string) ([]byte, error) { return []byte("{}"), nil }
+	base := spec.Spec{Name: "pusher", Models: []spec.Model{{Product: "pusher-1"}}}
+	for name, face := range map[string]*spec.PushFace{
+		"no body": {Every: 30 * time.Second}, "too fast": {Every: time.Millisecond, Body: body},
+	} {
+		s := base
+		s.Push = face
+		if _, err := spec.NewFamily(s); err == nil {
+			t.Errorf("%s: the family was accepted", name)
+		}
+	}
+	s := base
+	s.Push = &spec.PushFace{Every: 30 * time.Second, Body: body}
+	f, err := spec.NewFamily(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := f.PushFace(); p == nil || p.Every != "30s" {
+		t.Errorf("push face = %+v, want one every 30s", p)
+	}
+	if f.WebhookFace() != nil {
+		t.Error("a family that declares no webhook face has one")
 	}
 }
