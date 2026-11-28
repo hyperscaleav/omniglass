@@ -2038,8 +2038,6 @@ export type SimDeviceBody = {
 };
 
 export type SimBehaviorBody = {
-  /** Deprecated, always false: a device posts its webhooks from its own handlers, not from a timer. */
-  emits?: boolean;
   /** How often it runs, as a duration: 5s, 1m. */
   interval: string;
   name: string;

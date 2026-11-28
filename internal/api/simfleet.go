@@ -128,7 +128,6 @@ type simBehaviorBody struct {
 	Name     string   `json:"name"`
 	Interval string   `json:"interval" doc:"How often it runs, as a duration: 5s, 1m."`
 	Writes   []string `json:"writes,omitempty" doc:"The state paths it changes each time."`
-	Emits    bool     `json:"emits,omitempty" doc:"Deprecated, always false: a device posts its webhooks from its own handlers, not from a timer."`
 }
 
 // simBehaviors lists what the device changes on its own over time: its

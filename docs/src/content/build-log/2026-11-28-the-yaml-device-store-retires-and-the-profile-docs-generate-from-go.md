@@ -30,3 +30,9 @@ and route-validation tables, the behavior, emit and computed template tests, the
 parity check, the template helpers). The ones whose subject was a face (HTTP auth, the SSH, Telnet and
 raw-TCP sessions, the event stream, observation, faults, operate) now stand on a Go route or command in
 place of a template. ADR-2829 is amended: the strangler is over.
+
+**Breaking: a simulated behavior no longer carries `emits`.** `SimBehaviorBody`, in the simulation routes'
+behaviors list, lost its `emits` flag. It said a YAML behavior posted a webhook on its timer; a family posts
+from its own handlers, so with no YAML left the flag was always false, and the console's "posts a webhook"
+badge went with it. A client reading `emits` reads nothing now, which is what the field held. The webhooks
+themselves are unchanged.

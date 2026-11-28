@@ -381,7 +381,7 @@ function BehaviorsSection(props: { sim: ComponentSim }) {
           <For each={items()}>
             {(b) => (
               <li class="flex flex-col gap-0.5 px-3 py-2 text-sm">
-                <span class="flex items-center gap-2"><span class="font-data font-medium">{b.name}</span><span class="badge badge-sm badge-ghost font-data">every {b.interval}</span><Show when={b.emits}><span class="badge badge-sm badge-ghost">posts a webhook</span></Show></span>
+                <span class="flex items-center gap-2"><span class="font-data font-medium">{b.name}</span><span class="badge badge-sm badge-ghost font-data">every {b.interval}</span></span>
                 <Show when={(b.writes ?? []).length > 0}><span class="text-xs text-base-content/60">changes <span class="font-data">{(b.writes ?? []).join(", ")}</span></span></Show>
               </li>
             )}

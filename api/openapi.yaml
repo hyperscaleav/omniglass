@@ -12377,9 +12377,6 @@ components:
     SimBehaviorBody:
       additionalProperties: false
       properties:
-        emits:
-          description: "Deprecated, always false: a device posts its webhooks from its own handlers, not from a timer."
-          type: boolean
         interval:
           description: "How often it runs, as a duration: 5s, 1m."
           type: string
