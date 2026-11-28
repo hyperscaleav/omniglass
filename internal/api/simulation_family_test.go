@@ -2,6 +2,7 @@ package api
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,8 +38,11 @@ func TestSimulationRoutesDescribeAFamilyAsTheyDescribeItsYAMLTwin(t *testing.T) 
 		if !reflect.DeepEqual(simBehaviors(g), simBehaviors(y)) {
 			t.Errorf("%s: behaviors differ", p.Go)
 		}
+		// A YAML profile leads with the product it is named for; a family lists
+		// its model products only (its name is its wire API, not a product), so
+		// the family's variants are the twin's variants after that lead.
 		gv, yv := variantsOf(g), variantsOf(y)
-		if len(gv) != len(yv) || gv[0] != spectest.Name || yv[0] != spectest.TwinName {
+		if len(gv) != len(yv)-1 || yv[0] != spectest.TwinName || slices.Contains(gv, spectest.Name) {
 			t.Errorf("%s: variants = %v, twin %v", p.Go, gv, yv)
 		}
 	}

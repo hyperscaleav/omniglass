@@ -49,7 +49,7 @@ func TestCatalogResolvesAProductToTheFamilyThatClaimsIt(t *testing.T) {
 		if r.Identity.Manufacturer != "Testfamily" || !strings.HasPrefix(r.Identity.Model, "Display ") || r.Identity.DeviceType != "display" {
 			t.Errorf("%s identity = %+v: the model's overrides the family's, which fills the rest", row.Product, r.Identity)
 		}
-		if !reflect.DeepEqual(r.Definition.Products(), []string{spectest.Name, "tf-display-55", "tf-display-65"}) {
+		if !reflect.DeepEqual(r.Definition.Products(), []string{"tf-display-55", "tf-display-65"}) {
 			t.Errorf("products = %v", r.Definition.Products())
 		}
 	}
