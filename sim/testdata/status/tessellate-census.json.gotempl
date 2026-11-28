@@ -1,0 +1,15 @@
+{
+  "device": {
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }},
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}"
+  },
+  "occupancy": {
+    "last_event": "{{ .State | get "status" | get "occupancy" | get "last_event" }}",
+    "vacant": {{ .State | get "status" | get "occupancy" | get "vacant" }}
+  },
+  "webhook": {
+    "url": "{{ .State | get "configuration" | get "webhook" | get "url" }}"
+  }
+}

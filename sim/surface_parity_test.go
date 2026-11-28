@@ -516,8 +516,9 @@ func TestParitySNMPSystemAndIdentity(t *testing.T) {
 	}
 	// Nine profiles repeated the identity arc before the Boreal displays and
 	// projector became Go families (#2832), and two more before the Meridian
-	// switcher and extender did (#2833); five remain in YAML.
-	if identities < 5 {
+	// switcher and extender did (#2833), and one more before the Ferrite PDU did
+	// (#2836); four remain in YAML.
+	if identities < 4 {
 		t.Fatalf("only %d profiles map the identity arc; the helper's reason to exist is gone", identities)
 	}
 }
