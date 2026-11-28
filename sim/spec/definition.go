@@ -31,7 +31,9 @@ type Definition interface {
 	// InitialState is its state tree with the defaults; callers do not
 	// modify it.
 	InitialState() map[string]any
-	// Products is every product it simulates, its own name first.
+	// Products is every product it simulates. A YAML profile leads with the
+	// product it is named for; a Go family lists its model products only, since
+	// its name is the wire API it serves, not a product.
 	Products() []string
 	// BehaviorList is the YAML-style behaviors it runs (none, for a family
 	// that animates in Go); ElapsedList is the read-derived uptimes it reports.
