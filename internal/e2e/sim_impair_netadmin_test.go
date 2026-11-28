@@ -342,15 +342,10 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 // e2eSNMPPort is the port the product's simulator profile serves SNMP on.
 func e2eSNMPPort(t *testing.T, product string) int {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p, ok := store.Devices[product]; ok {
-		for _, iface := range p.Interfaces {
-			if iface.Protocol == "snmp" {
-				return iface.Port
-			}
+	ifaces, _ := e2eSimulatedSurfaces(t, product)
+	for _, iface := range ifaces {
+		if iface.Protocol == "snmp" {
+			return iface.Port
 		}
 	}
 	t.Fatalf("the simulated product %s serves no snmp face", product)
