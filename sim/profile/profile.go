@@ -248,6 +248,12 @@ type Subject struct {
 	// a function of the new value in place of PushFormat's template. Never
 	// read from YAML.
 	Push func(value any) string `yaml:"-"`
+
+	// PushLine is the same for a subject whose line names the subject that
+	// changed (a wildcard Match covers many) and the token the subscription
+	// carries (a command may name its own): Go in place of PushFormat's
+	// template, taking precedence over Push. Never read from YAML.
+	PushLine func(subject, token string, value any) string `yaml:"-"`
 }
 
 // SessionLimits caps resource use on a Persistent interface. All
