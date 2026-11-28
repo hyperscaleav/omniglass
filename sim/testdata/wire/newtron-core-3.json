@@ -1,0 +1,9343 @@
+{
+ "product": "newtron-core-3",
+ "source": "recorded from the YAML profile before its deletion (#2833); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "manufacturer": "Newtron",
+    "model": "Core CP-3",
+    "serial": "SN-3EACB886A9"
+   },
+   "firmware": {
+    "version": "4.1.2"
+   }
+  },
+  "status": {
+   "control": {
+    "macro": "none",
+    "macro_at": 0,
+    "panels": 3,
+    "ports": "com1=connected com2=connected ir1=idle relay1=open",
+    "program": "running",
+    "room_power": "standby"
+   },
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   },
+   "diagnostics": {
+    "log": ""
+   },
+   "panel": {
+    "occupancy": false
+   },
+   "room": {
+    "climate_c": 21.5,
+    "load_c_per_person": 0.25,
+    "scene": "idle",
+    "setpoint_c": 21.5,
+    "source": "none",
+    "temperature_c": 21.5
+   },
+   "video": {
+    "input": "hdmi1"
+   }
+  }
+ },
+ "http": [],
+ "ticks": {
+  "room_climate": [
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.6
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.6
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.4
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.4
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.4
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.4
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.4
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.4
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   },
+   {
+    "status.room.climate_c": 21.5,
+    "status.room.temperature_c": 21.5
+   }
+  ],
+  "room_meeting": [
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   },
+   {
+    "status.control.macro": "none",
+    "status.control.macro_at": 0,
+    "status.control.room_power": "standby"
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "start",
+    "path": "status.control.macro",
+    "value": "none"
+   },
+   {
+    "at": "start",
+    "path": "status.control.macro_at",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "start",
+    "path": "status.room.climate_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:03:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:10:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:12:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:18:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:18:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:27:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.control.macro",
+    "value": "end-meeting"
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.control.macro_at",
+    "value": 1793691000
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:32:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:42:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:47:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:52:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:06:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:18:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:22:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.control.room_power",
+    "value": "on"
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.control.macro",
+    "value": "start-meeting"
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.control.macro_at",
+    "value": 1793694390
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.climate_c",
+    "value": 21.65
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.room.climate_c",
+    "value": 21.77
+   },
+   {
+    "at": "08:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "08:29:30",
+    "path": "status.room.climate_c",
+    "value": 21.866
+   },
+   {
+    "at": "08:30:00",
+    "path": "status.room.climate_c",
+    "value": 21.943
+   },
+   {
+    "at": "08:30:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "08:30:30",
+    "path": "status.room.climate_c",
+    "value": 22.004
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.room.climate_c",
+    "value": 22.053
+   },
+   {
+    "at": "08:31:30",
+    "path": "status.room.climate_c",
+    "value": 22.092
+   },
+   {
+    "at": "08:32:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "08:32:00",
+    "path": "status.room.climate_c",
+    "value": 22.124
+   },
+   {
+    "at": "08:32:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:32:30",
+    "path": "status.room.climate_c",
+    "value": 22.149
+   },
+   {
+    "at": "08:33:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "08:33:00",
+    "path": "status.room.climate_c",
+    "value": 22.169
+   },
+   {
+    "at": "08:33:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:33:30",
+    "path": "status.room.climate_c",
+    "value": 22.185
+   },
+   {
+    "at": "08:34:00",
+    "path": "status.room.climate_c",
+    "value": 22.198
+   },
+   {
+    "at": "08:34:30",
+    "path": "status.room.climate_c",
+    "value": 22.208
+   },
+   {
+    "at": "08:35:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "08:35:00",
+    "path": "status.room.climate_c",
+    "value": 22.216
+   },
+   {
+    "at": "08:35:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:35:30",
+    "path": "status.room.climate_c",
+    "value": 22.223
+   },
+   {
+    "at": "08:36:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:36:00",
+    "path": "status.room.climate_c",
+    "value": 22.228
+   },
+   {
+    "at": "08:36:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:36:30",
+    "path": "status.room.climate_c",
+    "value": 22.232
+   },
+   {
+    "at": "08:37:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:37:00",
+    "path": "status.room.climate_c",
+    "value": 22.236
+   },
+   {
+    "at": "08:37:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:37:30",
+    "path": "status.room.climate_c",
+    "value": 22.239
+   },
+   {
+    "at": "08:38:00",
+    "path": "status.room.climate_c",
+    "value": 22.241
+   },
+   {
+    "at": "08:38:30",
+    "path": "status.room.climate_c",
+    "value": 22.243
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.room.climate_c",
+    "value": 22.244
+   },
+   {
+    "at": "08:39:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "08:39:30",
+    "path": "status.room.climate_c",
+    "value": 22.245
+   },
+   {
+    "at": "08:40:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:40:00",
+    "path": "status.room.climate_c",
+    "value": 22.246
+   },
+   {
+    "at": "08:40:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:40:30",
+    "path": "status.room.climate_c",
+    "value": 22.247
+   },
+   {
+    "at": "08:41:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:41:00",
+    "path": "status.room.climate_c",
+    "value": 22.248
+   },
+   {
+    "at": "08:41:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:43:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:44:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:45:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:45:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:46:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:47:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:47:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:49:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:49:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:50:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:51:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:51:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:52:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:52:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "08:53:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:54:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:54:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:55:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:56:00",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:58:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "08:58:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "08:59:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.room.climate_c",
+    "value": 22.098
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.room.climate_c",
+    "value": 21.978
+   },
+   {
+    "at": "09:01:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "09:01:30",
+    "path": "status.room.climate_c",
+    "value": 21.882
+   },
+   {
+    "at": "09:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "09:02:00",
+    "path": "status.room.climate_c",
+    "value": 21.806
+   },
+   {
+    "at": "09:02:30",
+    "path": "status.room.climate_c",
+    "value": 21.745
+   },
+   {
+    "at": "09:03:00",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:03:00",
+    "path": "status.room.climate_c",
+    "value": 21.696
+   },
+   {
+    "at": "09:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "09:03:30",
+    "path": "status.room.climate_c",
+    "value": 21.657
+   },
+   {
+    "at": "09:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:04:00",
+    "path": "status.room.climate_c",
+    "value": 21.626
+   },
+   {
+    "at": "09:04:30",
+    "path": "status.room.climate_c",
+    "value": 21.601
+   },
+   {
+    "at": "09:05:00",
+    "path": "status.room.climate_c",
+    "value": 21.581
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.control.macro",
+    "value": "end-meeting"
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.control.macro_at",
+    "value": 1793696730
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.room.climate_c",
+    "value": 21.565
+   },
+   {
+    "at": "09:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:06:00",
+    "path": "status.room.climate_c",
+    "value": 21.552
+   },
+   {
+    "at": "09:06:30",
+    "path": "status.room.climate_c",
+    "value": 21.542
+   },
+   {
+    "at": "09:07:00",
+    "path": "status.room.climate_c",
+    "value": 21.534
+   },
+   {
+    "at": "09:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:07:30",
+    "path": "status.room.climate_c",
+    "value": 21.527
+   },
+   {
+    "at": "09:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:08:00",
+    "path": "status.room.climate_c",
+    "value": 21.522
+   },
+   {
+    "at": "09:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:08:30",
+    "path": "status.room.climate_c",
+    "value": 21.518
+   },
+   {
+    "at": "09:09:00",
+    "path": "status.room.climate_c",
+    "value": 21.514
+   },
+   {
+    "at": "09:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:09:30",
+    "path": "status.room.climate_c",
+    "value": 21.511
+   },
+   {
+    "at": "09:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:10:00",
+    "path": "status.room.climate_c",
+    "value": 21.509
+   },
+   {
+    "at": "09:10:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:10:30",
+    "path": "status.room.climate_c",
+    "value": 21.507
+   },
+   {
+    "at": "09:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:11:00",
+    "path": "status.room.climate_c",
+    "value": 21.506
+   },
+   {
+    "at": "09:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:11:30",
+    "path": "status.room.climate_c",
+    "value": 21.505
+   },
+   {
+    "at": "09:12:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:12:00",
+    "path": "status.room.climate_c",
+    "value": 21.504
+   },
+   {
+    "at": "09:12:30",
+    "path": "status.room.climate_c",
+    "value": 21.503
+   },
+   {
+    "at": "09:13:00",
+    "path": "status.room.climate_c",
+    "value": 21.502
+   },
+   {
+    "at": "09:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:22:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:27:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.control.room_power",
+    "value": "on"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.control.macro",
+    "value": "start-meeting"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.control.macro_at",
+    "value": 1793698380
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.room.climate_c",
+    "value": 21.552
+   },
+   {
+    "at": "09:33:30",
+    "path": "status.room.climate_c",
+    "value": 21.592
+   },
+   {
+    "at": "09:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:34:00",
+    "path": "status.room.climate_c",
+    "value": 21.624
+   },
+   {
+    "at": "09:34:30",
+    "path": "status.room.climate_c",
+    "value": 21.649
+   },
+   {
+    "at": "09:35:00",
+    "path": "status.room.climate_c",
+    "value": 21.669
+   },
+   {
+    "at": "09:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:35:30",
+    "path": "status.room.climate_c",
+    "value": 21.685
+   },
+   {
+    "at": "09:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:36:00",
+    "path": "status.room.climate_c",
+    "value": 21.698
+   },
+   {
+    "at": "09:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:36:30",
+    "path": "status.room.climate_c",
+    "value": 21.708
+   },
+   {
+    "at": "09:37:00",
+    "path": "status.room.climate_c",
+    "value": 21.716
+   },
+   {
+    "at": "09:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "09:37:30",
+    "path": "status.room.climate_c",
+    "value": 21.723
+   },
+   {
+    "at": "09:38:00",
+    "path": "status.room.climate_c",
+    "value": 21.728
+   },
+   {
+    "at": "09:38:30",
+    "path": "status.room.climate_c",
+    "value": 21.732
+   },
+   {
+    "at": "09:39:00",
+    "path": "status.room.climate_c",
+    "value": 21.736
+   },
+   {
+    "at": "09:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:39:30",
+    "path": "status.room.climate_c",
+    "value": 21.739
+   },
+   {
+    "at": "09:40:00",
+    "path": "status.room.climate_c",
+    "value": 21.741
+   },
+   {
+    "at": "09:40:30",
+    "path": "status.room.climate_c",
+    "value": 21.743
+   },
+   {
+    "at": "09:41:00",
+    "path": "status.room.climate_c",
+    "value": 21.744
+   },
+   {
+    "at": "09:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "09:41:30",
+    "path": "status.room.climate_c",
+    "value": 21.745
+   },
+   {
+    "at": "09:42:00",
+    "path": "status.room.climate_c",
+    "value": 21.746
+   },
+   {
+    "at": "09:42:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:42:30",
+    "path": "status.room.climate_c",
+    "value": 21.747
+   },
+   {
+    "at": "09:43:00",
+    "path": "status.room.climate_c",
+    "value": 21.748
+   },
+   {
+    "at": "09:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "09:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.room.climate_c",
+    "value": 21.698
+   },
+   {
+    "at": "09:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "09:45:30",
+    "path": "status.room.climate_c",
+    "value": 21.658
+   },
+   {
+    "at": "09:46:00",
+    "path": "status.room.climate_c",
+    "value": 21.626
+   },
+   {
+    "at": "09:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:46:30",
+    "path": "status.room.climate_c",
+    "value": 21.601
+   },
+   {
+    "at": "09:47:00",
+    "path": "status.room.climate_c",
+    "value": 21.581
+   },
+   {
+    "at": "09:47:30",
+    "path": "status.room.climate_c",
+    "value": 21.565
+   },
+   {
+    "at": "09:48:00",
+    "path": "status.room.climate_c",
+    "value": 21.552
+   },
+   {
+    "at": "09:48:30",
+    "path": "status.room.climate_c",
+    "value": 21.542
+   },
+   {
+    "at": "09:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:49:00",
+    "path": "status.room.climate_c",
+    "value": 21.534
+   },
+   {
+    "at": "09:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:49:30",
+    "path": "status.room.climate_c",
+    "value": 21.527
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.room.climate_c",
+    "value": 21.522
+   },
+   {
+    "at": "09:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:50:30",
+    "path": "status.room.climate_c",
+    "value": 21.518
+   },
+   {
+    "at": "09:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:51:00",
+    "path": "status.room.climate_c",
+    "value": 21.514
+   },
+   {
+    "at": "09:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:51:30",
+    "path": "status.room.climate_c",
+    "value": 21.511
+   },
+   {
+    "at": "09:52:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:52:00",
+    "path": "status.room.climate_c",
+    "value": 21.509
+   },
+   {
+    "at": "09:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:52:30",
+    "path": "status.room.climate_c",
+    "value": 21.507
+   },
+   {
+    "at": "09:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:53:00",
+    "path": "status.room.climate_c",
+    "value": 21.506
+   },
+   {
+    "at": "09:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:53:30",
+    "path": "status.room.climate_c",
+    "value": 21.505
+   },
+   {
+    "at": "09:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:54:00",
+    "path": "status.room.climate_c",
+    "value": 21.504
+   },
+   {
+    "at": "09:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:54:30",
+    "path": "status.room.climate_c",
+    "value": 21.503
+   },
+   {
+    "at": "09:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:55:00",
+    "path": "status.room.climate_c",
+    "value": 21.502
+   },
+   {
+    "at": "09:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.control.room_power",
+    "value": "on"
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.control.macro_at",
+    "value": 1793700120
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.room.climate_c",
+    "value": 21.802
+   },
+   {
+    "at": "10:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "10:04:30",
+    "path": "status.room.climate_c",
+    "value": 22.042
+   },
+   {
+    "at": "10:05:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "10:05:00",
+    "path": "status.room.climate_c",
+    "value": 22.234
+   },
+   {
+    "at": "10:05:30",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "10:05:30",
+    "path": "status.room.climate_c",
+    "value": 22.387
+   },
+   {
+    "at": "10:06:00",
+    "path": "status.room.temperature_c",
+    "value": 22.4
+   },
+   {
+    "at": "10:06:00",
+    "path": "status.room.climate_c",
+    "value": 22.51
+   },
+   {
+    "at": "10:06:30",
+    "path": "status.room.climate_c",
+    "value": 22.608
+   },
+   {
+    "at": "10:07:00",
+    "path": "status.room.temperature_c",
+    "value": 22.6
+   },
+   {
+    "at": "10:07:00",
+    "path": "status.room.climate_c",
+    "value": 22.686
+   },
+   {
+    "at": "10:07:30",
+    "path": "status.room.temperature_c",
+    "value": 22.7
+   },
+   {
+    "at": "10:07:30",
+    "path": "status.room.climate_c",
+    "value": 22.749
+   },
+   {
+    "at": "10:08:00",
+    "path": "status.room.temperature_c",
+    "value": 22.8
+   },
+   {
+    "at": "10:08:00",
+    "path": "status.room.climate_c",
+    "value": 22.799
+   },
+   {
+    "at": "10:08:30",
+    "path": "status.room.temperature_c",
+    "value": 22.7
+   },
+   {
+    "at": "10:08:30",
+    "path": "status.room.climate_c",
+    "value": 22.839
+   },
+   {
+    "at": "10:09:00",
+    "path": "status.room.temperature_c",
+    "value": 22.8
+   },
+   {
+    "at": "10:09:00",
+    "path": "status.room.climate_c",
+    "value": 22.871
+   },
+   {
+    "at": "10:09:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:09:30",
+    "path": "status.room.climate_c",
+    "value": 22.897
+   },
+   {
+    "at": "10:10:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:10:00",
+    "path": "status.room.climate_c",
+    "value": 22.918
+   },
+   {
+    "at": "10:10:30",
+    "path": "status.room.climate_c",
+    "value": 22.934
+   },
+   {
+    "at": "10:11:00",
+    "path": "status.room.climate_c",
+    "value": 22.947
+   },
+   {
+    "at": "10:11:30",
+    "path": "status.room.climate_c",
+    "value": 22.958
+   },
+   {
+    "at": "10:12:00",
+    "path": "status.room.climate_c",
+    "value": 22.966
+   },
+   {
+    "at": "10:12:30",
+    "path": "status.room.climate_c",
+    "value": 22.973
+   },
+   {
+    "at": "10:13:00",
+    "path": "status.room.climate_c",
+    "value": 22.978
+   },
+   {
+    "at": "10:13:30",
+    "path": "status.room.climate_c",
+    "value": 22.982
+   },
+   {
+    "at": "10:14:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:14:00",
+    "path": "status.room.climate_c",
+    "value": 22.986
+   },
+   {
+    "at": "10:14:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:14:30",
+    "path": "status.room.climate_c",
+    "value": 22.989
+   },
+   {
+    "at": "10:15:00",
+    "path": "status.room.climate_c",
+    "value": 22.991
+   },
+   {
+    "at": "10:15:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:15:30",
+    "path": "status.room.climate_c",
+    "value": 22.993
+   },
+   {
+    "at": "10:16:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:16:00",
+    "path": "status.room.climate_c",
+    "value": 22.994
+   },
+   {
+    "at": "10:16:30",
+    "path": "status.room.climate_c",
+    "value": 22.995
+   },
+   {
+    "at": "10:17:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:17:00",
+    "path": "status.room.climate_c",
+    "value": 22.996
+   },
+   {
+    "at": "10:17:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:17:30",
+    "path": "status.room.climate_c",
+    "value": 22.997
+   },
+   {
+    "at": "10:18:00",
+    "path": "status.room.climate_c",
+    "value": 22.998
+   },
+   {
+    "at": "10:19:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:20:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:22:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:23:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:27:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:28:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:28:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:29:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:31:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:31:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:33:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:33:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:34:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:35:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:35:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:36:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:36:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:37:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:37:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:38:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:39:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:40:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:41:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:43:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:43:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:44:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:45:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:45:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:46:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:46:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:47:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:48:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:48:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:49:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:50:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:51:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:52:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:52:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:53:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:54:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:54:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "10:55:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:56:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:57:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.room.climate_c",
+    "value": 22.698
+   },
+   {
+    "at": "10:58:30",
+    "path": "status.room.temperature_c",
+    "value": 22.7
+   },
+   {
+    "at": "10:58:30",
+    "path": "status.room.climate_c",
+    "value": 22.458
+   },
+   {
+    "at": "10:59:00",
+    "path": "status.room.temperature_c",
+    "value": 22.5
+   },
+   {
+    "at": "10:59:00",
+    "path": "status.room.climate_c",
+    "value": 22.266
+   },
+   {
+    "at": "10:59:30",
+    "path": "status.room.temperature_c",
+    "value": 22.3
+   },
+   {
+    "at": "10:59:30",
+    "path": "status.room.climate_c",
+    "value": 22.113
+   },
+   {
+    "at": "11:00:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "11:00:00",
+    "path": "status.room.climate_c",
+    "value": 21.99
+   },
+   {
+    "at": "11:00:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:00:30",
+    "path": "status.room.climate_c",
+    "value": 21.892
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.room.climate_c",
+    "value": 21.914
+   },
+   {
+    "at": "11:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:01:30",
+    "path": "status.room.climate_c",
+    "value": 21.931
+   },
+   {
+    "at": "11:02:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:02:00",
+    "path": "status.room.climate_c",
+    "value": 21.945
+   },
+   {
+    "at": "11:02:30",
+    "path": "status.room.climate_c",
+    "value": 21.956
+   },
+   {
+    "at": "11:03:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:03:00",
+    "path": "status.room.climate_c",
+    "value": 21.965
+   },
+   {
+    "at": "11:03:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "11:03:30",
+    "path": "status.room.climate_c",
+    "value": 21.972
+   },
+   {
+    "at": "11:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:04:00",
+    "path": "status.room.climate_c",
+    "value": 21.978
+   },
+   {
+    "at": "11:04:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "11:04:30",
+    "path": "status.room.climate_c",
+    "value": 21.982
+   },
+   {
+    "at": "11:05:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:05:00",
+    "path": "status.room.climate_c",
+    "value": 21.986
+   },
+   {
+    "at": "11:05:30",
+    "path": "status.room.climate_c",
+    "value": 21.989
+   },
+   {
+    "at": "11:06:00",
+    "path": "status.room.climate_c",
+    "value": 21.991
+   },
+   {
+    "at": "11:06:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "11:06:30",
+    "path": "status.room.climate_c",
+    "value": 21.993
+   },
+   {
+    "at": "11:07:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:07:00",
+    "path": "status.room.climate_c",
+    "value": 21.994
+   },
+   {
+    "at": "11:07:30",
+    "path": "status.room.climate_c",
+    "value": 21.995
+   },
+   {
+    "at": "11:08:00",
+    "path": "status.room.climate_c",
+    "value": 21.996
+   },
+   {
+    "at": "11:08:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "11:08:30",
+    "path": "status.room.climate_c",
+    "value": 21.997
+   },
+   {
+    "at": "11:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:09:00",
+    "path": "status.room.climate_c",
+    "value": 21.998
+   },
+   {
+    "at": "11:09:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:10:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "11:10:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:11:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:12:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:12:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:13:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "11:13:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.room.climate_c",
+    "value": 21.898
+   },
+   {
+    "at": "11:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "11:15:30",
+    "path": "status.room.climate_c",
+    "value": 21.818
+   },
+   {
+    "at": "11:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "11:16:00",
+    "path": "status.room.climate_c",
+    "value": 21.754
+   },
+   {
+    "at": "11:16:30",
+    "path": "status.room.climate_c",
+    "value": 21.703
+   },
+   {
+    "at": "11:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:17:00",
+    "path": "status.room.climate_c",
+    "value": 21.662
+   },
+   {
+    "at": "11:17:30",
+    "path": "status.room.climate_c",
+    "value": 21.63
+   },
+   {
+    "at": "11:18:00",
+    "path": "status.room.climate_c",
+    "value": 21.604
+   },
+   {
+    "at": "11:18:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:18:30",
+    "path": "status.room.climate_c",
+    "value": 21.583
+   },
+   {
+    "at": "11:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "11:19:00",
+    "path": "status.room.climate_c",
+    "value": 21.566
+   },
+   {
+    "at": "11:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:19:30",
+    "path": "status.room.climate_c",
+    "value": 21.553
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.control.macro",
+    "value": "end-meeting"
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.control.macro_at",
+    "value": 1793704800
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.room.climate_c",
+    "value": 21.542
+   },
+   {
+    "at": "11:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:20:30",
+    "path": "status.room.climate_c",
+    "value": 21.534
+   },
+   {
+    "at": "11:21:00",
+    "path": "status.room.climate_c",
+    "value": 21.527
+   },
+   {
+    "at": "11:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:21:30",
+    "path": "status.room.climate_c",
+    "value": 21.522
+   },
+   {
+    "at": "11:22:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:22:00",
+    "path": "status.room.climate_c",
+    "value": 21.518
+   },
+   {
+    "at": "11:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:22:30",
+    "path": "status.room.climate_c",
+    "value": 21.514
+   },
+   {
+    "at": "11:23:00",
+    "path": "status.room.climate_c",
+    "value": 21.511
+   },
+   {
+    "at": "11:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:23:30",
+    "path": "status.room.climate_c",
+    "value": 21.509
+   },
+   {
+    "at": "11:24:00",
+    "path": "status.room.climate_c",
+    "value": 21.507
+   },
+   {
+    "at": "11:24:30",
+    "path": "status.room.climate_c",
+    "value": 21.506
+   },
+   {
+    "at": "11:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:25:00",
+    "path": "status.room.climate_c",
+    "value": 21.505
+   },
+   {
+    "at": "11:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:25:30",
+    "path": "status.room.climate_c",
+    "value": 21.504
+   },
+   {
+    "at": "11:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:26:00",
+    "path": "status.room.climate_c",
+    "value": 21.503
+   },
+   {
+    "at": "11:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:26:30",
+    "path": "status.room.climate_c",
+    "value": 21.502
+   },
+   {
+    "at": "11:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:33:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:40:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:42:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:47:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.control.room_power",
+    "value": "on"
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.control.macro",
+    "value": "start-meeting"
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.control.macro_at",
+    "value": 1793707320
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.room.climate_c",
+    "value": 21.602
+   },
+   {
+    "at": "12:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "12:02:30",
+    "path": "status.room.climate_c",
+    "value": 21.682
+   },
+   {
+    "at": "12:03:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:03:00",
+    "path": "status.room.climate_c",
+    "value": 21.746
+   },
+   {
+    "at": "12:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "12:03:30",
+    "path": "status.room.climate_c",
+    "value": 21.797
+   },
+   {
+    "at": "12:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:04:00",
+    "path": "status.room.climate_c",
+    "value": 21.838
+   },
+   {
+    "at": "12:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "12:04:30",
+    "path": "status.room.climate_c",
+    "value": 21.87
+   },
+   {
+    "at": "12:05:00",
+    "path": "status.room.climate_c",
+    "value": 21.896
+   },
+   {
+    "at": "12:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:05:30",
+    "path": "status.room.climate_c",
+    "value": 21.917
+   },
+   {
+    "at": "12:06:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:06:00",
+    "path": "status.room.climate_c",
+    "value": 21.934
+   },
+   {
+    "at": "12:06:30",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:06:30",
+    "path": "status.room.climate_c",
+    "value": 21.947
+   },
+   {
+    "at": "12:07:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:07:00",
+    "path": "status.room.climate_c",
+    "value": 21.958
+   },
+   {
+    "at": "12:07:30",
+    "path": "status.room.climate_c",
+    "value": 21.966
+   },
+   {
+    "at": "12:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:08:00",
+    "path": "status.room.climate_c",
+    "value": 21.973
+   },
+   {
+    "at": "12:08:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:08:30",
+    "path": "status.room.climate_c",
+    "value": 21.978
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.room.climate_c",
+    "value": 21.982
+   },
+   {
+    "at": "12:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:09:30",
+    "path": "status.room.climate_c",
+    "value": 21.986
+   },
+   {
+    "at": "12:10:00",
+    "path": "status.room.climate_c",
+    "value": 21.989
+   },
+   {
+    "at": "12:10:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:10:30",
+    "path": "status.room.climate_c",
+    "value": 21.991
+   },
+   {
+    "at": "12:11:00",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "12:11:00",
+    "path": "status.room.climate_c",
+    "value": 21.993
+   },
+   {
+    "at": "12:11:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:11:30",
+    "path": "status.room.climate_c",
+    "value": 21.994
+   },
+   {
+    "at": "12:12:00",
+    "path": "status.room.climate_c",
+    "value": 21.995
+   },
+   {
+    "at": "12:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:12:30",
+    "path": "status.room.climate_c",
+    "value": 21.996
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.room.climate_c",
+    "value": 21.997
+   },
+   {
+    "at": "12:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "12:13:30",
+    "path": "status.room.climate_c",
+    "value": 21.998
+   },
+   {
+    "at": "12:14:30",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.room.climate_c",
+    "value": 21.898
+   },
+   {
+    "at": "12:15:30",
+    "path": "status.room.climate_c",
+    "value": 21.818
+   },
+   {
+    "at": "12:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "12:16:00",
+    "path": "status.room.climate_c",
+    "value": 21.754
+   },
+   {
+    "at": "12:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "12:16:30",
+    "path": "status.room.climate_c",
+    "value": 21.703
+   },
+   {
+    "at": "12:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "12:17:00",
+    "path": "status.room.climate_c",
+    "value": 21.662
+   },
+   {
+    "at": "12:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:17:30",
+    "path": "status.room.climate_c",
+    "value": 21.63
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.room.climate_c",
+    "value": 21.604
+   },
+   {
+    "at": "12:18:30",
+    "path": "status.room.climate_c",
+    "value": 21.583
+   },
+   {
+    "at": "12:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:19:00",
+    "path": "status.room.climate_c",
+    "value": 21.566
+   },
+   {
+    "at": "12:19:30",
+    "path": "status.room.climate_c",
+    "value": 21.553
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.control.macro",
+    "value": "end-meeting"
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.control.macro_at",
+    "value": 1793708400
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.room.climate_c",
+    "value": 21.542
+   },
+   {
+    "at": "12:20:30",
+    "path": "status.room.climate_c",
+    "value": 21.534
+   },
+   {
+    "at": "12:21:00",
+    "path": "status.room.climate_c",
+    "value": 21.527
+   },
+   {
+    "at": "12:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:21:30",
+    "path": "status.room.climate_c",
+    "value": 21.522
+   },
+   {
+    "at": "12:22:00",
+    "path": "status.room.climate_c",
+    "value": 21.518
+   },
+   {
+    "at": "12:22:30",
+    "path": "status.room.climate_c",
+    "value": 21.514
+   },
+   {
+    "at": "12:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:23:00",
+    "path": "status.room.climate_c",
+    "value": 21.511
+   },
+   {
+    "at": "12:23:30",
+    "path": "status.room.climate_c",
+    "value": 21.509
+   },
+   {
+    "at": "12:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:24:00",
+    "path": "status.room.climate_c",
+    "value": 21.507
+   },
+   {
+    "at": "12:24:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:24:30",
+    "path": "status.room.climate_c",
+    "value": 21.506
+   },
+   {
+    "at": "12:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:25:00",
+    "path": "status.room.climate_c",
+    "value": 21.505
+   },
+   {
+    "at": "12:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:25:30",
+    "path": "status.room.climate_c",
+    "value": 21.504
+   },
+   {
+    "at": "12:26:00",
+    "path": "status.room.climate_c",
+    "value": 21.503
+   },
+   {
+    "at": "12:26:30",
+    "path": "status.room.climate_c",
+    "value": 21.502
+   },
+   {
+    "at": "12:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.control.room_power",
+    "value": "on"
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.control.macro",
+    "value": "start-meeting"
+   },
+   {
+    "at": "12:32:30",
+    "path": "status.control.macro_at",
+    "value": 1793709150
+   },
+   {
+    "at": "12:33:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:33:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.room.climate_c",
+    "value": 21.802
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.room.climate_c",
+    "value": 22.042
+   },
+   {
+    "at": "12:35:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "12:35:30",
+    "path": "status.room.climate_c",
+    "value": 22.234
+   },
+   {
+    "at": "12:36:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "12:36:00",
+    "path": "status.room.climate_c",
+    "value": 22.387
+   },
+   {
+    "at": "12:36:30",
+    "path": "status.room.temperature_c",
+    "value": 22.4
+   },
+   {
+    "at": "12:36:30",
+    "path": "status.room.climate_c",
+    "value": 22.51
+   },
+   {
+    "at": "12:37:00",
+    "path": "status.room.climate_c",
+    "value": 22.608
+   },
+   {
+    "at": "12:37:30",
+    "path": "status.room.temperature_c",
+    "value": 22.6
+   },
+   {
+    "at": "12:37:30",
+    "path": "status.room.climate_c",
+    "value": 22.686
+   },
+   {
+    "at": "12:38:00",
+    "path": "status.room.temperature_c",
+    "value": 22.8
+   },
+   {
+    "at": "12:38:00",
+    "path": "status.room.climate_c",
+    "value": 22.749
+   },
+   {
+    "at": "12:38:30",
+    "path": "status.room.temperature_c",
+    "value": 22.7
+   },
+   {
+    "at": "12:38:30",
+    "path": "status.room.climate_c",
+    "value": 22.799
+   },
+   {
+    "at": "12:39:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:39:00",
+    "path": "status.room.climate_c",
+    "value": 22.839
+   },
+   {
+    "at": "12:39:30",
+    "path": "status.room.temperature_c",
+    "value": 22.8
+   },
+   {
+    "at": "12:39:30",
+    "path": "status.room.climate_c",
+    "value": 22.871
+   },
+   {
+    "at": "12:40:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:40:00",
+    "path": "status.room.climate_c",
+    "value": 22.897
+   },
+   {
+    "at": "12:40:30",
+    "path": "status.room.temperature_c",
+    "value": 22.8
+   },
+   {
+    "at": "12:40:30",
+    "path": "status.room.climate_c",
+    "value": 22.918
+   },
+   {
+    "at": "12:41:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:41:00",
+    "path": "status.room.climate_c",
+    "value": 22.934
+   },
+   {
+    "at": "12:41:30",
+    "path": "status.room.climate_c",
+    "value": 22.947
+   },
+   {
+    "at": "12:42:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:42:00",
+    "path": "status.room.climate_c",
+    "value": 22.958
+   },
+   {
+    "at": "12:42:30",
+    "path": "status.room.climate_c",
+    "value": 22.966
+   },
+   {
+    "at": "12:43:00",
+    "path": "status.room.climate_c",
+    "value": 22.973
+   },
+   {
+    "at": "12:43:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "12:43:30",
+    "path": "status.room.climate_c",
+    "value": 22.978
+   },
+   {
+    "at": "12:44:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:44:00",
+    "path": "status.room.climate_c",
+    "value": 22.982
+   },
+   {
+    "at": "12:44:30",
+    "path": "status.room.climate_c",
+    "value": 22.986
+   },
+   {
+    "at": "12:45:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "12:45:00",
+    "path": "status.room.climate_c",
+    "value": 22.989
+   },
+   {
+    "at": "12:45:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:45:30",
+    "path": "status.room.climate_c",
+    "value": 22.991
+   },
+   {
+    "at": "12:46:00",
+    "path": "status.room.climate_c",
+    "value": 22.993
+   },
+   {
+    "at": "12:46:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:46:30",
+    "path": "status.room.climate_c",
+    "value": 22.994
+   },
+   {
+    "at": "12:47:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:47:00",
+    "path": "status.room.climate_c",
+    "value": 22.995
+   },
+   {
+    "at": "12:47:30",
+    "path": "status.room.climate_c",
+    "value": 22.996
+   },
+   {
+    "at": "12:48:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:48:00",
+    "path": "status.room.climate_c",
+    "value": 22.997
+   },
+   {
+    "at": "12:48:30",
+    "path": "status.room.climate_c",
+    "value": 22.998
+   },
+   {
+    "at": "12:49:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:49:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:50:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:51:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "12:52:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:52:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "12:53:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:53:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:54:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:54:30",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "12:55:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:55:30",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "12:56:00",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:58:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "12:58:30",
+    "path": "status.room.temperature_c",
+    "value": 23
+   },
+   {
+    "at": "12:59:00",
+    "path": "status.room.temperature_c",
+    "value": 22.9
+   },
+   {
+    "at": "13:00:00",
+    "path": "status.room.temperature_c",
+    "value": 23.1
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.room.climate_c",
+    "value": 22.698
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.room.temperature_c",
+    "value": 22.8
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.room.climate_c",
+    "value": 22.458
+   },
+   {
+    "at": "13:01:30",
+    "path": "status.room.temperature_c",
+    "value": 22.4
+   },
+   {
+    "at": "13:01:30",
+    "path": "status.room.climate_c",
+    "value": 22.266
+   },
+   {
+    "at": "13:02:00",
+    "path": "status.room.temperature_c",
+    "value": 22.2
+   },
+   {
+    "at": "13:02:00",
+    "path": "status.room.climate_c",
+    "value": 22.113
+   },
+   {
+    "at": "13:02:30",
+    "path": "status.room.temperature_c",
+    "value": 22.1
+   },
+   {
+    "at": "13:02:30",
+    "path": "status.room.climate_c",
+    "value": 21.99
+   },
+   {
+    "at": "13:03:00",
+    "path": "status.room.temperature_c",
+    "value": 22
+   },
+   {
+    "at": "13:03:00",
+    "path": "status.room.climate_c",
+    "value": 21.892
+   },
+   {
+    "at": "13:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.8
+   },
+   {
+    "at": "13:03:30",
+    "path": "status.room.climate_c",
+    "value": 21.814
+   },
+   {
+    "at": "13:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.9
+   },
+   {
+    "at": "13:04:00",
+    "path": "status.room.climate_c",
+    "value": 21.751
+   },
+   {
+    "at": "13:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "13:04:30",
+    "path": "status.room.climate_c",
+    "value": 21.701
+   },
+   {
+    "at": "13:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:05:00",
+    "path": "status.room.climate_c",
+    "value": 21.661
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.control.macro",
+    "value": "end-meeting"
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.control.macro_at",
+    "value": 1793711130
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.7
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.room.climate_c",
+    "value": 21.629
+   },
+   {
+    "at": "13:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:06:00",
+    "path": "status.room.climate_c",
+    "value": 21.603
+   },
+   {
+    "at": "13:06:30",
+    "path": "status.room.climate_c",
+    "value": 21.582
+   },
+   {
+    "at": "13:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:07:00",
+    "path": "status.room.climate_c",
+    "value": 21.566
+   },
+   {
+    "at": "13:07:30",
+    "path": "status.room.climate_c",
+    "value": 21.553
+   },
+   {
+    "at": "13:08:00",
+    "path": "status.room.climate_c",
+    "value": 21.542
+   },
+   {
+    "at": "13:08:30",
+    "path": "status.room.climate_c",
+    "value": 21.534
+   },
+   {
+    "at": "13:09:00",
+    "path": "status.room.climate_c",
+    "value": 21.527
+   },
+   {
+    "at": "13:09:30",
+    "path": "status.room.climate_c",
+    "value": 21.522
+   },
+   {
+    "at": "13:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:10:00",
+    "path": "status.room.climate_c",
+    "value": 21.518
+   },
+   {
+    "at": "13:10:30",
+    "path": "status.room.climate_c",
+    "value": 21.514
+   },
+   {
+    "at": "13:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:11:00",
+    "path": "status.room.climate_c",
+    "value": 21.511
+   },
+   {
+    "at": "13:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:11:30",
+    "path": "status.room.climate_c",
+    "value": 21.509
+   },
+   {
+    "at": "13:12:00",
+    "path": "status.room.climate_c",
+    "value": 21.507
+   },
+   {
+    "at": "13:12:30",
+    "path": "status.room.climate_c",
+    "value": 21.506
+   },
+   {
+    "at": "13:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:13:00",
+    "path": "status.room.climate_c",
+    "value": 21.505
+   },
+   {
+    "at": "13:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:13:30",
+    "path": "status.room.climate_c",
+    "value": 21.504
+   },
+   {
+    "at": "13:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:14:00",
+    "path": "status.room.climate_c",
+    "value": 21.503
+   },
+   {
+    "at": "13:14:30",
+    "path": "status.room.climate_c",
+    "value": 21.502
+   },
+   {
+    "at": "13:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:34:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:40:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:42:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:45:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:57:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:14:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:42:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:48:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:57:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "15:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "start",
+    "path": "status.control.macro",
+    "value": "none"
+   },
+   {
+    "at": "start",
+    "path": "status.control.macro_at",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "start",
+    "path": "status.room.climate_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:03:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:10:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:12:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:18:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:18:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:27:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.control.room_power",
+    "value": "on"
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:32:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:42:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:47:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:52:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "07:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "07:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "07:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:06:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:18:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:22:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:32:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:33:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:33:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:40:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "08:57:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "08:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "08:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:06:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:10:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:12:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:18:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:22:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:27:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:33:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:42:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:48:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.control.room_power",
+    "value": "standby"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:52:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "09:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "09:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "09:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:06:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:33:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:34:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:45:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:48:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:52:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "10:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "10:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:06:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:10:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:12:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:18:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:18:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:22:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:33:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:40:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:42:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:47:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "11:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "11:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "11:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:03:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:09:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:10:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:14:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:15:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:16:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:18:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:24:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:33:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:33:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:39:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:42:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:42:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:47:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:52:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:54:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "12:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "12:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "12:59:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:01:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:03:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:04:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:04:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:08:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:13:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:14:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:16:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:19:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:19:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:24:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:26:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:26:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:34:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:36:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:36:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:38:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:40:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:42:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:43:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:45:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:45:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:46:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:50:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:51:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:53:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:54:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:56:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "13:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:57:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "13:58:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "13:59:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:00:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:01:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:02:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:02:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:05:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:05:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:06:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:07:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:07:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:08:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:10:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:11:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:11:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:12:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:13:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:14:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:15:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:17:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:17:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:20:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:20:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:21:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:21:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:22:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:23:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:23:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:25:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:25:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:27:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:28:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:28:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:29:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:29:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:30:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:30:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:31:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:31:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:32:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:34:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:35:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:35:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:37:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:37:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:38:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:39:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:40:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:41:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:41:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:42:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:43:00",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:44:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:44:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:46:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:47:30",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:48:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:48:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:49:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:49:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:50:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:51:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:52:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:53:00",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:55:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:55:30",
+    "path": "status.room.temperature_c",
+    "value": 21.6
+   },
+   {
+    "at": "14:56:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "14:57:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   },
+   {
+    "at": "14:58:30",
+    "path": "status.room.temperature_c",
+    "value": 21.5
+   },
+   {
+    "at": "15:00:00",
+    "path": "status.room.temperature_c",
+    "value": 21.4
+   }
+  ]
+ },
+ "lines": [
+  {
+   "name": "the input at rest",
+   "line": "GET INPUT",
+   "reply": "INPUT hdmi1",
+   "state_change": false
+  },
+  {
+   "name": "input dp1",
+   "line": "SET INPUT dp1",
+   "reply": "INPUT dp1",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "input hdmi2",
+   "line": "SET INPUT hdmi2",
+   "reply": "INPUT hdmi2",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "hdmi2"
+     }
+    }
+   }
+  },
+  {
+   "name": "input hdmi3",
+   "line": "SET INPUT hdmi3",
+   "reply": "INPUT hdmi3",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "hdmi3"
+     }
+    }
+   }
+  },
+  {
+   "name": "input usbc",
+   "line": "SET INPUT usbc",
+   "reply": "INPUT usbc",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "input hdmi1",
+   "line": "SET INPUT hdmi1",
+   "reply": "INPUT hdmi1",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "input refused",
+   "line": "SET INPUT vga",
+   "reply": "-ERR unknown command: SET INPUT vga",
+   "state_change": false
+  },
+  {
+   "name": "input with no value",
+   "line": "SET INPUT",
+   "reply": "-ERR unknown command: SET INPUT",
+   "state_change": false
+  },
+  {
+   "name": "input in another case",
+   "line": "SET INPUT HDMI1",
+   "reply": "-ERR unknown command: SET INPUT HDMI1",
+   "state_change": false
+  },
+  {
+   "name": "the input after",
+   "line": "GET INPUT",
+   "reply": "INPUT hdmi1",
+   "state_change": false
+  },
+  {
+   "name": "the scene at rest",
+   "line": "GET SCENE",
+   "reply": "SCENE idle",
+   "state_change": false
+  },
+  {
+   "name": "scene presentation",
+   "line": "SET SCENE presentation",
+   "reply": "SCENE presentation",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "scene vc",
+   "line": "SET SCENE vc",
+   "reply": "SCENE vc",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "vc",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "scene idle",
+   "line": "SET SCENE idle",
+   "reply": "SCENE idle",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "hdmi1"
+     }
+    }
+   }
+  },
+  {
+   "name": "scene refused",
+   "line": "SET SCENE cleanup",
+   "reply": "-ERR unknown command: SET SCENE cleanup",
+   "state_change": false
+  },
+  {
+   "name": "the scene after",
+   "line": "GET SCENE",
+   "reply": "SCENE idle",
+   "state_change": false
+  },
+  {
+   "name": "a lower-case verb",
+   "line": "get input",
+   "reply": "-ERR unknown command: get input",
+   "state_change": false
+  },
+  {
+   "name": "a verb with trailing space",
+   "line": "GET INPUT ",
+   "reply": "INPUT hdmi1",
+   "state_change": false
+  },
+  {
+   "name": "an unknown verb",
+   "line": "NOPE",
+   "reply": "-ERR unknown command: NOPE",
+   "state_change": false
+  },
+  {
+   "name": "a blank line",
+   "line": "  ",
+   "reply": "",
+   "state_change": false
+  },
+  {
+   "name": "subscribe input",
+   "line": "SUBSCRIBE INPUT",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "a change is pushed",
+   "line": "SET INPUT dp1",
+   "reply": "INPUT dp1",
+   "pushed": [
+    "EVT INPUT dp1"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "the same input again",
+   "line": "SET INPUT dp1",
+   "reply": "INPUT dp1",
+   "pushed": [
+    "EVT INPUT dp1"
+   ],
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "idle",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "subscribe log",
+   "line": "SUBSCRIBE LOG",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "subscribe scene",
+   "line": "SUBSCRIBE SCENE",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "a scene is pushed",
+   "line": "SET SCENE vc",
+   "reply": "SCENE vc",
+   "pushed": [
+    "EVT SCENE vc"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "vc",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe scene",
+   "line": "UNSUBSCRIBE SCENE",
+   "reply": "-ERR unknown command: UNSUBSCRIBE SCENE",
+   "state_change": false
+  },
+  {
+   "name": "a scene after unsubscribe",
+   "line": "SET SCENE presentation",
+   "reply": "SCENE presentation",
+   "pushed": [
+    "EVT SCENE presentation"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "dp1"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe input",
+   "line": "UNSUBSCRIBE INPUT",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "an input after unsubscribe",
+   "line": "SET INPUT usbc",
+   "reply": "INPUT usbc",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe log",
+   "line": "UNSUBSCRIBE LOG",
+   "reply": "-ERR unknown command: UNSUBSCRIBE LOG",
+   "state_change": false
+  },
+  {
+   "name": "the program at rest",
+   "line": "GET PROGRAM",
+   "reply": "PROGRAM running",
+   "state_change": false
+  },
+  {
+   "name": "stop the program",
+   "line": "SET PROGRAM stopped",
+   "reply": "PROGRAM stopped",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "stopped",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "the program stopped",
+   "line": "GET PROGRAM",
+   "reply": "PROGRAM stopped",
+   "state_change": false
+  },
+  {
+   "name": "start the program",
+   "line": "SET PROGRAM running",
+   "reply": "PROGRAM running",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "program refused",
+   "line": "SET PROGRAM paused",
+   "reply": "-ERR unknown command: SET PROGRAM paused",
+   "state_change": false
+  },
+  {
+   "name": "subscribe program",
+   "line": "SUBSCRIBE PROGRAM",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "the program stops, pushed",
+   "line": "SET PROGRAM stopped",
+   "reply": "PROGRAM stopped",
+   "pushed": [
+    "EVT PROGRAM stopped"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "stopped",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "the program starts, pushed",
+   "line": "SET PROGRAM running",
+   "reply": "PROGRAM running",
+   "pushed": [
+    "EVT PROGRAM running"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "running",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe program",
+   "line": "UNSUBSCRIBE PROGRAM",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "the program after unsubscribe",
+   "line": "SET PROGRAM stopped",
+   "reply": "PROGRAM stopped",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "none",
+      "macro_at": 0,
+      "panels": 3,
+      "ports": "com1=connected com2=connected ir1=idle relay1=open",
+      "program": "stopped",
+      "room_power": "standby"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 21.5
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "the control ports",
+   "line": "GET PORTS",
+   "reply": "PORTS com1=connected com2=connected ir1=idle relay1=open",
+   "state_change": false
+  },
+  {
+   "name": "the connected panels",
+   "line": "GET PANELS",
+   "reply": "PANELS 3",
+   "state_change": false
+  },
+  {
+   "name": "the room power at rest",
+   "line": "GET ROOMPOWER",
+   "reply": "ROOMPOWER standby",
+   "state_change": false
+  },
+  {
+   "name": "the room temperature at rest",
+   "line": "GET ROOMTEMP",
+   "reply": "ROOMTEMP 21.5",
+   "state_change": false
+  },
+  {
+   "name": "the macro at rest",
+   "line": "GET MACRO",
+   "reply": "MACRO none 0",
+   "state_change": false
+  },
+  {
+   "name": "the room is on and the macro ran",
+   "line": "GET ROOMPOWER",
+   "reply": "ROOMPOWER on",
+   "state_change": false
+  },
+  {
+   "name": "the macro after",
+   "line": "GET MACRO",
+   "reply": "MACRO start-meeting 1793700000",
+   "state_change": false
+  },
+  {
+   "name": "the room temperature after",
+   "line": "GET ROOMTEMP",
+   "reply": "ROOMTEMP 23.4",
+   "state_change": false
+  },
+  {
+   "name": "the ports after",
+   "line": "GET PORTS",
+   "reply": "PORTS com1=connected com2=error ir1=idle relay1=closed",
+   "state_change": false
+  },
+  {
+   "name": "the panels after",
+   "line": "GET PANELS",
+   "reply": "PANELS 5",
+   "state_change": false
+  },
+  {
+   "name": "a command through the table",
+   "line": "GET MACRO",
+   "direct": true,
+   "reply": "MACRO start-meeting 1793700000",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "start-meeting",
+      "macro_at": 1793700000,
+      "panels": 5,
+      "ports": "com1=connected com2=error ir1=idle relay1=closed",
+      "program": "stopped",
+      "room_power": "on"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 23.4
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "a subscribe through the table",
+   "line": "SUBSCRIBE PROGRAM",
+   "direct": true,
+   "reply": "OK",
+   "action": "subscribe",
+   "subject": "status.control.program",
+   "token": "PROGRAM",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "start-meeting",
+      "macro_at": 1793700000,
+      "panels": 5,
+      "ports": "com1=connected com2=error ir1=idle relay1=closed",
+      "program": "stopped",
+      "room_power": "on"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 23.4
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "an unsubscribe through the table",
+   "line": "UNSUBSCRIBE PROGRAM",
+   "direct": true,
+   "reply": "OK",
+   "action": "unsubscribe",
+   "subject": "status.control.program",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "start-meeting",
+      "macro_at": 1793700000,
+      "panels": 5,
+      "ports": "com1=connected com2=error ir1=idle relay1=closed",
+      "program": "stopped",
+      "room_power": "on"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 23.4
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  },
+  {
+   "name": "an unknown command through the table",
+   "line": "GET NOTHING",
+   "direct": true,
+   "reply": "",
+   "unknown": true,
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Core CP-3",
+      "serial": "SN-3EACB886A9"
+     },
+     "firmware": {
+      "version": "4.1.2"
+     }
+    },
+    "status": {
+     "control": {
+      "macro": "start-meeting",
+      "macro_at": 1793700000,
+      "panels": 5,
+      "ports": "com1=connected com2=error ir1=idle relay1=closed",
+      "program": "stopped",
+      "room_power": "on"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "diagnostics": {
+      "log": ""
+     },
+     "panel": {
+      "occupancy": false
+     },
+     "room": {
+      "climate_c": 21.5,
+      "load_c_per_person": 0.25,
+      "scene": "presentation",
+      "setpoint_c": 21.5,
+      "source": "none",
+      "temperature_c": 23.4
+     },
+     "video": {
+      "input": "usbc"
+     }
+    }
+   }
+  }
+ ],
+ "help": [
+  "GET INPUT",
+  "SET INPUT hdmi1",
+  "SET INPUT hdmi2",
+  "SET INPUT hdmi3",
+  "SET INPUT dp1",
+  "SET INPUT usbc",
+  "SUBSCRIBE INPUT",
+  "UNSUBSCRIBE INPUT",
+  "SUBSCRIBE LOG",
+  "GET SCENE",
+  "SET SCENE idle",
+  "SET SCENE presentation",
+  "SET SCENE vc",
+  "SUBSCRIBE SCENE",
+  "GET PROGRAM",
+  "SET PROGRAM running",
+  "SET PROGRAM stopped",
+  "GET PORTS",
+  "GET PANELS",
+  "GET ROOMPOWER",
+  "GET ROOMTEMP",
+  "GET MACRO",
+  "SUBSCRIBE PROGRAM",
+  "UNSUBSCRIBE PROGRAM"
+ ]
+}
