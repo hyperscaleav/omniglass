@@ -10,6 +10,7 @@ import (
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
 	fam_ferritepdu "github.com/hyperscaleav/omniglass/sim/device/ferritepdu"
 	fam_genericdevice "github.com/hyperscaleav/omniglass/sim/device/genericdevice"
+	fam_tessellatecensus "github.com/hyperscaleav/omniglass/sim/device/tessellatecensus"
 )
 
 // families is every Go device family under sim/device, by directory.
@@ -20,5 +21,6 @@ func families() []spec.Spec {
 		fam_borealedge.Spec(),
 		fam_ferritepdu.Spec(),
 		fam_genericdevice.Spec(),
+		fam_tessellatecensus.Spec(),
 	}
 }
