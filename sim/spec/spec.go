@@ -188,6 +188,19 @@ type TickContext struct {
 	// holds hours for it and whether it is inside them (behave.ReadBuildingHours
 	// over behave.BuildingSpan).
 	Hours behave.HoursReading
+	// Bookings reads the booked meetings of the device's room (behave.BookingsAt
+	// through the lab calendar), computed on the first call; nil when the engine
+	// supplies none (ReadBookings is the safe way in).
+	Bookings func() behave.Bookings
+}
+
+// ReadBookings is the room's booked meetings, a free and empty room when the
+// context carries no reader: a tick of a scheduling panel reads its room here.
+func (c TickContext) ReadBookings() behave.Bookings {
+	if c.Bookings == nil {
+		return behave.Bookings{State: behave.StateFree}
+	}
+	return c.Bookings()
 }
 
 // Tick is a typed behavior of a Go family: a function that runs on an
