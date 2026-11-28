@@ -22,6 +22,8 @@ import (
 //   - every route that takes no body answers 200 with a body;
 //   - every OID the surface serves reads without a state behind it breaking,
 //     and lists the state path it reads;
+//   - every typed line the surface's commanders answer is listed on some
+//     interface, so the console's operations panel offers it;
 //   - every tick writes only the paths it declares, and runs with no calendar.
 func Conform(t *testing.T, s spec.Spec) {
 	t.Helper()
@@ -129,6 +131,40 @@ func conformSurface(t *testing.T, s spec.Spec, f *Fake) {
 			t.Errorf("OID %s lists no state path; the console shows what an OID reads", o.OID)
 		}
 	}
+	conformListed(t, s, f)
+}
+
+// conformListed holds every typed line the surface's commanders answer to a
+// listing the console shows: an operator finds a command in the operations
+// panel only if some line interface lists it (#2857).
+func conformListed(t *testing.T, s spec.Spec, f *Fake) {
+	t.Helper()
+	fam, err := spec.NewFamily(s)
+	if err != nil {
+		return // Conform reports the refusal
+	}
+	listed := map[string]bool{}
+	for _, iface := range fam.Surfaces() {
+		for _, c := range iface.Commands {
+			listed[c.Match] = true
+		}
+	}
+	for _, c := range s.Surface(f).Commanders {
+		for _, line := range c.Commands() {
+			if printable(line) && !listed[line] {
+				t.Errorf("the surface answers %q but no interface lists it; set Surface.ListedOn or list it on its interface", line)
+			}
+		}
+	}
+}
+
+func printable(line string) bool {
+	for _, r := range line {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // IdleRoom is the room of a device with no calendar, as the engine reads it.

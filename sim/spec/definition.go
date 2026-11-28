@@ -173,6 +173,11 @@ func (f *Family) surfaceCommands(iface string) []profile.Command {
 	var out []profile.Command
 	for _, c := range sf.Commanders {
 		for _, line := range c.Commands() {
+			if !typed(line) {
+				// A binary frame (a hex poll) is no line an operator types; the
+				// family lists it as a hex command on its own band.
+				continue
+			}
 			cmd := profile.Command{Match: line, Native: true}
 			if reply, ok := c.Handle(line); ok {
 				cmd.Action = string(reply.Action)
@@ -181,6 +186,17 @@ func (f *Family) surfaceCommands(iface string) []profile.Command {
 		}
 	}
 	return out
+}
+
+// typed reports whether a command line is printable text, as an operator
+// types it.
+func typed(line string) bool {
+	for _, r := range line {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // nativeOIDs is the OIDs the family's surface serves, as the console lists

@@ -136,6 +136,10 @@ func Spec() spec.Spec {
 				Name: "control-hex", Protocol: "tcp", Port: 5001, APISurface: "tessellate-census-hex", Persistent: true,
 				Doc:        profile.Doc{Summary: "Binary AV-control band, fixed hex poll for live head-count", Tags: []string{"control", "raw-tcp", "binary", "data"}},
 				LineEnding: "\r", FrameStart: "\x02", FrameEnd: "\x03",
+				// The poll is a binary frame, so the console lists it as hex here;
+				// the control Commander answers it.
+				Commands: []profile.Command{{MatchHex: "AA 01", Native: true,
+					Doc: profile.Doc{Summary: "Hex poll: people_count (request AA 01, response AA 81 <count>)"}}},
 			},
 			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
@@ -332,5 +336,5 @@ func surfaceOf(d spec.Device) spec.Surface {
 		subjects[i] = surface.Subject{Match: f.Path, Path: f.Path, Token: token,
 			Push: func(v any) string { return "#" + token + "=" + surface.Encoded(v) }}
 	}
-	return spec.Surface{Commanders: []surface.Commander{control{d}}, Subjects: map[string][]surface.Subject{"control": subjects}}
+	return spec.Surface{Commanders: []surface.Commander{control{d}}, Subjects: map[string][]surface.Subject{"control": subjects}, ListedOn: "control"}
 }
