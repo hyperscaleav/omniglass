@@ -10,7 +10,7 @@ steps:
     caption: Touch Panel 2, with its vitals. Each metric has a way to raise an alarm on it.
   - click: { role: link, name: Alarm on Poll Duration }
     caption: Alarm on this opens a new rule that already reads this metric on this component.
-  - wait: { selector: '[aria-label="Selected"]:has-text("Touch Panel 2")' }
+  - wait: { selector: '[aria-label="Selected"]:has-text("Touch Panel")' }
     caption: The component is filled in, and the picker names where it sits, so two panels with one name are not mistaken.
   - click: { role: button, name: Create rule }
     caption: Submit with nothing else filled in.

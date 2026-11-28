@@ -89,10 +89,11 @@ func TestComponentSimulationReportsItsProductsOwnIdentity(t *testing.T) {
 		if !strings.Contains(sim.Summary, tc.size) {
 			t.Errorf("%s summary %q does not say it is the %s", tc.name, sim.Summary, tc.size)
 		}
-		for _, other := range []string{"boreal-edge-55", "boreal-edge-65", "boreal-edge-75", "boreal-edge-86", "boreal-edge-98"} {
-			if !slices.Contains(sim.Variants, other) {
-				t.Errorf("%s variants %v lack %s", tc.name, sim.Variants, other)
-			}
+		// The variants are the line's products and nothing else: a family's own
+		// name is the wire API it serves, not a product a component could be
+		// changed to (#2846 review).
+		if want := []string{"boreal-edge-55", "boreal-edge-65", "boreal-edge-75", "boreal-edge-86", "boreal-edge-98"}; !slices.Equal(sim.Variants, want) {
+			t.Errorf("%s variants = %v, want exactly %v", tc.name, sim.Variants, want)
 		}
 	}
 }

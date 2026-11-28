@@ -241,7 +241,7 @@ fault you repair stays repaired across a lab restart (`omniglass lab run --fresh
 - **DSP 1 in the auditorium is unplugged.** The official reachability rule opens a **High** alarm
   after its sustain: the DSP goes to outage and the auditorium reads degraded. Its Reachability panel
   reads `down`, its activity shows the rule's `rule-fired` event, and the drawer shows **Unplugged**.
-- **Display 1 in bay 1 answers 400 ms late.** Its **SNMP Response Time** sits at about 400 ms, so the
+- **The display in bay 1 answers 400 ms late.** Its **SNMP Response Time** sits at about 400 ms, so the
   fleet's own `response-slow` rule (an operator's rule the seed adds beside the official ones; more
   than 250 ms, held 15 s) opens a **Warning**: the display reads degraded and keeps its slot, so the
   room above it stays healthy.

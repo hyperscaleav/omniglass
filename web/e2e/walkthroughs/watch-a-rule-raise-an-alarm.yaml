@@ -36,7 +36,7 @@ steps:
     caption: Save. The panel is marked unplugged, and the simulator applies it on its next pull.
   - press: Escape
     caption: Close the simulation. The panel's page lists the systems it serves.
-  - click: '[data-testid="leaf-memberships"] >> role=button[name="Media Lab Teaching 2"]'
+  - click: '[data-testid="leaf-memberships"] button:has([data-system-label]:text-is("Media Lab Teaching 2"))'
     caption: Open the system it serves. It still reads healthy; the official rule waits for a down to hold 15s, so one failed probe never pages.
   - wait: { selector: '[data-testid="alarm-strip"]:has-text("panel-2")', timeout: 45000 }
     caption: The down held, so the rule opened a High alarm on the panel. The system's view refreshes on its own, so Why names it with no reload.

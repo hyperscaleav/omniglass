@@ -136,6 +136,10 @@ func Spec() spec.Spec {
 				Name: "control-hex", Protocol: "tcp", Port: 5001, APISurface: "tessellate-census-hex", Persistent: true,
 				Doc:        wire.Doc{Summary: "Binary AV-control band, fixed hex poll for live head-count", Tags: []string{"control", "raw-tcp", "binary", "data"}},
 				LineEnding: "\r", FrameStart: "\x02", FrameEnd: "\x03",
+				// The poll is a binary frame, so the console lists it as its hex
+				// bytes here (a listing only); the control Commander answers it.
+				Commands: []wire.Command{{Match: "hex AA 01",
+					Doc: wire.Doc{Summary: "Hex poll: people_count (request AA 01 → response AA 81 <count>)"}}},
 			},
 			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
@@ -295,6 +299,17 @@ func (control) Commands() []string {
 	return append(out, hexPoll)
 }
 
+// Summary documents the query lines as the console lists them.
+func (control) Summary(line string) string {
+	switch line {
+	case "COUNT?":
+		return "Query live people count"
+	case "VACANT?":
+		return "Query vacant flag"
+	}
+	return ""
+}
+
 // hexPoll is the binary poll's payload: the magic byte and the opcode.
 const hexPoll = "\xaa\x01"
 
@@ -332,5 +347,5 @@ func surfaceOf(d spec.Device) spec.Surface {
 		subjects[i] = surface.Subject{Match: f.Path, Path: f.Path, Token: token,
 			Push: func(v any) string { return "#" + token + "=" + surface.Encoded(v) }}
 	}
-	return spec.Surface{Commanders: []surface.Commander{control{d}}, Subjects: map[string][]surface.Subject{"control": subjects}}
+	return spec.Surface{Commanders: []surface.Commander{control{d}}, Subjects: map[string][]surface.Subject{"control": subjects}, ListedOn: "control"}
 }

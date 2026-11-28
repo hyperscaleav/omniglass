@@ -8,7 +8,7 @@ import "strings"
 //	{site}                  -> site code (e.g. BOI)
 //	{building}              -> building (e.g. 17C)
 //	{room}                  -> room (e.g. 300)
-//	{room-device:<profile>} -> hostname of the device with that profile name
+//	{room-device:<profile>} -> hostname of the device with that product or profile
 //	                           in the same room (empty when the room has none)
 //
 // A device profile is shared: it fans out to every room in the fleet. Any

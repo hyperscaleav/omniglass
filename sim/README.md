@@ -111,7 +111,10 @@ Written once here, so the next family repeats no workaround.
   recorded transcript to what the family means to say, and fail when the recording no longer holds what they
   correct; the divergence is an ADR.
 - **A line command is listed where it is served.** A `spec.Command` names its `Face` (the interface the
-  console lists it under) and a family's `Surface` names `ListedOn` for the shared surface's commands; a
+  console lists it under) and a family's `Surface` names `ListedOn` for the shared surface's commands (a
+  commander that is also a `surface.Described` gives each line its summary; a binary frame is listed as a
+  hex command on its own interface). `spectest.Conform` fails a family that answers a typed line no
+  interface lists. A
   line protocol is recorded in the wire script's `Lines` (each line on the device's TCP face, or a verb
   direct against its command table), with the pushes each draws and the device's own command list.
 - **Free text and derived writes.** A control route that took any string is an `httpapi.Text` field (with a

@@ -17115,7 +17115,7 @@
             "type": "string"
           },
           "products": {
-            "description": "The products this profile simulates, its own first, then its variants.",
+            "description": "The products this profile simulates. A YAML profile leads with the product it is named for; a Go family, named for its wire API, lists its model products only.",
             "items": {
               "type": "string"
             },

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
@@ -28,8 +29,10 @@ func TestSimulationRoutesDescribeAFamily(t *testing.T) {
 		if gs[0].Routes[0].Summary == "" {
 			t.Errorf("%s: the first route lists no summary", product)
 		}
-		if gv := variantsOf(g); len(gv) == 0 || gv[0] != spectest.Name {
-			t.Errorf("%s: variants = %v, want the family first", product, gv)
+		// A family lists its model products only: its name is its wire API,
+		// not a product a component could be.
+		if gv := variantsOf(g); len(gv) == 0 || slices.Contains(gv, spectest.Name) {
+			t.Errorf("%s: variants = %v, want the models, never the family's name", product, gv)
 		}
 	}
 	byName := map[string]simProfileBody{}

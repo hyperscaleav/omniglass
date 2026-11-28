@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
@@ -21,7 +22,8 @@ type Definition interface {
 	// InitialState is its state tree with the defaults; callers do not
 	// modify it.
 	InitialState() map[string]any
-	// Products is every product it simulates, its own name first.
+	// Products is every product it simulates: its model products, never the
+	// family's own name, which is the wire API it serves, not a product.
 	Products() []string
 	// ElapsedList is the read-derived uptimes it reports.
 	ElapsedList() []Elapsed
@@ -120,7 +122,15 @@ func (f *Family) surfaceCommands(iface string) []wire.Command {
 	var out []wire.Command
 	for _, c := range sf.Commanders {
 		for _, line := range c.Commands() {
+			if !typed(line) {
+				// A binary frame (a hex poll) is no line an operator types; the
+				// family lists it on its own band.
+				continue
+			}
 			cmd := wire.Command{Match: line}
+			if d, ok := c.(surface.Described); ok {
+				cmd.Doc.Summary = d.Summary(line)
+			}
 			if reply, ok := c.Handle(line); ok {
 				cmd.Action = string(reply.Action)
 			}
@@ -128,6 +138,17 @@ func (f *Family) surfaceCommands(iface string) []wire.Command {
 		}
 	}
 	return out
+}
+
+// typed reports whether a command line is printable text, as an operator
+// types it.
+func typed(line string) bool {
+	for _, r := range line {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // nativeOIDs is the OIDs the family's surface serves, as the console lists
@@ -150,12 +171,14 @@ func (f *Family) nativeOIDs() map[string]string {
 func (f *Family) Handlers() Handlers {
 	return Handlers{HTTP: f.s.HTTP, Commands: f.s.Commands, Animate: f.s.Animate, Surface: f.s.Surface, Ticks: f.s.Ticks, Push: f.s.Push}
 }
+
+// Products lists the products the family simulates, its model rows in order.
+// The family's own name is the wire API it serves, not a product a component
+// could be assigned, so it is not listed (#2846 review).
 func (f *Family) Products() []string {
-	out := []string{f.s.Name}
+	out := make([]string, 0, len(f.s.Models))
 	for _, m := range f.s.Models {
-		if m.Product != f.s.Name {
-			out = append(out, m.Product)
-		}
+		out = append(out, m.Product)
 	}
 	return out
 }

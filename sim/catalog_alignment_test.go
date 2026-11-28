@@ -44,14 +44,10 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 			continue
 		}
 		checked++
-		// A family is named for its wire API, and leads with its first model,
-		// unless it is a family of one named for its only product.
+		// A family is named for its wire API and lists only its models, the
+		// first leading.
 		products := def.Products()
 		lead := products[0]
-		if len(products) > 1 {
-			products = products[1:]
-			lead = products[0]
-		}
 		for _, name := range products {
 			if !seeded[name] {
 				t.Errorf("family %q lists %q, which the seed does not ship; name the product it simulates", def.ID(), name)
