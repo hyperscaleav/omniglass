@@ -32,8 +32,8 @@ Everything a simulated device is comes from the catalog embedded in the binary
   a protocol, a port, its auth, and the routes, commands, OIDs and subscriptions it answers), its
   behaviors (state that moves on an interval, and the named events it reports), its computed fields (values derived on read, such as
   uptime from a boot time) and its default state;
-- a **surface fragment** (`surfaces/*.yaml`) is what two profiles share, taken in with `include:`;
-  the loader refuses an unknown fragment or one a surface restates
+- a **surface fragment** (`surfaces/*.yaml`) is what two profiles would share, taken in with `include:`
+  (none ships today: the families that shared one are Go packages over `sim/surface`); the loader refuses an unknown fragment or one a surface restates
   ([ADR-0896](/architecture/decisions/#adr-0896-device-profiles-share-a-surface-through-a-simulator-include-not-a-catalog-primitive));
 - **templates** render responses from live state, so a device's HTTP status route and its CLI's
   `show` command read the same values.
@@ -139,6 +139,7 @@ the bytes. The call itself is `sim/behave`'s `FollowsCall`, `ContentSharing` and
 people count is `PeopleCount`, and the camera's framing, which only it has, is written in its package. Three
 differences from the profiles are written down in
 [ADR-2834](/architecture/decisions/#adr-2834-a-go-family-reports-its-profiles-named-events-on-the-live-feed-and-corrects-only-the-profiles-malformed-words).
+
 ### The second wave: room control and switching
 
 Five more families replaced five profiles (#2833), grouped by wire API, not by vendor:

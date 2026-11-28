@@ -7,7 +7,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
-	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // The simulator serves a component by its product's name, so every device
@@ -47,14 +46,9 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		}
 		checked++
 		// A YAML profile is named for the product it leads with; a Go family is
-		// named for its wire API, and leads with its first model, unless it is a
-		// family of one named for its only product.
+		// named for its wire API and lists only its models, the first leading.
 		products := def.Products()
 		lead := products[0]
-		if def.Kind() == spec.KindGo && len(products) > 1 {
-			products = products[1:]
-			lead = products[0]
-		}
 		for _, name := range products {
 			if !seeded[name] {
 				t.Errorf("%s %q lists %q, which the seed does not ship; name the product it simulates", def.Kind(), def.ID(), name)
