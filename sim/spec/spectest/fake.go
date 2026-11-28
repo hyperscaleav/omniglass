@@ -2,6 +2,7 @@ package spectest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,39 +90,74 @@ func (f *Fake) WriteMany(changes ...surface.Change) error {
 func look(root map[string]any, path string) any {
 	var cur any = root
 	for _, seg := range strings.Split(path, ".") {
-		m, ok := cur.(map[string]any)
-		if !ok {
+		switch c := cur.(type) {
+		case map[string]any:
+			cur = c[seg]
+		case []any:
+			i, err := strconv.Atoi(seg)
+			if err != nil || i < 0 || i >= len(c) {
+				return nil
+			}
+			cur = c[i]
+		default:
 			return nil
 		}
-		cur = m[seg]
 	}
 	return cur
 }
 
+// set writes a path, a list element by its index, making the maps it lacks.
 func set(root map[string]any, path string, v any) {
 	segs := strings.Split(path, ".")
-	cur := root
+	var cur any = root
 	for _, seg := range segs[:len(segs)-1] {
-		next, ok := cur[seg].(map[string]any)
-		if !ok {
-			next = map[string]any{}
-			cur[seg] = next
+		switch c := cur.(type) {
+		case map[string]any:
+			next, ok := c[seg]
+			if !ok {
+				next = map[string]any{}
+				c[seg] = next
+			}
+			cur = next
+		case []any:
+			i, err := strconv.Atoi(seg)
+			if err != nil || i < 0 || i >= len(c) {
+				return
+			}
+			cur = c[i]
 		}
-		cur = next
 	}
-	cur[segs[len(segs)-1]] = v
+	last := segs[len(segs)-1]
+	switch c := cur.(type) {
+	case map[string]any:
+		c[last] = v
+	case []any:
+		if i, err := strconv.Atoi(last); err == nil && i >= 0 && i < len(c) {
+			c[i] = v
+		}
+	}
 }
 
 func clone(m map[string]any) map[string]any {
 	out := make(map[string]any, len(m))
 	for k, v := range m {
-		if sub, ok := v.(map[string]any); ok {
-			out[k] = clone(sub)
-			continue
-		}
-		out[k] = v
+		out[k] = cloneValue(v)
 	}
 	return out
+}
+
+func cloneValue(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		return clone(x)
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = cloneValue(e)
+		}
+		return out
+	}
+	return v
 }
 
 func merge(dst, src map[string]any) {
