@@ -15,7 +15,7 @@ primitives: the processor's `RoomPower` and `Climate`, the scheduling panel's `R
 What the engine and the shared helpers gained for it: a tick reads its room's booked meetings
 (`TickContext.ReadBookings`); a control route takes free text, optionally held to a pattern
 (`httpapi.Text`), and writes a value it derives from the request in the same change (`Control.Also`); the
-console lists a family's line commands under the interface that serves them (`Command.Face`,
+console lists a family's line commands under the face that serves them (`Command.Face`,
 `Surface.ListedOn`), each with its subscription verb; and the wire harness records line protocols, the
 lines a device answers and pushes, and an operator's hand on the device. Parity with each profile is the
 transcript recorded before it was deleted (ADR-2833 lists the two refusals the families make plainly).
