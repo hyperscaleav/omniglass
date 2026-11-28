@@ -16,3 +16,7 @@ docs/src/content/docs/reference/cli/index.md linguist-generated=true
 docs/src/content/docs/reference/mcp/index.md linguist-generated=true
 docs/src/content/docs/architecture/data-model.md linguist-generated=true
 docs/public/d2/** linguist-generated=true
+
+# The golden wire transcripts were deleted in #2837. Their deletion still diffs
+# as binary, so a review of that change holds the code, not 277k lines of JSON.
+sim/testdata/wire/*.json -diff linguist-generated=true
