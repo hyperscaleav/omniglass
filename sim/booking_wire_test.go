@@ -78,7 +78,7 @@ func bookingExtra(t *testing.T, fam wireFamily, product string) map[string]any {
 }
 
 var bookingWire = wireFamily{
-	Name: "booking-service", Products: []string{bookingProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "booking-service", Products: []string{bookingProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	RoomDay: bookingRoomDay, Extra: bookingExtra,
 }
 

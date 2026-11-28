@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // A simulated service a scale lab seeds as a webhook sender (#1747) names
@@ -13,12 +13,9 @@ import (
 // room identity, so the lab can seed the endpoint, its signing key and one
 // binding per room from the profile alone.
 func TestEverySimulatedWebhookSenderNamesAShippedWebhookDriver(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	named := 0
-	for name, p := range store.Devices {
+	for _, def := range shipped.Catalog(t).Definitions() {
+		name, p := def.ID(), struct{ Webhook *profile.WebhookSubscribe }{def.WebhookFace()}
 		if p.Webhook == nil || p.Webhook.Driver == "" {
 			continue
 		}

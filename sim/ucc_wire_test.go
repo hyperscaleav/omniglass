@@ -263,7 +263,7 @@ func uccExtra(t *testing.T, fam wireFamily, product string) map[string]any {
 }
 
 var uccWire = wireFamily{
-	Name: "ucc-platform", Products: []string{uccProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "ucc-platform", Products: []string{uccProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	Script: uccScript(), Ticks: uccTicks(), RoomDay: uccRoomDay, Extra: uccExtra,
 }
 

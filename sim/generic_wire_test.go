@@ -9,7 +9,7 @@ package sim
 const genericProduct = "generic-device"
 
 var genericWire = wireFamily{
-	Name: "generic-device", Products: []string{genericProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "generic-device", Products: []string{genericProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	OIDs:  []string{"1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0", "1.3.6.1.2.1.1.5.0", "1.3.6.1.4.1.1.1.0"},
 	Walks: []string{"1.3.6.1.2.1.1", "1.3.6.1.2.1", "1.3.6.1.4.1"},
 }

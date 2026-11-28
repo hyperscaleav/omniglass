@@ -115,7 +115,7 @@ func recordingExtra(t *testing.T, fam wireFamily, product string) map[string]any
 }
 
 var recordingWire = wireFamily{
-	Name: "recording-service", Products: []string{recordingProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "recording-service", Products: []string{recordingProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	Script: recordingScript(), Ticks: recordingTicks(), RoomDay: recordingRoomDay, Extra: recordingExtra,
 }
 

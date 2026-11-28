@@ -109,7 +109,7 @@ func ferriteRoomDay(d *Device, at *time.Time) []wireChange {
 }
 
 var ferriteWire = wireFamily{
-	Name: "ferrite-pdu-4c", Products: []string{ferriteProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "ferrite-pdu-4c", Products: []string{ferriteProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	Script: ferriteScript(), Writes: ferriteWrites(), OIDs: ferriteOIDs(), Walks: []string{"1.3.6.1.4.1.55560", "1.3.6.1.2.1.1"},
 	Ticks: ferriteTicks(), RoomDay: ferriteRoomDay,
 }
@@ -117,5 +117,9 @@ var ferriteWire = wireFamily{
 // wireYAMLSource is the provenance note the transcripts of the YAML profiles
 // this slice replaced carry.
 const wireYAMLSource = "recorded from the YAML profile before its deletion (#2836); see sim/testdata/wire/README.md"
+
+// wireYAMLFrozen is why the transcripts of the profiles this slice replaced are
+// never re-recorded from the families.
+const wireYAMLFrozen = "recorded from the YAML profile before its deletion (#2836); re-recording from the Go family would hold it to itself"
 
 func init() { wireFamilies = append(wireFamilies, ferriteWire) }

@@ -67,7 +67,9 @@ are. The `sim/behave` primitives plug in there; an `Animator` is the escape hatc
 a family may still run YAML-style behaviors. A `Surface` func builds the shared protocol surfaces
 (`sim/surface`) for each device. The Boreal Edge displays, the Beam projector and the Cast player are families
 ([a worked example](#a-go-family-worked-the-boreal-displays)), and so are room control and switching
-([the second wave](#the-second-wave-room-control-and-switching)); the rest are profiles until their families land.
+([the second wave](#the-second-wave-room-control-and-switching)), and so are occupancy, power and the cloud
+services ([the third](#the-third-wave-occupancy-power-and-the-cloud-services)); the rest are profiles until their
+families land.
 
 ### A Go family, worked: the Boreal displays
 
@@ -134,6 +136,27 @@ names); a command is listed under the face that serves it (`Command.Face`, and `
 the shared surface's); a control route may take free text held to a pattern (`httpapi.Text`) and write what
 it derives in the same change (`Control.Also`); and a tick reads its room's booked meetings
 (`TickContext.ReadBookings`).
+
+### The third wave: occupancy, power and the cloud services
+
+Seven more families replaced seven profiles (#2836), each a family of one named for its product:
+
+| Package | Serves | Product |
+| --- | --- | --- |
+| `tessellatecensus` | the people counter: a REST and event API behind a key, a raw-TCP feed with push subscriptions, a binary hex poll | `tessellate-census-c1` |
+| `ferritepdu` | the rack PDU: a JSON document, outlet switching behind a login, SNMP with an outlet table | `ferrite-pdu-4c` |
+| `genericdevice` | the unclassified SNMP box: sysDescr and sysUpTime | `generic-device` |
+| `uccplatform` | the account-wide meeting platform: paged room and device lists, meeting routes, signed webhooks, the calendar | `ucc-platform` |
+| `schedulingservice` | the booking platform: bookings and a paged room list | `scheduling-service` |
+| `recordingservice` | the recording service: health, work, a paged room list, a failure feed | `recording-service` |
+| `bookingservice` | the booking integration: no face, a push of each granted system's day | `booking-service` |
+
+A service that speaks for many rooms reads them through `spec.RoomsOf(d)` (the world's covers, a room's phase,
+meeting and bookings, the devices a platform lists, memoized once a room a second); it sends a webhook with
+`spec.Send`, signed as a sender's is, and names an event on its stream with `spec.Report`. A device that
+reports by pushing declares `Spec.Push`, and one a lab subscribes to a webhook endpoint declares `Spec.Webhook`.
+A list pages by the names its API declares (`httpapi.Paging`, `Cut`), and the wire harness records a line
+protocol, an event stream and every post a device makes.
 
 The catalog holds devices and nothing above them: no room archetype and no fleet layout, since a
 simulated system is built to the platform's own standards ([fleets](#fleets),

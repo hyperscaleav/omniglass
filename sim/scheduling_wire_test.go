@@ -104,7 +104,7 @@ func schedulingExtra(t *testing.T, fam wireFamily, product string) map[string]an
 }
 
 var schedulingWire = wireFamily{
-	Name: "scheduling-service", Products: []string{schedulingProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "scheduling-service", Products: []string{schedulingProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	Script: schedulingScript(), Ticks: schedulingTicks(), RoomDay: schedulingRoomDay, Extra: schedulingExtra,
 }
 

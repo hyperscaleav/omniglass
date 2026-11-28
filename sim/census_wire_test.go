@@ -106,7 +106,7 @@ func censusExtra(t *testing.T, fam wireFamily, product string) map[string]any {
 }
 
 var censusWire = wireFamily{
-	Name: "tessellate-census-c1", Products: []string{censusProduct}, Engine: shippedEngineOf, Source: wireYAMLSource,
+	Name: "tessellate-census-c1", Products: []string{censusProduct}, Engine: shippedEngineOf, Source: wireYAMLSource, Frozen: wireYAMLFrozen,
 	Script: censusScript(), Ticks: censusTicks(), RoomDay: censusRoomDay, Extra: censusExtra,
 }
 

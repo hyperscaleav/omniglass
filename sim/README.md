@@ -120,6 +120,18 @@ Written once here, so the next family repeats no workaround.
   change (the signal on the input just routed) is a `Control.Also`. A tick that reads its room's booked
   meetings calls `c.ReadBookings()`.
 
+- **A family of one is named for its product.** A model row may carry the family's own name, so the
+  lab's manifests, pushers and senders, which name a product as a profile, resolve it unchanged.
+- **A service that speaks for rooms reads them through `spec.RoomsOf(d)`**, sends a webhook with
+  `spec.Send` (signed as the subscription says) and names a stream event with `spec.Report`; a pusher
+  declares `Spec.Push` and a webhook sender `Spec.Webhook`. A paged list declares its names once
+  (`httpapi.Paging`, `Cut`, `PagedDocument`). The wire script's `Extra` hook records what is not HTTP or
+  SNMP: `wireConverse` (a conversation on a line face), `wireStream` (an event stream), `wireRecv` (the
+  posts a device makes, and whether each signature verifies).
+- **Text stays text.** A value the YAML templates coerced (an id of digits into a number) is stored as the
+  string it is, and a field that is not a string is refused; the recording marks such a step `Quirk` or
+  leaves its state out of the comparison (ADR-2836).
+
 `sim/spec/spectest` is also a small family used by the engine's tests.
 
 ## Where the docs live

@@ -16,8 +16,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
@@ -91,16 +89,12 @@ func TestFanOutEndToEnd(t *testing.T) {
 	bind("zr-boardroom-a", "boardroom-a")
 	bind("zr-huddle-north", "huddle-north")
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The account-wide platform's profile, found by its model so the test
 	// borrows no catalog name.
 	platProfile := ""
-	for name, p := range store.Devices {
-		if p.Model == "UCC Platform (account)" {
-			platProfile = name
+	for _, def := range shipped.Catalog(t).Definitions() {
+		if def.Identity().Model == "UCC Platform (account)" {
+			platProfile = def.ID()
 		}
 	}
 	engine := shipped.Engine(t)
