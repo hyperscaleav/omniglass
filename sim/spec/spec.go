@@ -167,7 +167,11 @@ type Command struct {
 	Match   string
 	Summary string
 	Example string
-	Handle  LineHandler
+	// Face is the line interface the console lists the command under; the
+	// command answers on every line interface whatever it says. Empty lists it
+	// under every one.
+	Face   string
+	Handle LineHandler
 }
 
 // Animator runs while its device serves: the engine calls it when the device
@@ -234,6 +238,10 @@ type Surface struct {
 	// Subjects are the subscription subjects of a persistent interface, by
 	// the interface's name: each face declares its own set.
 	Subjects map[string][]surface.Subject
+	// ListedOn is the line interface the console lists the Commanders' commands
+	// under (each answers on every persistent line interface whatever it says);
+	// empty lists them under none.
+	ListedOn string
 }
 
 // SurfaceFunc builds a device's Surface. It runs once per device, as the
@@ -332,6 +340,9 @@ func (s Spec) validate() error {
 			return fmt.Errorf("family %q lists command %q twice", s.Name, c.Match)
 		}
 		cmds[c.Match] = true
+		if c.Face != "" && !lineFace(s.Interfaces, c.Face) {
+			return fmt.Errorf("family %q lists command %q under %q, which is no line interface", s.Name, c.Match, c.Face)
+		}
 	}
 	if len(s.HTTP) > 0 && !hasProtocol(s.Interfaces, "http") {
 		return fmt.Errorf("family %q has HTTP routes and no http interface", s.Name)
@@ -340,6 +351,16 @@ func (s Spec) validate() error {
 		return fmt.Errorf("family %q has commands and no ssh, telnet, tcp or udp interface", s.Name)
 	}
 	return nil
+}
+
+// lineFace says an interface of that name speaks a line protocol.
+func lineFace(ifaces []profile.Interface, name string) bool {
+	for _, i := range ifaces {
+		if i.Name == name {
+			return hasProtocol([]profile.Interface{i}, "ssh", "telnet", "tcp", "udp")
+		}
+	}
+	return false
 }
 
 func hasProtocol(ifaces []profile.Interface, protocols ...string) bool {
