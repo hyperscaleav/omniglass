@@ -41,7 +41,7 @@ import (
 )
 
 // Name is the family's id, the profile name its devices carry.
-const Name = "kestrel-vroom-bar"
+const Name = "kestrel-bar"
 
 // Row is one model of the bar line.
 type Row struct {

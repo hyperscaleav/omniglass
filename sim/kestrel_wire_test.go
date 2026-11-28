@@ -342,10 +342,10 @@ func gazeRoomDay(d *Device, at *time.Time) []wireChange {
 
 const wireKestrelSource = "recorded from the YAML profile before its deletion (#2834); see sim/testdata/wire/README.md"
 
-const kestrelFrozen = ""
+const kestrelFrozen = "recorded from the YAML profile before its deletion (#2834); re-recording from the Go family would hold it to itself"
 
 var (
-	vroomWire = wireFamily{Name: "kestrel-vroom-bar", Products: []string{kestrelVRoomProduct}, Engine: shippedEngineOf, Source: wireKestrelSource, Frozen: kestrelFrozen,
+	vroomWire = wireFamily{Name: "kestrel-bar", Products: []string{kestrelVRoomProduct}, Engine: shippedEngineOf, Source: wireKestrelSource, Frozen: kestrelFrozen,
 		Script: vroomScript(), Ticks: vroomTicks(), RoomDay: vroomRoomDay, Diverges: vroomDiverges}
 	relayWire = wireFamily{Name: "kestrel-relay", Products: []string{kestrelRelayProduct}, Engine: shippedEngineOf, Source: wireKestrelSource, Frozen: kestrelFrozen,
 		Script: relayScript(), Ticks: relayTicks(), RoomDay: relayRoomDay}

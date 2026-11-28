@@ -1,9 +1,0 @@
-{
-  "pan": {{ .State | get "status" | get "camera" | get "pan" }},
-  "tilt": {{ .State | get "status" | get "camera" | get "tilt" }},
-  "magnification": {{ .State | get "status" | get "camera" | get "magnification" }},
-  "preset": {{ .State | get "status" | get "camera" | get "preset" }},
-  "tracking": "{{ .State | get "status" | get "camera" | get "tracking" }}",
-  "presence": {{ .State | get "status" | get "camera" | get "presence" }},
-  "people": {{ .State | get "status" | get "camera" | get "people" }}
-}

@@ -270,3 +270,22 @@ func TestLookedReadsTextAsTheTemplateEngineDid(t *testing.T) {
 		}
 	}
 }
+
+// The standby route lists the three power states as the quick set the console
+// offers and refuses any other (the profile's enum-validated power route).
+func TestTheStandbyRouteOffersOnOffAndStandbyAndRefusesTheRest(t *testing.T) {
+	for _, r := range Spec().HTTP {
+		if r.Match != "POST /api/system/standby" {
+			continue
+		}
+		if len(r.Sets) != 1 || r.Sets[0].Path != pathPower || strings.Join(r.Sets[0].Values, ",") != "on,off,standby" {
+			t.Fatalf("sets = %+v", r.Sets)
+		}
+		f := fake()
+		if res := r.Handle(f, spec.HTTPRequest{Body: map[string]any{"power": "asleep"}}); res.Status != 400 || len(f.Writes) != 0 {
+			t.Fatalf("a power state it lacks: %d, %d writes", res.Status, len(f.Writes))
+		}
+		return
+	}
+	t.Fatal("no standby route")
+}
