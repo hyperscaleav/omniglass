@@ -103,6 +103,18 @@ type Device interface {
 	// Now is the time the device reads: the simulated world's clock, which a
 	// handler stamps a reboot's anchor with.
 	Now() time.Time
+	// Publish reports a named occurrence (a call started, a log line) on the
+	// device's live feed, numbered with the state changes the feed streams and
+	// kept for a reconnect's replay as they are. A device whose face declares
+	// no feed drops it. Call it after the writes the occurrence follows, as a
+	// YAML route's events are reported after its mutations.
+	Publish(e Event)
+}
+
+// Event is a named occurrence on a device's live feed (event: <Name>, its data
+// the text Data): what a driver maps to one event of its own.
+type Event struct {
+	Name, Data string
 }
 
 // HTTPRequest is one request as a handler sees it.
@@ -149,6 +161,9 @@ type HTTPRoute struct {
 	// device's surface; Example is a request body for the operations panel.
 	Summary string
 	Example string
+	// Private marks a route the product's own web UI calls but does not
+	// advertise: the console badges it.
+	Private bool
 	// Sets are the state paths the route sets from a field of its body, each
 	// to a fixed list of values: what the console offers as quick sets and
 	// the simulator reads to tell a path driven away from its default. A route
@@ -167,7 +182,11 @@ type Command struct {
 	Match   string
 	Summary string
 	Example string
-	Handle  LineHandler
+	// Face is the line interface the console lists the command under; the
+	// command answers on every line interface whatever it says. Empty lists it
+	// under every one.
+	Face   string
+	Handle LineHandler
 }
 
 // Animator runs while its device serves: the engine calls it when the device
@@ -188,6 +207,19 @@ type TickContext struct {
 	// holds hours for it and whether it is inside them (behave.ReadBuildingHours
 	// over behave.BuildingSpan).
 	Hours behave.HoursReading
+	// Bookings reads the booked meetings of the device's room (behave.BookingsAt
+	// through the lab calendar), computed on the first call; nil when the engine
+	// supplies none (ReadBookings is the safe way in).
+	Bookings func() behave.Bookings
+}
+
+// ReadBookings is the room's booked meetings, a free and empty room when the
+// context carries no reader: a tick of a scheduling panel reads its room here.
+func (c TickContext) ReadBookings() behave.Bookings {
+	if c.Bookings == nil {
+		return behave.Bookings{State: behave.StateFree}
+	}
+	return c.Bookings()
 }
 
 // Tick is a typed behavior of a Go family: a function that runs on an
@@ -206,6 +238,12 @@ type Tick struct {
 	// what it derives from the room is right from the first request.
 	OnStart bool
 	Run     func(d Device, c TickContext) []surface.Change
+	// Emit names the occurrences the tick reports on the device's live feed,
+	// read from the device after Run's changes are written (as a YAML
+	// behavior's events are rendered against the state its mutations left),
+	// numbered with the state changes. A tick that reports nothing leaves it
+	// nil; an event with no name is not this tick's.
+	Emit func(d Device, c TickContext) []Event
 }
 
 // Surface is the shared protocol surfaces (sim/surface, #2831) a family
@@ -221,6 +259,10 @@ type Surface struct {
 	// Subjects are the subscription subjects of a persistent interface, by
 	// the interface's name: each face declares its own set.
 	Subjects map[string][]surface.Subject
+	// ListedOn is the line interface the console lists the Commanders' commands
+	// under (each answers on every persistent line interface whatever it says);
+	// empty lists them under none.
+	ListedOn string
 }
 
 // SurfaceFunc builds a device's Surface. It runs once per device, as the
@@ -319,6 +361,9 @@ func (s Spec) validate() error {
 			return fmt.Errorf("family %q lists command %q twice", s.Name, c.Match)
 		}
 		cmds[c.Match] = true
+		if c.Face != "" && !lineFace(s.Interfaces, c.Face) {
+			return fmt.Errorf("family %q lists command %q under %q, which is no line interface", s.Name, c.Match, c.Face)
+		}
 	}
 	if len(s.HTTP) > 0 && !hasProtocol(s.Interfaces, "http") {
 		return fmt.Errorf("family %q has HTTP routes and no http interface", s.Name)
@@ -327,6 +372,16 @@ func (s Spec) validate() error {
 		return fmt.Errorf("family %q has commands and no ssh, telnet, tcp or udp interface", s.Name)
 	}
 	return nil
+}
+
+// lineFace says an interface of that name speaks a line protocol.
+func lineFace(ifaces []profile.Interface, name string) bool {
+	for _, i := range ifaces {
+		if i.Name == name {
+			return hasProtocol([]profile.Interface{i}, "ssh", "telnet", "tcp", "udp")
+		}
+	}
+	return false
 }
 
 func hasProtocol(ifaces []profile.Interface, protocols ...string) bool {
@@ -355,3 +410,4 @@ func (listingDevice) State() map[string]any             { return map[string]any{
 func (listingDevice) Write(string, any) error           { return nil }
 func (listingDevice) WriteMany(...surface.Change) error { return nil }
 func (listingDevice) Now() time.Time                    { return time.Time{} }
+func (listingDevice) Publish(Event)                     {}

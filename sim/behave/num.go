@@ -11,10 +11,15 @@ func Clamp(lo, hi, v float64) float64 {
 }
 
 // Round rounds v to n decimal places, half away from zero (a negative n
-// rounds to tens, hundreds), the way a profile's `round` does.
+// rounds to tens, hundreds), the way a profile's `round` does. A value that
+// rounds to zero is zero, never negative zero: a profile's value reached state
+// as the text "-0", which read back as the number 0.
 func Round(n int, v float64) float64 {
 	factor := math.Pow(10, float64(n))
-	return math.Round(v*factor) / factor
+	if r := math.Round(v*factor) / factor; r != 0 {
+		return r
+	}
+	return 0
 }
 
 // SigFig rounds v to n significant digits, the way a profile's `sigfig` does;

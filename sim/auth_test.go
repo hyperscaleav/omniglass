@@ -344,12 +344,14 @@ func TestHTTPAuthFromProfile_CatalogProfiles(t *testing.T) {
 	cat := shippedEngine(t).cat
 
 	expected := map[string]HTTPAuthMode{
-		"boreal-edge":     HTTPAuthDigest,
-		"boreal-beam":     HTTPAuthDigest,
-		"boreal-cast":     HTTPAuthHeader,
-		"kestrel-vroom":   HTTPAuthBasic,
-		"polaris-dsp-16":  HTTPAuthHeader,
-		"newtron-panel-7": HTTPAuthForm,
+		"boreal-edge":    HTTPAuthDigest,
+		"boreal-beam":    HTTPAuthDigest,
+		"boreal-cast":    HTTPAuthHeader,
+		"kestrel-bar":    HTTPAuthBasic,
+		"kestrel-relay":  HTTPAuthBasic,
+		"kestrel-gaze":   HTTPAuthBasic,
+		"polaris-dsp-16": HTTPAuthHeader,
+		"newtron-panel":  HTTPAuthForm,
 	}
 
 	for name, want := range expected {

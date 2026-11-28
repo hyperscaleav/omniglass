@@ -16,7 +16,7 @@ func loadRelayIn(t *testing.T, id string, room calendar.Room, seed int64) *Devic
 	k := calTestKnobs()
 	e := shippedEngine(t)
 	e.SetCalendar(calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true }))
-	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-relay-c1", Version: 1,
+	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-relay", Version: 1,
 		SiteCode: room.Site, Building: room.Building, Room: room.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestTheRelaysOwnCallsYieldTheCalendar(t *testing.T) {
 // With no calendar the codec never takes a call by itself.
 func TestTheRelayWithNoCalendarStaysIdle(t *testing.T) {
 	e := shippedEngine(t)
-	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "c", Hostname: "c", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-relay-c1", Version: 1}}); err != nil {
+	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "c", Hostname: "c", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-relay", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]

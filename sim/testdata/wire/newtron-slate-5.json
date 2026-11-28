@@ -1,0 +1,759 @@
+{
+ "product": "newtron-slate-5",
+ "source": "recorded from the YAML profile before its deletion (#2833); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "manufacturer": "Newtron",
+    "model": "Slate 5",
+    "serial": "SN-BE2F755191"
+   },
+   "firmware": {
+    "version": "2.3.0"
+   }
+  },
+  "status": {
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   },
+   "room": {
+    "booking": "free",
+    "cal_booking": "free",
+    "current_meeting": "none",
+    "next_meeting": "none"
+   }
+  }
+ },
+ "http": [],
+ "ticks": {
+  "room_bookings": [
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   },
+   {
+    "status.room.booking": "free",
+    "status.room.cal_booking": "free",
+    "status.room.current_meeting": "none",
+    "status.room.next_meeting": "none"
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.room.booking",
+    "value": "free"
+   },
+   {
+    "at": "start",
+    "path": "status.room.cal_booking",
+    "value": "free"
+   },
+   {
+    "at": "start",
+    "path": "status.room.current_meeting",
+    "value": "none"
+   },
+   {
+    "at": "start",
+    "path": "status.room.next_meeting",
+    "value": "none"
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.room.next_meeting",
+    "value": "1793694600 1793696400 Avery Chen"
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.booking",
+    "value": "booked"
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.cal_booking",
+    "value": "booked"
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.current_meeting",
+    "value": "1793694600 1793696400 Avery Chen"
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.room.next_meeting",
+    "value": "1793700000 1793703600 Quinn Ashby"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.room.booking",
+    "value": "free"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.room.cal_booking",
+    "value": "free"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.room.current_meeting",
+    "value": "none"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.room.booking",
+    "value": "booked"
+   },
+   {
+    "at": "10:00:00",
+    "path": "status.room.cal_booking",
+    "value": "booked"
+   },
+   {
+    "at": "10:00:00",
+    "path": "status.room.current_meeting",
+    "value": "1793700000 1793703600 Quinn Ashby"
+   },
+   {
+    "at": "10:00:00",
+    "path": "status.room.next_meeting",
+    "value": "1793709000 1793710800 Rowan Teague"
+   },
+   {
+    "at": "11:00:00",
+    "path": "status.room.booking",
+    "value": "free"
+   },
+   {
+    "at": "11:00:00",
+    "path": "status.room.cal_booking",
+    "value": "free"
+   },
+   {
+    "at": "11:00:00",
+    "path": "status.room.current_meeting",
+    "value": "none"
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.room.booking",
+    "value": "booked"
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.room.cal_booking",
+    "value": "booked"
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.room.current_meeting",
+    "value": "1793709000 1793710800 Rowan Teague"
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.room.next_meeting",
+    "value": "1793713500 1793714400 Tobias Lund"
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.room.booking",
+    "value": "free"
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.room.cal_booking",
+    "value": "free"
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.room.current_meeting",
+    "value": "none"
+   },
+   {
+    "at": "13:45:00",
+    "path": "status.room.booking",
+    "value": "booked"
+   },
+   {
+    "at": "13:45:00",
+    "path": "status.room.cal_booking",
+    "value": "booked"
+   },
+   {
+    "at": "13:45:00",
+    "path": "status.room.current_meeting",
+    "value": "1793713500 1793714400 Tobias Lund"
+   },
+   {
+    "at": "13:45:00",
+    "path": "status.room.next_meeting",
+    "value": "1793780100 1793781000 Noor Haddad"
+   },
+   {
+    "at": "14:00:00",
+    "path": "status.room.booking",
+    "value": "free"
+   },
+   {
+    "at": "14:00:00",
+    "path": "status.room.cal_booking",
+    "value": "free"
+   },
+   {
+    "at": "14:00:00",
+    "path": "status.room.current_meeting",
+    "value": "none"
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.room.booking",
+    "value": "free"
+   },
+   {
+    "at": "start",
+    "path": "status.room.cal_booking",
+    "value": "free"
+   },
+   {
+    "at": "start",
+    "path": "status.room.current_meeting",
+    "value": "none"
+   },
+   {
+    "at": "start",
+    "path": "status.room.next_meeting",
+    "value": "none"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.room.booking",
+    "value": "booked"
+   },
+   {
+    "at": "11:30:00",
+    "path": "status.room.booking",
+    "value": "free"
+   }
+  ]
+ },
+ "lines": [
+  {
+   "name": "the booking at rest",
+   "line": "GET BOOKING",
+   "reply": "BOOKING free",
+   "state_change": false
+  },
+  {
+   "name": "the next meeting at rest",
+   "line": "GET NEXT",
+   "reply": "NEXT none",
+   "state_change": false
+  },
+  {
+   "name": "the current meeting at rest",
+   "line": "GET CURRENT",
+   "reply": "CURRENT none",
+   "state_change": false
+  },
+  {
+   "name": "book the room",
+   "line": "BOOK",
+   "reply": "BOOKING booked",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "none",
+      "next_meeting": "none"
+     }
+    }
+   }
+  },
+  {
+   "name": "the booking after",
+   "line": "GET BOOKING",
+   "reply": "BOOKING booked",
+   "state_change": false
+  },
+  {
+   "name": "release the room",
+   "line": "RELEASE",
+   "reply": "BOOKING free",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "free",
+      "cal_booking": "free",
+      "current_meeting": "none",
+      "next_meeting": "none"
+     }
+    }
+   }
+  },
+  {
+   "name": "the booking released",
+   "line": "GET BOOKING",
+   "reply": "BOOKING free",
+   "state_change": false
+  },
+  {
+   "name": "a lower-case verb",
+   "line": "book",
+   "reply": "-ERR unknown command: book",
+   "state_change": false
+  },
+  {
+   "name": "an unknown verb",
+   "line": "NOPE",
+   "reply": "-ERR unknown command: NOPE",
+   "state_change": false
+  },
+  {
+   "name": "a touch panel's verb is not the slate's",
+   "line": "GET INPUT",
+   "reply": "-ERR unknown command: GET INPUT",
+   "state_change": false
+  },
+  {
+   "name": "a touch panel's set is not the slate's",
+   "line": "SET SCENE idle",
+   "reply": "-ERR unknown command: SET SCENE idle",
+   "state_change": false
+  },
+  {
+   "name": "a processor's verb is not the slate's",
+   "line": "GET PROGRAM",
+   "reply": "-ERR unknown command: GET PROGRAM",
+   "state_change": false
+  },
+  {
+   "name": "a meeting holds the room",
+   "line": "GET CURRENT",
+   "reply": "CURRENT 1793700000 1793703600 ada@example.com",
+   "state_change": false
+  },
+  {
+   "name": "the next meeting then",
+   "line": "GET NEXT",
+   "reply": "NEXT 1793707200 1793709000 grace@example.com",
+   "state_change": false
+  },
+  {
+   "name": "subscribe booking",
+   "line": "SUBSCRIBE BOOKING",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "a booking is pushed",
+   "line": "BOOK",
+   "reply": "BOOKING booked",
+   "pushed": [
+    "EVT BOOKING booked"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  },
+  {
+   "name": "the same booking again",
+   "line": "BOOK",
+   "reply": "BOOKING booked",
+   "pushed": [
+    "EVT BOOKING booked"
+   ],
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  },
+  {
+   "name": "a release is pushed",
+   "line": "RELEASE",
+   "reply": "BOOKING free",
+   "pushed": [
+    "EVT BOOKING free"
+   ],
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "free",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  },
+  {
+   "name": "unsubscribe booking",
+   "line": "UNSUBSCRIBE BOOKING",
+   "reply": "OK",
+   "state_change": false
+  },
+  {
+   "name": "a booking after unsubscribe",
+   "line": "BOOK",
+   "reply": "BOOKING booked",
+   "state_change": true,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  },
+  {
+   "name": "a command through the table",
+   "line": "GET BOOKING",
+   "direct": true,
+   "reply": "BOOKING booked",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  },
+  {
+   "name": "a subscribe through the table",
+   "line": "SUBSCRIBE BOOKING",
+   "direct": true,
+   "reply": "OK",
+   "action": "subscribe",
+   "subject": "status.room.booking",
+   "token": "BOOKING",
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  },
+  {
+   "name": "an unknown command through the table",
+   "line": "GET NOTHING",
+   "direct": true,
+   "reply": "",
+   "unknown": true,
+   "state_change": false,
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Newtron",
+      "model": "Slate 5",
+      "serial": "SN-BE2F755191"
+     },
+     "firmware": {
+      "version": "2.3.0"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "room": {
+      "booking": "booked",
+      "cal_booking": "free",
+      "current_meeting": "1793700000 1793703600 ada@example.com",
+      "next_meeting": "1793707200 1793709000 grace@example.com"
+     }
+    }
+   }
+  }
+ ],
+ "help": [
+  "GET BOOKING",
+  "BOOK",
+  "RELEASE",
+  "GET NEXT",
+  "GET CURRENT",
+  "SUBSCRIBE BOOKING",
+  "UNSUBSCRIBE BOOKING"
+ ]
+}

@@ -1,0 +1,2059 @@
+{
+ "product": "meridian-mx-84",
+ "source": "recorded from the YAML profile before its deletion (#2833); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "manufacturer": "Meridian",
+    "model": "MX 84",
+    "serial": "SN-0789E23474"
+   },
+   "firmware": {
+    "version": "3.2.0"
+   },
+   "network": {
+    "hostname": "wire-meridian-mx-84"
+   }
+  },
+  "status": {
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   },
+   "network": {
+    "ipv4": {
+     "address": "127.0.0.1",
+     "mac": "02:a4:ee:ba:fe:b5"
+    }
+   },
+   "sim": {
+    "prev": "",
+    "want": ""
+   },
+   "switcher": {
+    "input": "hdmi1",
+    "inputs": {
+     "dp1": {
+      "signal": "absent"
+     },
+     "hdmi1": {
+      "signal": "present"
+     },
+     "hdmi2": {
+      "signal": "present"
+     },
+     "hdmi3": {
+      "signal": "present"
+     }
+    },
+    "signal": "present"
+   }
+  }
+ },
+ "http": [
+  {
+   "Name": "the status document",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"MX 84\",\n    \"serial\": \"SN-0789E23474\",\n    \"firmware\": \"3.2.0\",\n    \"uptime\": 3600\n  },\n  \"switcher\": {\"input\":\"hdmi1\",\"inputs\":{\"dp1\":{\"signal\":\"absent\"},\"hdmi1\":{\"signal\":\"present\"},\"hdmi2\":{\"signal\":\"present\"},\"hdmi3\":{\"signal\":\"present\"}},\"signal\":\"present\"}\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "an unknown path",
+   "Method": "GET",
+   "Path": "/nope",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the root",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ]
+   },
+   "response": "ok\n",
+   "state_change": false
+  },
+  {
+   "Name": "the wrong method on a route",
+   "Method": "GET",
+   "Path": "/api/route",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the status with no key",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 401,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"unauthorized\",\"auth\":\"header\",\"header\":\"X-Meridian-Key\"}\n",
+   "state_change": false
+  },
+  {
+   "Name": "a route with no key",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"hdmi2\"}",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 401,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"unauthorized\",\"auth\":\"header\",\"header\":\"X-Meridian-Key\"}\n",
+   "state_change": false
+  },
+  {
+   "Name": "route hdmi2",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"hdmi2\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"hdmi2\", \"signal\": \"present\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi2",
+      "inputs": {
+       "dp1": {
+        "signal": "absent"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "present"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "route hdmi3",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"hdmi3\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"hdmi3\", \"signal\": \"present\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi3",
+      "inputs": {
+       "dp1": {
+        "signal": "absent"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "present"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "route dp1, which has no signal",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"dp1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"dp1\", \"signal\": \"absent\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "dp1",
+      "inputs": {
+       "dp1": {
+        "signal": "absent"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "present"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "absent"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status on dp1",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"MX 84\",\n    \"serial\": \"SN-0789E23474\",\n    \"firmware\": \"3.2.0\",\n    \"uptime\": 3600\n  },\n  \"switcher\": {\"input\":\"dp1\",\"inputs\":{\"dp1\":{\"signal\":\"absent\"},\"hdmi1\":{\"signal\":\"present\"},\"hdmi2\":{\"signal\":\"present\"},\"hdmi3\":{\"signal\":\"present\"}},\"signal\":\"absent\"}\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "route hdmi1",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"hdmi1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"hdmi1\", \"signal\": \"present\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "absent"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "present"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "route hdmi2 with the signal gone",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"hdmi2\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Hand": {
+    "status.switcher.inputs.hdmi2.signal": "absent"
+   },
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"hdmi2\", \"signal\": \"absent\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi2",
+      "inputs": {
+       "dp1": {
+        "signal": "absent"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "absent"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status with a signal gone",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"MX 84\",\n    \"serial\": \"SN-0789E23474\",\n    \"firmware\": \"3.2.0\",\n    \"uptime\": 3600\n  },\n  \"switcher\": {\"input\":\"hdmi2\",\"inputs\":{\"dp1\":{\"signal\":\"absent\"},\"hdmi1\":{\"signal\":\"present\"},\"hdmi2\":{\"signal\":\"absent\"},\"hdmi3\":{\"signal\":\"present\"}},\"signal\":\"absent\"}\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "route hdmi3 with the dp1 cable plugged",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"dp1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Hand": {
+    "status.switcher.inputs.dp1.signal": "present"
+   },
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"input\": \"dp1\", \"signal\": \"present\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "dp1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "reboot",
+   "Method": "POST",
+   "Path": "/api/admin/reboot",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"action\": \"reboot\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the status after a reboot",
+   "Method": "GET",
+   "Path": "/api/status",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"device\": {\n    \"model\": \"MX 84\",\n    \"serial\": \"SN-0789E23474\",\n    \"firmware\": \"3.2.0\",\n    \"uptime\": 0\n  },\n  \"switcher\": {\"input\":\"hdmi1\",\"inputs\":{\"dp1\":{\"signal\":\"present\"},\"hdmi1\":{\"signal\":\"present\"},\"hdmi2\":{\"signal\":\"absent\"},\"hdmi3\":{\"signal\":\"present\"}},\"signal\":\"present\"}\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "factory reset is not on a switcher",
+   "Method": "POST",
+   "Path": "/api/admin/factory-reset",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "reboot with the wrong method",
+   "Method": "GET",
+   "Path": "/api/admin/reboot",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "route refused",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"vga\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal named the signal path beside the input, which the template resolved to <no value>",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.switcher.input\",\"value\":\"vga\",\"enum\":[\"hdmi1\",\"hdmi2\",\"hdmi3\",\"dp1\"]},{\"path\":\"status.switcher.signal\",\"value\":\"\\u003cno value\\u003e\",\"enum\":[\"present\",\"absent\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route an input in another case",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": \"HDMI1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal named the signal path beside the input, which the template resolved to <no value>",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.switcher.input\",\"value\":\"HDMI1\",\"enum\":[\"hdmi1\",\"hdmi2\",\"hdmi3\",\"dp1\"]},{\"path\":\"status.switcher.signal\",\"value\":\"\\u003cno value\\u003e\",\"enum\":[\"present\",\"absent\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route with no body",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal was the template engine's own error text",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"mutation failed\",\"failed_mutations\":[{\"path\":\"status.switcher.input\",\"error\":\"mutation \\\"status.switcher.input\\\": value \\\"\\u003cno value\\u003e\\\" not in enum [hdmi1 hdmi2 hdmi3 dp1]\"},{\"path\":\"status.switcher.signal\",\"error\":\"resolving value for \\\"status.switcher.signal\\\": template: mutate-value:1:71: executing \\\"mutate-value\\\" at \\u003c.Request.Body.input\\u003e: invalid value; expected string\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route with no field",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal was the template engine's own error text",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"mutation failed\",\"failed_mutations\":[{\"path\":\"status.switcher.input\",\"error\":\"mutation \\\"status.switcher.input\\\": value \\\"\\u003cno value\\u003e\\\" not in enum [hdmi1 hdmi2 hdmi3 dp1]\"},{\"path\":\"status.switcher.signal\",\"error\":\"resolving value for \\\"status.switcher.signal\\\": template: mutate-value:1:71: executing \\\"mutate-value\\\" at \\u003c.Request.Body.input\\u003e: invalid value; expected string\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route with a number",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": 2}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal was the template engine's own error text",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"mutation failed\",\"failed_mutations\":[{\"path\":\"status.switcher.input\",\"error\":\"mutation \\\"status.switcher.input\\\": value \\\"2\\\" not in enum [hdmi1 hdmi2 hdmi3 dp1]\"},{\"path\":\"status.switcher.signal\",\"error\":\"resolving value for \\\"status.switcher.signal\\\": template: mutate-value:1:71: executing \\\"mutate-value\\\" at \\u003c.Request.Body.input\\u003e: wrong type for value; expected string; got float64\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route with a list",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "{\"input\": [\"hdmi2\"]}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal was the template engine's own error text",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"mutation failed\",\"failed_mutations\":[{\"path\":\"status.switcher.input\",\"error\":\"mutation \\\"status.switcher.input\\\": value \\\"[hdmi2]\\\" not in enum [hdmi1 hdmi2 hdmi3 dp1]\"},{\"path\":\"status.switcher.signal\",\"error\":\"resolving value for \\\"status.switcher.signal\\\": template: mutate-value:1:71: executing \\\"mutate-value\\\" at \\u003c.Request.Body.input\\u003e: wrong type for value; expected string; got []interface {}\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route with an array body",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "[\"hdmi2\"]",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal was the template engine's own error text",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"mutation failed\",\"failed_mutations\":[{\"path\":\"status.switcher.input\",\"error\":\"mutation \\\"status.switcher.input\\\": value \\\"\\u003cno value\\u003e\\\" not in enum [hdmi1 hdmi2 hdmi3 dp1]\"},{\"path\":\"status.switcher.signal\",\"error\":\"resolving value for \\\"status.switcher.signal\\\": template: mutate-value:1:71: executing \\\"mutate-value\\\" at \\u003c.Request.Body.input\\u003e: invalid value; expected string\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "route with a body that is not JSON",
+   "Method": "POST",
+   "Path": "/api/route",
+   "Body": "input=hdmi2",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "the refusal was the template engine's own error text",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"mutation failed\",\"failed_mutations\":[{\"path\":\"status.switcher.input\",\"error\":\"mutation \\\"status.switcher.input\\\": value \\\"\\u003cno value\\u003e\\\" not in enum [hdmi1 hdmi2 hdmi3 dp1]\"},{\"path\":\"status.switcher.signal\",\"error\":\"resolving value for \\\"status.switcher.signal\\\": template: mutate-value:1:71: executing \\\"mutate-value\\\" at \\u003c.Request.Body.input\\u003e: invalid value; expected string\"}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Meridian",
+      "model": "MX 84",
+      "serial": "SN-0789E23474"
+     },
+     "firmware": {
+      "version": "3.2.0"
+     },
+     "network": {
+      "hostname": "wire-meridian-mx-84"
+     }
+    },
+    "status": {
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:a4:ee:ba:fe:b5"
+      }
+     },
+     "sim": {
+      "prev": "",
+      "want": ""
+     },
+     "switcher": {
+      "input": "hdmi1",
+      "inputs": {
+       "dp1": {
+        "signal": "present"
+       },
+       "hdmi1": {
+        "signal": "present"
+       },
+       "hdmi2": {
+        "signal": "absent"
+       },
+       "hdmi3": {
+        "signal": "present"
+       }
+      },
+      "signal": "present"
+     }
+    }
+   },
+   "state_change": false
+  }
+ ],
+ "snmp": {
+  "rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "MX 84"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.1.0",
+    "type": "OctetString",
+    "value": "hdmi1"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.2.0",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.1",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.2",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.3",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.4",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.5",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.2.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.2.2.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.1.0",
+    "type": "OctetString",
+    "value": "3.2.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.2.0",
+    "type": "OctetString",
+    "value": "SN-0789E23474"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.9.9.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   }
+  ],
+  "written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "MX 84"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.1.0",
+    "type": "OctetString",
+    "value": "hdmi3"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.2.0",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.1",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.2",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.3",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.4",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.5",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.2.1.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.2.2.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.1.0",
+    "type": "OctetString",
+    "value": "3.2.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.2.0",
+    "type": "OctetString",
+    "value": "SN-0789E23474"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.9.9.0",
+    "type": "NoSuchInstance",
+    "value": ""
+   }
+  ]
+ },
+ "walks": {
+  "1.3.6.1.2.1.1@rest": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "MX 84"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ],
+  "1.3.6.1.2.1.1@written": [
+   {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "type": "OctetString",
+    "value": "MX 84"
+   },
+   {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "type": "TimeTicks",
+    "value": "360000"
+   }
+  ],
+  "1.3.6.1.4.1.55550@rest": [
+   {
+    "oid": "1.3.6.1.4.1.55550.1.1.0",
+    "type": "OctetString",
+    "value": "hdmi1"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.2.0",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.1",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.2",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.3",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.4",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.1.0",
+    "type": "OctetString",
+    "value": "3.2.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.2.0",
+    "type": "OctetString",
+    "value": "SN-0789E23474"
+   }
+  ],
+  "1.3.6.1.4.1.55550@written": [
+   {
+    "oid": "1.3.6.1.4.1.55550.1.1.0",
+    "type": "OctetString",
+    "value": "hdmi3"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.2.0",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.1",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.2",
+    "type": "OctetString",
+    "value": "present"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.3",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.1.10.1.2.4",
+    "type": "OctetString",
+    "value": "absent"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.1.0",
+    "type": "OctetString",
+    "value": "3.2.0"
+   },
+   {
+    "oid": "1.3.6.1.4.1.55550.5.2.0",
+    "type": "OctetString",
+    "value": "SN-0789E23474"
+   }
+  ]
+ },
+ "ticks": {
+  "room_meeting": [
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.sim.prev": "",
+    "status.sim.want": "",
+    "status.switcher.input": "hdmi1",
+    "status.switcher.signal": "present"
+   }
+  ],
+  "signal_follow": [
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   },
+   {
+    "status.switcher.signal": "present"
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.switcher.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "start",
+    "path": "status.switcher.signal",
+    "value": "present"
+   },
+   {
+    "at": "start",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.prev",
+    "value": ""
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.switcher.signal",
+    "value": "absent"
+   },
+   {
+    "at": "07:00:00",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "07:00:30",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   },
+   {
+    "at": "07:30:00",
+    "path": "status.switcher.signal",
+    "value": "present"
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "08:28:30",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.switcher.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.sim.want",
+    "value": "hdmi1"
+   },
+   {
+    "at": "08:39:30",
+    "path": "status.sim.prev",
+    "value": "hdmi1"
+   },
+   {
+    "at": "08:49:30",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "08:49:30",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "08:50:00",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "09:00:30",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "09:33:30",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "09:45:30",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.switcher.input",
+    "value": "hdmi3"
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "10:04:30",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.switcher.signal",
+    "value": "absent"
+   },
+   {
+    "at": "10:22:00",
+    "path": "status.switcher.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "10:22:00",
+    "path": "status.switcher.signal",
+    "value": "present"
+   },
+   {
+    "at": "10:22:00",
+    "path": "status.sim.want",
+    "value": "hdmi1"
+   },
+   {
+    "at": "10:22:30",
+    "path": "status.sim.prev",
+    "value": "hdmi1"
+   },
+   {
+    "at": "10:40:00",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "10:40:00",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "10:40:30",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "10:58:00",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "10:58:30",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "11:01:30",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "11:15:30",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "12:02:30",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "12:15:30",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.switcher.input",
+    "value": "hdmi2"
+   },
+   {
+    "at": "12:34:30",
+    "path": "status.sim.want",
+    "value": "hdmi2"
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.sim.prev",
+    "value": "hdmi2"
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.switcher.input",
+    "value": "dp1"
+   },
+   {
+    "at": "13:00:30",
+    "path": "status.sim.want",
+    "value": "dp1"
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.sim.prev",
+    "value": "dp1"
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.switcher.input",
+    "value": "hdmi1"
+   },
+   {
+    "at": "start",
+    "path": "status.switcher.signal",
+    "value": "present"
+   },
+   {
+    "at": "start",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.prev",
+    "value": ""
+   },
+   {
+    "at": "09:50:00",
+    "path": "status.switcher.input",
+    "value": "hdmi3"
+   }
+  ]
+ }
+}

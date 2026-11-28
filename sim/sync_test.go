@@ -162,7 +162,7 @@ func TestEngineSyncServesPastAFailedListener(t *testing.T) {
 	squatHTTP(t, e, a)
 
 	// b is a video bar, which declares no port 80, so the pin is a's alone.
-	bar := DeviceSnapshot{DeviceID: "bar-b", Hostname: "bar-b", LoopbackIP: b, ProfileName: "kestrel-vroom", Version: 1}
+	bar := DeviceSnapshot{DeviceID: "bar-b", Hostname: "bar-b", LoopbackIP: b, ProfileName: "kestrel-bar", Version: 1}
 	err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp-a", a), bar})
 	if err == nil || !strings.Contains(err.Error(), "dsp-a") {
 		t.Fatalf("sync error = %v, want one naming dsp-a", err)

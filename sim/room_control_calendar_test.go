@@ -30,7 +30,7 @@ func roomEngine(t *testing.T, seed int64, k calendar.Knobs, at *time.Time, profi
 	var snaps []DeviceSnapshot
 	for i, name := range profileNames {
 		id := fmt.Sprintf("d-%d", i)
-		snaps = append(snaps, DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: name, Version: 1,
+		snaps = append(snaps, DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, name), Product: name, Version: 1,
 			SiteCode: roomHQ.Site, Building: roomHQ.Building, Room: roomHQ.Room})
 	}
 	if err := e.LoadDevices(snaps); err != nil {
@@ -39,7 +39,7 @@ func roomEngine(t *testing.T, seed int64, k calendar.Knobs, at *time.Time, profi
 	out := map[string]*Device{}
 	for _, d := range e.Devices() {
 		d.SetClock(pinned(at))
-		out[d.ProfileName] = d
+		out[d.Product] = d
 	}
 	return out
 }
@@ -168,8 +168,8 @@ func TestTouchPanelWakesAndChangesPageOverADay(t *testing.T) {
 func TestSwitcherRoutesTheMeetingAndAgreesWithTheBar(t *testing.T) {
 	k, seed, day, cal := pinnedDay(t)
 	at := day
-	room := roomEngine(t, seed, k, &at, "meridian-mx-84", "kestrel-vroom")
-	sw, bar := room["meridian-mx-84"], room["kestrel-vroom"]
+	room := roomEngine(t, seed, k, &at, "meridian-mx-84", "kestrel-bar")
+	sw, bar := room["meridian-mx-84"], room["kestrel-bar"]
 	var conf, laptop, idle, noShow, sharedMinutes int
 	for at = day; at.Before(day.Add(24 * time.Hour)); at = at.Add(time.Minute) {
 		sw.TickBehavior("room_meeting")

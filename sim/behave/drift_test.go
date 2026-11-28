@@ -68,3 +68,17 @@ func TestPlaylistAdvanceStepsWhilePlayingAndWraps(t *testing.T) {
 		t.Errorf("an empty playlist moved the index to %d", got.Index)
 	}
 }
+
+// A reading that rounds to nothing is zero, not negative zero (#2834): the
+// profile's value reached state as the text "-0", which read back as 0, and a
+// document must not print -0.
+func TestRoundNeverMakesNegativeZero(t *testing.T) {
+	for _, v := range []float64{-0.04, -0.0001, math.Copysign(0, -1)} {
+		if got := behave.Round(1, v); got != 0 || math.Signbit(got) {
+			t.Errorf("Round(1, %v) = %v, want 0", v, got)
+		}
+	}
+	if got := behave.Round(1, -0.06); got != -0.1 {
+		t.Errorf("behave.Round(1, -0.06) = %v, want -0.1", got)
+	}
+}

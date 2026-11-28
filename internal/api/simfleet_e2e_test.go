@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -19,9 +20,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/simhub"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // fakeHub is the server's line to its simulators, with a recorded fire.
@@ -237,19 +238,19 @@ func TestSimulationFleetAPI(t *testing.T) {
 	get(viewer, "/simulation/profiles", &cat)
 	found := false
 	for _, p := range cat.Profiles {
-		if p.Name == prof.Name {
-			found = len(p.Products) > 0 && p.Products[0] == prof.Name
+		if p.Name == prof.ID() {
+			found = slices.Contains(p.Products, panel)
 		}
 	}
 	if !found {
-		t.Fatalf("catalog = %+v, want %s simulating its own product first", cat, prof.Name)
+		t.Fatalf("catalog = %+v, want %s simulating %s", cat, prof.ID(), panel)
 	}
 
 	// A simulated component's surface: every interface its profile serves,
 	// with its routes, commands and OIDs, ports as the simulator binds them.
 	var sim componentSimBody
 	get(viewer, "/components/panel-1/simulation", &sim)
-	if !sim.Simulated || sim.Outpost != "site-a" || sim.Product != panel || sim.Profile != prof.Name || sim.Address != "127.60.0.1" {
+	if !sim.Simulated || sim.Outpost != "site-a" || sim.Product != panel || sim.Profile != prof.ID() || sim.Address != "127.60.0.1" {
 		t.Fatalf("panel-1 simulation = %+v", sim)
 	}
 	byName := map[string]int{}
@@ -264,13 +265,13 @@ func TestSimulationFleetAPI(t *testing.T) {
 		}
 		return port
 	}
-	for _, want := range prof.Interfaces {
+	for _, want := range prof.Surfaces() {
 		i, ok := byName[want.Name]
 		if !ok {
 			t.Fatalf("surface %s missing from %+v", want.Name, sim.Surface)
 		}
 		got := sim.Surface[i]
-		if got.Port != lift(want.Port) || len(got.Routes) != len(want.Routes) || len(got.Commands) != len(want.Commands) || len(got.OIDs) != len(want.OIDMap) {
+		if got.Port != lift(want.Port) || len(got.Routes) != len(want.Routes) || len(got.Commands) != len(want.Commands) || len(got.OIDs) != len(want.OIDMap)+len(want.NativeOIDs) {
 			t.Fatalf("surface %s = %+v, want port %d and the profile's routes, commands and OIDs", want.Name, got, lift(want.Port))
 		}
 		if len(want.Commands) > 0 && got.Commands[0].Match != want.Commands[0].Match {
@@ -278,7 +279,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 		}
 	}
 	lineSurface := ""
-	for _, i := range prof.Interfaces {
+	for _, i := range prof.Surfaces() {
 		if i.Protocol == "tcp" && len(i.Commands) > 0 && lineSurface == "" {
 			lineSurface = i.Name
 		}
@@ -466,13 +467,13 @@ func TestSimulationFleetAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components/panel-1/simulation:fire", map[string]any{"surface": "http-api", "method": "GE T", "path": "/"}, http.StatusUnprocessableEntity)
 }
 
-// lineProtocolProduct is a seeded product on the newtron-panel-nvp driver that a
-// simulator profile simulates as its own product (a panel speaking the
-// line protocol), read from the catalog rather than named, so a catalog
-// rename does not break this test.
-func lineProtocolProduct(t *testing.T, ctx context.Context, gw *storage.PG) (string, *profile.DeviceProfile) {
+// lineProtocolProduct is a seeded product on the newtron-panel-nvp driver that
+// the simulator simulates (a panel speaking the line protocol), with the
+// definition that serves it, read from the catalog rather than named, so a
+// catalog rename does not break this test.
+func lineProtocolProduct(t *testing.T, ctx context.Context, gw *storage.PG) (string, spec.Definition) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
+	cat, err := simdevice.Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,11 +485,11 @@ func lineProtocolProduct(t *testing.T, ctx context.Context, gw *storage.PG) (str
 		if p.DriverName == nil || *p.DriverName != "newtron-panel-nvp" {
 			continue
 		}
-		if d, ok := store.Devices[p.Name]; ok {
+		if d, ok := cat.ProfileFor(p.Name); ok {
 			return p.Name, d
 		}
 	}
-	t.Fatal("no seeded newtron-panel-nvp product is a simulator profile's own product")
+	t.Fatal("no seeded newtron-panel-nvp product is a simulated product")
 	return "", nil
 }
 
@@ -544,7 +545,7 @@ func TestComponentAimedAtASimulatedDeviceIsServedByIt(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/aimed/simulation", nil, http.StatusOK), &sim); err != nil {
 		t.Fatal(err)
 	}
-	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.ServedByID == "" || sim.ServedByID != view.Devices[0].ComponentID || sim.Profile != prof.Name || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
+	if !sim.Simulated || sim.ServedBy != "panel-1" || sim.ServedByID == "" || sim.ServedByID != view.Devices[0].ComponentID || sim.Profile != prof.ID() || sim.Address != "127.60.0.1" || sim.Activity == nil || sim.Activity.Component != "panel-1" {
 		t.Fatalf("aimed simulation = %+v, want panel-1's device, served by it", sim)
 	}
 

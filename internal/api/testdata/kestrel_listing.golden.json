@@ -1,0 +1,400 @@
+{
+ "kestrel-gaze-p2": {
+  "surface": [
+   {
+    "name": "http-api",
+    "protocol": "http",
+    "port": 10443,
+    "tls": true,
+    "summary": "Kestrel Gaze JSON API",
+    "auth_type": "basic",
+    "default_user": "admin",
+    "fireable": true,
+    "routes": [
+     {
+      "method": "GET",
+      "path": "/api/system",
+      "summary": "System unit info (model, serial, firmware, uptime)"
+     },
+     {
+      "method": "GET",
+      "path": "/api/camera",
+      "summary": "Pan, tilt, lens magnification, preset and tracking"
+     },
+     {
+      "method": "POST",
+      "path": "/api/camera/preset",
+      "summary": "Recall a stored preset",
+      "example": "{\"preset\": 2}\n",
+      "sets": [
+       {
+        "path": "status.camera.preset",
+        "field": "preset",
+        "values": [
+         "1",
+         "2",
+         "3"
+        ],
+        "default": "0"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/camera/position",
+      "summary": "Point the camera by hand",
+      "example": "{\"pan\": -12.5, \"tilt\": 4, \"magnification\": 1.5}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/camera/tracking",
+      "summary": "Turn presenter tracking on or off",
+      "example": "{\"tracking\": \"tracking\"}\n",
+      "sets": [
+       {
+        "path": "status.camera.tracking",
+        "field": "tracking",
+        "values": [
+         "tracking",
+         "manual"
+        ],
+        "default": "tracking"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/reboot",
+      "summary": "Reboot camera (clears uptime, returns to its home position)",
+      "example": "{}"
+     }
+    ]
+   },
+   {
+    "name": "icmp",
+    "protocol": "icmp",
+    "port": 0,
+    "summary": "ICMP ping reachability",
+    "fireable": false
+   }
+  ],
+  "behaviors": [
+   {
+    "name": "room_meeting",
+    "interval": "20s",
+    "writes": [
+     "status.sim.known",
+     "status.camera.people",
+     "status.camera.presence",
+     "status.camera.magnification",
+     "status.camera.pan",
+     "status.camera.tilt",
+     "status.camera.preset",
+     "status.camera.tracking",
+     "status.sim.meeting"
+    ]
+   },
+   {
+    "name": "tracking_drift",
+    "interval": "20s",
+    "writes": [
+     "status.camera.pan",
+     "status.camera.tilt"
+    ]
+   }
+  ]
+ },
+ "kestrel-relay-c1": {
+  "surface": [
+   {
+    "name": "http-api",
+    "protocol": "http",
+    "port": 10443,
+    "tls": true,
+    "summary": "Kestrel Relay JSON API",
+    "auth_type": "basic",
+    "default_user": "admin",
+    "fireable": true,
+    "routes": [
+     {
+      "method": "GET",
+      "path": "/api/system",
+      "summary": "System unit info (model, serial, firmware, uptime)"
+     },
+     {
+      "method": "GET",
+      "path": "/api/call",
+      "summary": "Current call state"
+     },
+     {
+      "method": "GET",
+      "path": "/api/content",
+      "summary": "Content sharing state and its source"
+     },
+     {
+      "method": "GET",
+      "path": "/api/peripherals",
+      "summary": "Peripherals connected to the codec"
+     },
+     {
+      "method": "POST",
+      "path": "/api/call/dial",
+      "summary": "Place a call",
+      "example": "{\"participants\": 3}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/call/disconnect",
+      "summary": "Disconnect the active call (and stop sharing)",
+      "example": "{}"
+     },
+     {
+      "method": "POST",
+      "path": "/api/content/share",
+      "summary": "Start sharing content from a source",
+      "example": "{\"source\": \"hdmi1\"}\n",
+      "sets": [
+       {
+        "path": "status.content.source",
+        "field": "source",
+        "values": [
+         "hdmi1",
+         "hdmi2",
+         "usbc",
+         "wireless"
+        ]
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/content/stop",
+      "summary": "Stop sharing content",
+      "example": "{}"
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/reboot",
+      "summary": "Reboot codec (clears the call and any shared content, and uptime)",
+      "example": "{}"
+     }
+    ]
+   },
+   {
+    "name": "icmp",
+    "protocol": "icmp",
+    "port": 0,
+    "summary": "ICMP ping reachability",
+    "fireable": false
+   }
+  ],
+  "behaviors": [
+   {
+    "name": "call_cycle",
+    "interval": "60s",
+    "writes": [
+     "status.sim.skip",
+     "status.sim.hungup",
+     "status.sim.want",
+     "status.sim.want_n",
+     "status.sim.event",
+     "status.sim.call",
+     "status.call.active",
+     "status.call.participants",
+     "status.content.sharing",
+     "status.sim.share_prev",
+     "status.content.source"
+    ]
+   }
+  ]
+ },
+ "kestrel-vroom": {
+  "surface": [
+   {
+    "name": "http-api",
+    "protocol": "http",
+    "port": 10443,
+    "tls": true,
+    "summary": "Kestrel HTTP JSON API + web admin UI",
+    "auth_type": "basic",
+    "default_user": "admin",
+    "fireable": true,
+    "routes": [
+     {
+      "method": "GET",
+      "path": "/",
+      "summary": "Codec dashboard"
+     },
+     {
+      "method": "GET",
+      "path": "/api/status",
+      "summary": "Full status snapshot (app, call, audio, video)"
+     },
+     {
+      "method": "GET",
+      "path": "/api/app",
+      "summary": "App mode, UCC sign-in, touch pairing, local presentation"
+     },
+     {
+      "method": "GET",
+      "path": "/api/logs",
+      "summary": "Recent device logs (private; undocumented direct-call route)",
+      "private": true
+     },
+     {
+      "method": "GET",
+      "path": "/api/call",
+      "summary": "Current call state"
+     },
+     {
+      "method": "GET",
+      "path": "/api/audio",
+      "summary": "Audio state (volume, mute)"
+     },
+     {
+      "method": "GET",
+      "path": "/api/system",
+      "summary": "System unit info (serial, firmware, uptime)"
+     },
+     {
+      "method": "POST",
+      "path": "/api/audio/volume",
+      "summary": "Set speaker volume",
+      "example": "{\"volume\": 50}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/audio/mute",
+      "summary": "Set microphone mute",
+      "example": "{\"mute\": true}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/video/camera",
+      "summary": "Toggle camera privacy shutter",
+      "example": "{\"camera_on\": true}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/system/standby",
+      "summary": "Set codec standby state",
+      "example": "{\"power\": \"standby\"}\n",
+      "sets": [
+       {
+        "path": "status.device.power",
+        "field": "power",
+        "values": [
+         "on",
+         "off",
+         "standby"
+        ],
+        "default": "on"
+       }
+      ]
+     },
+     {
+      "method": "POST",
+      "path": "/api/call/dial",
+      "summary": "Place a call (the room joins a meeting)",
+      "example": "{\"id\": \"c9001\", \"participants\": 3}\n"
+     },
+     {
+      "method": "POST",
+      "path": "/api/call/disconnect",
+      "summary": "Disconnect active call",
+      "example": "{}"
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/reboot",
+      "summary": "Reboot codec (clears call + uptime)",
+      "example": "{}"
+     },
+     {
+      "method": "POST",
+      "path": "/api/admin/factory-reset",
+      "summary": "Factory reset (resets every status path to defaults)",
+      "example": "{}"
+     }
+    ]
+   },
+   {
+    "name": "ws-api",
+    "protocol": "websocket",
+    "port": 9443,
+    "tls": true,
+    "summary": "Kestrel control socket (JSON over a websocket): subscribe, get, set",
+    "auth_type": "basic",
+    "default_user": "admin",
+    "fireable": false
+   },
+   {
+    "name": "icmp",
+    "protocol": "icmp",
+    "port": 0,
+    "summary": "ICMP ping reachability",
+    "fireable": false
+   }
+  ],
+  "behaviors": [
+   {
+    "name": "call_cycle",
+    "interval": "60s",
+    "writes": [
+     "status.sim.participants_prev",
+     "status.sim.id_prev",
+     "status.sim.cal",
+     "status.sim.skip",
+     "status.sim.hungup",
+     "status.sim.want",
+     "status.sim.want_n",
+     "status.sim.event",
+     "status.sim.dial_ticks",
+     "status.sim.dialed",
+     "status.call.active",
+     "status.sim.call_seq",
+     "status.call.id",
+     "status.call.participants",
+     "status.presentation.local_active",
+     "status.sim.share_prev",
+     "status.sim.start_at",
+     "status.sim.plan",
+     "status.sim.slot",
+     "status.sim.boundary",
+     "status.sim.booked",
+     "status.sim.end_at",
+     "status.sim.plan_at"
+    ]
+   },
+   {
+    "name": "people_count",
+    "interval": "30s",
+    "writes": [
+     "status.video.people_count"
+    ]
+   },
+   {
+    "name": "status_log",
+    "interval": "15m"
+   },
+   {
+    "name": "media_stats",
+    "interval": "30s",
+    "writes": [
+     "status.media.packet_loss",
+     "status.sim.net_event",
+     "status.sim.uplink_degraded",
+     "status.media.jitter_ms",
+     "status.media.bitrate_kbps",
+     "status.media.frame_rate",
+     "status.audio.speaker_level",
+     "status.audio.mic_level_db",
+     "status.device.cpu_load",
+     "status.device.temperature",
+     "status.device.fan_rpm",
+     "status.device.memory_used"
+    ]
+   }
+  ]
+ }
+}

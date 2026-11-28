@@ -84,7 +84,7 @@ func conformRoutes(t *testing.T, s spec.Spec, product string) {
 			for _, v := range set.Values {
 				f := NewFake(s, product)
 				res := r.Handle(f, spec.HTTPRequest{Method: method, Path: path, Body: map[string]any{set.Field: v}})
-				if res.Status >= 400 || f.Read(set.Path) != v {
+				if res.Status >= 400 || fmt.Sprint(f.Read(set.Path)) != v {
 					t.Errorf("%s: %s=%q: status %d, %s reads %v; a listed quick set must be accepted and written", r.Match, set.Field, v, res.Status, set.Path, f.Read(set.Path))
 				}
 			}

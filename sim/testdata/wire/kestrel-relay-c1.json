@@ -1,0 +1,2789 @@
+{
+ "product": "kestrel-relay-c1",
+ "source": "recorded from the YAML profile before its deletion (#2834); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "device": {
+    "manufacturer": "Kestrel",
+    "model": "Relay C1",
+    "serial": "SN-545E3BD0E3"
+   },
+   "firmware": {
+    "version": "2.7.3"
+   },
+   "network": {
+    "hostname": "wire-kestrel-relay-c1"
+   }
+  },
+  "status": {
+   "call": {
+    "active": false,
+    "participants": 0
+   },
+   "content": {
+    "sharing": false,
+    "source": ""
+   },
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   },
+   "network": {
+    "ipv4": {
+     "address": "127.0.0.1",
+     "mac": "02:fd:bc:a1:b8:0e"
+    }
+   },
+   "peripherals": {
+    "connected": 3
+   },
+   "sim": {
+    "call": "",
+    "dialed": false,
+    "event": "",
+    "hungup": false,
+    "share_prev": false,
+    "skip": 0,
+    "want": "",
+    "want_n": 0
+   }
+  }
+ },
+ "http": [
+  {
+   "Name": "the system unit",
+   "Method": "GET",
+   "Path": "/api/system",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"model\": \"Relay C1\",\n  \"manufacturer\": \"Kestrel\",\n  \"serial\": \"SN-545E3BD0E3\",\n  \"firmware\": \"2.7.3\",\n  \"uptime\": 3600\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "the call",
+   "Method": "GET",
+   "Path": "/api/call",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"active\": false,\n  \"participants\": 0\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "the content",
+   "Method": "GET",
+   "Path": "/api/content",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"sharing\": false,\n  \"source\": \"\"\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "the peripherals",
+   "Method": "GET",
+   "Path": "/api/peripherals",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"connected\": 3\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "an unknown path",
+   "Method": "GET",
+   "Path": "/nope",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the root",
+   "Method": "GET",
+   "Path": "/",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ]
+   },
+   "response": "ok\n",
+   "state_change": false
+  },
+  {
+   "Name": "the wrong method on a route",
+   "Method": "GET",
+   "Path": "/api/call/dial",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "the call with no login",
+   "Method": "GET",
+   "Path": "/api/call",
+   "Body": "",
+   "NoKey": true,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 401,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ],
+    "Www-Authenticate": [
+     "Basic realm=\"Kestrel Relay C1\", charset=\"UTF-8\""
+    ]
+   },
+   "response": "{\"error\":\"unauthorized\",\"auth\":\"basic\"}\n",
+   "state_change": false
+  },
+  {
+   "Name": "dial",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "{\"participants\": 3}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 3
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the call dialed",
+   "Method": "GET",
+   "Path": "/api/call",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"active\": true,\n  \"participants\": 3\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "dial with no count",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 2
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "dial with no body",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 2
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "dial with a zero count",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "{\"participants\": 0}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 2
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "dial with a count as text",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "{\"participants\": \"9\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "share hdmi1",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"hdmi1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "hdmi1"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "share hdmi2",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"hdmi2\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "hdmi2"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "share usbc",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"usbc\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "usbc"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "share wireless",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"wireless\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "wireless"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "share refused",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"vga\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.content.source\",\"value\":\"vga\",\"enum\":[\"hdmi1\",\"hdmi2\",\"usbc\",\"wireless\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "wireless"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "share with no source",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 400,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"error\":\"validation failed\",\"fields\":[{\"path\":\"status.content.source\",\"value\":\"\\u003cno value\\u003e\",\"enum\":[\"hdmi1\",\"hdmi2\",\"usbc\",\"wireless\"]}]}",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "wireless"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "the content shared",
+   "Method": "GET",
+   "Path": "/api/content",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"sharing\": true,\n  \"source\": \"wireless\"\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "stop sharing",
+   "Method": "POST",
+   "Path": "/api/content/stop",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "stop sharing again",
+   "Method": "POST",
+   "Path": "/api/content/stop",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": false
+  },
+  {
+   "Name": "share to hang up with",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"usbc\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 9
+     },
+     "content": {
+      "sharing": true,
+      "source": "usbc"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": false,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "disconnect",
+   "Method": "POST",
+   "Path": "/api/call/disconnect",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": false,
+      "participants": 0
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": false,
+      "event": "",
+      "hungup": true,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the call after a hang-up",
+   "Method": "GET",
+   "Path": "/api/call",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"active\": false,\n  \"participants\": 0\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "the content after a hang-up",
+   "Method": "GET",
+   "Path": "/api/content",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"sharing\": false,\n  \"source\": \"\"\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "dial again",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "{\"participants\": 6}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 6
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": true,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "share again",
+   "Method": "POST",
+   "Path": "/api/content/share",
+   "Body": "{\"source\": \"hdmi1\"}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 6
+     },
+     "content": {
+      "sharing": true,
+      "source": "hdmi1"
+     },
+     "device": {
+      "boot_epoch": 1793703600,
+      "uptime": 3600
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": true,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "reboot",
+   "Method": "POST",
+   "Path": "/api/admin/reboot",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true, \"action\": \"reboot\"}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": false,
+      "participants": 0
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": false,
+      "event": "",
+      "hungup": true,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  },
+  {
+   "Name": "the system unit after a reboot",
+   "Method": "GET",
+   "Path": "/api/system",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"model\": \"Relay C1\",\n  \"manufacturer\": \"Kestrel\",\n  \"serial\": \"SN-545E3BD0E3\",\n  \"firmware\": \"2.7.3\",\n  \"uptime\": 0\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "the call after a reboot",
+   "Method": "GET",
+   "Path": "/api/call",
+   "Body": "",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\n  \"active\": false,\n  \"participants\": 0\n}\n",
+   "state_change": false
+  },
+  {
+   "Name": "factory reset is not on a codec",
+   "Method": "POST",
+   "Path": "/api/admin/factory-reset",
+   "Body": "{}",
+   "NoKey": false,
+   "Snapshot": false,
+   "Quirk": "",
+   "status": 404,
+   "headers": {
+    "Content-Type": [
+     "text/plain; charset=utf-8"
+    ],
+    "X-Content-Type-Options": [
+     "nosniff"
+    ]
+   },
+   "response": "404 page not found\n",
+   "state_change": false
+  },
+  {
+   "Name": "a body that is not JSON",
+   "Method": "POST",
+   "Path": "/api/call/dial",
+   "Body": "dial please",
+   "NoKey": false,
+   "Snapshot": true,
+   "Quirk": "",
+   "status": 200,
+   "headers": {
+    "Content-Type": [
+     "application/json"
+    ]
+   },
+   "response": "{\"ok\": true}\n",
+   "state": {
+    "configuration": {
+     "device": {
+      "manufacturer": "Kestrel",
+      "model": "Relay C1",
+      "serial": "SN-545E3BD0E3"
+     },
+     "firmware": {
+      "version": "2.7.3"
+     },
+     "network": {
+      "hostname": "wire-kestrel-relay-c1"
+     }
+    },
+    "status": {
+     "call": {
+      "active": true,
+      "participants": 2
+     },
+     "content": {
+      "sharing": false,
+      "source": ""
+     },
+     "device": {
+      "boot_epoch": 1793707200,
+      "uptime": 0
+     },
+     "network": {
+      "ipv4": {
+       "address": "127.0.0.1",
+       "mac": "02:fd:bc:a1:b8:0e"
+      }
+     },
+     "peripherals": {
+      "connected": 3
+     },
+     "sim": {
+      "call": "",
+      "dialed": true,
+      "event": "",
+      "hungup": true,
+      "share_prev": false,
+      "skip": 0,
+      "want": "",
+      "want_n": 0
+     }
+    }
+   },
+   "state_change": true
+  }
+ ],
+ "ticks": {
+  "call_cycle": [
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   },
+   {
+    "status.call.active": false,
+    "status.call.participants": 0,
+    "status.content.sharing": false,
+    "status.content.source": "",
+    "status.sim.call": "",
+    "status.sim.event": "",
+    "status.sim.share_prev": false,
+    "status.sim.skip": 0,
+    "status.sim.want": "",
+    "status.sim.want_n": 0
+   }
+  ]
+ },
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.content.sharing",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.content.source",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.sim.call",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.skip",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.sim.hungup",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.dialed",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.share_prev",
+    "value": false
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.sim.event",
+    "value": "start"
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.sim.want",
+    "value": "c1793694487"
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.sim.want_n",
+    "value": 3
+   },
+   {
+    "at": "08:29:00",
+    "path": "status.sim.call",
+    "value": "c1793694487"
+   },
+   {
+    "at": "08:30:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "08:30:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "08:31:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "08:35:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "08:35:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "08:36:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.content.sharing",
+    "value": true
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.content.source",
+    "value": "wireless"
+   },
+   {
+    "at": "08:39:00",
+    "path": "status.sim.share_prev",
+    "value": true
+   },
+   {
+    "at": "08:40:00",
+    "path": "status.call.participants",
+    "value": 1
+   },
+   {
+    "at": "08:40:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "08:41:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "08:42:00",
+    "path": "status.content.sharing",
+    "value": false
+   },
+   {
+    "at": "08:42:00",
+    "path": "status.content.source",
+    "value": ""
+   },
+   {
+    "at": "08:50:00",
+    "path": "status.sim.share_prev",
+    "value": false
+   },
+   {
+    "at": "08:51:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "08:51:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "08:52:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.sim.event",
+    "value": "end"
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "09:01:00",
+    "path": "status.sim.call",
+    "value": ""
+   },
+   {
+    "at": "09:02:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.call.participants",
+    "value": 1
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.event",
+    "value": "start"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.want",
+    "value": "c1793698361"
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.want_n",
+    "value": 1
+   },
+   {
+    "at": "09:33:00",
+    "path": "status.sim.call",
+    "value": "c1793698361"
+   },
+   {
+    "at": "09:34:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.sim.event",
+    "value": "end"
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "09:45:00",
+    "path": "status.sim.call",
+    "value": ""
+   },
+   {
+    "at": "09:46:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.sim.event",
+    "value": "start"
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.sim.want",
+    "value": "c1793700235"
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.sim.want_n",
+    "value": 6
+   },
+   {
+    "at": "10:04:00",
+    "path": "status.sim.call",
+    "value": "c1793700235"
+   },
+   {
+    "at": "10:05:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "10:11:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "10:11:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "10:12:00",
+    "path": "status.call.participants",
+    "value": 1
+   },
+   {
+    "at": "10:13:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "10:16:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "10:16:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "10:17:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "10:20:00",
+    "path": "status.sim.skip",
+    "value": 1793700235
+   },
+   {
+    "at": "10:22:00",
+    "path": "status.sim.share_prev",
+    "value": true
+   },
+   {
+    "at": "10:40:00",
+    "path": "status.sim.share_prev",
+    "value": false
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.call.participants",
+    "value": 1
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.event",
+    "value": "start"
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.want",
+    "value": "c1793703658"
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.want_n",
+    "value": 2
+   },
+   {
+    "at": "11:01:00",
+    "path": "status.sim.call",
+    "value": "c1793703658"
+   },
+   {
+    "at": "11:02:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "11:07:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "11:07:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "11:08:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.sim.event",
+    "value": "end"
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "11:15:00",
+    "path": "status.sim.call",
+    "value": ""
+   },
+   {
+    "at": "11:16:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.sim.call",
+    "value": "c-dial"
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.sim.dialed",
+    "value": true
+   },
+   {
+    "at": "12:02:00",
+    "path": "status.sim.skip",
+    "value": 1793707305
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.content.sharing",
+    "value": true
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.content.source",
+    "value": "usbc"
+   },
+   {
+    "at": "12:09:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:10:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:14:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "12:14:00",
+    "path": "status.content.sharing",
+    "value": false
+   },
+   {
+    "at": "12:14:00",
+    "path": "status.content.source",
+    "value": ""
+   },
+   {
+    "at": "12:14:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.content.sharing",
+    "value": true
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.content.source",
+    "value": "hdmi1"
+   },
+   {
+    "at": "12:15:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:17:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "12:17:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "12:19:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:21:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "12:21:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:22:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:26:00",
+    "path": "status.call.participants",
+    "value": 1
+   },
+   {
+    "at": "12:26:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:27:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:28:00",
+    "path": "status.call.participants",
+    "value": 2
+   },
+   {
+    "at": "12:28:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "12:29:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.sim.dialed",
+    "value": false
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.call.participants",
+    "value": 5
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.sim.event",
+    "value": "start"
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.sim.want",
+    "value": "c1793709249"
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.sim.want_n",
+    "value": 6
+   },
+   {
+    "at": "12:35:00",
+    "path": "status.sim.call",
+    "value": "c1793709249"
+   },
+   {
+    "at": "12:36:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:51:00",
+    "path": "status.call.participants",
+    "value": 4
+   },
+   {
+    "at": "12:51:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:52:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.content.sharing",
+    "value": false
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.content.source",
+    "value": ""
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.sim.event",
+    "value": "end"
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "13:01:00",
+    "path": "status.sim.call",
+    "value": ""
+   },
+   {
+    "at": "13:02:00",
+    "path": "status.sim.event",
+    "value": ""
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.call.participants",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.content.sharing",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.content.source",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.want",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.want_n",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.sim.call",
+    "value": ""
+   },
+   {
+    "at": "start",
+    "path": "status.sim.skip",
+    "value": 0
+   },
+   {
+    "at": "start",
+    "path": "status.sim.hungup",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.dialed",
+    "value": false
+   },
+   {
+    "at": "start",
+    "path": "status.sim.share_prev",
+    "value": false
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.call.active",
+    "value": true
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.call.participants",
+    "value": 4
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.sim.call",
+    "value": "c-dial"
+   },
+   {
+    "at": "12:00:00",
+    "path": "status.sim.dialed",
+    "value": true
+   },
+   {
+    "at": "12:01:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.content.sharing",
+    "value": true
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.content.source",
+    "value": "usbc"
+   },
+   {
+    "at": "12:13:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:14:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.call.participants",
+    "value": 4
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.content.sharing",
+    "value": false
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.content.source",
+    "value": ""
+   },
+   {
+    "at": "12:18:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "12:19:00",
+    "path": "status.content.sharing",
+    "value": true
+   },
+   {
+    "at": "12:19:00",
+    "path": "status.content.source",
+    "value": "hdmi1"
+   },
+   {
+    "at": "12:19:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:21:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "12:21:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:22:00",
+    "path": "status.call.participants",
+    "value": 4
+   },
+   {
+    "at": "12:22:00",
+    "path": "status.sim.event",
+    "value": "join"
+   },
+   {
+    "at": "12:23:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:25:00",
+    "path": "status.call.participants",
+    "value": 3
+   },
+   {
+    "at": "12:25:00",
+    "path": "status.sim.event",
+    "value": "leave"
+   },
+   {
+    "at": "12:26:00",
+    "path": "status.sim.event",
+    "value": ""
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.call.active",
+    "value": false
+   },
+   {
+    "at": "12:30:00",
+    "path": "status.sim.dialed",
+    "value": false
+   }
+  ]
+ }
+}

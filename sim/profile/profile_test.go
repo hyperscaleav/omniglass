@@ -16,7 +16,7 @@ func TestLoadStore(t *testing.T) {
 
 	// The catalog's generic-vendor devices. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet seed.
-	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "ferrite-pdu-4c", "polaris-dsp-16"}
+	expectedDevices := []string{"generic-device", "ferrite-pdu-4c", "polaris-dsp-16"}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
@@ -31,22 +31,22 @@ func TestDeviceProfileFields(t *testing.T) {
 		t.Fatalf("LoadStore: %v", err)
 	}
 
-	kv := store.Devices["kestrel-vroom"]
+	kv := store.Devices["generic-device"]
 	if kv == nil {
-		t.Fatal("kestrel-vroom not loaded")
+		t.Fatal("generic-device not loaded")
 	}
 
-	if kv.Manufacturer != "Kestrel" {
-		t.Errorf("manufacturer = %q, want Kestrel", kv.Manufacturer)
+	if kv.Manufacturer != "Generic" {
+		t.Errorf("manufacturer = %q, want Generic", kv.Manufacturer)
 	}
-	if kv.Model != "VRoom" {
-		t.Errorf("model = %q, want VRoom", kv.Model)
+	if kv.Model != "Generic SNMP Device" {
+		t.Errorf("model = %q, want Generic SNMP Device", kv.Model)
 	}
-	if kv.SlugPrefix != "video-bar" {
-		t.Errorf("slug_prefix = %q, want video-bar", kv.SlugPrefix)
+	if kv.SlugPrefix != "generic-device" {
+		t.Errorf("slug_prefix = %q, want generic-device", kv.SlugPrefix)
 	}
-	if kv.DeviceType != "video-codec" {
-		t.Errorf("device_type = %q, want video-codec", kv.DeviceType)
+	if kv.DeviceType != "generic-device" {
+		t.Errorf("device_type = %q, want generic-device", kv.DeviceType)
 	}
 	if len(kv.Interfaces) == 0 {
 		t.Error("expected at least one interface")
@@ -56,73 +56,6 @@ func TestDeviceProfileFields(t *testing.T) {
 	}
 	if kv.Defaults == nil {
 		t.Error("expected defaults to be loaded")
-	}
-}
-
-// TestPowerRoutesDeclareEnum locks the kestrel-vroom
-// power route to the enum-validated shape. If a future change replaces
-// the list mutations with the legacy map without re-adding the enum,
-// this test fails, which is the point: silent regressions to the
-// "yolo-accepted" state were the motivation for the validation feature.
-func TestPowerRoutesDeclareEnum(t *testing.T) {
-	root := findProfilesRoot(t)
-	store, err := LoadStore(root)
-	if err != nil {
-		t.Fatalf("LoadStore: %v", err)
-	}
-
-	cases := []struct {
-		device string
-		match  string
-	}{
-		{"kestrel-vroom", "POST /api/system/standby"},
-	}
-	for _, c := range cases {
-		t.Run(c.device, func(t *testing.T) {
-			dev := store.Devices[c.device]
-			if dev == nil {
-				t.Fatalf("device %q not loaded", c.device)
-			}
-			var route *Route
-		findRoute:
-			for i := range dev.Interfaces {
-				for j := range dev.Interfaces[i].Routes {
-					if dev.Interfaces[i].Routes[j].Match == c.match {
-						route = &dev.Interfaces[i].Routes[j]
-						break findRoute
-					}
-				}
-			}
-			if route == nil {
-				t.Fatalf("route %q not found on %q", c.match, c.device)
-			}
-			if len(route.Mutations) == 0 {
-				t.Fatalf("route %q on %q has no list-shape mutations; expected enum-validated", c.match, c.device)
-			}
-			var found bool
-			for _, m := range route.Mutations {
-				if m.Path == "status.device.power" {
-					found = true
-					if len(m.Enum) == 0 {
-						t.Errorf("status.device.power mutation has empty enum on %q", c.device)
-					}
-					expected := map[string]bool{"on": false, "off": false, "standby": false}
-					for _, v := range m.Enum {
-						if _, ok := expected[v]; ok {
-							expected[v] = true
-						}
-					}
-					for v, seen := range expected {
-						if !seen {
-							t.Errorf("enum on %q missing %q (got %v)", c.device, v, m.Enum)
-						}
-					}
-				}
-			}
-			if !found {
-				t.Errorf("route %q on %q has no status.device.power mutation in list shape", c.match, c.device)
-			}
-		})
 	}
 }
 
@@ -147,13 +80,7 @@ func TestRebootMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		httpPath string
 		cliVerb  string // empty means HTTP-only profile
 	}{
-		// kestrel-vroom is now HTTP + ICMP only, the SSH/Telnet xAPI
-		// surfaces were removed so the video bar has one teaching
-		// interface (HTTP JSON). No CLI verb to cross-check; the reboot
-		// anchor lives entirely on the HTTP route.
-		{"kestrel-vroom", "POST /api/admin/reboot", ""},
 		{"polaris-dsp-16", "POST /api/admin/reboot", "system reboot"},
-		{"newtron-panel-7", "POST /api/admin/reboot", "reboot"},
 	}
 
 	for _, c := range cases {
@@ -217,10 +144,7 @@ func TestFactoryResetMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		httpPath string
 		cliVerb  string
 	}{
-		// kestrel-vroom is HTTP-only now (see reboot test note).
-		{"kestrel-vroom", "POST /api/admin/factory-reset", ""},
 		{"polaris-dsp-16", "POST /api/admin/factory-reset", "system factory-reset"},
-		{"newtron-panel-7", "POST /api/admin/factory-reset", "factory-reset"},
 	}
 
 	for _, c := range cases {

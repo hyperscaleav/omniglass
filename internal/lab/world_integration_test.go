@@ -157,8 +157,8 @@ func TestIntegrationCorporateWorldReachesDevices(t *testing.T) {
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
 			for _, d := range r.Devices {
-				if d.Profile == "kestrel-vroom" || d.Profile == "kestrel-relay-c1" {
-					bars = append(bars, bar{r.System, d.Profile, calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}})
+				if d.Product == "kestrel-vroom" || d.Product == "kestrel-relay-c1" {
+					bars = append(bars, bar{r.System, d.Product, calendar.Room{Site: s.Name, Building: r.Building, Room: r.Name}})
 				}
 			}
 		}

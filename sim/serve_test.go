@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // TestServeHTTP_MuteChannelPropagates exercises the whole loop the
@@ -563,31 +562,25 @@ func TestServeHTTP_MixedRequiredSuccessRequiredFailureReturns400(t *testing.T) {
 	}
 }
 
+// vroomWithCall is the shipped kestrel-vroom as the engine builds it, with the
+// call state the dial tests start from: idle, no id, no one on.
+func vroomWithCall(t *testing.T) *Device {
+	t.Helper()
+	e := shippedEngine(t)
+	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "h", LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, "kestrel-vroom"), Version: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	dev := e.Devices()[0]
+	state := dev.State()
+	state["status"].(map[string]any)["call"] = map[string]any{"id": "", "active": false, "participants": int64(0)}
+	dev.SetState(state, dev.Version+1)
+	return dev
+}
+
 // The kestrel-vroom dial route (#1445): a refused id pattern must not
 // leave status.call.active or participants written.
 func TestServeHTTP_VroomDialRefusedLeavesStateUntouched(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dp := store.Devices["kestrel-vroom"]
-	var route *profile.Route
-	for i := range dp.Interfaces {
-		for j := range dp.Interfaces[i].Routes {
-			if dp.Interfaces[i].Routes[j].Match == "POST /api/call/dial" {
-				route = &dp.Interfaces[i].Routes[j]
-			}
-		}
-	}
-	if route == nil {
-		t.Fatal("dial route not found")
-	}
-	initial := map[string]any{"status": map[string]any{"call": map[string]any{
-		"id": "", "active": false, "participants": int64(0)}}}
-	dev := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "kestrel-vroom", 1, initial)
-	if err := dev.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
-		t.Fatal(err)
-	}
+	dev := vroomWithCall(t)
 	req := httptest.NewRequest("POST", "/api/call/dial", strings.NewReader(`{"id":"bad id!","participants":5}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -603,33 +596,12 @@ func TestServeHTTP_VroomDialRefusedLeavesStateUntouched(t *testing.T) {
 
 // A participants count outside 1..64 is refused the same way (#1445).
 func TestServeHTTP_VroomDialRefusesOutOfBoundParticipants(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dp := store.Devices["kestrel-vroom"]
-	var route *profile.Route
-	for i := range dp.Interfaces {
-		for j := range dp.Interfaces[i].Routes {
-			if dp.Interfaces[i].Routes[j].Match == "POST /api/call/dial" {
-				route = &dp.Interfaces[i].Routes[j]
-			}
-		}
-	}
-	if route == nil {
-		t.Fatal("dial route not found")
-	}
 	for _, body := range []string{
 		`{"id":"c1","participants":-3}`,
 		`{"id":"c1","participants":65}`,
 		`{"id":"c1","participants":1000000}`,
 	} {
-		initial := map[string]any{"status": map[string]any{"call": map[string]any{
-			"id": "", "active": false, "participants": int64(0)}}}
-		dev := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "kestrel-vroom", 1, initial)
-		if err := dev.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
-			t.Fatal(err)
-		}
+		dev := vroomWithCall(t)
 		req := httptest.NewRequest("POST", "/api/call/dial", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -643,12 +615,7 @@ func TestServeHTTP_VroomDialRefusesOutOfBoundParticipants(t *testing.T) {
 		}
 	}
 	// In bound still dials.
-	initial := map[string]any{"status": map[string]any{"call": map[string]any{
-		"id": "", "active": false, "participants": int64(0)}}}
-	dev := NewDevice("d", "h", net.ParseIP("127.0.0.1"), "kestrel-vroom", 1, initial)
-	if err := dev.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
-		t.Fatal(err)
-	}
+	dev := vroomWithCall(t)
 	req := httptest.NewRequest("POST", "/api/call/dial", strings.NewReader(`{"id":"c1","participants":5}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
