@@ -27,7 +27,7 @@ func readPeople(t *testing.T, d *Device) int {
 func TestVideoBarCountsTheRoomsAttendeesOverAPinnedDay(t *testing.T) {
 	k, seed, day, cal := pinnedDay(t)
 	at := day
-	d := roomEngine(t, seed, k, &at, "kestrel-vroom")["kestrel-vroom"]
+	d := roomEngine(t, seed, k, &at, "kestrel-bar")["kestrel-bar"]
 	var held, empty int
 	for at = day; at.Before(day.Add(24 * time.Hour)); at = at.Add(time.Minute) {
 		if !d.TickBehavior("people_count") {
@@ -56,7 +56,7 @@ func TestVideoBarCountsTheRoomsAttendeesOverAPinnedDay(t *testing.T) {
 func TestVideoBarCountsNobodyInANoShow(t *testing.T) {
 	k, seed, day, cal := pinnedDay(t)
 	at := day
-	d := roomEngine(t, seed, k, &at, "kestrel-vroom")["kestrel-vroom"]
+	d := roomEngine(t, seed, k, &at, "kestrel-bar")["kestrel-bar"]
 	var seen int
 	for _, e := range cal.Entries(roomHQ, day, day.Add(24*time.Hour), calendar.MeetingKinds) {
 		if caltest.M(e).Outcome != calendar.OutcomeNoShow {
@@ -76,7 +76,7 @@ func TestVideoBarCountsNobodyInANoShow(t *testing.T) {
 
 func TestVideoBarWithNoCalendarCountsOnlyItsCall(t *testing.T) {
 	e := shippedEngine(t)
-	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "d", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1}}); err != nil {
+	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: "d", Hostname: "d", LoopbackIP: "127.0.0.1", ProfileName: "kestrel-bar", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]

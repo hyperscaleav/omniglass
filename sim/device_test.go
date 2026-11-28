@@ -194,7 +194,7 @@ func TestEngineLoadTemplates(t *testing.T) {
 	if seen == 0 {
 		t.Fatal("catalog references no templates; the walk found nothing to check")
 	}
-	content, err := e.loadTemplate("api/kestrel-vroom/status.json.gotempl")
+	content, err := e.loadTemplate("api/ferrite-pdu/status.json.gotempl")
 	if err != nil {
 		t.Fatalf("loading template: %v", err)
 	}

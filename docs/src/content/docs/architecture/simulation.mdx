@@ -67,7 +67,8 @@ are. The `sim/behave` primitives plug in there; an `Animator` is the escape hatc
 a family may still run YAML-style behaviors. A `Surface` func builds the shared protocol surfaces
 (`sim/surface`) for each device. The Boreal Edge displays, the Beam projector and the Cast player are families
 ([a worked example](#a-go-family-worked-the-boreal-displays)), and so are room control and switching
-([the second wave](#the-second-wave-room-control-and-switching)); the rest are profiles until their families land.
+([the second wave](#the-second-wave-room-control-and-switching)) and the Kestrel bar, codec and camera
+([the conferencing families](#conferencing-and-cameras-the-kestrel-families)); the rest are profiles until their families land.
 
 ### A Go family, worked: the Boreal displays
 
@@ -114,6 +115,27 @@ sequence to the recording, and the console's listing of each surface to the list
 ([ADR-2832](/architecture/decisions/#adr-2832-a-go-family-keeps-its-profiles-wire-byte-for-byte-and-corrects-only-the-profiles-accidents)
 lists the two corrections). Recording the next family's profile is the first step of its slice.
 
+### Conferencing and cameras: the Kestrel families
+
+The Kestrel video bar, codec and camera (#2834) are three families because they are three wire APIs, each a
+one-row table over the same basic-auth https face:
+
+| Package | Serves | Model |
+| --- | --- | --- |
+| `kestrelvroom` | the video bar: a status snapshot, the course properties, a private log route the web admin fetches, a dashboard, a live feed that carries named events beside state changes, and the touch panel's control socket | `kestrel-vroom`, a `Row` with its firmware and hardware revision |
+| `kestrelrelay` | the rack codec: its call, the content it shares and its peripherals | `kestrel-relay-c1`, a `Row` with its firmware |
+| `kestrelgaze` | the PTZ camera: pan, tilt, magnification, three presets and tracking | `kestrel-gaze-p2`, a `Row` with its firmware |
+
+What the Boreal families did not need, these added once for any family. A route or a tick **reports a named
+event** on the device's feed (`Device.Publish`, `Tick.Emit`), numbered with the state changes the feed streams
+and replayed to a reconnect as they are; the recorded transcripts hold those events beside the state. A route a
+page calls but does not advertise is `Private`. A control route can **write the changes a field implies**
+beside it (`httpapi.Control.Also`: a preset recall moves the lens and takes the camera off tracking), and a
+document that a template left comment lines in keeps them (`httpapi.Annotated`), because a collector reads
+the bytes. The call itself is `sim/behave`'s `FollowsCall`, `ContentSharing` and `PlanOwnSchedule`, the room's
+people count is `PeopleCount`, and the camera's framing, which only it has, is written in its package. Three
+differences from the profiles are written down in
+[ADR-2834](/architecture/decisions/#adr-2834-a-go-family-reports-its-profiles-named-events-on-the-live-feed-and-corrects-only-the-profiles-malformed-words).
 ### The second wave: room control and switching
 
 Five more families replaced five profiles (#2833), grouped by wire API, not by vendor:

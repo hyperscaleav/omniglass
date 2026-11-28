@@ -43,7 +43,7 @@ func (e Element) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	if r.Body == nil && len(bytes.TrimSpace(r.Raw)) > 0 {
 		return unreadable()
 	}
-	index := fieldText(r.Body[e.IndexField])
+	index := FieldText(r.Body[e.IndexField])
 	if strings.Contains(index, ".") {
 		return spec.HTTPResponse{Status: 400, ContentType: "application/json", Body: struct {
 			Error string `json:"error"`

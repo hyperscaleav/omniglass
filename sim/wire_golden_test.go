@@ -69,6 +69,9 @@ type wireResult struct {
 	Response    string              `json:"response"`
 	State       json.RawMessage     `json:"state,omitempty"`
 	StateChange bool                `json:"state_change"`
+	// Events are the named events the request published on the device's live
+	// feed, each "name data" in the order the feed numbered them.
+	Events []string `json:"events,omitempty"`
 }
 
 // wireOID is one SNMP variable as the agent answered it.
@@ -149,6 +152,10 @@ type wireFamily struct {
 	// a difference the family means (a product naming its own model where the
 	// profile named one for all). Nil compares the bytes as recorded.
 	Body func(t *testing.T, product, golden string) string
+	// Diverges maps a recorded transcript to what the family means to say now,
+	// for a difference that is not a response body (a log line the profile
+	// wrote wrongly, in a room day). Nil compares the transcript as recorded.
+	Diverges func(t *testing.T, product string, golden wireTranscript) wireTranscript
 	// Faces records the interfaces the family declares; Sessions are scripts
 	// played over its persistent line faces, Echo the UDP echo faces answered
 	// a datagram (wire_shell_test.go). All three are empty for a family that
@@ -221,6 +228,9 @@ func wireDevice(t *testing.T, fam wireFamily, product string) *Device {
 	}
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
+	// A behavior that ticks as the device starts reads the world's clock, which
+	// is the transcript's, so what it writes at start repeats on any day.
+	e.SetClock(Clock{Offset: wireClock.Sub(time.Now())})
 	id := "wire-" + product
 	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: r.Definition.ID(), Product: product, Version: 1}
 	if err := e.Sync([]DeviceSnapshot{snap}); err != nil {
@@ -251,14 +261,18 @@ func wireRequest(t *testing.T, d *Device, st wireStep) wireResult {
 		req.RemoteAddr = "192.0.2.1:4000"
 	} else {
 		req = asConsole(req)
-		if d.HTTPAuth.Mode == HTTPAuthHeader {
+		switch d.HTTPAuth.Mode {
+		case HTTPAuthHeader:
 			req.Header.Set(d.HTTPAuth.HeaderName, d.HTTPAuth.APIKey)
+		case HTTPAuthBasic:
+			req.SetBasicAuth(d.HTTPAuth.User, d.HTTPAuth.Password)
 		}
 	}
 	if st.Body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	before := stateJSON(d)
+	seen := feedSeq(d)
 	w := httptest.NewRecorder()
 	d.ServeHTTP(w, req)
 	res := wireResult{wireStep: st, Status: w.Code, Response: w.Body.String()}
@@ -269,11 +283,39 @@ func wireRequest(t *testing.T, d *Device, st wireStep) wireResult {
 		}
 	}
 	after := stateJSON(d)
+	res.Events = feedSince(d, seen)
 	res.StateChange = !bytes.Equal(before, after)
 	if st.Snapshot {
 		res.State = after
 	}
 	return res
+}
+
+// feedSeq is how many events the device's live feed has numbered, 0 for a
+// device with no feed; feedSince is the named events published after it (the
+// state changes the feed streams are not listed: the state records them).
+func feedSeq(d *Device) uint64 {
+	if d.events == nil {
+		return 0
+	}
+	d.events.mu.Lock()
+	defer d.events.mu.Unlock()
+	return d.events.seq
+}
+
+func feedSince(d *Device, seq uint64) []string {
+	if d.events == nil {
+		return nil
+	}
+	d.events.mu.Lock()
+	defer d.events.mu.Unlock()
+	var out []string
+	for _, ev := range d.events.ring {
+		if ev.id > seq && ev.name != "change" {
+			out = append(out, ev.name+" "+ev.data)
+		}
+	}
+	return out
 }
 
 func stateJSON(d *Device) json.RawMessage {
@@ -415,12 +457,16 @@ func recordTicks(d *Device, plans []tickPlan) map[string][]any {
 	for _, p := range plans {
 		var seq []any
 		for i := 0; i < tickRuns; i++ {
+			seen := feedSeq(d)
 			if !d.TickBehavior(p.name) {
 				panic("no behavior " + p.name)
 			}
 			row := map[string]any{}
 			for _, path := range p.paths {
 				row[path] = d.ReadPath(path)
+			}
+			if ev := feedSince(d, seen); len(ev) > 0 {
+				row["#events"] = ev
 			}
 			seq = append(seq, row)
 		}
@@ -547,6 +593,9 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 		if have.StateChange != w.StateChange {
 			add("%s: %s: state changed %v, recorded %v", product, name, have.StateChange, w.StateChange)
 		}
+		if !reflect.DeepEqual(have.Events, w.Events) {
+			add("%s: %s: live feed events %q, recorded %q", product, name, have.Events, w.Events)
+		}
 		if w.State != nil && canon(t, have.State) != canon(t, w.State) {
 			add("%s: %s: state after:\n got %s\nwant %s", product, name, canon(t, have.State), canon(t, w.State))
 		}
@@ -570,7 +619,11 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 // replayWire holds one product of a family to its golden transcript.
 func replayWire(t *testing.T, fam wireFamily, product string) {
 	t.Helper()
-	for _, d := range diffWire(t, fam, product, collectWire(t, fam, product), readGolden(t, fam, product)) {
+	want := readGolden(t, fam, product)
+	if fam.Diverges != nil {
+		want = fam.Diverges(t, product, want)
+	}
+	for _, d := range diffWire(t, fam, product, collectWire(t, fam, product), want) {
 		t.Error(d)
 	}
 }

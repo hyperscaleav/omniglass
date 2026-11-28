@@ -11,8 +11,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // loadVRoom loads the shipped kestrel-vroom as the simulator does, with its
@@ -20,21 +18,28 @@ import (
 // ticks them by hand.
 func loadVRoom(t *testing.T, id string) *Device {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	e := shippedEngine(t)
-	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1}}); err != nil {
+	if err := e.LoadDevices([]DeviceSnapshot{{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, "kestrel-vroom"), Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	dev := e.Devices()[0]
-	for _, iface := range store.Devices["kestrel-vroom"].Interfaces {
+	setFeed(t, e, dev, "kestrel-vroom")
+	return dev
+}
+
+// setFeed gives the device the live feed its product's http face declares, as
+// the engine does when the face starts.
+func setFeed(t *testing.T, e *Engine, dev *Device, product string) {
+	t.Helper()
+	r, ok := e.cat.ForProduct(product)
+	if !ok {
+		t.Fatalf("the catalog simulates no %s", product)
+	}
+	for _, iface := range r.Definition.Surfaces() {
 		if iface.Events.Path != "" {
 			dev.SetEvents(iface.Events)
 		}
 	}
-	return dev
 }
 
 // tickByName fires one tick of the named behavior.
@@ -87,25 +92,17 @@ func simulateDay(t *testing.T, d *Device, from time.Time, minutes int, after fun
 // behaviors compiled but not running, so a test ticks them by hand.
 func loadVRoomIn(t *testing.T, id string, room calendar.Room, seed int64) (*Device, *calendar.Calendar) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	k := calTestKnobs()
 	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 	e := shippedEngine(t)
 	e.SetCalendar(cal)
-	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: "kestrel-vroom", Version: 1,
+	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, "kestrel-vroom"), Version: 1,
 		SiteCode: room.Site, Building: room.Building, Room: room.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}
 	dev := e.Devices()[0]
-	for _, iface := range store.Devices["kestrel-vroom"].Interfaces {
-		if iface.Events.Path != "" {
-			dev.SetEvents(iface.Events)
-		}
-	}
+	setFeed(t, e, dev, "kestrel-vroom")
 	return dev, cal
 }
 
@@ -725,12 +722,21 @@ func TestTheVRoomsTicksRenderClean(t *testing.T) {
 // comes from more kinds of signal, not more samples.
 func TestNoVRoomBehaviorTicksFasterThan15s(t *testing.T) {
 	d := loadVRoom(t, "bar")
-	if len(d.behaviors) == 0 {
+	every := map[string]time.Duration{}
+	for _, b := range d.behaviors {
+		every[b.Name] = b.Interval
+	}
+	if d.fam != nil {
+		for _, tk := range d.fam.ticks {
+			every[tk.Name] = tk.Interval
+		}
+	}
+	if len(every) == 0 {
 		t.Fatal("kestrel-vroom has no behaviors")
 	}
-	for _, b := range d.behaviors {
-		if b.Interval < 15*time.Second {
-			t.Errorf("behavior %s ticks every %s, want 15 s or slower", b.Name, b.Interval)
+	for name, interval := range every {
+		if interval < 15*time.Second {
+			t.Errorf("behavior %s ticks every %s, want 15 s or slower", name, interval)
 		}
 	}
 }

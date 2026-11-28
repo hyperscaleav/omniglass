@@ -22,6 +22,8 @@ type Fake struct {
 	Clock time.Time
 	// Writes lists every WriteMany, Write counting as one of one.
 	Writes [][]surface.Change
+	// Events lists every event published, in order.
+	Events []spec.Event
 
 	state, defaults map[string]any
 }
@@ -50,6 +52,8 @@ func (f *Fake) Now() time.Time        { return f.Clock }
 func (f *Fake) Read(p string) any     { return look(f.state, p) }
 func (f *Fake) Default(p string) any  { return look(f.defaults, p) }
 func (f *Fake) State() map[string]any { return clone(f.state) }
+
+func (f *Fake) Publish(e spec.Event) { f.Events = append(f.Events, e) }
 
 func (f *Fake) Write(path string, v any) error {
 	return f.WriteMany(surface.Change{Path: path, Value: v})
@@ -169,6 +173,11 @@ func (f *Fake) Ticks(c spec.TickContext) (undeclared []string) {
 				undeclared = append(undeclared, fmt.Sprintf("%s writes %s", t.Name, ch.Path))
 			}
 			set(f.state, ch.Path, ch.Value)
+		}
+		if t.Emit != nil {
+			for _, e := range t.Emit(f, c) {
+				f.Publish(e)
+			}
 		}
 	}
 	return undeclared

@@ -8,6 +8,9 @@ import (
 	fam_borealbeam "github.com/hyperscaleav/omniglass/sim/device/borealbeam"
 	fam_borealcast "github.com/hyperscaleav/omniglass/sim/device/borealcast"
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
+	fam_kestrelgaze "github.com/hyperscaleav/omniglass/sim/device/kestrelgaze"
+	fam_kestrelrelay "github.com/hyperscaleav/omniglass/sim/device/kestrelrelay"
+	fam_kestrelvroom "github.com/hyperscaleav/omniglass/sim/device/kestrelvroom"
 	fam_lyraarc "github.com/hyperscaleav/omniglass/sim/device/lyraarc"
 	fam_lyrahx "github.com/hyperscaleav/omniglass/sim/device/lyrahx"
 	fam_meridianextender "github.com/hyperscaleav/omniglass/sim/device/meridianextender"
@@ -25,6 +28,9 @@ func families() []spec.Spec {
 		fam_borealbeam.Spec(),
 		fam_borealcast.Spec(),
 		fam_borealedge.Spec(),
+		fam_kestrelgaze.Spec(),
+		fam_kestrelrelay.Spec(),
+		fam_kestrelvroom.Spec(),
 		fam_lyraarc.Spec(),
 		fam_lyrahx.Spec(),
 		fam_meridianextender.Spec(),

@@ -75,7 +75,7 @@ func TestLabCalendarRouteMatchesWhatTheRoomsDeviceActsOut(t *testing.T) {
 	e.SetCalendar(sw.Calendar())
 	e.SetWorld(sw)
 	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "sys-a-cam-1", Hostname: "sys-a-cam-1", LoopbackIP: "127.0.0.1",
-		ProfileName: "kestrel-gaze-p2", Version: 1, SiteCode: "hq", Building: "tower", Room: "r101"}}); err != nil {
+		ProfileName: "kestrel-gaze", Version: 1, SiteCode: "hq", Building: "tower", Room: "r101"}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]

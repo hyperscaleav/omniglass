@@ -103,6 +103,18 @@ type Device interface {
 	// Now is the time the device reads: the simulated world's clock, which a
 	// handler stamps a reboot's anchor with.
 	Now() time.Time
+	// Publish reports a named occurrence (a call started, a log line) on the
+	// device's live feed, numbered with the state changes the feed streams and
+	// kept for a reconnect's replay as they are. A device whose face declares
+	// no feed drops it. Call it after the writes the occurrence follows, as a
+	// YAML route's events are reported after its mutations.
+	Publish(e Event)
+}
+
+// Event is a named occurrence on a device's live feed (event: <Name>, its data
+// the text Data): what a driver maps to one event of its own.
+type Event struct {
+	Name, Data string
 }
 
 // HTTPRequest is one request as a handler sees it.
@@ -149,6 +161,9 @@ type HTTPRoute struct {
 	// device's surface; Example is a request body for the operations panel.
 	Summary string
 	Example string
+	// Private marks a route the product's own web UI calls but does not
+	// advertise: the console badges it.
+	Private bool
 	// Sets are the state paths the route sets from a field of its body, each
 	// to a fixed list of values: what the console offers as quick sets and
 	// the simulator reads to tell a path driven away from its default. A route
@@ -229,6 +244,12 @@ type Tick struct {
 	// what it derives from the room is right from the first request.
 	OnStart bool
 	Run     func(d Device, c TickContext) []surface.Change
+	// Emit names the occurrences the tick reports on the device's live feed,
+	// read from the device after Run's changes are written (as a YAML
+	// behavior's events are rendered against the state its mutations left),
+	// numbered with the state changes. A tick that reports nothing leaves it
+	// nil; an event with no name is not this tick's.
+	Emit func(d Device, c TickContext) []Event
 }
 
 // Surface is the shared protocol surfaces (sim/surface, #2831) a family
@@ -395,3 +416,4 @@ func (listingDevice) State() map[string]any             { return map[string]any{
 func (listingDevice) Write(string, any) error           { return nil }
 func (listingDevice) WriteMany(...surface.Change) error { return nil }
 func (listingDevice) Now() time.Time                    { return time.Time{} }
+func (listingDevice) Publish(Event)                     {}

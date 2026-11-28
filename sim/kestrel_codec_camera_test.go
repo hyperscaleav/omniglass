@@ -58,7 +58,7 @@ func kestrelDo(t *testing.T, d *Device, user, method, path, body string) (int, m
 // call placed and content shared over the API read back; a request with no
 // login is refused.
 func TestKestrelRelayServesCallContentAndPeripherals(t *testing.T) {
-	d := startKestrel(t, "kestrel-relay-c1")
+	d := startKestrel(t, "kestrel-relay")
 	code, sys := kestrelDo(t, d, "admin", http.MethodGet, "/api/system", "")
 	if code != http.StatusOK || sys["model"] != "Relay C1" || sys["serial"] == "" || sys["firmware"] == "" {
 		t.Fatalf("GET /api/system = %d %v", code, sys)
@@ -104,7 +104,7 @@ func TestKestrelRelayServesCallContentAndPeripherals(t *testing.T) {
 // position and takes it off tracking; a position set by hand clears the
 // preset; a tracking state outside the enum is refused.
 func TestKestrelGazeServesPanTiltZoomAndPresets(t *testing.T) {
-	d := startKestrel(t, "kestrel-gaze-p2")
+	d := startKestrel(t, "kestrel-gaze")
 	code, sys := kestrelDo(t, d, "admin", http.MethodGet, "/api/system", "")
 	if code != http.StatusOK || sys["model"] != "Gaze P2" || sys["serial"] == "" {
 		t.Fatalf("GET /api/system = %d %v", code, sys)
@@ -154,22 +154,17 @@ func TestKestrelGazeServesPanTiltZoomAndPresets(t *testing.T) {
 // pan and tilt and they stay within the camera's range; set to manual, a
 // tick holds the position.
 func TestKestrelGazeTrackingDriftsWithinBounds(t *testing.T) {
-	d := startKestrel(t, "kestrel-gaze-p2")
-	var track *behaviorEntry
-	d.behaviorMu.Lock()
-	for i := range d.behaviors {
-		if d.behaviors[i].Name == "tracking_drift" {
-			track = &d.behaviors[i]
+	d := startKestrel(t, "kestrel-gaze")
+	tick := func() {
+		t.Helper()
+		if !d.TickBehavior("tracking_drift") {
+			t.Fatalf("no tracking_drift behavior; have %v", d.Behaviors())
 		}
-	}
-	d.behaviorMu.Unlock()
-	if track == nil {
-		t.Fatalf("no tracking_drift behavior; have %v", d.Behaviors())
 	}
 	moved := false
 	_, start := kestrelDo(t, d, "admin", http.MethodGet, "/api/camera", "")
 	for i := 0; i < 40; i++ {
-		d.tickBehavior(track)
+		tick()
 		_, cam := kestrelDo(t, d, "admin", http.MethodGet, "/api/camera", "")
 		pan, tilt := cam["pan"].(float64), cam["tilt"].(float64)
 		if pan < -60 || pan > 60 || tilt < -20 || tilt > 20 {
@@ -183,7 +178,7 @@ func TestKestrelGazeTrackingDriftsWithinBounds(t *testing.T) {
 	kestrelDo(t, d, "admin", http.MethodPost, "/api/camera/tracking", `{"tracking": "manual"}`)
 	_, before := kestrelDo(t, d, "admin", http.MethodGet, "/api/camera", "")
 	for i := 0; i < 10; i++ {
-		d.tickBehavior(track)
+		tick()
 	}
 	if _, after := kestrelDo(t, d, "admin", http.MethodGet, "/api/camera", ""); after["pan"] != before["pan"] || after["tilt"] != before["tilt"] {
 		t.Errorf("manual, ticks moved the camera from %v to %v", before, after)
