@@ -92,6 +92,10 @@ type wireTranscript struct {
 	Walks    map[string][]wireOID    `json:"walks,omitempty"`
 	Ticks    map[string][]any        `json:"ticks,omitempty"`
 	RoomDays map[string][]wireChange `json:"room_days,omitempty"`
+	// Extra is what a family's own Extra hook recorded: the line-protocol
+	// conversations, event streams and webhook posts the generic script has no
+	// step for (wire_extra_test.go).
+	Extra map[string]json.RawMessage `json:"extra,omitempty"`
 }
 
 // defaultWireDir is where a family's goldens live unless it says otherwise.
@@ -130,6 +134,10 @@ type wireFamily struct {
 	// moved; the harness runs it once with the lab calendar and once without.
 	// Nil for a family that does not follow a room.
 	RoomDay func(d *Device, at *time.Time) []wireChange
+	// Extra records what the steps above cannot: a family with a line protocol,
+	// an event stream or webhook posts returns each as a named, JSON-encodable
+	// value (see wire_extra_test.go for the helpers). Nil records none.
+	Extra func(t *testing.T, fam wireFamily, product string) map[string]any
 	// Body maps a recorded response body to what the family answers now, for
 	// a difference the family means (a product naming its own model where the
 	// profile named one for all). Nil compares the bytes as recorded.
@@ -226,8 +234,11 @@ func wireRequest(t *testing.T, d *Device, st wireStep) wireResult {
 		req.RemoteAddr = "192.0.2.1:4000"
 	} else {
 		req = asConsole(req)
-		if d.HTTPAuth.Mode == HTTPAuthHeader {
+		switch d.HTTPAuth.Mode {
+		case HTTPAuthHeader:
 			req.Header.Set(d.HTTPAuth.HeaderName, d.HTTPAuth.APIKey)
+		case HTTPAuthBasic:
+			req.SetBasicAuth(d.HTTPAuth.User, d.HTTPAuth.Password)
 		}
 	}
 	if st.Body != "" {
@@ -464,6 +475,16 @@ func collectWire(t *testing.T, fam wireFamily, product string) wireTranscript {
 	if fam.RoomDay != nil {
 		tr.RoomDays = roomDays(t, fam, product)
 	}
+	if fam.Extra != nil {
+		tr.Extra = map[string]json.RawMessage{}
+		for k, v := range fam.Extra(t, fam, product) {
+			b, err := json.Marshal(v)
+			if err != nil {
+				t.Fatalf("extra %s: %v", k, err)
+			}
+			tr.Extra[k] = b
+		}
+	}
 	return tr
 }
 
@@ -522,6 +543,15 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 	}
 	if !sameJSON(t, got.Ticks, want.Ticks) {
 		add("%s: drift sequences differ from the recorded seeded run:\n got %v\nwant %v", product, got.Ticks, want.Ticks)
+	}
+	for k, w := range want.Extra {
+		g, ok := got.Extra[k]
+		if !ok {
+			add("%s: %s was recorded and not replayed", product, k)
+		} else if canon(t, g) != canon(t, w) {
+			gs, ws := canon(t, g), canon(t, w)
+			add("%s: %s differs from the recorded one:\n got %q\nwant %q", product, k, firstDiff(gs, ws), firstDiff(ws, gs))
+		}
 	}
 	gd, wd := canonChanges(t, got.RoomDays), canonChanges(t, want.RoomDays)
 	for key := range want.RoomDays {
