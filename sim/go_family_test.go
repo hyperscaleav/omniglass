@@ -23,7 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
-// familyEngine serves the test family beside the shipped YAML profiles.
+// familyEngine serves the test family beside the shipped families.
 func familyEngine(t *testing.T, fam spec.Spec) *Engine {
 	t.Helper()
 	e := NewEngineOver(shippedCatalog(t, fam))
@@ -47,7 +47,7 @@ func deviceNamed(t *testing.T, e *Engine, id string) *Device {
 	return nil
 }
 
-// A Go family serves a product end to end beside a YAML profile (#2829): a
+// A Go family serves a product end to end beside the shipped families (#2829): a
 // real HTTP request reaches the family's Go handler and gets its typed
 // response, for each row of the model table, while a YAML device on the same
 // engine answers as it always did.

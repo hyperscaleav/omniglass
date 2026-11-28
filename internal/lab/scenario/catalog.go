@@ -65,7 +65,7 @@ func loadShipped() (Catalog, error) {
 }
 
 // shippedOver is the shipped catalog with the simulator's definitions read
-// from cat, YAML profiles and Go families alike (#2829).
+// from cat, the Go families (#2829).
 func shippedOver(cat *spec.Catalog) Catalog {
 	tc := template.Shipped()
 	products := map[string]string{}

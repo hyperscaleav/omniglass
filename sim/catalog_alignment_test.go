@@ -69,7 +69,7 @@ func TestEveryDeviceProfileNamesASeededProduct(t *testing.T) {
 		}
 	}
 	if checked == 0 {
-		t.Fatal("checked no device profiles")
+		t.Fatal("checked no families")
 	}
 
 	// Coverage: every seeded product with a driver is simulated, or listed as
