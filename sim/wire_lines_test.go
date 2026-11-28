@@ -174,7 +174,7 @@ func diffWireLines(t *testing.T, product string, got, want []wireLineResult) []s
 		g := got[i]
 		g.State, w.State = canonRaw(t, g.State), canonRaw(t, w.State)
 		if !reflect.DeepEqual(g, w) {
-			out = append(out, fmt.Sprintf("%s: line %q:\n got %+v\nwant %+v", product, w.Name, g, w))
+			out = append(out, fmt.Sprintf("%s: line %q:\n got %s\nwant %s", product, w.Name, lineSummary(g), lineSummary(w)))
 		}
 	}
 	return out
@@ -210,4 +210,12 @@ func wireLineSnap(name, line string) wireLine {
 // wireCmd is a verb run direct against the command table, state recorded.
 func wireCmd(name, line string) wireLine {
 	return wireLine{Name: name, Line: line, Direct: true, Snapshot: true}
+}
+
+// lineSummary is a line step's result as one readable line, its state as text.
+func lineSummary(r wireLineResult) string {
+	state := string(r.State)
+	r.State = nil
+	b, _ := json.Marshal(r)
+	return string(b) + " state " + state
 }

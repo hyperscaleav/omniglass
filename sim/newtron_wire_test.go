@@ -289,23 +289,26 @@ func slateRoomDay(d *Device, at *time.Time) []wireChange {
 	return w.out
 }
 
-// The Newtron families, as the harness records and replays them. Their goldens
-// were recorded from the YAML profiles the families replaced, so once the
-// profiles are deleted the families are frozen.
+// The room control and switching families, as the harness records and replays
+// them. Their goldens were recorded from the YAML profiles the families
+// replaced, so they are frozen: recording one from the family would make the
+// hold on the profile vacuous.
+const wireRoomFrozen = "recorded from the YAML profile before its deletion (#2833); re-recording from the Go family would hold it to itself"
+
 const wireNewtronSource = "recorded from the YAML profile before its deletion (#2833); see sim/testdata/wire/README.md"
 
 var (
 	newtronCoreWire = wireFamily{
-		Name: "newtron-core", Products: []string{newtronCoreProduct}, Engine: shippedEngineOf, Source: wireNewtronSource,
+		Name: "newtron-core", Products: []string{newtronCoreProduct}, Engine: shippedEngineOf, Source: wireNewtronSource, Frozen: wireRoomFrozen,
 		Lines: coreLines(), Ticks: coreTicks(), RoomDay: coreRoomDay,
 	}
 	newtronPanelWire = wireFamily{
-		Name: "newtron-panel", Products: []string{newtronPanelProduct}, Engine: shippedEngineOf, Source: wireNewtronSource,
+		Name: "newtron-panel", Products: []string{newtronPanelProduct}, Engine: shippedEngineOf, Source: wireNewtronSource, Frozen: wireRoomFrozen,
 		Script: panelScript(), Writes: panelWrites(), OIDs: panelOIDs, Walks: panelWalks,
 		Lines: panelLines(), Ticks: panelTicks(), RoomDay: panelRoomDay,
 	}
 	newtronSlateWire = wireFamily{
-		Name: "newtron-slate", Products: []string{newtronSlateProduct}, Engine: shippedEngineOf, Source: wireNewtronSource,
+		Name: "newtron-slate", Products: []string{newtronSlateProduct}, Engine: shippedEngineOf, Source: wireNewtronSource, Frozen: wireRoomFrozen,
 		Lines: slateLines(), Ticks: slateTicks(), RoomDay: slateRoomDay,
 	}
 )

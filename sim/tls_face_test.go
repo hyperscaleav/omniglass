@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
 	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
@@ -27,10 +27,13 @@ import (
 // validity window is the profile's; and a test can replace the key or the
 // whole certificate to model a replaced or re-certified component.
 
-const panelProfile = "newtron-panel-7"
+const (
+	panelProfile = "newtron-panel"
+	panelProduct = "newtron-panel-7"
+)
 
 func panelSnapshot(id, ip string) DeviceSnapshot {
-	return DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: panelProfile, Version: 1}
+	return DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: panelProfile, Product: panelProduct, Version: 1}
 }
 
 // tlsAsk handshakes with the face (verifying nothing: the test reads what
@@ -145,25 +148,25 @@ func TestTLSFaceKeyAndCertificateCanBeReplaced(t *testing.T) {
 // The profile sets the certificate's validity window, counted from the
 // face's start.
 func TestTLSFaceValidityComesFromTheProfile(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := store.Devices[panelProfile]
+	// The panel's family, shaped by the test: its TLS face declares ten days.
+	fam := newtronpanel.Spec()
+	fam.Name, fam.Models = "newtron-panel-ten-days", nil
 	found := false
-	for i := range p.Interfaces {
-		if p.Interfaces[i].Name == "nvp-tls" {
-			p.Interfaces[i].TLSValidityDays, found = 10, true
+	for i := range fam.Interfaces {
+		if fam.Interfaces[i].Name == "nvp-tls" {
+			fam.Interfaces[i].TLSValidityDays, found = 10, true
 		}
 	}
 	if !found {
-		t.Fatal("the panel profile declares no nvp-tls interface")
+		t.Fatal("the panel family declares no nvp-tls interface")
 	}
-	e := shippedEngineFrom(t, store)
+	e := NewEngineOver(shippedCatalog(t, fam), profiles.Templates())
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	start := time.Now()
-	if err := e.Sync([]DeviceSnapshot{panelSnapshot("panel-v", "127.88.7.5")}); err != nil {
+	snap := panelSnapshot("panel-v", "127.88.7.5")
+	snap.ProfileName, snap.Product = fam.Name, ""
+	if err := e.Sync([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)
 	}
 	_, leaf := tlsAsk(t, faceAddr(t, device(t, e, "panel-v"), "nvp-tls"))

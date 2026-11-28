@@ -66,7 +66,8 @@ source, and returns the state paths to write, which the engine applies as a prof
 are. The `sim/behave` primitives plug in there; an `Animator` is the escape hatch for anything else, and
 a family may still run YAML-style behaviors. A `Surface` func builds the shared protocol surfaces
 (`sim/surface`) for each device. The Boreal Edge displays, the Beam projector and the Cast player are families
-([a worked example](#a-go-family-worked-the-boreal-displays)); the rest are profiles until their families land.
+([a worked example](#a-go-family-worked-the-boreal-displays)), and so are room control and switching
+([the second wave](#the-second-wave-room-control-and-switching)); the rest are profiles until their families land.
 
 ### A Go family, worked: the Boreal displays
 
@@ -112,6 +113,27 @@ the status, headers, bytes and state of every answer, the SNMP types and values,
 sequence to the recording, and the console's listing of each surface to the listing the profile gave
 ([ADR-2832](/architecture/decisions/#adr-2832-a-go-family-keeps-its-profiles-wire-byte-for-byte-and-corrects-only-the-profiles-accidents)
 lists the two corrections). Recording the next family's profile is the first step of its slice.
+
+### The second wave: room control and switching
+
+Five more families replaced five profiles (#2833), grouped by wire API, not by vendor:
+
+| Package | Serves | Models |
+| --- | --- | --- |
+| `newtroncore` | the control processor: the touch panel's room over NVP (TCP) plus its program, ports, panels, room power, temperature and macro | `newtron-core-3` |
+| `newtronpanel` | the touch panel: a web API behind a form sign-in, the NVP room on a raw port, over TLS, over Telnet and as UDP datagrams, an SSH shell, and a dead SNMP agent | `newtron-panel-7` |
+| `newtronslate` | the scheduling panel: a room's booking, next and current meeting over NVP | `newtron-slate-5` |
+| `meridianswitcher` | the presentation switcher: a JSON API with a route, SNMP with a table of the signal on each input | `meridian-mx-84` |
+| `meridianextender` | the AV extender: a JSON status and reboot, SNMP link and signal | `meridian-xl-1` |
+
+A processor and a touch panel share the NVP room (`sim/surface/nvp`, bound to a device's state by
+`bind.NVPRoom`) and nothing else, so they are two families, as a switcher and an extender are two. What the
+second wave settled for the next: a line protocol is held by the same recordings as an HTTP one (each line
+sent on the device's own face, its reply and the pushes it draws, and the command list a shell's help
+names); a command is listed under the interface that serves it (`Command.Face`, and `Surface.ListedOn` for
+the shared surface's); a control route may take free text held to a pattern (`httpapi.Text`) and write what
+it derives in the same change (`Control.Also`); and a tick reads its room's booked meetings
+(`TickContext.ReadBookings`).
 
 The catalog holds devices and nothing above them: no room archetype and no fleet layout, since a
 simulated system is built to the platform's own standards ([fleets](#fleets),
@@ -681,6 +703,9 @@ calendar is read only by the few readers that say so.
 | `Recordings`, `PerRoom` | recordings in progress and the queue, over the rooms a service covers or its own | the recording service's `room_recordings` |
 | `BuildingDay`, `BuildingSpan`, `PlaylistAdvance` | a signage player plays inside the building's hours and stops outside, and steps its playlist while it plays | the signage player's `building_day` and `playlist_advance` |
 | `Drift`, `Wear` | a reading wanders inside a band from the device's own source; a worn part ages only while the device is lit | the displays', the projector's and the player's drifts and the lamp's `light_source_aging` |
+| `PanelFollowsRoom` | a touch panel wakes with the room's use and shows the call, sharing or idle page; a room with no calendar leaves it as it was | the touch panel's `room_meeting` |
+| `RouteFollowsRoom`, `SignalOnInput` | a switcher routes the codec's feed in a call, the lectern while content is shared and the empty input between meetings, on the edge only, and reports the signal on the routed input | the switcher's `room_meeting` and `signal_follow` |
+| `ExtenderSignal` | an extender carries a signal while a meeting someone attends is held | the extender's `room_meeting` |
 | `BookingsAt`, `RoomBooking`, `SumBookings`, `FixedDay` | a room's booked count, state, now and next, and the day a service with no calendar keeps | the panel's, the scheduling service's and the booking service's readings |
 | `MicActivity`, `MicLevel`, `Gates`, `AmpSignalPresent`, `AmpTemperature`, `AmpOutputLevel`, `OutletCurrent` | microphones, mixer gates, amplifier signal and levels and a PDU outlet's load follow the people in the room | the Lyra, Polaris and Ferrite room behaviors |
 

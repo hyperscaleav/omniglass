@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
 )
 
 // The Newtron control processor and scheduling panel (#896) speak the NVP
@@ -28,10 +28,10 @@ import (
 func startNVP(t *testing.T, name string) (target string, d *Device) {
 	t.Helper()
 	e := newCatalogEngine(t)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: name, Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: profileOf(t, e, name), Product: name, Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	d = deviceByProfile(t, e, name)
+	d = deviceByProfile(t, e, profileOf(t, e, name))
 	d.StopBehaviors()
 	return faceAddr(t, d, "nvp"), d
 }
@@ -153,45 +153,46 @@ func TestNVPDevicesPushTheirClassState(t *testing.T) {
 
 // What a touch panel and a control processor answer alike is one definition:
 // every command and subject of the panel's NVP face is on the processor's,
-// served from the shared surface and written in neither profile.
+// served from the shared surface and written in neither family.
 func TestProcessorAnswersEverythingThePanelDoes(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	nvp := func(name string) profile.Interface {
-		p, ok := store.Devices[name]
+	cat := shippedCatalog(t)
+	nvp := func(product string) (commands []string, subjects []string) {
+		r, ok := cat.ForProduct(product)
 		if !ok {
-			t.Fatalf("no %s profile", name)
+			t.Fatalf("no %s family", product)
 		}
-		for _, i := range p.Interfaces {
-			if i.Name == "nvp" {
-				return i
+		for _, i := range r.Definition.Surfaces() {
+			if i.Name != "nvp" {
+				continue
 			}
+			for _, c := range i.Commands {
+				commands = append(commands, c.Match)
+			}
+			served, ok := r.Definition.(spec.Served)
+			if !ok {
+				t.Fatalf("%s is not a Go family", product)
+			}
+			for _, s := range served.Handlers().Surface(spectest.NewFake(spec.Spec{}, "")).Subjects["nvp"] {
+				subjects = append(subjects, s.Match)
+			}
+			if len(commands) == 0 || len(subjects) == 0 {
+				t.Fatalf("%s lists no commands or subjects on its nvp face", product)
+			}
+			return commands, subjects
 		}
-		t.Fatalf("%s has no nvp face", name)
-		return profile.Interface{}
+		t.Fatalf("%s has no nvp face", product)
+		return nil, nil
 	}
-	panel, core := nvp("newtron-panel-7"), nvp("newtron-core-3")
-	if !slices.Equal(panel.Include, core.Include) || len(panel.Include) == 0 {
-		t.Fatalf("panel includes %v, processor %v; want the same shared surface", panel.Include, core.Include)
-	}
-	have := map[string]bool{}
-	for _, c := range core.Commands {
-		have[c.Match] = true
-	}
-	for _, c := range panel.Commands {
-		if !have[c.Match] {
-			t.Errorf("the processor does not answer %q, which the panel does", c.Match)
+	panelCommands, panelSubjects := nvp("newtron-panel-7")
+	coreCommands, coreSubjects := nvp("newtron-core-3")
+	for _, c := range panelCommands {
+		if !slices.Contains(coreCommands, c) {
+			t.Errorf("the processor does not answer %q, which the panel does", c)
 		}
 	}
-	haveSubject := map[string]bool{}
-	for _, s := range core.Subjects {
-		haveSubject[s.Match] = true
-	}
-	for _, s := range panel.Subjects {
-		if !haveSubject[s.Match] {
-			t.Errorf("the processor does not publish %q, which the panel does", s.Match)
+	for _, s := range panelSubjects {
+		if !slices.Contains(coreSubjects, s) {
+			t.Errorf("the processor does not publish %q, which the panel does", s)
 		}
 	}
 }

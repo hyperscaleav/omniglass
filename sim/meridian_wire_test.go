@@ -154,12 +154,12 @@ const wireMeridianSource = "recorded from the YAML profile before its deletion (
 
 var (
 	meridianSwitcherWire = wireFamily{
-		Name: "meridian-switcher", Products: []string{meridianSwitcherProduct}, Engine: shippedEngineOf, Source: wireMeridianSource,
+		Name: "meridian-switcher", Products: []string{meridianSwitcherProduct}, Engine: shippedEngineOf, Source: wireMeridianSource, Frozen: wireRoomFrozen,
 		Script: meridianSwitcherScript(), Writes: meridianSwitcherWrites(), OIDs: meridianSwitcherOIDs, Walks: meridianWalks,
 		Ticks: meridianSwitcherTicks(), RoomDay: meridianSwitcherRoomDay,
 	}
 	meridianExtenderWire = wireFamily{
-		Name: "meridian-extender", Products: []string{meridianExtenderProduct}, Engine: shippedEngineOf, Source: wireMeridianSource,
+		Name: "meridian-extender", Products: []string{meridianExtenderProduct}, Engine: shippedEngineOf, Source: wireMeridianSource, Frozen: wireRoomFrozen,
 		Script: meridianExtenderScript(), Writes: meridianExtenderWrites(), OIDs: meridianExtenderOIDs, Walks: meridianWalks,
 		Ticks: meridianExtenderTicks(), RoomDay: meridianExtenderRoomDay,
 	}
