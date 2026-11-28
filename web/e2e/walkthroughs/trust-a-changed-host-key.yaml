@@ -11,7 +11,7 @@ description: A touch panel was reimaged, so it presents a new ssh host key and t
 steps:
   - goto: /locations/briefing
     caption: This location's system. An outpost collects its touch panel over the panel's ssh console.
-  - click: 'button:has([data-label]:text-is("Touch Panel 1"))'
+  - click: 'button:has([data-label]:text-is("Touch Panel"))'
     caption: Open the touch panel.
   - click: 'aside[data-blade] button[aria-label=Expand]'
     caption: Expand it to the component's view, where collection is read.

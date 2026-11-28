@@ -21,7 +21,7 @@ steps:
     caption: Notifications says what a message about an alarm says. Two ship with Omniglass; Page on-call is an operator's own.
   - click: 'text=Page on-call'
     caption: Open it. A subject and a text, each a rule over the alarm's facts.
-  - select: { target: 'aside[data-blade] select >> nth=0', value: Touch Panel 2 (panel-2) }
+  - select: { target: 'aside[data-blade] select >> nth=0', value: Touch Panel (panel-2) }
     caption: Preview it against a real component, Touch Panel 2. Its most recent alarm is the one rendered.
   - click: 'aside[data-blade] button:has-text("Preview")'
     caption: Preview renders through the same engine a delivery uses, and writes nothing.

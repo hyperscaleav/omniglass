@@ -45,7 +45,7 @@ screenshots:
     path: /web/locations/boardroom-a
     steps:
       - action: click
-        selector: "button:has([data-label]:text-is('Video Bar 1'))"
+        selector: "button:has([data-label]:text-is('Video Bar'))"
       - action: click
         selector: "aside[data-blade] button[aria-label=Expand]"
       - action: wait
