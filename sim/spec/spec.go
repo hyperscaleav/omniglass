@@ -188,6 +188,11 @@ type TickContext struct {
 	// holds hours for it and whether it is inside them (behave.ReadBuildingHours
 	// over behave.BuildingSpan).
 	Hours behave.HoursReading
+	// Spans are the meetings of the device's room overlapping [from, to), in
+	// start order, as the battery primitive reads them (behave.SpansBetween):
+	// none for a room with no calendar. A read that follows the room's
+	// meetings over a stretch of time, not only at an instant, asks here.
+	Spans func(from, to time.Time) []behave.Span
 }
 
 // Tick is a typed behavior of a Go family: a function that runs on an

@@ -107,7 +107,7 @@ func (d *Device) runTick(t spec.Tick, stop <-chan struct{}, done *sync.WaitGroup
 func (d *Device) applyTick(t spec.Tick) {
 	now := d.clock()
 	span, known := behave.BuildingSpan(d.world(), d.calendarSrc(), d.room)
-	c := spec.TickContext{Room: d.roomState(d.room), Now: now, Rand: d.fam.src, Hours: behave.ReadBuildingHours(span, known, now)}
+	c := spec.TickContext{Room: d.roomState(d.room), Now: now, Rand: d.fam.src, Hours: behave.ReadBuildingHours(span, known, now), Spans: d.roomSpans}
 	changes := t.Run(goDevice{d}, c)
 	if len(changes) == 0 {
 		return
@@ -137,6 +137,16 @@ func (d *Device) applyTick(t spec.Tick) {
 		d.DiffPublisher(StateChange{DeviceID: d.DeviceID, Version: d.Version, Diffs: diffs, Cause: "behavior:" + t.Name})
 	}
 	d.fanoutToSessions(diffs)
+}
+
+// roomSpans is the meetings of the device's room overlapping [from, to): none
+// for a device with no calendar.
+func (d *Device) roomSpans(from, to time.Time) []behave.Span {
+	c := d.calendarSrc()
+	if c == nil {
+		return nil
+	}
+	return behave.SpansBetween(c, d.room, from, to)
 }
 
 // stopAnimator stops what the animator started.
