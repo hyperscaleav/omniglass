@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostNewtronProcessorAndSchedulerReadTheirClassState (#896): the
@@ -23,7 +22,7 @@ func TestOutpostNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var core, slate string
-	s := newHTTPStack(t, "edge-nvp", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-nvp", nil, func(store *fleetShape) []string {
 		core, slate = driverProfile(t, store, "newtron-core-nvp"), driverProfile(t, store, "newtron-slate-nvp")
 		return []string{core, slate}
 	})

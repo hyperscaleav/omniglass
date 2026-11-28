@@ -12,7 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // A server-sent events stream end to end (#1038): Postgres, the bus, a real
@@ -112,7 +112,7 @@ func TestOutpostHTTPStreamLandsChangesAndResumes(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-stream", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-stream", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})
@@ -193,10 +193,10 @@ func TestOutpostHTTPStreamBehindAFormLogin(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	formBar := "bar-form"
-	s := newHTTPStack(t, "edge-stream-login", func(store *profile.Store) {
+	s := newHTTPStack(t, "edge-stream-login", func(store *fleetShape) {
 		base := driverProfile(t, store, "kestrel-api")
-		loginVariant(store, base, formBar, profile.Auth{Type: "form", DefaultUser: "admin", DefaultPassword: "kestrel", Enforce: true})
-	}, func(*profile.Store) []string { return []string{formBar} })
+		loginVariant(store, base, formBar, wire.Auth{Type: "form", DefaultUser: "admin", DefaultPassword: "kestrel", Enforce: true})
+	}, func(*fleetShape) []string { return []string{formBar} })
 	bar := s.devices[formBar]
 	s.authorDriver("bar-form-stream", map[string]any{
 		"version": 1, "transport": "https",

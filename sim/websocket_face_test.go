@@ -13,7 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The websocket face (#1034): a simulated component's control socket, a
@@ -25,8 +25,8 @@ import (
 
 // wsTestConfig is the websocket block the face tests serve: two watchable
 // paths, one settable, and a console drop route.
-func wsTestConfig() profile.WebSocket {
-	return profile.WebSocket{Path: "/api/ws", Paths: []string{"power", "audio"}, Settable: []string{"audio.volume"},
+func wsTestConfig() wire.WebSocket {
+	return wire.WebSocket{Path: "/api/ws", Paths: []string{"power", "audio"}, Settable: []string{"audio.volume"},
 		DropPath: "/api/admin/sockets/drop"}
 }
 

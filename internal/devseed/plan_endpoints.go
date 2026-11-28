@@ -44,8 +44,8 @@ func planDevices(ctx context.Context, gw storage.Gateway, rows planRows, portOff
 	return planDevicesOver(cat, rows, drivers, portOffset)
 }
 
-// planDevicesOver is planDevices with the simulator's catalog (YAML profiles
-// and Go families alike, #2829) and the products' drivers given.
+// planDevicesOver is planDevices with the simulator's catalog (the Go families
+// #2829) and the products' drivers given.
 func planDevicesOver(cat *spec.Catalog, rows planRows, drivers map[string]string, portOffset int) ([]plannedEndpoint, error) {
 	cands := make([]simfleet.Component, len(rows.Components))
 	for i, c := range rows.Components {

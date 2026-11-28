@@ -5,14 +5,14 @@
 // nobody has written a driver for honestly reports a model number and an uptime
 // and nothing more. There is no vendor arc and nothing to switch.
 //
-// The family replaced the generic-device YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the generic-device YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package genericdevice
 
 import (
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry: the product it
@@ -47,14 +47,14 @@ func Spec() spec.Spec {
 		Models: spec.Table(Rows, func(r Row) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
-				Name: "snmp", Protocol: "snmp", Port: 161, Doc: profile.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
+				Name: "snmp", Protocol: "snmp", Port: 161, Doc: wire.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
 				// A community the agent knows and refuses answers
 				// authorizationError, where any other is dropped silently.
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: map[string]any{
 			"status": map[string]any{

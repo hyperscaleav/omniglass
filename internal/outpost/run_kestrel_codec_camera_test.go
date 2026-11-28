@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostKestrelRelayAndGazeReadTheirClass (#897): the shipped
@@ -23,7 +22,7 @@ func TestOutpostKestrelRelayAndGazeReadTheirClass(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var relay, gaze string
-	s := newHTTPStack(t, "edge-kestrel", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-kestrel", nil, func(store *fleetShape) []string {
 		relay, gaze = driverProfile(t, store, "kestrel-relay-api"), driverProfile(t, store, "kestrel-gaze-api")
 		return []string{relay, gaze}
 	})

@@ -26,6 +26,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestImpairingASimulatedDeviceShowsInCollection drives the operator's
@@ -340,10 +341,11 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 // e2eSNMPPort is the port the product's simulator profile serves SNMP on.
 func e2eSNMPPort(t *testing.T, product string) int {
 	t.Helper()
-	ifaces, _ := e2eSimulatedSurfaces(t, product)
-	for _, iface := range ifaces {
-		if iface.Protocol == "snmp" {
-			return iface.Port
+	if p, ok := shipped.Catalog(t).ProfileFor(product); ok {
+		for _, iface := range p.Surfaces() {
+			if iface.Protocol == "snmp" {
+				return iface.Port
+			}
 		}
 	}
 	t.Fatalf("the simulated product %s serves no snmp face", product)

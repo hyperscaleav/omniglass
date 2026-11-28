@@ -1,7 +1,6 @@
 package sim
 
 import (
-	"text/template"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
@@ -65,65 +64,4 @@ func RoomBookingsAt(c *calendar.Calendar, room calendar.Room, at time.Time) map[
 	}
 	out["today"], out["remaining"] = today, remaining
 	return out
-}
-
-// bookingFuncs are the template functions that read a room's booked meetings
-// through the device's clock (the seam a test pins):
-//
-//	bookings            -> the device's own room, as RoomBookingsAt reads it
-//	roomBookings s b r  -> the room site s, building b, room r
-//	servedRooms         -> the rooms a service speaks for (coveredRooms, each with
-//	                       its system's name as "system"), else the device's own
-//	                       room when it has one, else none
-//	ownerBookings o     -> the room of the system o in the world (a push's
-//	                       .Owner); a system the world does not name reads as a
-//	                       room with no booking
-func (d *Device) bookingFuncs() template.FuncMap {
-	// A behavior's mutations each read the room in the same tick, and a read
-	// generates three days of the calendar, so the engine's memo keeps the
-	// reading of one second for its room (room_phase.go): a service reading
-	// thousands of rooms reads each once a tick, however many devices ask.
-	read := func(room calendar.Room) map[string]any {
-		c, at := d.calendarSrc(), d.clock().UTC().Truncate(time.Second)
-		if room == (calendar.Room{}) {
-			c = nil // no room: nothing is booked in it
-		}
-		memo := d.roomMemo()
-		e := memo.entry(roomMemoKey{cal: c, w: nil, room: room, sec: at.Unix()})
-		e.bookOnce.Do(func() {
-			memo.books.Add(1)
-			e.book = RoomBookingsAt(c, room, at)
-		})
-		return e.book
-	}
-	return template.FuncMap{
-		"servedRooms": func() []map[string]any {
-			var out []map[string]any
-			if w := d.world(); w != nil {
-				for _, s := range w.Services {
-					if s.Name != d.Hostname {
-						continue
-					}
-					for _, c := range s.Covers {
-						out = append(out, map[string]any{"system": c.System, "site": c.Site, "building": c.Building, "room": c.Room, "label": c.Label})
-					}
-				}
-			}
-			if len(out) == 0 && d.room != (calendar.Room{}) {
-				out = append(out, map[string]any{"site": d.room.Site, "building": d.room.Building, "room": d.room.Room})
-			}
-			return out
-		},
-		"bookings": func() map[string]any { return read(d.room) },
-		"roomBookings": func(site, building, room string) map[string]any {
-			return read(calendar.Room{Site: site, Building: building, Room: room})
-		},
-		"ownerBookings": func(owner string) map[string]any {
-			p, ok := d.world().PlaceSystem(owner)
-			if !ok {
-				return read(calendar.Room{})
-			}
-			return read(p.CalRoom())
-		},
-	}
 }

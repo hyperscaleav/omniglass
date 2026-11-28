@@ -4,27 +4,13 @@ import (
 	"testing"
 
 	simdevice "github.com/hyperscaleav/omniglass/sim/device"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
-// shippedEngine is an engine over the shipped catalog: the embedded YAML
-// profiles and every Go family.
+// shippedEngine is an engine over the shipped catalog: every Go family.
 func shippedEngine(t testing.TB) *Engine {
 	t.Helper()
-	return NewEngineOver(shippedCatalog(t), profiles.Templates())
-}
-
-// shippedEngineFrom is an engine over a store the test shaped first, beside
-// every shipped family.
-func shippedEngineFrom(t testing.TB, store *profile.Store) *Engine {
-	t.Helper()
-	cat, err := simdevice.CatalogOver(store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return NewEngineOver(cat, profiles.Templates())
+	return NewEngineOver(shippedCatalog(t))
 }
 
 // shippedCatalog is the shipped catalog with any extra family beside it. The

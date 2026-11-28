@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // A family reports named events on its device's live feed (#2834): a route
@@ -23,9 +23,9 @@ func eventFamily() spec.Spec {
 		Name:     "testfamily-events",
 		Identity: spec.Identity{Manufacturer: "Testfamily", Model: "Events", DeviceType: "display", Summary: "A device that reports events"},
 		Models:   []spec.Model{{Product: "tf-events-1", Model: "Events 1"}},
-		Interfaces: []profile.Interface{{
-			Name: "api", Protocol: "http", Port: 8081, Doc: profile.Doc{Summary: "API"},
-			Events: profile.Events{Path: "/api/events", Paths: []string{"status.count"}},
+		Interfaces: []wire.Interface{{
+			Name: "api", Protocol: "http", Port: 8081, Doc: wire.Doc{Summary: "API"},
+			Events: wire.Events{Path: "/api/events", Paths: []string{"status.count"}},
 		}},
 		State: map[string]any{"status": map[string]any{"count": 0}},
 		HTTP: []spec.HTTPRoute{

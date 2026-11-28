@@ -8,8 +8,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
@@ -25,16 +23,12 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("serves a simulated device")
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	// A definition that posts webhooks, found by its subscribe route.
 	var sender []string
-	for _, def := range catalogOf(t, store).Definitions() {
+	for _, def := range shipped.Catalog(t).Definitions() {
 		if def.WebhookFace() != nil {
 			sender = append(sender, def.ID())
 		}
@@ -52,7 +46,7 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key"}}}
 
 	calls := 0
-	s := newSubscriber("http://server:8080", catalogOf(t, store))
+	s := newSubscriber("http://server:8080", shipped.Catalog(t))
 	op := s.operate
 	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
 	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {
@@ -107,14 +101,10 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 	if testing.Short() {
 		t.Skip("serves a simulated device")
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The platform is the profile whose webhook face posts to the ucc-webhook
 	// driver and provisions its rooms, found by that face rather than named.
 	platform := ""
-	for _, def := range catalogOf(t, store).Definitions() {
+	for _, def := range shipped.Catalog(t).Definitions() {
 		if w := def.WebhookFace(); w != nil && w.Provision != "" && w.Driver == "ucc-webhook" {
 			if platform != "" {
 				t.Fatalf("definitions %s and %s both provision rooms for ucc-webhook, want one", platform, def.ID())
@@ -137,7 +127,7 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 		Webhook: &collection.SimWebhook{Path: "/api/v1/webhooks/TOKEN", Scheme: "hmac", Secret: "lab-key",
 			Identities: []string{"hq-conf-1", "zr-huddle-north"}}}}
 	calls := 0
-	s := newSubscriber("http://server:8080", catalogOf(t, store))
+	s := newSubscriber("http://server:8080", shipped.Catalog(t))
 	op := s.operate
 	s.operate = func(d *sim.Device, o sim.Operation) sim.OperationResult { calls++; return op(d, o) }
 	if errs := s.reconcile(listed, engine.Devices()); len(errs) != 0 {

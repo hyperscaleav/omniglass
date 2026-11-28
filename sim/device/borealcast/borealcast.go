@@ -6,8 +6,8 @@
 // (X-Boreal-Key), the way signage players are integrated with a content
 // management system: no SNMP, no command line.
 //
-// The family replaced the boreal-cast-m1 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the boreal-cast-m1 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package borealcast
 
 import (
@@ -16,10 +16,10 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -89,12 +89,12 @@ func Spec() spec.Spec {
 		Models: spec.Table(Rows, func(r Row) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model, Summary: fmt.Sprintf("Boreal %s digital signage media player", r.Model)}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
-				Name: "http-api", Protocol: "http", Port: 80, Doc: profile.Doc{Summary: "Cast JSON API"},
-				Auth: profile.Auth{Type: "header", Header: "X-Boreal-Key", APIKey: castKey, Enforce: true},
+				Name: "http-api", Protocol: "http", Port: 80, Doc: wire.Doc{Summary: "Cast JSON API"},
+				Auth: wire.Auth{Type: "header", Header: "X-Boreal-Key", APIKey: castKey, Enforce: true},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State:   stateFor(Rows[0]),
 		HTTP:    routes(),

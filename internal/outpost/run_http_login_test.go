@@ -12,8 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim/device"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // http logins and digest end to end (#1114): Postgres, the bus, a real
@@ -27,7 +26,7 @@ import (
 // loginProfile is the simulator profile whose http face enforces a login of
 // the auth type and answers every route named, derived from the catalog,
 // never named (#804).
-func loginProfile(t *testing.T, store *profile.Store, typ string, routes ...string) string {
+func loginProfile(t *testing.T, store *fleetShape, typ string, routes ...string) string {
 	t.Helper()
 	var names []string
 	for _, d := range catalogOf(t, store).Definitions() {
@@ -47,7 +46,7 @@ func loginProfile(t *testing.T, store *profile.Store, typ string, routes ...stri
 // servesRoutes reports whether an interface answers every route named (its
 // match, "METHOD /path"): a test that drives a display's routes picks a
 // profile serving them, not whichever login of the type sorts first.
-func servesRoutes(iface profile.Interface, routes []string) bool {
+func servesRoutes(iface wire.Interface, routes []string) bool {
 	have := map[string]bool{}
 	for _, r := range iface.Routes {
 		have[r.Match] = true
@@ -60,34 +59,28 @@ func servesRoutes(iface profile.Interface, routes []string) bool {
 	return true
 }
 
-// loginVariant adds a copy of a profile under name whose http face logs in
-// by auth.
-func loginVariant(store *profile.Store, from, name string, auth profile.Auth) {
-	if _, yaml := store.Devices[from]; !yaml {
-		familyLoginVariant(store, from, name, auth)
-		return
-	}
-	base := *store.Devices[from]
-	base.Name = name
-	base.Interfaces = append([]profile.Interface(nil), base.Interfaces...)
-	for i := range base.Interfaces {
-		if base.Interfaces[i].Protocol == "http" {
-			base.Interfaces[i].Auth = auth
+// loginVariant adds a copy of a family under name whose http face logs in by
+// auth: the family with no models of its own, served beside the shipped ones.
+func loginVariant(shape *fleetShape, from, name string, auth wire.Auth) {
+	for _, fam := range device.Families() {
+		if fam.Name != from {
+			continue
 		}
-	}
-	store.Devices[name] = &base
-}
-
-// faceAuth is a profile's http face's auth block.
-func faceAuth(store *profile.Store, name string) profile.Auth {
-	if d, ok := store.Devices[name]; ok {
-		for _, iface := range d.Interfaces {
-			if iface.Protocol == "http" {
-				return iface.Auth
+		fam.Name, fam.Models = name, nil
+		fam.Interfaces = append([]wire.Interface(nil), fam.Interfaces...)
+		for i := range fam.Interfaces {
+			if fam.Interfaces[i].Protocol == "http" {
+				fam.Interfaces[i].Auth = auth
 			}
 		}
-		return profile.Auth{}
+		shape.variants = append(shape.variants, fam)
+		return
 	}
+	panic("no family " + from)
+}
+
+// faceAuth is a family's http face's auth block.
+func faceAuth(_ *fleetShape, name string) wire.Auth {
 	for _, fam := range device.Families() {
 		if fam.Name != name {
 			continue
@@ -98,29 +91,7 @@ func faceAuth(store *profile.Store, name string) profile.Auth {
 			}
 		}
 	}
-	return profile.Auth{}
-}
-
-// familyLoginVariant is loginVariant for a Go family: a copy of the family
-// under name, with no models of its own, whose http face logs in by auth.
-func familyLoginVariant(store *profile.Store, from, name string, auth profile.Auth) {
-	for _, fam := range device.Families() {
-		if fam.Name != from {
-			continue
-		}
-		fam.Name, fam.Models = name, nil
-		fam.Interfaces = append([]profile.Interface(nil), fam.Interfaces...)
-		for i := range fam.Interfaces {
-			if fam.Interfaces[i].Protocol == "http" {
-				fam.Interfaces[i].Auth = auth
-			}
-		}
-		prev, _ := familyVariants.Load(store)
-		list, _ := prev.([]spec.Spec)
-		familyVariants.Store(store, append(list, fam))
-		return
-	}
-	panic("no profile or family " + from)
+	return wire.Auth{}
 }
 
 // quickDriver authors a copy of a shipped driver whose polls run every
@@ -214,12 +185,12 @@ func TestOutpostHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
 	}
 	var formProfile string
 	tokenProfile := "panel-token"
-	s := newHTTPStack(t, "edge-login", func(store *profile.Store) {
+	s := newHTTPStack(t, "edge-login", func(store *fleetShape) {
 		formProfile = loginProfile(t, store, "form")
 		base := faceAuth(store, formProfile)
-		loginVariant(store, formProfile, tokenProfile, profile.Auth{Type: "token", DefaultUser: base.DefaultUser, DefaultPassword: base.DefaultPassword,
+		loginVariant(store, formProfile, tokenProfile, wire.Auth{Type: "token", DefaultUser: base.DefaultUser, DefaultPassword: base.DefaultPassword,
 			Enforce: true, SessionTTL: 600})
-	}, func(*profile.Store) []string { return []string{formProfile, tokenProfile} })
+	}, func(*fleetShape) []string { return []string{formProfile, tokenProfile} })
 	panel, tokenPanel := s.devices[formProfile], s.devices[tokenProfile]
 	password := fmt.Sprint(panel.HTTPAuth.Password)
 
@@ -299,12 +270,12 @@ func TestOutpostHTTPDigestAnswersItsChallenge(t *testing.T) {
 	}
 	var md5Profile string
 	shaProfile := "display-sha256"
-	s := newHTTPStack(t, "edge-digest", func(store *profile.Store) {
+	s := newHTTPStack(t, "edge-digest", func(store *fleetShape) {
 		md5Profile = loginProfile(t, store, "digest", "POST /api/display/power", "POST /api/display/input")
 		a := faceAuth(store, md5Profile)
 		a.Algorithm = "SHA-256"
 		loginVariant(store, md5Profile, shaProfile, a)
-	}, func(*profile.Store) []string { return []string{md5Profile, shaProfile} })
+	}, func(*fleetShape) []string { return []string{md5Profile, shaProfile} })
 	s.quickDriver("boreal-edge-web", "display-web-quick")
 	owner := s.owner()
 

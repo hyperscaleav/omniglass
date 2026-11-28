@@ -11,9 +11,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/docslint"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simhub"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 func TestSimulationBodyConnectedWindow(t *testing.T) {
@@ -140,20 +141,28 @@ func TestSimulationBodyCarriesFaultsAndImpairmentAge(t *testing.T) {
 	}
 }
 
-// A route's quick sets are what its profile declares: the state path, the
-// body field and the values it accepts, with the profile's default for that
-// path, so the console offers each value without parsing a template (#2462).
+// A route's quick sets are what its family declares: the state path, the body
+// field and the values it accepts, with the family's default for that path, so
+// the console offers each value without parsing a handler (#2462).
 func TestSimSurfaceCarriesTheRoutesQuickSets(t *testing.T) {
 	t.Parallel()
-	p := &profile.DeviceProfile{
-		Defaults: map[string]any{"status": map[string]any{"device": map[string]any{"power": "on"}}},
-		Interfaces: []profile.Interface{{Name: "web", Protocol: "http", Port: 80, Routes: []profile.Route{{
-			Match:     "POST /api/display/power",
-			Mutations: []profile.Mutation{{Path: "status.device.power", Value: "{{ .Request.Body.power }}", Enum: []string{"on", "off", "standby"}}},
-		}}}},
+	fam, err := spec.NewFamily(spec.Spec{
+		Name:       "lamp",
+		State:      map[string]any{"status": map[string]any{"device": map[string]any{"power": "on"}}},
+		Interfaces: []wire.Interface{{Name: "web", Protocol: "http", Port: 80}},
+		HTTP: []spec.HTTPRoute{{
+			Match: "POST /api/display/power",
+			Sets:  []wire.Set{{Path: "status.device.power", Field: "power", Values: []string{"on", "off", "standby"}}},
+			Handle: func(spec.Device, spec.HTTPRequest) spec.HTTPResponse {
+				return spec.HTTPResponse{}
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	var power *simRouteBody
-	for _, s := range simSurface(spec.FromProfile(p), 0) {
+	for _, s := range simSurface(fam, 0) {
 		for i, r := range s.Routes {
 			if r.Method == "POST" && r.Path == "/api/display/power" {
 				power = &s.Routes[i]
@@ -169,23 +178,30 @@ func TestSimSurfaceCarriesTheRoutesQuickSets(t *testing.T) {
 	}
 }
 
-// A profile's behaviors (what changes on its own over time) reach the console
-// as read-only facts: the name, how often, which state paths it writes, and
-// whether it posts a webhook.
-func TestSimBehaviorsListWhatTheProfileDeclares(t *testing.T) {
+// A family's ticks (what changes on its own over time) reach the console as
+// read-only facts: the name, how often, and which state paths it writes.
+func TestSimBehaviorsListWhatTheFamilyDeclares(t *testing.T) {
 	t.Parallel()
-	p := &profile.DeviceProfile{Behaviors: []profile.Behavior{
-		{Name: "temperature_drift", Schedule: profile.Schedule{Interval: "5s"}, Mutations: []profile.Mutation{{Path: "status.display.temperature"}, {Path: "status.display.temperature"}, {Path: "status.fan"}}},
-		{Name: "heartbeat", Schedule: profile.Schedule{Interval: "30s"}, Emit: &profile.Emit{URL: "x"}},
-	}}
-	got := simBehaviors(spec.FromProfile(p))
-	if len(got) != 2 || got[0].Name != "temperature_drift" || got[0].Interval != "5s" || !reflect.DeepEqual(got[0].Writes, []string{"status.display.temperature", "status.fan"}) || got[0].Emits {
+	run := func(spec.Device, spec.TickContext) []surface.Change { return nil }
+	fam, err := spec.NewFamily(spec.Spec{Name: "lamp", Ticks: []spec.Tick{
+		{Name: "temperature_drift", Interval: 5 * time.Second, Writes: []string{"status.display.temperature", "status.fan"}, Run: run},
+		{Name: "heartbeat", Interval: 30 * time.Second, Run: run},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := simBehaviors(fam)
+	if len(got) != 2 || got[0].Name != "temperature_drift" || got[0].Interval != "5s" || !reflect.DeepEqual(got[0].Writes, []string{"status.display.temperature", "status.fan"}) {
 		t.Fatalf("behaviors = %+v", got)
 	}
-	if !got[1].Emits || len(got[1].Writes) != 0 {
+	if got[1].Interval != "30s" || len(got[1].Writes) != 0 {
 		t.Fatalf("heartbeat = %+v", got[1])
 	}
-	if simBehaviors(spec.FromProfile(&profile.DeviceProfile{})) != nil {
-		t.Fatal("a profile with no behaviors lists some")
+	bare, err := spec.NewFamily(spec.Spec{Name: "bare"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if simBehaviors(bare) != nil {
+		t.Fatal("a family with no ticks lists some")
 	}
 }

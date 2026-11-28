@@ -2,8 +2,10 @@ package sim
 
 import (
 	"testing"
+	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
 // TestSetBehaviorOverrides_ValidationRejects pins the rejection surface
@@ -158,12 +160,11 @@ func TestOverridePublishesCauseAttribution(t *testing.T) {
 	}
 }
 
-// TestProfileBehaviorSkipsOverriddenPath is the path-overlap contract
-// from omniglass-lab#102: while a scenario override is active on a path, the
-// profile-declared behavior that would otherwise write the same path
-// skips that write. The rest of the profile behavior continues, only
-// the overlapping mutation is dropped, not the whole behavior.
-func TestProfileBehaviorSkipsOverriddenPath(t *testing.T) {
+// TestTickSkipsOverriddenPath is the path-overlap contract from
+// omniglass-lab#102: while a scenario override is active on a path, a family's
+// tick that would otherwise write the same path skips that write. The rest of
+// the tick continues, only the overlapping change is dropped, not the whole tick.
+func TestTickSkipsOverriddenPath(t *testing.T) {
 	d := newTestDevice(t, "d-1", map[string]any{
 		"status": map[string]any{
 			"device": map[string]any{
@@ -174,16 +175,21 @@ func TestProfileBehaviorSkipsOverriddenPath(t *testing.T) {
 	})
 	defer d.StopBehaviorOverrides()
 
-	// Profile behavior writes both uptime and cpu_load every tick.
-	if err := d.AddBehaviorFromProfile(&profile.Behavior{
+	// The family's tick writes both uptime and cpu_load every time it runs.
+	count := int64(0)
+	if err := d.addHandlers(spec.Handlers{Ticks: []spec.Tick{{
 		Name:     "uptime_and_cpu",
-		Schedule: profile.Schedule{Interval: "1s"},
-		Mutations: []profile.Mutation{
-			{Path: "status.device.uptime", Value: "{{ add .State.status.device.uptime 5 }}"},
-			{Path: "status.device.cpu_load", Value: "{{ add .State.status.device.cpu_load 1 }}"},
+		Interval: time.Second,
+		Writes:   []string{"status.device.uptime", "status.device.cpu_load"},
+		Run: func(_ spec.Device, _ spec.TickContext) []surface.Change {
+			count++
+			return []surface.Change{
+				{Path: "status.device.uptime", Value: 5 * count},
+				{Path: "status.device.cpu_load", Value: float64(20 + count)},
+			}
 		},
-	}); err != nil {
-		t.Fatalf("AddBehaviorFromProfile: %v", err)
+	}}}, spec.Model{}); err != nil {
+		t.Fatalf("addHandlers: %v", err)
 	}
 
 	// Scenario override claims cpu_load.
@@ -196,14 +202,14 @@ func TestProfileBehaviorSkipsOverriddenPath(t *testing.T) {
 		t.Fatalf("SetBehaviorOverrides: %v", err)
 	}
 
-	// Profile-behavior tick: uptime advances, cpu_load is skipped.
-	d.tickBehavior(&d.behaviors[0])
+	// Tick: uptime advances, cpu_load is skipped.
+	d.TickBehavior("uptime_and_cpu")
 	s := d.State()["status"].(map[string]any)["device"].(map[string]any)
 	if !numericEquals(s["uptime"], 5) {
-		t.Errorf("uptime = %v, want 5 (profile behavior should fire normally for non-overlapping paths)", s["uptime"])
+		t.Errorf("uptime = %v, want 5 (the tick should write the paths no override holds)", s["uptime"])
 	}
 	if !numericEquals(s["cpu_load"], 20) {
-		t.Errorf("cpu_load = %v, want 20 (profile behavior should skip overridden path)", s["cpu_load"])
+		t.Errorf("cpu_load = %v, want 20 (the tick should skip the overridden path)", s["cpu_load"])
 	}
 
 	// Override tick: cpu_load advances to the override's value.
@@ -213,16 +219,15 @@ func TestProfileBehaviorSkipsOverriddenPath(t *testing.T) {
 		t.Errorf("after override tick: cpu_load = %v, want 90", s["cpu_load"])
 	}
 
-	// Once the override is removed, the next profile tick must write
-	// cpu_load again, the skip is scoped to the active override
-	// window, not permanent.
+	// Once the override is removed, the next tick writes cpu_load again: the
+	// skip is scoped to the active override window, not permanent.
 	if err := d.SetBehaviorOverrides(nil); err != nil {
 		t.Fatalf("clear SetBehaviorOverrides: %v", err)
 	}
-	d.tickBehavior(&d.behaviors[0])
+	d.TickBehavior("uptime_and_cpu")
 	s = d.State()["status"].(map[string]any)["device"].(map[string]any)
-	if !numericEquals(s["cpu_load"], 91) {
-		t.Errorf("after override cleared: cpu_load = %v, want 91", s["cpu_load"])
+	if !numericEquals(s["cpu_load"], 22) {
+		t.Errorf("after override cleared: cpu_load = %v, want 22", s["cpu_load"])
 	}
 }
 
@@ -241,42 +246,6 @@ func numericEquals(got any, want float64) bool {
 		return float64(v) == want
 	}
 	return false
-}
-
-// TestFilterOverriddenMutations_LiteralPathSkip covers the helper that
-// the profile-behavior tick uses to drop overridden writes. Literal
-// paths are skipped; mutations with no path template are passed through
-// unchanged (defensive, production code never produces those).
-func TestFilterOverriddenMutations_LiteralPathSkip(t *testing.T) {
-	d := newTestDevice(t, "d-1", nil)
-
-	// Compile two mutations: one on a literal path that should be
-	// skipped, one on a literal path that should not.
-	muts, err := compileBehaviorMutationList([]profile.Mutation{
-		{Path: "status.dsp.cpu_load", Value: "90"},
-		{Path: "status.device.uptime", Value: "5"},
-	}, behaviorFuncs(newDeviceRand(d.DeviceID), d.clock))
-	if err != nil {
-		t.Fatalf("compileBehaviorMutationList: %v", err)
-	}
-
-	overridePaths := map[string]struct{}{
-		"status.dsp.cpu_load": {},
-	}
-	got := filterOverriddenMutations(muts, overridePaths)
-	if len(got) != 1 {
-		t.Fatalf("filterOverriddenMutations returned %d mutations, want 1", len(got))
-	}
-	// Verify the survivor is the uptime mutation by rendering its path.
-	raw, _ := rawPathSource(got[0].path)
-	if raw != "status.device.uptime" {
-		t.Errorf("kept mutation path = %q, want status.device.uptime", raw)
-	}
-
-	// Empty overrides set returns the input unchanged.
-	if out := filterOverriddenMutations(muts, nil); len(out) != len(muts) {
-		t.Errorf("empty override set: returned %d, want %d", len(out), len(muts))
-	}
 }
 
 func stringSliceEqual(a, b []string) bool {

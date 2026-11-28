@@ -24,14 +24,14 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 const protocolsPortShift = 25000
 
 // simulatedProductOn picks a seeded product on driverID that a simulator
-// profile or Go family serves, derived from both catalogs rather than named.
+// profile serves, derived from both catalogs rather than named.
 func simulatedProductOn(t *testing.T, driverID string) string {
 	t.Helper()
 	raw, err := seed.FactsJSON()
@@ -47,10 +47,7 @@ func simulatedProductOn(t *testing.T, driverID string) string {
 	if err := json.Unmarshal(raw, &facts); err != nil {
 		t.Fatal(err)
 	}
-	cat, err := device.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	var names []string
 	for _, p := range facts.Products {
 		if _, ok := cat.ForProduct(p.ID); ok && p.DriverID == driverID {

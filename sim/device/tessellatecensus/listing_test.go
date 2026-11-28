@@ -20,9 +20,6 @@ func TestTheConsoleListsEachBandsCommands(t *testing.T) {
 	for _, iface := range f.Surfaces() {
 		for _, c := range iface.Commands {
 			m := c.Match
-			if c.MatchHex != "" {
-				m = "hex " + c.MatchHex
-			}
 			listed[iface.Name] = append(listed[iface.Name], m)
 			if c.Doc.Summary != "" {
 				summaries[m] = c.Doc.Summary

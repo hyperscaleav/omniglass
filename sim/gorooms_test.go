@@ -11,8 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/ingress"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -30,9 +30,9 @@ func roomsSpec(target string) spec.Spec {
 	return spec.Spec{
 		Name: roomsFamily, Identity: spec.Identity{Manufacturer: "Wire", Model: "Rooms", DeviceType: "cloud-service"},
 		Models: []spec.Model{{Product: "wt-rooms-1"}},
-		Interfaces: []profile.Interface{{
+		Interfaces: []wire.Interface{{
 			Name: "http", Protocol: "http", Port: 80,
-			Events: profile.Events{Path: "/events", RetryMS: 1000},
+			Events: wire.Events{Path: "/events", RetryMS: 1000},
 		}},
 		State: map[string]any{"status": map[string]any{"device": map[string]any{"boot_epoch": 0}}},
 		HTTP: []spec.HTTPRoute{{Match: "POST /go", Handle: func(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
@@ -50,7 +50,7 @@ func roomsSpec(target string) spec.Spec {
 
 func roomsDevice(t *testing.T, target string, w *world.World, cal *calendar.Calendar, room calendar.Room) (*Device, *time.Time) {
 	t.Helper()
-	e := NewEngineOver(shippedCatalog(t, roomsSpec(target)), nil)
+	e := NewEngineOver(shippedCatalog(t, roomsSpec(target)))
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	e.SetWorld(w)
@@ -147,7 +147,7 @@ func TestARoomIsReadOnceASecondForAFamily(t *testing.T) {
 func TestAFamilySendsASignedPostAndNamesAnEvent(t *testing.T) {
 	var c caught
 	d, _ := roomsDevice(t, c.server(t).URL, nil, nil, calendar.Room{})
-	d.SetEvents(profile.Events{Path: "/events"}) // as the face does when it starts
+	d.SetEvents(wire.Events{Path: "/events"}) // as the face does when it starts
 	rec := wireRequest(t, d, wireStep{Name: "go", Method: "POST", Path: "/go", Body: `{}`})
 	if rec.Status != http.StatusOK {
 		t.Fatalf("POST /go = %d %s", rec.Status, rec.Response)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -37,21 +36,6 @@ func calEngine(t *testing.T, seed int64, room calendar.Room, at *time.Time) (*En
 }
 
 var probeSeq int
-
-// stampBehavior registers a behavior writing the rendered expr to a probe
-// path, ticks it once and returns what it wrote.
-func stampBehavior(t *testing.T, d *Device, expr string) any {
-	t.Helper()
-	probeSeq++
-	name := "cal" + string(rune('a'+probeSeq))
-	if err := d.AddBehaviorFromProfile(&profile.Behavior{Name: name, Schedule: profile.Schedule{Interval: "60s"},
-		Mutations: []profile.Mutation{{Path: "cal_probe", Value: expr}}}); err != nil {
-		t.Fatal(err)
-	}
-	d.SetState(map[string]any{"cal_probe": ""}, 2)
-	d.TickBehavior(name)
-	return d.ReadPath("cal_probe")
-}
 
 // A device's template reads its own room's meeting through its clock, two
 // engines of one seed read the same day, and a device in another room reads

@@ -12,11 +12,11 @@
 // the arc and the key but has a different API (a status and a reboot, no route),
 // so it is a family of its own.
 //
-// Its route follows the room's meetings off the lab calendar: the codec's feed
-// while a meeting is held, the lectern laptop through the stretch content is
-// shared, and the input nothing is plugged into between meetings and through a
-// no-show. The family replaced the meridian-mx-84 YAML profile; wire parity
-// with it is held by golden transcripts (sim/testdata/wire).
+// Its route follows the room's meetings off the lab calendar: the codec's feed while a meeting is
+// held, the lectern laptop through the stretch content is shared, and the input nothing is plugged
+// into between meetings and through a no-show. The family replaced the meridian-mx-84 YAML profile;
+// its wire matched the profile's before the profile was deleted (#2826); the driver contract test
+// now holds it.
 package meridianswitcher
 
 import (
@@ -24,11 +24,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -124,16 +124,16 @@ func Spec() spec.Spec {
 				State: map[string]any{"configuration": map[string]any{"device": map[string]any{"model": r.Model}, "firmware": map[string]any{"version": r.Firmware}}},
 			}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
-				Name: "http-api", Protocol: "http", Port: 80, Doc: profile.Doc{Summary: "Meridian JSON control API"},
-				Auth: profile.Auth{Type: "header", Header: "X-Meridian-Key", APIKey: "meridian-lab-key", Enforce: true},
+				Name: "http-api", Protocol: "http", Port: 80, Doc: wire.Doc{Summary: "Meridian JSON control API"},
+				Auth: wire.Auth{Type: "header", Header: "X-Meridian-Key", APIKey: "meridian-lab-key", Enforce: true},
 			},
 			{
-				Name: "snmp", Protocol: "snmp", Port: 161, Doc: profile.Doc{Summary: "SNMP monitoring"},
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Name: "snmp", Protocol: "snmp", Port: 161, Doc: wire.Doc{Summary: "SNMP monitoring"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State:   stateFor(Rows[0]),
 		HTTP:    routes(),

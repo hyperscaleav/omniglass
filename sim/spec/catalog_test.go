@@ -11,37 +11,27 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
-func TestCatalogResolvesAProductToItsYAMLProfileWhenNoFamilyClaimsIt(t *testing.T) {
-	store := loadYAML(t)
-	cat, err := spec.NewCatalog(store, spectest.Spec())
+func TestCatalogResolvesNothingForAnUnknownProduct(t *testing.T) {
+	cat, err := spec.NewCatalog(spectest.Spec())
 	if err != nil {
 		t.Fatal(err)
-	}
-	for product, overlay := range map[string]map[string]any{
-		"yaml-display":     nil,
-		"yaml-display-big": {"size": 65},
-	} {
-		r, ok := cat.ForProduct(product)
-		if !ok || r.Definition.ID() != "yaml-display" || r.Definition.Kind() != spec.KindYAML || !reflect.DeepEqual(r.Overlay, overlay) {
-			t.Errorf("%s resolved to %+v (ok=%v)", product, r, ok)
-		}
-		if r.Identity.Manufacturer != "Acme" || r.Identity.DeviceType != "display" {
-			t.Errorf("%s identity = %+v", product, r.Identity)
-		}
 	}
 	if _, ok := cat.ForProduct("nothing"); ok {
 		t.Error("an unknown product resolved")
 	}
+	if _, ok := cat.Lookup("nothing"); ok {
+		t.Error("an unknown definition id resolved")
+	}
 }
 
 func TestCatalogResolvesAProductToTheFamilyThatClaimsIt(t *testing.T) {
-	cat, err := spec.NewCatalog(loadYAML(t), spectest.Spec())
+	cat, err := spec.NewCatalog(spectest.Spec())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range spectest.Rows {
 		r, ok := cat.ForProduct(row.Product)
-		if !ok || r.Definition.ID() != spectest.Name || r.Definition.Kind() != spec.KindGo {
+		if !ok || r.Definition.ID() != spectest.Name {
 			t.Fatalf("%s resolved to %+v (ok=%v)", row.Product, r, ok)
 		}
 		if got, ok := spec.Row[spectest.Row](r.Model); !ok || got != row {
@@ -59,25 +49,8 @@ func TestCatalogResolvesAProductToTheFamilyThatClaimsIt(t *testing.T) {
 	if !ok || r.Definition.ID() != spectest.Name || r.Model.Product != "" || r.Overlay != nil {
 		t.Errorf("the family's own name resolved to %+v (ok=%v)", r, ok)
 	}
-	if d, ok := cat.Lookup(spectest.Name); !ok || d.Kind() != spec.KindGo {
+	if _, ok := cat.Lookup(spectest.Name); !ok {
 		t.Error("Lookup by the family's id did not find the family")
-	}
-}
-
-// A family that claims a product a YAML profile also simulates wins it; the
-// profile still serves the rest.
-func TestCatalogFamilyWinsAProductAYAMLProfileAlsoSimulates(t *testing.T) {
-	fam := spectest.Spec()
-	fam.Models = append(fam.Models, spec.Model{Product: "yaml-display-big"})
-	cat, err := spec.NewCatalog(loadYAML(t), fam)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r, _ := cat.ForProduct("yaml-display-big"); r.Definition.ID() != spectest.Name {
-		t.Errorf("yaml-display-big resolved to %s, want the family", r.Definition.ID())
-	}
-	if r, _ := cat.ForProduct("yaml-display"); r.Definition.ID() != "yaml-display" {
-		t.Errorf("yaml-display resolved to %s, want its profile", r.Definition.ID())
 	}
 }
 
@@ -86,7 +59,6 @@ func TestCatalogRefusesWhatItCouldNotServeFaithfully(t *testing.T) {
 		mutate func(*spec.Spec)
 		want   string
 	}{
-		"a name a profile has":     {func(s *spec.Spec) { s.Name = "yaml-display" }, "the name of another definition"},
 		"a model with no product":  {func(s *spec.Spec) { s.Models = append(s.Models, spec.Model{}) }, "no product"},
 		"a product listed twice":   {func(s *spec.Spec) { s.Models = append(s.Models, s.Models[0]) }, "twice"},
 		"no name":                  {func(s *spec.Spec) { s.Name = "" }, "no name"},
@@ -105,16 +77,24 @@ func TestCatalogRefusesWhatItCouldNotServeFaithfully(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fam := spectest.Spec()
 			c.mutate(&fam)
-			_, err := spec.NewCatalog(loadYAML(t), fam)
+			_, err := spec.NewCatalog(fam)
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("err = %v, want one containing %q", err, c.want)
 			}
 		})
 	}
+	t.Run("a name another family has", func(t *testing.T) {
+		other := spectest.Spec()
+		other.Models = nil
+		_, err := spec.NewCatalog(spectest.Spec(), other)
+		if err == nil || !strings.Contains(err.Error(), "the name of another definition") {
+			t.Fatalf("err = %v", err)
+		}
+	})
 	t.Run("two families claiming one product", func(t *testing.T) {
 		other := spectest.Spec()
 		other.Name = "testfamily-other"
-		_, err := spec.NewCatalog(nil, spectest.Spec(), other)
+		_, err := spec.NewCatalog(spectest.Spec(), other)
 		if err == nil || !strings.Contains(err.Error(), "claimed by both") {
 			t.Fatalf("err = %v", err)
 		}
@@ -122,7 +102,7 @@ func TestCatalogRefusesWhatItCouldNotServeFaithfully(t *testing.T) {
 }
 
 func TestDefinitionsListsEveryDefinitionByID(t *testing.T) {
-	cat, err := spec.NewCatalog(loadYAML(t), spectest.Spec())
+	cat, err := spec.NewCatalog(spectest.Spec())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +110,7 @@ func TestDefinitionsListsEveryDefinitionByID(t *testing.T) {
 	for _, d := range cat.Definitions() {
 		ids = append(ids, d.ID())
 	}
-	if !reflect.DeepEqual(ids, []string{spectest.Name, "yaml-display"}) {
+	if !reflect.DeepEqual(ids, []string{spectest.Name}) {
 		t.Fatalf("ids = %v", ids)
 	}
 }
@@ -162,7 +142,7 @@ func TestAFamilyOfOneIsNamedForItsProduct(t *testing.T) {
 		Models: []spec.Model{{Product: "solo-box", Model: "Box 1", Summary: "the only one",
 			State: map[string]any{"configuration": map[string]any{"device": map[string]any{"model": "Box 1"}}}}},
 	}
-	cat, err := spec.NewCatalog(nil, one)
+	cat, err := spec.NewCatalog(one)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +154,7 @@ func TestAFamilyOfOneIsNamedForItsProduct(t *testing.T) {
 		t.Errorf("products = %v, want the one product once", got)
 	}
 	one.Models = append(one.Models, one.Models[0])
-	if _, err := spec.NewCatalog(nil, one); err == nil || !strings.Contains(err.Error(), "twice") {
+	if _, err := spec.NewCatalog(one); err == nil || !strings.Contains(err.Error(), "twice") {
 		t.Errorf("a product listed twice: err = %v, want a refusal", err)
 	}
 }
@@ -199,7 +179,7 @@ func TestAFamilyPushFaceNeedsABodyAndACadence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p := f.PushFace(); p == nil || p.Every != "30s" {
+	if p := f.PushFace(); p == nil || p.Every != 30*time.Second {
 		t.Errorf("push face = %+v, want one every 30s", p)
 	}
 	if f.WebhookFace() != nil {

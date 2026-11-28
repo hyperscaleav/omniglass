@@ -92,7 +92,7 @@ func TestEngineClockOffsetMovesEveryCalendarFunc(t *testing.T) {
 	}
 }
 
-// The offset moves the simulated world's own time: a route's `now` stamp and
+// The offset moves the simulated world's own time: an override's `now` stamp and
 // an uptime anchor read the device's clock, so a reboot or a start stays at
 // zero uptime whatever the offset. What Omniglass stamps and the node collects
 // on is real time, which the offset never reaches (#2800).
@@ -104,9 +104,9 @@ func TestClockOffsetKeepsUptimeAndCollectionStampsReal(t *testing.T) {
 	if got := e.Now().Sub(time.Now()); got < offset-time.Second || got > offset+time.Second {
 		t.Fatalf("the engine's clock runs %v ahead, want %v", got, offset)
 	}
-	stamp := d.routeFuncs()["now"].(func() int64)()
+	stamp := d.behaviorFuncs()["now"].(func() int64)()
 	if want := time.Now().Add(offset).Unix(); stamp < want-5 || stamp > want+5 {
-		t.Fatalf("a route's now stamps %d, want the simulated %d", stamp, want)
+		t.Fatalf("an override's now stamps %d, want the simulated %d", stamp, want)
 	}
 	if up := toInt64(d.ReadPath("status.device.uptime")); up < 0 || up > 5 {
 		t.Fatalf("a device that has just started reads %ds of uptime on a clock offset by %v", up, offset)

@@ -12,20 +12,20 @@ import (
 )
 
 // The seams through which the protocol servers serve a Go-declared surface
-// (sim/surface, #2831) beside the profile's own commands, routes and OIDs.
+// (sim/surface, #2831) beside a family's own commands, routes and OIDs.
 // Attach before the device serves. A surface is a function of its family's
 // typed state; the device's state map only carries what a surface reports it
-// changed, so subscribers, the diff stream and the version see a Go command
-// as they see a YAML one.
+// changed, so subscribers, the diff stream and the version see a command
+// a surface answers as they see any other write.
 
 // AttachCommands serves a Go-declared line-protocol surface on every
-// persistent face the device has, after the profile's own commands.
+// persistent face the device has, after the family's own commands.
 func (d *Device) AttachCommands(c surface.Commander) { d.goCommands = append(d.goCommands, c) }
 
-// AttachRoute serves a Go-declared HTTP route, ahead of the profile's own.
+// AttachRoute serves a Go-declared HTTP route, ahead of a family's own.
 func (d *Device) AttachRoute(r surface.Route) { d.goRoutes = append(d.goRoutes, r) }
 
-// AttachOIDs serves Go-declared SNMP scalars beside the profile's OID map.
+// AttachOIDs serves Go-declared SNMP scalars beside a family's own.
 func (d *Device) AttachOIDs(oids ...surface.OID) { d.goOIDs = append(d.goOIDs, oids...) }
 
 // runGoCommand answers a line from the attached Go surfaces and applies the

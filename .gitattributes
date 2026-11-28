@@ -2,7 +2,7 @@
 # and left out of the language stats. A conflict in one is resolved by
 # regenerating, never by hand (#1095). No custom merge drivers here: GitHub's
 # server-side merge ignores them. Every file a `make gen` generator writes is
-# listed here (#1492); sim/simfleet/plan.go and sim/profiles/coverage.yaml
+# listed here (#1492); sim/simfleet/plan.go and sim/device/coverage.go
 # are hand-written sources, no generator emits them, so they are not listed.
 api/openapi.json linguist-generated=true
 api/openapi.yaml linguist-generated=true
@@ -16,7 +16,9 @@ docs/src/content/docs/reference/cli/index.md linguist-generated=true
 docs/src/content/docs/reference/mcp/index.md linguist-generated=true
 docs/src/content/docs/architecture/data-model.md linguist-generated=true
 docs/public/d2/** linguist-generated=true
-# Golden wire transcripts (#2826): machine-recorded proof, read by the replay tests,
-# not by people. Diffs show them as changed without their content, so a review
-# prompt holds the code, not 5 MB of JSON.
+
+# Wire transcripts are machine-recorded: the YAML goldens (deleted in #2837, whose
+# deletion would otherwise put 277k lines of JSON in a review) and any capture from
+# a real device replayed through the seam (sim/wire_replay_test.go) later. A review
+# reads the code, not a recording.
 sim/testdata/wire/*.json -diff linguist-generated=true

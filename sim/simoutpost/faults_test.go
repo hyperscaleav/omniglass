@@ -1,27 +1,45 @@
 package simoutpost
 
 import (
-	"net"
 	"reflect"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
+// powerDevice is a device of a one-control family: a power route that sets the
+// path from a body field to on or off.
 func powerDevice(t *testing.T, id string) *sim.Device {
 	t.Helper()
-	state := func() map[string]any {
-		return map[string]any{"status": map[string]any{"device": map[string]any{"power": "on"}}}
+	fam := spec.Spec{
+		Name:       "powerbox",
+		State:      map[string]any{"status": map[string]any{"device": map[string]any{"power": "on"}}},
+		Interfaces: []wire.Interface{{Name: "web", Protocol: "http", Port: 80}},
+		HTTP: []spec.HTTPRoute{{
+			Match: "POST /api/display/power",
+			Sets:  []wire.Set{{Path: "status.device.power", Field: "power", Values: []string{"on", "off"}}},
+			Handle: func(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
+				v, _ := r.Body["power"].(string)
+				if v != "on" && v != "off" {
+					return spec.HTTPResponse{Status: 400, Body: "refused"}
+				}
+				_ = d.Write("status.device.power", v)
+				return spec.HTTPResponse{Body: map[string]any{"ok": true}}
+			},
+		}},
 	}
-	d := sim.NewDevice(id, "h", net.ParseIP("127.60.0.1"), "p", 1, state())
-	d.SetDefaults(state())
-	r := &profile.Route{Match: "POST /api/display/power", Mutations: []profile.Mutation{{Path: "status.device.power", Value: "{{ .Request.Body.power }}", Enum: []string{"on", "off"}}}}
-	if err := d.AddRouteFromProfile(r, `{}`); err != nil {
+	cat, err := spec.NewCatalog(fam)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return d
+	e := sim.NewEngineOver(cat)
+	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: id, Hostname: "h", LoopbackIP: "127.60.0.1", ProfileName: "powerbox", Version: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	return e.Devices()[0]
 }
 
 // The batch carries only the devices holding a fault, by component id.

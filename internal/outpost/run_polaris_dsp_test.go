@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostPolarisDSPReadsItsProgramOutput (#1493): the shipped
@@ -22,7 +20,7 @@ func TestOutpostPolarisDSPReadsItsProgramOutput(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var prof string
-	s := newHTTPStack(t, "edge-dsp", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-dsp", nil, func(store *fleetShape) []string {
 		prof = driverProfile(t, store, "polaris-dsp-snmp")
 		return []string{prof}
 	})

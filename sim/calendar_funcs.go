@@ -28,130 +28,6 @@ func (e *Engine) World() *world.World { return e.world.Load() }
 // Room is the room the device sits in, as its snapshot located it.
 func (d *Device) Room() calendar.Room { return d.room }
 
-// calendarFuncs are the template functions that read the lab calendar through
-// the device's clock (the seam a test pins):
-//
-//	meetingNow            -> the meeting in the device's own room now, nil when none
-//	meetingNext           -> the room's next meeting after now, nil when none
-//	hasCalendar           -> whether the device's room holds a calendar at all
-//	meetingsBetween a b   -> the room's meetings overlapping [a, b) (unix seconds), in start order
-//	roomMeetingNow s b r  -> the same for the room site s, building b, room r
-//	roomMeetingNext s b r
-//	roomPhase, roomPhaseOf s b r, ownerPhase o
-//	                      -> a room's phase and the facts every device in it shares: in use (the
-//	                         wake lead, the cooldown tail), call active, attendees, sharing, impaired
-//	                         (room_phase.go, #2797); the timing is the standard's meeting knobs,
-//	                         never a number in a profile
-//	problemsNow           -> the scripted problems active in the device's own room now, each a map
-//	                         (kind, name, role, unplugged, loss_pct, pin_path, pin_value, start, end);
-//	                         a fact of the world the executor applies (problems.go), for a profile
-//	                         that wants to read it, never to re-implement it (#2769)
-//	meetingPrev           -> the device's own room's last meeting that has ended by now, nil when none (#2775)
-//	roomMeetingPrev s b r -> the last meeting of that room that has ended by now, nil when none (#2775)
-//	ownerRoom o           -> the {site, building, room} of the system o in the world, nil when none
-//	ownerMeetingNow o     -> the meeting in system o's room now (ownerMeetingNext: the next)
-//	coveredRooms          -> the rooms a service device speaks for, each {site, building, room}
-//	bookings, roomBookings s b r, ownerBookings o
-//	                      -> a room's booked meetings alone (calendar_bookings.go)
-//
-// A meeting reads as a map: kind, origin, organizer, expected, actual,
-// outcome, start, end, slot_start, slot_end (unix seconds) and the room's
-// site, building and room, so a profile writes
-// {{ with meetingNow }}{{ .outcome }}{{ end }}. A service that speaks for many
-// rooms (a booking platform, a meeting platform) reads by room key: the
-// calendar is keyed by room, and a push's .Owner is a system, which the
-// service resolves to its room key before it reads.
-func (d *Device) calendarFuncs() template.FuncMap {
-	read := func(room calendar.Room, next bool) map[string]any {
-		c := d.calendarSrc()
-		if c == nil {
-			return nil
-		}
-		at := d.clock()
-		var e calendar.Entry
-		var ok bool
-		if next {
-			e, ok = c.Next(room, at, calendar.MeetingKinds)
-		} else {
-			e, ok = c.Now(room, at, calendar.MeetingKinds)
-		}
-		if !ok {
-			return nil
-		}
-		return e.Map()
-	}
-	prev := func(room calendar.Room) map[string]any {
-		c := d.calendarSrc()
-		if c == nil {
-			return nil
-		}
-		if e, ok := c.Prev(room, d.clock(), calendar.MeetingKinds); ok {
-			return e.Map()
-		}
-		return nil
-	}
-	placed := func(p world.Placement) map[string]any {
-		return map[string]any{"site": p.Site, "building": p.Building, "room": p.Room}
-	}
-	// ownerRoom is the room of a push's .Owner system, through the world.
-	ownerRoom := func(owner string) (world.Placement, bool) { return d.world().PlaceSystem(owner) }
-	funcs := template.FuncMap{
-		"ownerRoom": func(owner string) map[string]any {
-			if p, ok := ownerRoom(owner); ok {
-				return placed(p)
-			}
-			return nil
-		},
-		"ownerMeetingNow": func(owner string) map[string]any {
-			if p, ok := ownerRoom(owner); ok {
-				return read(p.CalRoom(), false)
-			}
-			return nil
-		},
-		"ownerMeetingNext": func(owner string) map[string]any {
-			if p, ok := ownerRoom(owner); ok {
-				return read(p.CalRoom(), true)
-			}
-			return nil
-		},
-		"coveredRooms": func() []map[string]any {
-			var out []map[string]any
-			for _, p := range d.world().Covered(d.Hostname) {
-				out = append(out, placed(p))
-			}
-			return out
-		},
-		"meetingsBetween": d.meetingsBetween,
-		"hasCalendar":     d.hasCalendar,
-		"meetingNow":      func() map[string]any { return read(d.room, false) },
-		"meetingNext":     func() map[string]any { return read(d.room, true) },
-		"roomMeetingNow": func(site, building, room string) map[string]any {
-			return read(calendar.Room{Site: site, Building: building, Room: room}, false)
-		},
-		"roomMeetingNext": func(site, building, room string) map[string]any {
-			return read(calendar.Room{Site: site, Building: building, Room: room}, true)
-		},
-		"problemsNow": func() []map[string]any {
-			var out []map[string]any
-			for _, e := range d.calendarSrc().Active(d.room, d.clock(), calendar.ProblemKinds) {
-				out = append(out, e.Map())
-			}
-			return out
-		},
-		"meetingPrev": func() map[string]any { return prev(d.room) },
-		"roomMeetingPrev": func(site, building, room string) map[string]any {
-			return prev(calendar.Room{Site: site, Building: building, Room: room})
-		},
-	}
-	for name, fn := range d.bookingFuncs() {
-		funcs[name] = fn
-	}
-	for name, fn := range d.roomPhaseFuncs() {
-		funcs[name] = fn
-	}
-	return funcs
-}
-
 // world is how the device reaches its engine's world; a device that stands
 // alone has none (every lookup on a nil world finds nothing).
 func (d *Device) world() *world.World {
@@ -170,19 +46,8 @@ func (d *Device) calendarSrc() *calendar.Calendar {
 	return d.calSrc()
 }
 
-// behaviorFuncs is the FuncMap this device's behaviors and overrides compile
-// against: the package's behaviorFuncs over the device's source and clock,
-// plus the calendar.
+// behaviorFuncs is the FuncMap this device's overrides compile against: the
+// package's behaviorFuncs over the device's source and clock.
 func (d *Device) behaviorFuncs() template.FuncMap {
-	funcs := behaviorFuncs(d.rand, d.clock)
-	for name, fn := range d.calendarFuncs() {
-		funcs[name] = fn
-	}
-	for name, fn := range d.buildingFuncs() {
-		funcs[name] = fn
-	}
-	for name, fn := range d.listingFuncs() {
-		funcs[name] = fn
-	}
-	return funcs
+	return behaviorFuncs(d.rand, d.clock)
 }

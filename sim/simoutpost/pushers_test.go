@@ -11,8 +11,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // An outpost's pushers (#1743) reach its emulator as one env value, name, profile
@@ -89,11 +88,7 @@ func TestStartPushersRunsEachPusherWithItsToken(t *testing.T) {
 	srv := &grantServer{grants: map[string]string{"tok-a": "sys-a", "tok-b": "sys-b"}, pushed: map[string]string{}}
 	ts := httptest.NewServer(srv.handler())
 	defer ts.Close()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e, err := startPushers(catalogOf(t, store), ts.URL, []Pusher{
+	e, err := startPushers(shipped.Catalog(t), ts.URL, []Pusher{
 		{Name: "a-booking-1", Profile: "booking-service", Token: "tok-a"},
 		{Name: "b-booking-1", Profile: "booking-service", Token: "tok-b"},
 	}, nil, sim.Clock{})
@@ -120,12 +115,8 @@ func TestStartPushersRunsEachPusherWithItsToken(t *testing.T) {
 // face, could never push, so the emulator refuses it rather than run it
 // silently.
 func TestStartPushersRefusesAProfileThatCannotPush(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, p := range []string{"no-such-profile", "generic-device"} {
-		if _, err := startPushers(catalogOf(t, store), "http://127.0.0.1:1", []Pusher{{Name: "x", Profile: p, Token: "t"}}, nil, sim.Clock{}); err == nil || !strings.Contains(err.Error(), p) {
+		if _, err := startPushers(shipped.Catalog(t), "http://127.0.0.1:1", []Pusher{{Name: "x", Profile: p, Token: "t"}}, nil, sim.Clock{}); err == nil || !strings.Contains(err.Error(), p) {
 			t.Errorf("profile %s: %v, want refused naming it", p, err)
 		}
 	}

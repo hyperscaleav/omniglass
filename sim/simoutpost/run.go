@@ -20,7 +20,6 @@ import (
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
@@ -137,7 +136,7 @@ func Run(ctx context.Context, cfg Config) error {
 	log.Info("simulator connected", "url", creds.NatsURL, "low_ports", caps.LowPorts,
 		"net_admin", caps.NetAdmin, "port_offset", caps.PortOffset)
 
-	engine := sim.NewEngineOver(cat, profiles.Templates())
+	engine := sim.NewEngineOver(cat)
 	installWorld(engine, cfg.World)
 	engine.SetClock(sim.Clock{Offset: cfg.ClockOffset})
 	if cfg.PortOffset != 0 {

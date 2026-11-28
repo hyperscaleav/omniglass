@@ -12,7 +12,7 @@ func TestFamilyConforms(t *testing.T) { spectest.Conform(t, Spec()) }
 // The model table is the line, each row a product the catalog resolves to the
 // family with the identity its row gives.
 func TestEveryRowIsAProductThatReportsItself(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

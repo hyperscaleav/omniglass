@@ -21,8 +21,6 @@ import (
 	"github.com/gosnmp/gosnmp"
 
 	"github.com/hyperscaleav/omniglass/internal/lab/scenario"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -78,12 +76,8 @@ func standardsFleet(t *testing.T, e *Engine) []DeviceSnapshot {
 // startFleet serves a fleet built from the platform's standards, each face on
 // an ephemeral port (unprivileged, and never colliding with another run
 // serving the same fleet), read back from the device.
-func startFleet(t *testing.T) (*Engine, *profile.Store) {
+func startFleet(t *testing.T) *Engine {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("loading catalog: %v", err)
-	}
 	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	if err := e.LoadDevices(standardsFleet(t, e)); err != nil {
@@ -94,7 +88,7 @@ func startFleet(t *testing.T) (*Engine, *profile.Store) {
 		t.Fatalf("starting devices: %v", err)
 	}
 	t.Cleanup(e.StopAll)
-	return e, store
+	return e
 }
 
 func deviceByProfile(t *testing.T, e *Engine, name string) *Device {
@@ -113,7 +107,7 @@ func deviceByProfile(t *testing.T, e *Engine, name string) *Device {
 // answering HTTP, SNMP, SSH and a line-protocol subscription from one live
 // state, so a write over HTTP shows in the other protocols.
 func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
-	e, _ := startFleet(t)
+	e := startFleet(t)
 	if n := len(e.Devices()); n < 2 {
 		t.Fatalf("fleet served %d devices, want the whole fleet", n)
 	}

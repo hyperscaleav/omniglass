@@ -2038,8 +2038,6 @@ export type SimDeviceBody = {
 };
 
 export type SimBehaviorBody = {
-  /** Whether it posts a webhook each time. */
-  emits?: boolean;
   /** How often it runs, as a duration: 5s, 1m. */
   interval: string;
   name: string;

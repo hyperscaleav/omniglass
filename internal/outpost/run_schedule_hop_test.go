@@ -16,7 +16,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/labfootprint"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss drives #1693
@@ -32,7 +31,7 @@ func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	const outpostName = "edge-schedule-hop"
-	s := newHTTPStack(t, outpostName, nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, outpostName, nil, func(store *fleetShape) []string {
 		return []string{driverProfile(t, store, "tessellate-census-http")}
 	})
 	s.everyDriver("tessellate-census-http", "sensor-1s", "1s")

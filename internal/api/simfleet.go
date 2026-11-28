@@ -18,10 +18,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/device"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simfleet"
 	"github.com/hyperscaleav/omniglass/sim/simhub"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // SimHub is the server's line to the simulators beside its outposts
@@ -128,22 +128,12 @@ type simBehaviorBody struct {
 	Name     string   `json:"name"`
 	Interval string   `json:"interval" doc:"How often it runs, as a duration: 5s, 1m."`
 	Writes   []string `json:"writes,omitempty" doc:"The state paths it changes each time."`
-	Emits    bool     `json:"emits,omitempty" doc:"Whether it posts a webhook each time."`
 }
 
-// simBehaviors lists what the profile changes on its own over time.
+// simBehaviors lists what the device changes on its own over time: its
+// family's typed ticks.
 func simBehaviors(p spec.Definition) []simBehaviorBody {
 	var out []simBehaviorBody
-	for _, b := range p.BehaviorList() {
-		bb := simBehaviorBody{Name: b.Name, Interval: b.Schedule.Interval, Emits: b.Emit != nil}
-		for _, m := range b.Mutations {
-			if !slices.Contains(bb.Writes, m.Path) {
-				bb.Writes = append(bb.Writes, m.Path)
-			}
-		}
-		out = append(out, bb)
-	}
-	// A Go family's typed ticks are listed beside its YAML-style behaviors.
 	if g, ok := p.(spec.Served); ok {
 		for _, t := range g.Handlers().Ticks {
 			out = append(out, simBehaviorBody{Name: t.Name, Interval: tickInterval(t.Interval), Writes: slices.Clone(t.Writes)})
@@ -326,23 +316,16 @@ func simSurface(p spec.Definition, portOffset int) []simSurfaceBody {
 			}
 			rb := simRouteBody{Method: method, Path: path, Summary: r.Doc.Summary,
 				Example: r.Example, Private: r.Visibility == "private"}
-			for _, set := range r.Sets() {
-				def, _ := profile.DefaultAt(p.InitialState(), set.Path)
+			for _, set := range r.Sets {
+				def, _ := wire.DefaultAt(p.InitialState(), set.Path)
 				rb.Sets = append(rb.Sets, simSetBody{Path: set.Path, Field: set.Field, Values: set.Values, Default: def})
 			}
 			b.Routes = append(b.Routes, rb)
 		}
 		for _, c := range iface.Commands {
-			match := c.Match
-			if c.MatchHex != "" {
-				match = "hex " + c.MatchHex
-			}
-			b.Commands = append(b.Commands, simCommandBody{Match: match, Summary: c.Doc.Summary, Example: c.Example, Action: c.Action})
+			b.Commands = append(b.Commands, simCommandBody{Match: c.Match, Summary: c.Doc.Summary, Example: c.Example, Action: c.Action})
 		}
-		for path, oid := range iface.OIDMap {
-			b.OIDs = append(b.OIDs, simOIDBody{OID: oid, Path: path})
-		}
-		for path, oid := range iface.NativeOIDs {
+		for path, oid := range iface.OIDs {
 			b.OIDs = append(b.OIDs, simOIDBody{OID: oid, Path: path})
 		}
 		sort.Slice(b.OIDs, func(i, j int) bool { return oidBefore(b.OIDs[i].OID, b.OIDs[j].OID) })
@@ -551,7 +534,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if s.outpost == "" || s.prof == nil {
 			return nil, huma.Error409Conflict(fmt.Sprintf("%s is not simulated: it needs an endpoint on an outpost and a product a simulator profile simulates", in.Name))
 		}
-		var iface *profile.Interface
+		var iface *wire.Interface
 		surfaces := s.prof.Surfaces()
 		for i := range surfaces {
 			if surfaces[i].Name == in.Body.Surface {

@@ -271,7 +271,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 			t.Fatalf("surface %s missing from %+v", want.Name, sim.Surface)
 		}
 		got := sim.Surface[i]
-		if got.Port != lift(want.Port) || len(got.Routes) != len(want.Routes) || len(got.Commands) != len(want.Commands) || len(got.OIDs) != len(want.OIDMap)+len(want.NativeOIDs) {
+		if got.Port != lift(want.Port) || len(got.Routes) != len(want.Routes) || len(got.Commands) != len(want.Commands) || len(got.OIDs) != len(want.OIDs) {
 			t.Fatalf("surface %s = %+v, want port %d and the profile's routes, commands and OIDs", want.Name, got, lift(want.Port))
 		}
 		if len(want.Commands) > 0 && got.Commands[0].Match != want.Commands[0].Match {

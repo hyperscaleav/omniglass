@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/sim/spec"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -18,12 +19,11 @@ func TestSSHExec_DeclaredCommand(t *testing.T) {
 			},
 		})
 
-	// Profile-style command: renders a one-line output.
+	// A family's command: answers a one-line output read from state.
 	const cmd = "xstatus systemunit"
-	const tmpl = `power={{ .State | get "status" | get "device" | get "power" }}` + "\n"
-	if err := dev.AddCommand(cmd, "x.tmpl", tmpl, nil); err != nil {
-		t.Fatalf("AddCommand: %v", err)
-	}
+	dev.commands = append(dev.commands, commandEntry{Match: cmd, Go: func(d spec.Device) string {
+		return "power=" + spec.String(d, "status.device.power") + "\n"
+	}})
 
 	if err := dev.StartSSH(0, "admin", "admin", false); err != nil {
 		t.Fatalf("StartSSH: %v", err)

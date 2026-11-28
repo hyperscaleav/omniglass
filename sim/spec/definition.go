@@ -4,46 +4,33 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/surface"
-)
-
-// Kind is which way a definition is written.
-type Kind string
-
-const (
-	// KindYAML is a profile in the embedded catalog (sim/profiles).
-	KindYAML Kind = "yaml"
-	// KindGo is a family in sim/device.
-	KindGo Kind = "go"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Definition is what every consumer of the simulator catalog reads: the
 // engine, the simulated fleet's planner, the dev seed, the lab scenario's
-// catalog, the footprint sweep and the simulation routes. A YAML profile and a
-// Go family both satisfy it, so a consumer never asks which it has.
+// catalog, the footprint sweep and the simulation routes. A Go family is the
+// one thing that satisfies it, and a consumer reads the interface so a test
+// can stand a definition of its own beside the shipped ones.
 type Definition interface {
-	// ID names the definition: the profile name a fleet snapshot carries.
+	// ID names the definition: the family name a fleet snapshot carries.
 	ID() string
-	Kind() Kind
 	Identity() Identity
 	// Surfaces are the interfaces and ports it serves.
-	Surfaces() []profile.Interface
+	Surfaces() []wire.Interface
 	// InitialState is its state tree with the defaults; callers do not
 	// modify it.
 	InitialState() map[string]any
-	// Products is every product it simulates. A YAML profile leads with the
-	// product it is named for; a Go family lists its model products only, since
-	// its name is the wire API it serves, not a product.
+	// Products is every product it simulates: its model products, never the
+	// family's own name, which is the wire API it serves, not a product.
 	Products() []string
-	// BehaviorList is the YAML-style behaviors it runs (none, for a family
-	// that animates in Go); ElapsedList is the read-derived uptimes it reports.
-	BehaviorList() []profile.Behavior
+	// ElapsedList is the read-derived uptimes it reports.
 	ElapsedList() []Elapsed
 	// PushFace and WebhookFace are the outbound faces it declares, nil when
 	// it has none.
-	PushFace() *profile.Push
-	WebhookFace() *profile.WebhookSubscribe
+	PushFace() *PushFace
+	WebhookFace() *wire.WebhookSubscribe
 }
 
 // Served is a Definition whose protocol servers call Go: a family.
@@ -67,37 +54,6 @@ type Resolved struct {
 	Model Model
 }
 
-// profileDef presents a YAML profile as a Definition.
-type profileDef struct{ p *profile.DeviceProfile }
-
-// FromProfile presents a YAML profile as a Definition.
-func FromProfile(p *profile.DeviceProfile) Definition { return profileDef{p} }
-
-func (d profileDef) ID() string { return d.p.Name }
-func (d profileDef) Kind() Kind { return KindYAML }
-func (d profileDef) Identity() Identity {
-	return Identity{Manufacturer: d.p.Manufacturer, Model: d.p.Model, DeviceType: d.p.DeviceType, Summary: d.p.Doc.Summary}
-}
-func (d profileDef) Surfaces() []profile.Interface    { return d.p.Interfaces }
-func (d profileDef) InitialState() map[string]any     { return d.p.Defaults }
-func (d profileDef) BehaviorList() []profile.Behavior { return d.p.Behaviors }
-func (d profileDef) ElapsedList() []Elapsed {
-	var out []Elapsed
-	for _, c := range d.p.Computed {
-		out = append(out, Elapsed{Path: c.Path, Since: c.Since})
-	}
-	return out
-}
-func (d profileDef) PushFace() *profile.Push                { return d.p.Push }
-func (d profileDef) WebhookFace() *profile.WebhookSubscribe { return d.p.Webhook }
-func (d profileDef) Products() []string {
-	out := []string{d.p.Name}
-	for _, v := range d.p.Products {
-		out = append(out, v.Name)
-	}
-	return out
-}
-
 // Family is a validated Spec presented as a Definition.
 type Family struct{ s Spec }
 
@@ -109,37 +65,29 @@ func NewFamily(s Spec) (*Family, error) {
 	return &Family{s: s}, nil
 }
 
-func (f *Family) ID() string                             { return f.s.Name }
-func (f *Family) Kind() Kind                             { return KindGo }
-func (f *Family) Identity() Identity                     { return f.s.Identity }
-func (f *Family) InitialState() map[string]any           { return f.s.State }
-func (f *Family) BehaviorList() []profile.Behavior       { return f.s.Behaviors }
-func (f *Family) ElapsedList() []Elapsed                 { return f.s.Elapsed }
-func (f *Family) WebhookFace() *profile.WebhookSubscribe { return f.s.Webhook }
+func (f *Family) ID() string                          { return f.s.Name }
+func (f *Family) Identity() Identity                  { return f.s.Identity }
+func (f *Family) InitialState() map[string]any        { return f.s.State }
+func (f *Family) ElapsedList() []Elapsed              { return f.s.Elapsed }
+func (f *Family) WebhookFace() *wire.WebhookSubscribe { return f.s.Webhook }
 
-// PushFace is the family's push face as a profile declares one: its cadence,
-// the body left to the family's Go func (Handlers.Push).
-func (f *Family) PushFace() *profile.Push {
-	if f.s.Push == nil {
-		return nil
-	}
-	return &profile.Push{Every: f.s.Push.Every.String()}
-}
+// PushFace is the family's push face, nil when it reports nothing.
+func (f *Family) PushFace() *PushFace { return f.s.Push }
 
 // Surfaces are the family's interfaces, each listing the routes and commands
-// its protocol answers, marked Native: the same listing a profile's surface
-// gives the console, with no template behind it.
-func (f *Family) Surfaces() []profile.Interface {
-	out := make([]profile.Interface, len(f.s.Interfaces))
+// its protocol answers: the listing the console shows, built from the
+// family's own declarations so it cannot differ from what answers.
+func (f *Family) Surfaces() []wire.Interface {
+	out := make([]wire.Interface, len(f.s.Interfaces))
 	for i, iface := range f.s.Interfaces {
-		iface.Routes = append([]profile.Route(nil), iface.Routes...)
-		iface.Commands = append([]profile.Command(nil), iface.Commands...)
+		iface.Routes = append([]wire.Route(nil), iface.Routes...)
+		iface.Commands = append([]wire.Command(nil), iface.Commands...)
 		switch iface.Protocol {
 		case "snmp":
-			iface.NativeOIDs = f.nativeOIDs()
+			iface.OIDs = f.nativeOIDs()
 		case "http":
 			for _, r := range f.s.HTTP {
-				route := profile.Route{Match: r.Match, Doc: profile.Doc{Summary: r.Summary}, Example: r.Example, Native: true, NativeSets: r.Sets}
+				route := wire.Route{Match: r.Match, Doc: wire.Doc{Summary: r.Summary}, Example: r.Example, Sets: r.Sets}
 				if r.Private {
 					route.Visibility = "private"
 				}
@@ -150,7 +98,7 @@ func (f *Family) Surfaces() []profile.Interface {
 				if c.Face != "" && c.Face != iface.Name {
 					continue
 				}
-				iface.Commands = append(iface.Commands, profile.Command{Match: c.Match, Doc: profile.Doc{Summary: c.Summary}, Example: c.Example, Native: true})
+				iface.Commands = append(iface.Commands, wire.Command{Match: c.Match, Doc: wire.Doc{Summary: c.Summary}, Example: c.Example})
 			}
 			iface.Commands = append(iface.Commands, f.surfaceCommands(iface.Name)...)
 		}
@@ -163,7 +111,7 @@ func (f *Family) Surfaces() []profile.Interface {
 // lists them under the interface the surface names: each command with the
 // subscription verb it carries. The surface is built against a device that
 // holds nothing, so asking it to answer a line writes nowhere.
-func (f *Family) surfaceCommands(iface string) []profile.Command {
+func (f *Family) surfaceCommands(iface string) []wire.Command {
 	if f.s.Surface == nil {
 		return nil
 	}
@@ -171,15 +119,15 @@ func (f *Family) surfaceCommands(iface string) []profile.Command {
 	if sf.ListedOn != iface {
 		return nil
 	}
-	var out []profile.Command
+	var out []wire.Command
 	for _, c := range sf.Commanders {
 		for _, line := range c.Commands() {
 			if !typed(line) {
 				// A binary frame (a hex poll) is no line an operator types; the
-				// family lists it as a hex command on its own band.
+				// family lists it on its own band.
 				continue
 			}
-			cmd := profile.Command{Match: line, Native: true}
+			cmd := wire.Command{Match: line}
 			if d, ok := c.(surface.Described); ok {
 				cmd.Doc.Summary = d.Summary(line)
 			}
@@ -235,30 +183,17 @@ func (f *Family) Products() []string {
 	return out
 }
 
-// Catalog resolves products and definition ids over the YAML profiles and the
-// Go families together. A product resolves to a family when one claims it (its
-// name, or one of its models), else to the YAML profile that simulates it.
+// Catalog resolves products and definition ids over the Go families: a product
+// resolves to the family that claims it, by its name or one of its models.
 type Catalog struct {
 	defs     map[string]Definition
 	products map[string]Resolved
 }
 
-// NewCatalog builds the catalog over a profile store (nil for none) and the
-// families. A family may not share its name with a YAML profile (the profile is
-// deleted when its family lands), nor claim a product another family claims; it
-// may claim a product a YAML profile also simulates, and then wins it.
-func NewCatalog(store *profile.Store, families ...Spec) (*Catalog, error) {
+// NewCatalog builds the catalog over the families. A family may not share its
+// name with another definition, nor claim a product another family claims.
+func NewCatalog(families ...Spec) (*Catalog, error) {
 	c := &Catalog{defs: map[string]Definition{}, products: map[string]Resolved{}}
-	if store != nil {
-		for name, p := range store.Devices {
-			def := FromProfile(p)
-			c.defs[name] = def
-			c.products[name] = Resolved{Definition: def, Product: name, Identity: def.Identity()}
-			for _, v := range p.Products {
-				c.products[v.Name] = Resolved{Definition: def, Product: v.Name, Identity: def.Identity(), Overlay: v.Defaults}
-			}
-		}
-	}
 	claimed := map[string]string{}
 	for _, s := range families {
 		f, err := NewFamily(s)

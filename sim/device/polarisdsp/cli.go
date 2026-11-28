@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The DSP's line protocols (#2835): a CLI over SSH and Telnet, and a JSON-RPC
@@ -104,11 +104,11 @@ var cliSubscriptions = []subscription{
 
 // cliSubjects are what the CLI faces may push: a change to a channel's gain or
 // mute, or to a DSP reading, as `! "publishToken":... "subject":... "value":...`.
-func cliSubjects() []profile.Subject {
+func cliSubjects() []wire.Subject {
 	line := func(subject, token string, value any) string {
 		return fmt.Sprintf(`! "publishToken":%s "subject":%s "value":%s`, quote(token), quote(subject), jsonOf(value))
 	}
-	return []profile.Subject{
+	return []wire.Subject{
 		{Match: "status.channels.*.gain", PublishToken: "gain", PushLine: line},
 		{Match: "status.channels.*.mute", PublishToken: "mute", PushLine: line},
 		{Match: "status.dsp.*", PublishToken: "dsp", PushLine: line},
@@ -118,13 +118,13 @@ func cliSubjects() []profile.Subject {
 // listed is what the console lists of a face's commands: the lines it was
 // documented with. The shell answers every line on every face, as the device's
 // one command set; these are the documentation of what each face is for.
-func listed(telnet bool) []profile.Command {
-	var out []profile.Command
+func listed(telnet bool) []wire.Command {
+	var out []wire.Command
 	for _, v := range cliVerbs {
 		if telnet && !v.telnet {
 			continue
 		}
-		c := profile.Command{Match: v.line, Native: true}
+		c := wire.Command{Match: v.line}
 		if !telnet {
 			c.Doc.Summary = v.summary
 		}
@@ -132,12 +132,12 @@ func listed(telnet bool) []profile.Command {
 	}
 	for _, sub := range cliSubscriptions {
 		if !telnet || sub.telnet {
-			out = append(out, profile.Command{Match: "subscribe " + sub.verb, Action: "subscribe", Native: true})
+			out = append(out, wire.Command{Match: "subscribe " + sub.verb, Action: "subscribe"})
 		}
 	}
 	for _, sub := range cliSubscriptions {
 		if sub.unsubOK && (!telnet || sub.telnet) {
-			out = append(out, profile.Command{Match: "unsubscribe " + sub.verb, Action: "unsubscribe", Native: true})
+			out = append(out, wire.Command{Match: "unsubscribe " + sub.verb, Action: "unsubscribe"})
 		}
 	}
 	return out
@@ -240,14 +240,14 @@ func activeEngine() engineStatus { return engineStatus{State: "Active", DesignNa
 
 // qrcFace is the raw-TCP control plane: no auth dialog, no negotiation, every
 // connect speaks the wire protocol at once.
-func qrcFace() profile.Interface {
-	return profile.Interface{
+func qrcFace() wire.Interface {
+	return wire.Interface{
 		Name: "qrc", Protocol: "tcp", Port: 1710, APISurface: "polaris-qrc",
-		Doc:        profile.Doc{Summary: "JSON-RPC control over raw TCP (NUL-terminated)", Tags: []string{"control", "persistent-session", "raw-tcp"}},
+		Doc:        wire.Doc{Summary: "JSON-RPC control over raw TCP (NUL-terminated)", Tags: []string{"control", "persistent-session", "raw-tcp"}},
 		Persistent: true, LineEnding: "\x00", Commands: qrcListing(),
 		Welcome: text(notice{JSONRPC: "2.0", Method: "EngineStatus", Params: activeEngine()}),
-		Limits:  profile.SessionLimits{MaxSubsPerSession: 64, PublishMinIntervalMs: 50, MaxSessionsPerDevice: 16, OutBuffer: 256},
-		Subjects: []profile.Subject{{
+		Limits:  wire.SessionLimits{MaxSubsPerSession: 64, PublishMinIntervalMs: 50, MaxSessionsPerDevice: 16, OutBuffer: 256},
+		Subjects: []wire.Subject{{
 			Match: "status.channels.*.gain", PublishToken: component + ".gain",
 			PushLine: func(_, token string, value any) string {
 				return text(poll{JSONRPC: "2.0", Method: "ChangeGroup.Poll", Params: pollParams{ID: token, Changes: []pollChange{{Component: component, Name: "gain", Value: value}}}})
@@ -258,8 +258,8 @@ func qrcFace() profile.Interface {
 
 // qrcListing is what the console lists of the control plane: the calls it was
 // documented with, the heartbeat first.
-func qrcListing() []profile.Command {
-	out := []profile.Command{{Match: text(call{JSONRPC: "2.0", Method: "NoOp", ID: 0}), Native: true}}
+func qrcListing() []wire.Command {
+	out := []wire.Command{{Match: text(call{JSONRPC: "2.0", Method: "NoOp", ID: 0})}}
 	out[0].Doc.Summary = "Heartbeat"
 	for _, c := range []struct {
 		call   call
@@ -270,7 +270,7 @@ func qrcListing() []profile.Command {
 		{call{JSONRPC: "2.0", Method: "ChangeGroup.AddControl", Params: changeGroupAdd{group, []string{component + ".gain"}}, ID: 3}, "subscribe"},
 		{call{JSONRPC: "2.0", Method: "ChangeGroup.Remove", Params: changeGroupRemove{group}, ID: 4}, "unsubscribe"},
 	} {
-		out = append(out, profile.Command{Match: text(c.call), Action: c.action, Native: true})
+		out = append(out, wire.Command{Match: text(c.call), Action: c.action})
 	}
 	return out
 }

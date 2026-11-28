@@ -157,6 +157,7 @@ gen: gen-proto
 	go run ./cmd/identitygen
 	go run ./cmd/labgen
 	go run ./cmd/familygen
+	go run ./cmd/simgen
 	cd web && pnpm install --frozen-lockfile && pnpm run gen:api
 
 # Run make gen twice and require the second run to leave the tree byte-identical

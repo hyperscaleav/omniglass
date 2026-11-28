@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostMeridianReadsRouteLinkAndSignal (#895): the shipped Meridian
@@ -22,7 +21,7 @@ func TestOutpostMeridianReadsRouteLinkAndSignal(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var sw, ext string
-	s := newHTTPStack(t, "edge-meridian", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-meridian", nil, func(store *fleetShape) []string {
 		sw, ext = driverProfile(t, store, "meridian-mx-snmp"), driverProfile(t, store, "meridian-xl-snmp")
 		return []string{sw, ext}
 	})

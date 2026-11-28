@@ -11,10 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
@@ -22,10 +20,9 @@ import (
 // the network, reporting by pushing. It holds a bearer token for a user
 // granted telemetry:push on the systems it reports for, reads those systems
 // off its own grant (GET /auth/me), and posts each one's batch through
-// POST /telemetry:push on its profile's cadence. The batch is the profile's
-// body template rendered per system over the device's state and clock, so a
-// pusher is a profile, not code: the booking service is the first, and reads
-// the lab calendar (ownerBookings) for what it reports.
+// POST /telemetry:push on its family's cadence. The batch is the family's Go
+// func over the device's state and clock: the booking service is the first,
+// and reads the lab calendar for what it reports.
 
 // pushTimeout bounds one call to the server, so a server that accepts and
 // never answers does not stall the face past its next tick.
@@ -36,9 +33,8 @@ var pushClient = &http.Client{Timeout: pushTimeout}
 // pushFace is a device's compiled push face and its live credential.
 type pushFace struct {
 	every time.Duration
-	body  *template.Template
-	// goBody is the batch a Go family renders in place of body's template
-	// (#2836), read from the device and its clock.
+	// goBody is the batch the family renders for one system, read from the
+	// device and its clock.
 	goBody func(d spec.Device, owner string) ([]byte, error)
 
 	mu     sync.Mutex
@@ -56,112 +52,13 @@ type pushFace struct {
 	done   chan struct{}
 }
 
-// booking is a booked location's reading at one instant: booked while a meeting
-// runs and free between, and the meetings left in its day, the one in
-// progress included.
-type booking struct {
-	State     string
-	Remaining int
-}
-
-// bookingsAt reads a meeting day (a list of "HH:MM-HH:MM" windows in UTC,
-// the same every day) at now. A day that is not such a list is an error, so
-// a malformed profile fails its render rather than pushing a made-up day.
-// Pure.
-func bookingsAt(now time.Time, windows any) (booking, error) {
-	list, ok := windows.([]any)
-	if !ok {
-		return booking{}, fmt.Errorf("bookings %v is not a list of HH:MM-HH:MM windows", windows)
-	}
-	now = now.UTC()
-	since := now.Sub(time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC))
-	b := booking{State: "free"}
-	for _, w := range list {
-		start, end, err := parseWindow(w)
-		if err != nil {
-			return booking{}, err
-		}
-		if since < end {
-			b.Remaining++
-		}
-		if since >= start && since < end {
-			b.State = "booked"
-		}
-	}
-	return b, nil
-}
-
-func parseWindow(w any) (start, end time.Duration, err error) {
-	s, ok := w.(string)
-	if !ok {
-		return 0, 0, fmt.Errorf("booking window %v is not an HH:MM-HH:MM string", w)
-	}
-	from, to, ok := strings.Cut(s, "-")
-	if !ok {
-		return 0, 0, fmt.Errorf("booking window %q is not HH:MM-HH:MM", s)
-	}
-	if start, err = clockOffset(from); err != nil {
-		return 0, 0, fmt.Errorf("booking window %q: %w", s, err)
-	}
-	if end, err = clockOffset(to); err != nil {
-		return 0, 0, fmt.Errorf("booking window %q: %w", s, err)
-	}
-	if start >= end {
-		return 0, 0, fmt.Errorf("booking window %q ends before it starts", s)
-	}
-	return start, end, nil
-}
-
-// clockOffset is an "HH:MM" as an offset from midnight, 24:00 the latest.
-func clockOffset(s string) (time.Duration, error) {
-	var h, m int
-	if len(s) != 5 || s[2] != ':' {
-		return 0, fmt.Errorf("%q is not HH:MM", s)
-	}
-	if _, err := fmt.Sscanf(s, "%02d:%02d", &h, &m); err != nil {
-		return 0, fmt.Errorf("%q is not HH:MM", s)
-	}
-	if h < 0 || m < 0 || m > 59 || h > 24 || (h == 24 && m > 0) {
-		return 0, fmt.Errorf("%q is not a time of day", s)
-	}
-	return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute, nil
-}
-
-// pushFuncs are the template functions a push body renders with.
-func pushFuncs(extra template.FuncMap) template.FuncMap {
-	funcs := template.FuncMap{}
-	for name, fn := range templateFuncs {
-		funcs[name] = fn
-	}
-	funcs["bookingsAt"] = bookingsAt
-	for name, fn := range extra {
-		funcs[name] = fn
-	}
-	return funcs
-}
-
-// pushData is what a push body renders over: the device's own data, the
-// system it is rendered for and the device's clock.
-type pushData struct {
-	templateData
-	Owner string
-	Now   time.Time
-}
-
-// compilePush compiles a profile's push face. Nil when it declares none.
-func compilePush(name string, p *profile.Push, extra template.FuncMap) (*pushFace, error) {
+// compilePush is the device's push face from its family's declaration. Nil
+// when the family declares none.
+func compilePush(p *spec.PushFace) *pushFace {
 	if p == nil {
-		return nil, nil
+		return nil
 	}
-	every, err := p.PushEvery()
-	if err != nil {
-		return nil, err
-	}
-	body, err := template.New(name + ".push").Funcs(pushFuncs(extra)).Option("missingkey=zero").Parse(p.Body)
-	if err != nil {
-		return nil, fmt.Errorf("push.body: %w", err)
-	}
-	return &pushFace{every: every, body: body, kick: make(chan struct{}, 1)}, nil
+	return &pushFace{every: p.Every, goBody: p.Body, kick: make(chan struct{}, 1)}
 }
 
 var errNoPushFace = errors.New("the device's profile declares no push face")
@@ -171,33 +68,14 @@ func (d *Device) RenderPush(owner string) ([]byte, error) {
 	if d.push == nil {
 		return nil, errNoPushFace
 	}
-	if d.push.goBody != nil {
-		b, err := d.push.goBody(goDevice{d}, owner)
-		if err != nil {
-			return nil, fmt.Errorf("rendering the push for %s: %w", owner, err)
-		}
-		if !json.Valid(b) {
-			return nil, fmt.Errorf("the push rendered for %s is not JSON: %s", owner, b)
-		}
-		return b, nil
-	}
-	now := d.clock()
-	d.mu.RLock()
-	data := pushData{
-		templateData: templateData{State: d.state, Defaults: d.defaults, Hostname: d.Hostname, DeviceID: d.DeviceID, IP: d.LoopbackIP.String()},
-		Owner:        owner,
-		Now:          now,
-	}
-	var buf bytes.Buffer
-	err := d.push.body.Execute(&buf, data)
-	d.mu.RUnlock()
+	b, err := d.push.goBody(goDevice{d}, owner)
 	if err != nil {
 		return nil, fmt.Errorf("rendering the push for %s: %w", owner, err)
 	}
-	if !json.Valid(buf.Bytes()) {
-		return nil, fmt.Errorf("the push rendered for %s is not JSON: %s", owner, buf.Bytes())
+	if !json.Valid(b) {
+		return nil, fmt.Errorf("the push rendered for %s is not JSON: %s", owner, b)
 	}
-	return buf.Bytes(), nil
+	return b, nil
 }
 
 // PushEvery is the device's push cadence, zero when it has no push face.

@@ -2,11 +2,13 @@ package sim
 
 import (
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // newAuthDevice builds a minimal device with one route for auth tests.
@@ -17,15 +19,15 @@ func newAuthDevice(t *testing.T, auth HTTPAuth) *Device {
 	dev := NewDevice("d", "auth-host", net.ParseIP("127.0.0.1"), "p", 1,
 		map[string]any{"ok": true})
 	dev.HTTPAuth = auth
-	if err := dev.AddRoute("GET /api/status", "status.json.gotempl",
-		`{"status":"ok"}`, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := dev.AddRoute("POST /api/power", "ack.json.gotempl",
-		`{"ok":true}`,
-		map[string]any{"power": "{{ .Request.Body.power }}"}); err != nil {
-		t.Fatal(err)
-	}
+	serveText(t, dev, "GET /api/status", "application/json", `{"status":"ok"}`)
+	serveRoute(t, dev, "POST /api/power", func(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
+		if v, ok := r.Body["power"]; ok {
+			if err := d.Write("power", v); err != nil {
+				return spec.HTTPResponse{Status: http.StatusInternalServerError, Body: err.Error()}
+			}
+		}
+		return spec.HTTPResponse{ContentType: "application/json", Body: `{"ok":true}`}
+	})
 	return dev
 }
 
@@ -248,10 +250,7 @@ func TestHTTPAuth_PublicPathBypassesGate(t *testing.T) {
 		HeaderName:  "X-API-Key",
 		PublicPaths: []string{"/"},
 	})
-	if err := dev.AddRoute("GET /", "landing.gotempl",
-		`<html>landing</html>`, nil); err != nil {
-		t.Fatal(err)
-	}
+	serveText(t, dev, "GET /", "text/html", `<html>landing</html>`)
 
 	// Public path passes without a key.
 	req := httptest.NewRequest("GET", "/", nil)
@@ -287,7 +286,7 @@ func TestHTTPAuthFromProfile_OpenWhenEnforceFalse(t *testing.T) {
 	// A profile that declares basic credentials but does not opt into
 	// enforcement must produce an open gate. This is the backward-compat
 	// guarantee for every existing profile.
-	got := httpAuthFromProfile(profile.Auth{
+	got := httpAuthFromProfile(wire.Auth{
 		Type:            "basic",
 		DefaultUser:     "admin",
 		DefaultPassword: "secret",
@@ -299,7 +298,7 @@ func TestHTTPAuthFromProfile_OpenWhenEnforceFalse(t *testing.T) {
 }
 
 func TestHTTPAuthFromProfile_BasicEnforced(t *testing.T) {
-	got := httpAuthFromProfile(profile.Auth{
+	got := httpAuthFromProfile(wire.Auth{
 		Type:            "basic",
 		DefaultUser:     "admin",
 		DefaultPassword: "letmein",
@@ -318,7 +317,7 @@ func TestHTTPAuthFromProfile_BasicEnforced(t *testing.T) {
 }
 
 func TestHTTPAuthFromProfile_HeaderEnforced(t *testing.T) {
-	got := httpAuthFromProfile(profile.Auth{
+	got := httpAuthFromProfile(wire.Auth{
 		Type:    "header",
 		APIKey:  "k",
 		Header:  "X-Polaris-Token",
@@ -361,7 +360,7 @@ func TestHTTPAuthFromProfile_CatalogProfiles(t *testing.T) {
 			continue
 		}
 		surfaces := def.Surfaces()
-		var httpIface *profile.Interface
+		var httpIface *wire.Interface
 		for i := range surfaces {
 			if surfaces[i].Protocol == "http" {
 				httpIface = &surfaces[i]
@@ -385,7 +384,7 @@ func TestHTTPAuthFromProfile_UnknownTypeIsOpen(t *testing.T) {
 	// itself fail-closes on unknown modes, which catches the case where
 	// the runtime mode is set directly. Profiles get a startup warning
 	// elsewhere instead.
-	got := httpAuthFromProfile(profile.Auth{
+	got := httpAuthFromProfile(wire.Auth{
 		Type:    "oauth-bearer",
 		Enforce: true,
 	})
@@ -426,10 +425,10 @@ func TestHTTPAuth_BearerAndQuery(t *testing.T) {
 			t.Errorf("%s: status %d, want %d", tc.label, w.Code, tc.want)
 		}
 	}
-	if got := httpAuthFromProfile(profile.Auth{Type: "query", APIKey: "k", Query: "token", Enforce: true}); got.Mode != HTTPAuthQuery || got.QueryName != "token" {
+	if got := httpAuthFromProfile(wire.Auth{Type: "query", APIKey: "k", Query: "token", Enforce: true}); got.Mode != HTTPAuthQuery || got.QueryName != "token" {
 		t.Fatalf("a query profile = %+v", got)
 	}
-	if got := httpAuthFromProfile(profile.Auth{Type: "bearer", APIKey: "t", Enforce: true}); got.Mode != HTTPAuthBearer || got.APIKey != "t" {
+	if got := httpAuthFromProfile(wire.Auth{Type: "bearer", APIKey: "t", Enforce: true}); got.Mode != HTTPAuthBearer || got.APIKey != "t" {
 		t.Fatalf("a bearer profile = %+v", got)
 	}
 }

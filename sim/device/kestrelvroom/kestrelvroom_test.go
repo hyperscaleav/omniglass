@@ -58,7 +58,7 @@ func events(f *spectest.Fake) []string {
 }
 
 func TestEveryRowIsAProductThatReportsItself(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

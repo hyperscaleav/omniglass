@@ -1,7 +1,6 @@
 package sim
 
 import (
-	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/ingress"
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // The simulated UCC service signs its webhooks as a real sender does
@@ -62,42 +61,31 @@ func uccSpec() *driver.WebhookSpec {
 	return &driver.WebhookSpec{Signature: &driver.Signature{Header: "X-UCC-Signature", Prefix: "sha256=", Timestamp: "X-UCC-Timestamp"}, Delivery: "X-UCC-Delivery"}
 }
 
-// uccDevice is a UCC service whose webhook subscription the route set, and
-// a route that starts a meeting and posts it.
+// uccDevice is a device whose family signs the meeting it posts as a UCC
+// service does, with the given fault.
 func uccDevice(t *testing.T, url, fault string) *Device {
 	d := newTestDevice(t, "ucc-1", map[string]any{
 		"configuration": map[string]any{"webhook": map[string]any{
 			"target_url": url, "scheme": "hmac", "secret": "ucc-lab-signing-key", "fault": fault,
 		}},
 	})
-	sign := &profile.EmitSign{
-		Scheme: `{{ .State | get "configuration" | get "webhook" | get "scheme" }}`,
-		Secret: `{{ .State | get "configuration" | get "webhook" | get "secret" }}`,
-		Fault:  `{{ .State | get "configuration" | get "webhook" | get "fault" }}`,
-		Header: "X-UCC-Signature", Prefix: "sha256=", Timestamp: "X-UCC-Timestamp", Delivery: "X-UCC-Delivery",
-	}
-	route := &profile.Route{
-		Match: "POST /api/meetings/start",
-		Emit: &profile.Emit{
-			URL:     `{{ .State | get "configuration" | get "webhook" | get "target_url" }}`,
-			Body:    `{"event":"meeting.started","meeting":"{{ .Request.Body.id }}"}`,
-			Headers: map[string]string{"X-UCC-Event": "meeting.started"},
-			Sign:    sign,
-		},
-	}
-	if err := d.AddRouteFromProfile(route, `{"ok":true}`); err != nil {
-		t.Fatalf("add route: %v", err)
-	}
 	return d
 }
 
+// startMeeting posts the meeting-started webhook the way a family's Go route
+// does (spec.Send): signed as the device's subscription says.
 func startMeeting(t *testing.T, d *Device) {
 	t.Helper()
-	rec := httptest.NewRecorder()
-	d.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/meetings/start", bytes.NewBufferString(`{"id":"m-1"}`)))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("start meeting = %d %s", rec.Code, rec.Body)
-	}
+	cfg := d.State()["configuration"].(map[string]any)["webhook"].(map[string]any)
+	goDevice{d}.Post(spec.Post{
+		URL:     cfg["target_url"].(string),
+		Body:    []byte(`{"event":"meeting.started","meeting":"m-1"}`),
+		Headers: map[string]string{"X-UCC-Event": "meeting.started"},
+		Sign: &spec.Signing{
+			Scheme: cfg["scheme"].(string), Secret: cfg["secret"].(string), Fault: cfg["fault"].(string),
+			Header: "X-UCC-Signature", Prefix: "sha256=", Timestamp: "X-UCC-Timestamp", Delivery: "X-UCC-Delivery",
+		},
+	})
 }
 
 func TestTheUCCServiceSignsWhatItPosts(t *testing.T) {

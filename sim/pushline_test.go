@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // A Go-declared subject builds its push line from the subject that changed,
@@ -16,9 +16,9 @@ func TestAGoSubjectPushesTheSubjectAndTokenItWasSubscribedWith(t *testing.T) {
 	dev := NewDevice("d", "d", net.ParseIP("127.0.0.1"), "p", 1, map[string]any{
 		"status": map[string]any{"channels": []any{map[string]any{"gain": -6}, map[string]any{"gain": -3}}},
 	})
-	cfg, err := CompileSessionConfig(&profile.Interface{
+	cfg, err := CompileSessionConfig(&wire.Interface{
 		Name: "shell", Protocol: "tcp", Persistent: true, LineEnding: "\n",
-		Subjects: []profile.Subject{{
+		Subjects: []wire.Subject{{
 			Match: "status.channels.*.gain", PublishToken: "gain",
 			PushLine: func(subject, token string, value any) string {
 				return fmt.Sprintf("%s|%s|%v", subject, token, value)

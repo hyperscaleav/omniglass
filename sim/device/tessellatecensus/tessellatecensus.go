@@ -21,8 +21,8 @@
 // The head-count is who the lab calendar says is in the device's own room, never a
 // walk of its own (behave.PeopleCount); with no calendar it walks.
 //
-// The family replaced the tessellate-census-c1 YAML profile; wire parity with it
-// is held by golden transcripts (sim/testdata/wire).
+// The family replaced the tessellate-census-c1 YAML profile; its wire matched the profile's before
+// the profile was deleted (#2826); the driver contract test now holds it.
 package tessellatecensus
 
 import (
@@ -30,10 +30,10 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry: the product it is
@@ -106,13 +106,13 @@ func Spec() spec.Spec {
 		Models: spec.Table(Rows, func(r Row) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: "http-api", Protocol: "http", Port: 80, APISurface: "tessellate-census",
-				Doc: profile.Doc{Summary: "Census REST + event API", Tags: []string{"management", "api", "data"}},
+				Doc: wire.Doc{Summary: "Census REST + event API", Tags: []string{"management", "api", "data"}},
 				// The dashboard is public so an operator can paste a key into
 				// the page; every /api route stays gated behind the header.
-				Auth: profile.Auth{Type: "header", Header: "X-Census-Key", APIKey: apiKey, Enforce: true, PublicPaths: []string{"/"}},
+				Auth: wire.Auth{Type: "header", Header: "X-Census-Key", APIKey: apiKey, Enforce: true, PublicPaths: []string{"/"}},
 			},
 			// The raw-TCP control band, the closest supported push transport: a
 			// room-control system dials in and subscribes, and the sensor pushes
@@ -120,9 +120,9 @@ func Spec() spec.Spec {
 			// vacant flag changes.
 			{
 				Name: "control", Protocol: "tcp", Port: 5000, APISurface: "tessellate-census-control", Persistent: true,
-				Doc:        profile.Doc{Summary: "Raw-TCP occupancy feed (CRLF-delimited ASCII, push subscriptions)", Tags: []string{"control", "persistent-session", "raw-tcp", "data"}},
+				Doc:        wire.Doc{Summary: "Raw-TCP occupancy feed (CRLF-delimited ASCII, push subscriptions)", Tags: []string{"control", "persistent-session", "raw-tcp", "data"}},
 				LineEnding: "\r\n", Welcome: "TESSELLATE CENSUS C1 FEED READY",
-				Limits: profile.SessionLimits{MaxSubsPerSession: 64, PublishMinIntervalMs: 50, MaxSessionsPerDevice: 16, OutBuffer: 256},
+				Limits: wire.SessionLimits{MaxSubsPerSession: 64, PublishMinIntervalMs: 50, MaxSessionsPerDevice: 16, OutBuffer: 256},
 			},
 			// The binary AV-control band, a fixed-frame hex poll for the live
 			// head-count: a request frame in, a response frame back, a poll only.
@@ -134,14 +134,14 @@ func Spec() spec.Spec {
 			// instead of scanning for a delimiter (a count may be 0x03 or 0x0D).
 			{
 				Name: "control-hex", Protocol: "tcp", Port: 5001, APISurface: "tessellate-census-hex", Persistent: true,
-				Doc:        profile.Doc{Summary: "Binary AV-control band, fixed hex poll for live head-count", Tags: []string{"control", "raw-tcp", "binary", "data"}},
+				Doc:        wire.Doc{Summary: "Binary AV-control band, fixed hex poll for live head-count", Tags: []string{"control", "raw-tcp", "binary", "data"}},
 				LineEnding: "\r", FrameStart: "\x02", FrameEnd: "\x03",
-				// The poll is a binary frame, so the console lists it as hex here;
-				// the control Commander answers it.
-				Commands: []profile.Command{{MatchHex: "AA 01", Native: true,
-					Doc: profile.Doc{Summary: "Hex poll: people_count (request AA 01 → response AA 81 <count>)"}}},
+				// The poll is a binary frame, so the console lists it as its hex
+				// bytes here (a listing only); the control Commander answers it.
+				Commands: []wire.Command{{Match: "hex AA 01",
+					Doc: wire.Doc{Summary: "Hex poll: people_count (request AA 01 → response AA 81 <count>)"}}},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: stateFor(Rows[0]),
 		HTTP: []spec.HTTPRoute{

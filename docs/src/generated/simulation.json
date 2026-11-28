@@ -1,0 +1,1208 @@
+{
+  "families": [
+    {
+      "package": "bookingservice",
+      "name": "booking-service",
+      "manufacturer": "Shinra Cloud",
+      "deviceType": "cloud-service",
+      "summary": "Room-booking platform's integration: pushes each booked location's day, read off the lab calendar, through /telemetry:push",
+      "interfaces": [],
+      "models": [
+        {
+          "product": "booking-service",
+          "model": "Booking Service (integration)"
+        }
+      ]
+    },
+    {
+      "package": "borealbeam",
+      "name": "boreal-beam",
+      "manufacturer": "Boreal",
+      "deviceType": "projector",
+      "summary": "Boreal Beam laser installation projector",
+      "interfaces": [
+        {
+          "name": "web-admin",
+          "protocol": "http",
+          "port": 80,
+          "auth": "digest"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "boreal-beam-340",
+          "model": "Beam 340",
+          "summary": "Boreal Beam 340 laser installation projector",
+          "driver": "boreal-beam-snmp",
+          "componentType": "projector"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "30s",
+          "writes": [
+            "status.sim.busy",
+            "status.sim.known",
+            "status.sim.until",
+            "status.device.power",
+            "status.projector.input",
+            "status.sim.awake"
+          ]
+        },
+        {
+          "name": "light_source_aging",
+          "interval": "60s",
+          "writes": [
+            "status.projector.light_source_hours"
+          ]
+        },
+        {
+          "name": "temperature_drift",
+          "interval": "60s",
+          "writes": [
+            "status.projector.temperature"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "borealcast",
+      "name": "boreal-cast",
+      "manufacturer": "Boreal",
+      "deviceType": "media-player",
+      "summary": "Boreal Cast digital signage media player",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "boreal-cast-m1",
+          "model": "Cast M1",
+          "summary": "Boreal Cast M1 digital signage media player",
+          "driver": "boreal-cast-api",
+          "componentType": "media-player"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "building_day",
+          "interval": "60s",
+          "writes": [
+            "status.playback.state",
+            "status.playback.index",
+            "status.playback.content",
+            "status.sim.open"
+          ]
+        },
+        {
+          "name": "playlist_advance",
+          "interval": "90s",
+          "writes": [
+            "status.playback.index",
+            "status.playback.content"
+          ]
+        },
+        {
+          "name": "storage_drift",
+          "interval": "300s",
+          "writes": [
+            "status.storage.used_percent"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "borealedge",
+      "name": "boreal-edge",
+      "manufacturer": "Boreal",
+      "deviceType": "display",
+      "summary": "Boreal Edge 4K commercial display",
+      "interfaces": [
+        {
+          "name": "web-admin",
+          "protocol": "http",
+          "port": 80,
+          "auth": "digest"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "boreal-edge-55",
+          "model": "Edge 55",
+          "summary": "Boreal Edge 55-inch 4K commercial display",
+          "driver": "boreal-edge-snmp",
+          "componentType": "display"
+        },
+        {
+          "product": "boreal-edge-65",
+          "model": "Edge 65",
+          "summary": "Boreal Edge 65-inch 4K commercial display",
+          "driver": "boreal-edge-snmp",
+          "componentType": "display"
+        },
+        {
+          "product": "boreal-edge-75",
+          "model": "Edge 75",
+          "summary": "Boreal Edge 75-inch 4K commercial display",
+          "driver": "boreal-edge-snmp",
+          "componentType": "display"
+        },
+        {
+          "product": "boreal-edge-86",
+          "model": "Edge 86",
+          "summary": "Boreal Edge 86-inch 4K commercial display",
+          "driver": "boreal-edge-snmp",
+          "componentType": "display"
+        },
+        {
+          "product": "boreal-edge-98",
+          "model": "Edge 98",
+          "summary": "Boreal Edge 98-inch 4K commercial display",
+          "driver": "boreal-edge-snmp",
+          "componentType": "display"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "30s",
+          "writes": [
+            "status.sim.busy",
+            "status.sim.known",
+            "status.sim.until",
+            "status.device.power",
+            "status.display.input",
+            "status.sim.awake"
+          ]
+        },
+        {
+          "name": "temperature_drift",
+          "interval": "60s",
+          "writes": [
+            "status.display.temperature"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "ferritepdu",
+      "name": "ferrite-pdu-4c",
+      "manufacturer": "Ferrite",
+      "deviceType": "power-device",
+      "summary": "Ferrite PDU 4C, networked rack power conditioner",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "basic"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "ferrite-pdu-4c",
+          "model": "PDU 4C",
+          "driver": "ferrite-pdu-snmp",
+          "componentType": "power-device"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "mains_drift",
+          "interval": "30s",
+          "writes": [
+            "status.mains.voltage_mv"
+          ]
+        },
+        {
+          "name": "load_drift",
+          "interval": "30s",
+          "writes": [
+            "status.load.total_current_ma",
+            "status.load.energy_mwh",
+            "status.outlets.0.current_ma",
+            "status.outlets.1.current_ma",
+            "status.outlets.2.current_ma",
+            "status.outlets.3.current_ma"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "genericdevice",
+      "name": "generic-device",
+      "manufacturer": "Generic",
+      "deviceType": "generic-device",
+      "summary": "Generic unclassified SNMP device",
+      "interfaces": [
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "generic-device",
+          "model": "Generic SNMP Device",
+          "driver": "snmp-generic",
+          "componentType": "generic-device"
+        }
+      ]
+    },
+    {
+      "package": "kestrelgaze",
+      "name": "kestrel-gaze",
+      "manufacturer": "Kestrel",
+      "deviceType": "ptz-camera",
+      "summary": "Kestrel Gaze P2 PTZ camera",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "basic"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "kestrel-gaze-p2",
+          "model": "Gaze P2",
+          "summary": "Kestrel Gaze P2 PTZ camera",
+          "driver": "kestrel-gaze-api",
+          "componentType": "ptz-camera"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "20s",
+          "writes": [
+            "status.sim.known",
+            "status.camera.people",
+            "status.camera.presence",
+            "status.camera.magnification",
+            "status.camera.pan",
+            "status.camera.tilt",
+            "status.camera.preset",
+            "status.camera.tracking",
+            "status.sim.meeting"
+          ]
+        },
+        {
+          "name": "tracking_drift",
+          "interval": "20s",
+          "writes": [
+            "status.camera.pan",
+            "status.camera.tilt"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "kestrelrelay",
+      "name": "kestrel-relay",
+      "manufacturer": "Kestrel",
+      "deviceType": "video-codec",
+      "summary": "Kestrel Relay C1 conferencing codec",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "basic"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "kestrel-relay-c1",
+          "model": "Relay C1",
+          "summary": "Kestrel Relay C1 conferencing codec",
+          "driver": "kestrel-relay-api",
+          "componentType": "codec"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "call_cycle",
+          "interval": "60s",
+          "writes": [
+            "status.sim.skip",
+            "status.sim.hungup",
+            "status.sim.want",
+            "status.sim.want_n",
+            "status.sim.event",
+            "status.sim.call",
+            "status.call.active",
+            "status.call.participants",
+            "status.content.sharing",
+            "status.sim.share_prev",
+            "status.content.source"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "kestrelvroom",
+      "name": "kestrel-bar",
+      "manufacturer": "Kestrel",
+      "deviceType": "video-codec",
+      "summary": "Kestrel VRoom video conferencing bar",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "basic"
+        },
+        {
+          "name": "ws-api",
+          "protocol": "websocket",
+          "port": 9443,
+          "tls": true,
+          "auth": "basic"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "kestrel-vroom",
+          "model": "VRoom",
+          "summary": "Kestrel VRoom video conferencing bar",
+          "driver": "kestrel-api",
+          "componentType": "video-bar"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "call_cycle",
+          "interval": "60s",
+          "writes": [
+            "status.sim.participants_prev",
+            "status.sim.id_prev",
+            "status.sim.cal",
+            "status.sim.skip",
+            "status.sim.hungup",
+            "status.sim.want",
+            "status.sim.want_n",
+            "status.sim.event",
+            "status.sim.dial_ticks",
+            "status.sim.dialed",
+            "status.call.active",
+            "status.sim.call_seq",
+            "status.call.id",
+            "status.call.participants",
+            "status.presentation.local_active",
+            "status.sim.share_prev",
+            "status.sim.start_at",
+            "status.sim.plan",
+            "status.sim.slot",
+            "status.sim.boundary",
+            "status.sim.booked",
+            "status.sim.end_at",
+            "status.sim.plan_at"
+          ]
+        },
+        {
+          "name": "people_count",
+          "interval": "30s",
+          "writes": [
+            "status.video.people_count"
+          ]
+        },
+        {
+          "name": "status_log",
+          "interval": "900s"
+        },
+        {
+          "name": "media_stats",
+          "interval": "30s",
+          "writes": [
+            "status.media.packet_loss",
+            "status.sim.net_event",
+            "status.sim.uplink_degraded",
+            "status.media.jitter_ms",
+            "status.media.bitrate_kbps",
+            "status.media.frame_rate",
+            "status.audio.speaker_level",
+            "status.audio.mic_level_db",
+            "status.device.cpu_load",
+            "status.device.temperature",
+            "status.device.fan_rpm",
+            "status.device.memory_used"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "lyraarc",
+      "name": "lyra-arc",
+      "manufacturer": "Lyra",
+      "deviceType": "ceiling-mic",
+      "summary": "Lyra Arc A2, ceiling array microphone",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "lyra-arc-a2",
+          "model": "Arc A2",
+          "summary": "Lyra Arc A2, ceiling array microphone",
+          "driver": "lyra-arc-snmp",
+          "componentType": "ceiling-mic"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "call_state",
+          "interval": "15s",
+          "writes": [
+            "status.mic.active",
+            "status.mic.mute"
+          ]
+        },
+        {
+          "name": "level_drift",
+          "interval": "15s",
+          "writes": [
+            "status.mic.level_db"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "lyrahx",
+      "name": "lyra-hx",
+      "manufacturer": "Lyra",
+      "deviceType": "wireless-mic",
+      "summary": "Lyra HX-1, wireless microphone system",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "lyra-hx-1",
+          "model": "HX-1",
+          "summary": "Lyra HX-1, wireless microphone system",
+          "driver": "lyra-hx-snmp",
+          "componentType": "wireless-mic"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "call_state",
+          "interval": "15s",
+          "writes": [
+            "status.mic.transmitting",
+            "status.mic.mute"
+          ]
+        },
+        {
+          "name": "level_drift",
+          "interval": "15s",
+          "writes": [
+            "status.mic.level_db"
+          ]
+        },
+        {
+          "name": "battery_drain",
+          "interval": "60s",
+          "writes": [
+            "status.mic.battery_percent"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "meridianextender",
+      "name": "meridian-extender",
+      "manufacturer": "Meridian",
+      "deviceType": "av-extender",
+      "summary": "Meridian XL AV extender",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "meridian-xl-1",
+          "model": "XL-1",
+          "summary": "Meridian XL-1, AV extender",
+          "driver": "meridian-xl-snmp",
+          "componentType": "av-extender"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "30s",
+          "writes": [
+            "status.extender.signal"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "meridianswitcher",
+      "name": "meridian-switcher",
+      "manufacturer": "Meridian",
+      "deviceType": "presentation-switcher",
+      "summary": "Meridian MX presentation switcher",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "meridian-mx-84",
+          "model": "MX 84",
+          "summary": "Meridian MX 84, presentation switcher",
+          "driver": "meridian-mx-snmp",
+          "componentType": "presentation-switcher"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "30s",
+          "writes": [
+            "status.sim.prev",
+            "status.sim.want",
+            "status.switcher.input",
+            "status.switcher.signal"
+          ]
+        },
+        {
+          "name": "signal_follow",
+          "interval": "10s",
+          "writes": [
+            "status.switcher.signal"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "newtroncore",
+      "name": "newtron-core",
+      "manufacturer": "Newtron",
+      "deviceType": "control-processor",
+      "summary": "Newtron Core control processor",
+      "interfaces": [
+        {
+          "name": "nvp",
+          "protocol": "tcp",
+          "port": 51325,
+          "persistent": true
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "newtron-core-3",
+          "model": "Core CP-3",
+          "summary": "Newtron Core CP-3, room control processor",
+          "driver": "newtron-core-nvp",
+          "componentType": "control-processor"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "30s",
+          "writes": [
+            "status.control.macro",
+            "status.control.macro_at",
+            "status.control.room_power"
+          ]
+        },
+        {
+          "name": "room_climate",
+          "interval": "30s",
+          "writes": [
+            "status.room.temperature_c",
+            "status.room.climate_c"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "newtronpanel",
+      "name": "newtron-panel",
+      "manufacturer": "Newtron",
+      "deviceType": "touchpanel",
+      "summary": "Newtron Panel touchpanel",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "form"
+        },
+        {
+          "name": "ssh-console",
+          "protocol": "ssh",
+          "port": 22,
+          "auth": "password",
+          "persistent": true
+        },
+        {
+          "name": "nvp",
+          "protocol": "tcp",
+          "port": 51325,
+          "persistent": true
+        },
+        {
+          "name": "nvp-tls",
+          "protocol": "tcp",
+          "port": 51326,
+          "tls": true,
+          "persistent": true
+        },
+        {
+          "name": "nvp-telnet",
+          "protocol": "telnet",
+          "port": 23,
+          "auth": "password",
+          "persistent": true
+        },
+        {
+          "name": "nvp-udp",
+          "protocol": "udp",
+          "port": 51327,
+          "persistent": true
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "newtron-panel-7",
+          "model": "Panel 7",
+          "summary": "Newtron Panel 7, 7-inch room touchpanel",
+          "driver": "newtron-panel-nvp",
+          "componentType": "touch-panel"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_meeting",
+          "interval": "30s",
+          "writes": [
+            "status.panel.awake",
+            "status.panel.page"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "newtronslate",
+      "name": "newtron-slate",
+      "manufacturer": "Newtron",
+      "deviceType": "scheduling-panel",
+      "summary": "Newtron Slate scheduling panel",
+      "interfaces": [
+        {
+          "name": "nvp",
+          "protocol": "tcp",
+          "port": 51325,
+          "persistent": true
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "newtron-slate-5",
+          "model": "Slate 5",
+          "summary": "Newtron Slate 5, room scheduling panel",
+          "driver": "newtron-slate-nvp",
+          "componentType": "scheduling-panel"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_bookings",
+          "interval": "10s",
+          "writes": [
+            "status.room.booking",
+            "status.room.cal_booking",
+            "status.room.current_meeting",
+            "status.room.next_meeting"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "polarisamp",
+      "name": "polaris-amp",
+      "manufacturer": "Polaris",
+      "deviceType": "amplifier",
+      "summary": "Polaris Amp 4-100, 4-channel power amplifier",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "polaris-amp-4100",
+          "model": "Amp 4-100",
+          "summary": "Polaris Amp 4-100, 4-channel power amplifier",
+          "driver": "polaris-amp-snmp",
+          "componentType": "amplifier"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "temperature_drift",
+          "interval": "60s",
+          "writes": [
+            "status.amp.temperature"
+          ]
+        },
+        {
+          "name": "fan_drift",
+          "interval": "60s",
+          "writes": [
+            "status.amp.fan_rpm"
+          ]
+        },
+        {
+          "name": "output_drift",
+          "interval": "30s",
+          "writes": [
+            "status.amp.signal_present",
+            "status.channels.0.output_db",
+            "status.channels.1.output_db",
+            "status.channels.2.output_db",
+            "status.channels.3.output_db"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "polarisdsp",
+      "name": "polaris-dsp",
+      "manufacturer": "Polaris",
+      "deviceType": "audio-dsp",
+      "summary": "Polaris DSP 16, 16-channel audio DSP",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "ssh-console",
+          "protocol": "ssh",
+          "port": 22,
+          "auth": "password",
+          "persistent": true
+        },
+        {
+          "name": "telnet-console",
+          "protocol": "telnet",
+          "port": 23,
+          "auth": "password",
+          "persistent": true
+        },
+        {
+          "name": "qrc",
+          "protocol": "tcp",
+          "port": 1710,
+          "persistent": true
+        },
+        {
+          "name": "snmp",
+          "protocol": "snmp",
+          "port": 161
+        },
+        {
+          "name": "udp-echo",
+          "protocol": "udp",
+          "port": 9000
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "polaris-dsp-16",
+          "model": "DSP 16",
+          "summary": "Polaris DSP 16, 16-channel audio DSP",
+          "driver": "polaris-dsp-snmp",
+          "componentType": "dsp"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "cpu_drift",
+          "interval": "30s",
+          "writes": [
+            "status.dsp.cpu_load"
+          ]
+        },
+        {
+          "name": "temperature_drift",
+          "interval": "60s",
+          "writes": [
+            "status.dsp.temperature"
+          ]
+        },
+        {
+          "name": "output_level_drift",
+          "interval": "15s",
+          "writes": [
+            "status.output.level_db"
+          ]
+        },
+        {
+          "name": "room_signal",
+          "interval": "15s",
+          "writes": [
+            "status.dsp.active_channels",
+            "status.channels.0.gate",
+            "status.channels.0.peak_db",
+            "status.channels.1.gate",
+            "status.channels.1.peak_db",
+            "status.channels.2.gate",
+            "status.channels.2.peak_db",
+            "status.channels.3.gate",
+            "status.channels.3.peak_db"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "recordingservice",
+      "name": "recording-service",
+      "manufacturer": "Shinra Cloud",
+      "deviceType": "cloud-service",
+      "summary": "Shinra recording service: health, work counters and a failure feed over https",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "header"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "recording-service",
+          "model": "Recording Service",
+          "driver": "recording-service-api",
+          "componentType": "generic-service"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "room_recordings",
+          "interval": "60s",
+          "writes": [
+            "status.recordings.in_progress",
+            "status.recordings.queue_depth",
+            "status.recordings.rooms"
+          ]
+        },
+        {
+          "name": "storage_drift",
+          "interval": "300s",
+          "writes": [
+            "status.storage.used_percent"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "schedulingservice",
+      "name": "scheduling-service",
+      "manufacturer": "Shinra Cloud",
+      "deviceType": "cloud-service",
+      "summary": "Cloud room-booking / scheduling platform (bookings + config)",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "header"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "scheduling-service",
+          "model": "Scheduling Platform",
+          "driver": "scheduling-service-api",
+          "componentType": "generic-service"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "bookings_sync",
+          "interval": "30s",
+          "writes": [
+            "status.bookings.today",
+            "status.bookings.remaining",
+            "status.bookings.in_progress",
+            "status.rooms",
+            "configuration.rooms_served"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "tessellatecensus",
+      "name": "tessellate-census-c1",
+      "manufacturer": "Tessellate",
+      "deviceType": "people-counter",
+      "summary": "Tessellate Census C1 ceiling people counter",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 80,
+          "auth": "header"
+        },
+        {
+          "name": "control",
+          "protocol": "tcp",
+          "port": 5000,
+          "persistent": true
+        },
+        {
+          "name": "control-hex",
+          "protocol": "tcp",
+          "port": 5001,
+          "persistent": true
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "tessellate-census-c1",
+          "model": "Census C1",
+          "driver": "tessellate-census-http",
+          "componentType": "occupancy-sensor"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "occupancy_drift",
+          "interval": "20s",
+          "writes": [
+            "status.occupancy.people_count_prev",
+            "status.occupancy.people_count",
+            "status.occupancy.last_event",
+            "status.occupancy.vacant"
+          ]
+        }
+      ]
+    },
+    {
+      "package": "uccplatform",
+      "name": "ucc-platform",
+      "manufacturer": "Shinra Cloud",
+      "deviceType": "cloud-service",
+      "summary": "Account-wide meeting platform: every room's and device's state over one API and one webhook",
+      "interfaces": [
+        {
+          "name": "http-api",
+          "protocol": "http",
+          "port": 443,
+          "tls": true,
+          "auth": "header"
+        },
+        {
+          "name": "icmp",
+          "protocol": "icmp"
+        }
+      ],
+      "models": [
+        {
+          "product": "ucc-platform",
+          "model": "UCC Platform (account)",
+          "driver": "ucc-rooms",
+          "componentType": "generic-service"
+        }
+      ],
+      "behaviors": [
+        {
+          "name": "rooms_calendar",
+          "interval": "15s",
+          "writes": [
+            "status.rooms",
+            "status.sim.announce",
+            "status.sim.told"
+          ]
+        },
+        {
+          "name": "rooms_report",
+          "interval": "30s"
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "unsimulated": [],
+    "passive": [
+      {
+        "product": "lyra-gn-12",
+        "why": "an analog gooseneck microphone; the DSP input it is wired to reports its level and mute (#1367)"
+      },
+      {
+        "product": "polaris-sky-c6",
+        "why": "a passive loudspeaker; the amplifier channel driving it reports its load (#1367)"
+      }
+    ]
+  }
+}

@@ -36,7 +36,7 @@ func fake() *spectest.Fake { return spectest.NewFake(Spec(), "polaris-dsp-16") }
 // The model table is the line: a product the catalog resolves to the family,
 // with sixteen strips of which the room's four microphones have a gate.
 func TestTheRowIsASixteenStripProcessor(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

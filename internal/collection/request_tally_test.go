@@ -11,7 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The outpost's request tally is the outpost half of the closed loop the scale lab
@@ -141,9 +142,9 @@ func newTallySimDevice(t *testing.T, auth sim.HTTPAuth) *sim.Device {
 	dev := sim.NewDevice("d", "tally-host", net.ParseIP("127.0.0.1"), "p", 1,
 		map[string]any{"status": map[string]any{"device": map[string]any{"uptime": 1234}}})
 	dev.HTTPAuth = auth
-	if err := dev.AddRoute("GET /api/status", "status.json.gotempl", `{"status":"ok"}`, nil); err != nil {
-		t.Fatal(err)
-	}
+	dev.AttachRoute(surface.Route{Method: "GET", Path: "/api/status", Serve: func() surface.Response {
+		return surface.Response{ContentType: "application/json", Body: []byte(`{"status":"ok"}`)}
+	}})
 	return dev
 }
 
@@ -210,7 +211,7 @@ func TestTalliedWebSocketProbeCountsWhereTheFaceReceivesIt(t *testing.T) {
 		t.Skip("real-socket integration test")
 	}
 	dev := newTallySimDevice(t, sim.HTTPAuth{})
-	dev.SetWebSocket(profile.WebSocket{Path: "/api/ws", Paths: []string{"status"}}, sim.HTTPAuth{})
+	dev.SetWebSocket(wire.WebSocket{Path: "/api/ws", Paths: []string{"status"}}, sim.HTTPAuth{})
 	addr, err := dev.StartWebSocket(0, false)
 	if err != nil {
 		t.Fatal(err)

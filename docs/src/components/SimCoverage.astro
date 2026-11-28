@@ -1,0 +1,28 @@
+---
+// The seeded products the simulator does not serve, rendered from the generated
+// facts (docs/src/generated/simulation.json, written by make gen from the
+// coverage accounting in sim/device/coverage.go, which the catalog's alignment
+// test and the dev fleet's coverage test hold true). Every other seeded
+// product on the network is a model row of a family.
+import facts from '../generated/simulation.json';
+
+const { unsimulated, passive } = facts.coverage;
+---
+
+{unsimulated.length === 0 ? (
+  <p>No seeded product on the network is left to simulate: every one is a model of a family.</p>
+) : (
+  <table class="sim-coverage">
+    <thead><tr><th>Product</th><th>Why no family serves it yet</th></tr></thead>
+    <tbody>
+      {unsimulated.map((a) => (<tr><td><code>{a.product}</code></td><td>{a.why}</td></tr>))}
+    </tbody>
+  </table>
+)}
+
+<table class="sim-coverage">
+  <thead><tr><th>Passive product</th><th>How the fleet watches it instead</th></tr></thead>
+  <tbody>
+    {passive.map((a) => (<tr><td><code>{a.product}</code></td><td>{a.why}</td></tr>))}
+  </tbody>
+</table>

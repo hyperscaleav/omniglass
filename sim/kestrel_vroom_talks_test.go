@@ -723,9 +723,6 @@ func TestTheVRoomsTicksRenderClean(t *testing.T) {
 func TestNoVRoomBehaviorTicksFasterThan15s(t *testing.T) {
 	d := loadVRoom(t, "bar")
 	every := map[string]time.Duration{}
-	for _, b := range d.behaviors {
-		every[b.Name] = b.Interval
-	}
 	if d.fam != nil {
 		for _, tk := range d.fam.ticks {
 			every[tk.Name] = tk.Interval

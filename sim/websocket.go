@@ -18,7 +18,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The websocket face (#1034): a simulated component's control socket, a
@@ -52,7 +52,7 @@ const wsQueue = 64
 // connected now, and what it was sent.
 type wsFace struct {
 	d    *Device
-	cfg  profile.WebSocket
+	cfg  wire.WebSocket
 	auth HTTPAuth
 	up   websocket.Upgrader
 
@@ -110,7 +110,7 @@ func (s *wsSock) watching(path string) bool {
 
 // SetWebSocket gives the device a websocket face, its auth the profile's.
 // Call before the face starts.
-func (d *Device) SetWebSocket(cfg profile.WebSocket, auth HTTPAuth) {
+func (d *Device) SetWebSocket(cfg wire.WebSocket, auth HTTPAuth) {
 	if cfg.Path == "" {
 		d.ws = nil
 		return

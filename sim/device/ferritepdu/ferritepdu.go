@@ -17,8 +17,8 @@
 // day (behave.OutletCurrent): outlet 1 the video chain, 2 the processors, 3 the
 // amplifier, 4 nothing plugged in. A PDU with no calendar random-walks.
 //
-// The family replaced the ferrite-pdu-4c YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the ferrite-pdu-4c YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package ferritepdu
 
 import (
@@ -29,11 +29,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry: the product it is
@@ -137,18 +137,18 @@ func Spec() spec.Spec {
 		Models: spec.Table(Rows, func(r Row) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: "http-api", Protocol: "http", Port: 80, APISurface: "ferrite-pdu",
-				Doc:  profile.Doc{Summary: "Ferrite JSON status and outlet control", Tags: []string{"management", "api"}},
-				Auth: profile.Auth{Type: "basic", DefaultUser: "ferrite", DefaultPassword: "ferrite", Realm: "Ferrite PDU", Enforce: true},
+				Doc:  wire.Doc{Summary: "Ferrite JSON status and outlet control", Tags: []string{"management", "api"}},
+				Auth: wire.Auth{Type: "basic", DefaultUser: "ferrite", DefaultPassword: "ferrite", Realm: "Ferrite PDU", Enforce: true},
 			},
 			{
 				Name: "snmp", Protocol: "snmp", Port: 161, APISurface: "ferrite-pdu",
-				Doc:  profile.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Doc:  wire.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: stateFor(Rows[0]),
 		HTTP: []spec.HTTPRoute{

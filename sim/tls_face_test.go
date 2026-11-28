@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -160,7 +159,7 @@ func TestTLSFaceValidityComesFromTheProfile(t *testing.T) {
 	if !found {
 		t.Fatal("the panel family declares no nvp-tls interface")
 	}
-	e := NewEngineOver(shippedCatalog(t, fam), profiles.Templates())
+	e := NewEngineOver(shippedCatalog(t, fam))
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	start := time.Now()

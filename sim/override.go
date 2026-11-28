@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // BehaviorOverrideSpec is the shape of a single externally applied,
@@ -66,25 +64,18 @@ func (d *Device) SetBehaviorOverrides(specs []BehaviorOverrideSpec) error {
 		}
 		// Override mutations are always treated as optional from the
 		// simulator's perspective. A stanza targets a heterogeneous
-		// fleet and not every device profile declares every key;
-		// profile.Mutation.Optional=true makes a missing path log a
-		// warning rather than fail (omniglass-lab#102 silent-skip semantics).
-		m, err := compileBehaviorMutationList([]profile.Mutation{{
-			Path:     spec.Path,
-			Value:    spec.Expression,
-			Optional: true,
-		}}, d.behaviorFuncs())
+		// fleet and not every device declares every key; an optional
+		// mutation makes a missing path log a warning rather than fail
+		// (omniglass-lab#102 silent-skip semantics).
+		m, err := compileOneFuncs(spec.Path, spec.Expression, true, d.behaviorFuncs())
 		if err != nil {
 			return fmt.Errorf("override %q on %q: %w", spec.OverrideID, spec.Path, err)
-		}
-		if len(m) != 1 {
-			return fmt.Errorf("override %q: compileBehaviorMutationList produced %d mutations, want 1", spec.OverrideID, len(m))
 		}
 		compiled = append(compiled, overrideEntry{
 			OverrideID: spec.OverrideID,
 			Path:       spec.Path,
 			Interval:   time.Duration(spec.IntervalMs) * time.Millisecond,
-			Mutation:   m[0],
+			Mutation:   m,
 		})
 	}
 
@@ -120,21 +111,6 @@ func (d *Device) SetBehaviorOverrides(specs []BehaviorOverrideSpec) error {
 	}
 	d.behaviorMu.Unlock()
 	return nil
-}
-
-// overridePathsLocked returns the set of paths currently covered by an
-// active override. The profile-behavior tick consults this so writes
-// that would overlap an override skip silently. Caller MUST hold
-// behaviorMu.
-func (d *Device) overridePathsLocked() map[string]struct{} {
-	if len(d.overrides) == 0 {
-		return nil
-	}
-	out := make(map[string]struct{}, len(d.overrides))
-	for _, o := range d.overrides {
-		out[o.Path] = struct{}{}
-	}
-	return out
 }
 
 // runOverride is the per-override goroutine body. Mirrors runBehavior
@@ -257,33 +233,6 @@ func (d *Device) OverrideIDs() []string {
 	return out
 }
 
-// filterOverriddenMutations returns the subset of muts whose static
-// path text is NOT in overridePaths. Used by tickBehavior to drop
-// writes to paths an active scenario override would claim.
-//
-// Only mutations whose path template is a single text node, i.e. a
-// literal path with no {{ ... }} interpolation, are subject to the
-// skip. Templated paths fall through (rendered + applied as before)
-// because the override system's apply surface targets literal state
-// keys, so a {{ .Args.id }}-templated mutation can't ever be the
-// "same write" as a scenario override on `status.dsp.cpu_load`.
-func filterOverriddenMutations(muts []mutation, overridePaths map[string]struct{}) []mutation {
-	if len(overridePaths) == 0 || len(muts) == 0 {
-		return muts
-	}
-	out := muts[:0:0]
-	for _, m := range muts {
-		raw, ok := rawPathSource(m.path)
-		if ok {
-			if _, hit := overridePaths[raw]; hit {
-				continue
-			}
-		}
-		out = append(out, m)
-	}
-	return out
-}
-
 // overrideRuntimeTickAll is a test helper that runs one synchronous
 // tick for every active override on the device. Production code does
 // not call this, the per-override goroutine drives ticks on the
@@ -307,13 +256,10 @@ func (d *Device) overrideRuntimeTickAll() {
 // moment it closes, without waiting for a tick (#2769).
 func (d *Device) WritePath(overrideID, path, expression string) error {
 	d.ensureRand()
-	m, err := compileBehaviorMutationList([]profile.Mutation{{Path: path, Value: expression, Optional: true}}, d.behaviorFuncs())
+	m, err := compileOneFuncs(path, expression, true, d.behaviorFuncs())
 	if err != nil {
 		return fmt.Errorf("override %q on %q: %w", overrideID, path, err)
 	}
-	if len(m) != 1 {
-		return fmt.Errorf("override %q: compileBehaviorMutationList produced %d mutations, want 1", overrideID, len(m))
-	}
-	d.tickOverride(&overrideEntry{OverrideID: overrideID, Path: path, Mutation: m[0]})
+	d.tickOverride(&overrideEntry{OverrideID: overrideID, Path: path, Mutation: m})
 	return nil
 }

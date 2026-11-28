@@ -23,9 +23,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/device"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 const simE2EPortShift = 24000
@@ -230,27 +229,15 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	})
 }
 
-// e2eSimulatedSurfaces are the interfaces the shipped simulator serves for a
-// product (a Go family's or a YAML profile's), and whether it simulates one.
-func e2eSimulatedSurfaces(t *testing.T, product string) ([]profile.Interface, bool) {
-	t.Helper()
-	cat, err := device.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, ok := cat.ForProduct(product)
-	if !ok {
-		return nil, false
-	}
-	return r.Definition.Surfaces(), true
-}
-
-// e2eSimulatedRoute is a plain-HTTP surface of the product's simulator and
+// e2eSimulatedRoute is a plain-HTTP surface of the product's profile and
 // a GET route it serves.
 func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
 	t.Helper()
-	ifaces, _ := e2eSimulatedSurfaces(t, product)
-	for _, iface := range ifaces {
+	def, ok := shipped.Catalog(t).ProfileFor(product)
+	if !ok {
+		t.Fatalf("no simulator family serves %s", product)
+	}
+	for _, iface := range def.Surfaces() {
 		if iface.Protocol != "http" || iface.TLS {
 			continue
 		}
@@ -260,17 +247,18 @@ func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
 			}
 		}
 	}
-	t.Fatalf("%s's simulator has no plain-HTTP GET route", product)
+	t.Fatalf("%s's profile has no plain-HTTP GET route", product)
 	return "", ""
 }
 
 // e2eSimulatedProduct is the first seeded product, by name, whose simulator
-// serves plain HTTP and every other protocol named (a caller that
+// profile serves plain HTTP and every other protocol named (a caller that
 // attaches an snmp driver names snmp), with its plain-HTTP port. A caller
 // names every face it uses, so a new profile that sorts first cannot hand it
 // a product missing one.
 func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn, also ...string) (string, int) {
 	t.Helper()
+	cat := shipped.Catalog(t)
 	rows, err := conn.Query(ctx, `select name from product`)
 	if err != nil {
 		t.Fatal(err)
@@ -286,13 +274,13 @@ func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn, also
 	rows.Close()
 	sort.Strings(names)
 	for _, n := range names {
-		ifaces, ok := e2eSimulatedSurfaces(t, n)
+		p, ok := cat.ProfileFor(n)
 		if !ok {
 			continue
 		}
 		served := map[string]bool{}
 		port := 0
-		for _, iface := range ifaces {
+		for _, iface := range p.Surfaces() {
 			served[iface.Protocol] = true
 			if iface.Protocol == "http" && !iface.TLS && port == 0 {
 				port = iface.Port
@@ -306,7 +294,7 @@ func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn, also
 			return n, port
 		}
 	}
-	t.Fatalf("no seeded product has a simulator with plain HTTP and %v", also)
+	t.Fatalf("no seeded product has a simulator profile with plain HTTP and %v", also)
 	return "", 0
 }
 

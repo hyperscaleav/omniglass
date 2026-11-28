@@ -108,6 +108,19 @@ func Render(modulePath string, fams []Family) ([]byte, error) {
 		}
 		b.WriteString("\t}\n")
 	}
+	b.WriteString("}\n\n")
+	b.WriteString("// familyDirs is the directory of each family under sim/device, in the order\n")
+	b.WriteString("// families lists them: where a family's package is, for the docs generated from it.\n")
+	b.WriteString("func familyDirs() []string {\n")
+	if len(fams) == 0 {
+		b.WriteString("\treturn nil\n")
+	} else {
+		b.WriteString("\treturn []string{\n")
+		for _, f := range fams {
+			fmt.Fprintf(&b, "\t\t%q,\n", f.Dir)
+		}
+		b.WriteString("\t}\n")
+	}
 	b.WriteString("}\n")
 	out, err := format.Source(b.Bytes())
 	if err != nil {

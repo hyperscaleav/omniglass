@@ -28,7 +28,7 @@ func call(t *testing.T, f *spectest.Fake, match string, body map[string]any) spe
 }
 
 func TestEveryRowIsAProductThatReportsItself(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

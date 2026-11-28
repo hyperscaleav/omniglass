@@ -9,17 +9,13 @@ package sim
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"golang.org/x/crypto/ssh"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,8 +23,9 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/hyperscaleav/omniglass/sim/calendar"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/world"
@@ -307,7 +304,7 @@ type Device struct {
 	routes   []routeEntry
 	commands []commandEntry
 	// fam is what the device's Go family answers in Go (#2829), nil for a
-	// device of a YAML profile.
+	// device standing alone (a test's).
 	fam *goHandlers
 
 	// The Go-declared surfaces (sim/surface, #2831), attached before the
@@ -321,7 +318,6 @@ type Device struct {
 	// state) so a long applyMutations under mu doesn't block
 	// StartBehaviors / StopBehaviors / SetBehaviorOverrides.
 	behaviorMu sync.Mutex
-	behaviors  []behaviorEntry
 	// overrides are time-bounded mutations applied externally via
 	// SetBehaviorOverrides (a future control path, e.g. impairments,
 	// issue #889). Each
@@ -666,70 +662,20 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// routeEntry pairs a parsed route match with a compiled template and
-// pre-compiled mutations.
+// routeEntry is a family's HTTP route: its method and path, answered by the
+// family's Go handler.
 type routeEntry struct {
-	Method   string
-	Path     string
-	Template *template.Template
-	// Go answers the route in place of Template when a Go family registered
-	// it (#2829).
-	Go        spec.HTTPHandler
-	Mutations []mutation
-	// Events are the named events the route reports after its mutations
-	// (#1145), each data template compiled once.
-	Events []routeEvent
-	// Emit is the webhook the route posts after its mutations (#1024).
-	Emit *emitAction
+	Method string
+	Path   string
+	Go     spec.HTTPHandler
 }
 
-// routeEvent is one compiled named event a route or a behavior reports.
-type routeEvent struct {
-	name string
-	data *template.Template
-}
-
-// compileNamedEvents compiles the named events a route or a behavior (owner,
-// for the error) declares: each needs a name a stream can carry and data
-// that parses against funcs.
-func compileNamedEvents(owner string, events []profile.RouteEvent, funcs template.FuncMap) ([]routeEvent, error) {
-	var evs []routeEvent
-	for _, e := range events {
-		if strings.TrimSpace(e.Name) == "" || strings.ContainsAny(e.Name, "\r\n") {
-			return nil, fmt.Errorf("%s declares an event with no name, or a name with a line break", owner)
-		}
-		dt, err := template.New(owner + " event " + e.Name).Funcs(funcs).Parse(e.Data)
-		if err != nil {
-			return nil, fmt.Errorf("parsing %s event %q data: %w", owner, e.Name, err)
-		}
-		evs = append(evs, routeEvent{name: e.Name, data: dt})
-	}
-	return evs, nil
-}
-
-// commandEntry pairs a CLI command match with a compiled template. Used
-// by SSH and Telnet listeners to answer profile-declared Commands.
-// Match is exact-only for v1, mirroring HTTP route behavior.
-//
-// Action / Subject / Token / IntervalMs back the persistent-session
-// subscribe and unsubscribe verbs. They are zero-valued for ordinary
-// commands; the shell loop only consults them when the interface is
-// Persistent and Action is non-empty. Subject / Token / IntervalMs are
-// pre-compiled templates rendered with the standard templateData
-// (.State, .Hostname, .DeviceID, .IP) so a profile may parameterize
-// the resolved subject by device identity even without per-call
-// argument capture (which is a planned follow-up).
+// commandEntry is a family's line command, answered by its Go handler. A
+// persistent session's subscribe and unsubscribe verbs come from the surface
+// a family attaches (sim/surface), which reports the action in its reply.
 type commandEntry struct {
 	Match string
-	// Go answers the command in place of Template when a Go family
-	// registered it (#2829).
-	Go         spec.LineHandler
-	Template   *template.Template
-	Mutations  []mutation
-	Action     string
-	Subject    *template.Template
-	Token      *template.Template
-	IntervalMs *template.Template
+	Go    spec.LineHandler
 }
 
 // CommandAction names a persistent-session verb a command may declare.
@@ -758,11 +704,8 @@ const (
 // registers or removes the subscription against the per-device
 // SessionRegistry.
 //
-// Token and IntervalMs are derived from the matched commandEntry's
-// templates. IntervalMs is the parsed integer (0 means on-change
-// only); a malformed template result returns an error from RunCommand
-// so the caller can surface it on the wire instead of silently
-// downgrading to on-change.
+// Token and IntervalMs come from the reply of the surface that answered.
+// IntervalMs is the parsed integer (0 means on-change only).
 type CommandResult struct {
 	Response   string
 	Action     CommandAction
@@ -771,27 +714,19 @@ type CommandResult struct {
 	IntervalMs int
 }
 
-// templateData is the data passed to every template execution. The
-// Request field is zero-valued for CLI command renders (SSH/Telnet)
-// since those don't have an HTTP request context.
-//
-// Defaults is a read-only view of the profile's `defaults:` block,
-// installed once at device load. Templates use it to reset volatile
-// state paths back to their declared defaults, for example, a
-// reboot mutation that writes `value: "{{ .Defaults.status.audio.volume }}"`
-// returns the path to whatever the profile declared, without the
-// author having to repeat the literal value at every site that resets it.
+// templateData is the data an override's expression renders over: the
+// device's state and its identity. Defaults is a read-only view of the
+// device's default state, so an expression can put a path back to what the
+// family declared without repeating the literal.
 type templateData struct {
 	State    map[string]any
 	Defaults map[string]any
 	Hostname string
 	DeviceID string
 	IP       string
-	Request  requestContext
 }
 
-// requestContext exposes the current HTTP request to templates and
-// mutations. Body is the JSON-parsed request body (nil on empty or
+// requestContext is the current HTTP request, as the family's handler reads it. Body is the JSON-parsed request body (nil on empty or
 // non-JSON bodies); Query is the first value per query parameter.
 type requestContext struct {
 	Method string
@@ -800,77 +735,13 @@ type requestContext struct {
 	Query  map[string]string
 }
 
-// guardPatterns caches each pattern guard compiles.
-var guardPatterns sync.Map
-
-func guardPattern(pattern string) (*regexp.Regexp, error) {
-	if re, ok := guardPatterns.Load(pattern); ok {
-		return re.(*regexp.Regexp), nil
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, err
-	}
-	guardPatterns.Store(pattern, re)
-	return re, nil
-}
-
-// pathSegment is what segment admits as one state-path key.
-var pathSegment = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
-
-// templateFuncs provides helper functions available in all templates.
+// templateFuncs are the helpers an override's expression has in every
+// device: the clock and a path lookup. behaviorFuncs adds the numeric,
+// scheduling and seeded-random helpers per device.
 var templateFuncs = template.FuncMap{
-	// now returns the current Unix epoch in seconds. Used by reboot/reset
-	// mutations to re-anchor an elapsed computed field:
-	//   { path: status.device.boot_epoch, value: "{{ now }}" }
-	// so uptime (computed as now - boot_epoch) drops back to ~0.
+	// now returns the current Unix epoch in seconds, so an expression can
+	// re-anchor an elapsed field: "{{ now }}".
 	"now": func() int64 { return time.Now().Unix() },
-	"marshal": func(v any) string {
-		b, err := json.Marshal(v)
-		if err != nil {
-			return "{}"
-		}
-		return string(b)
-	},
-	// segment passes a request value through as one state-path segment, or
-	// fails the render when it is not one (letters, digits, - and _, at
-	// most 64), so a path built from a request ({{ segment .Request.Body.room }})
-	// can name only a key, never reach into another path with a dot.
-	"segment": func(v any) (string, error) {
-		s, _ := v.(string)
-		if !pathSegment.MatchString(s) {
-			return "", fmt.Errorf("%q is not a state path segment (letters, digits, - and _, at most 64)", s)
-		}
-		return s, nil
-	},
-	// guard renders nothing when v matches pattern and fails the render when
-	// it does not, so a mutation whose path carries it is written only when
-	// every field it guards is valid: the engine applies each mutation that
-	// passes on its own, and a state flag guarded by the fields it stands
-	// for is never written beside a refused one.
-	//   { path: 'status.rooms.{{ segment .Request.Body.room }}.state{{ guard "^[A-Za-z0-9-]{1,32}$" .Request.Body.id }}' }
-	"guard": func(pattern string, v any) (string, error) {
-		re, err := guardPattern(pattern)
-		if err != nil {
-			return "", err
-		}
-		s := fmt.Sprint(v)
-		if v == nil || !re.MatchString(s) {
-			return "", fmt.Errorf("%q does not match %q", s, pattern)
-		}
-		return "", nil
-	},
-	// add sums two integers, for a counter a list template keeps.
-	"add": func(a, b int) int { return a + b },
-	// atoi reads a request value (a query parameter) as a non-negative
-	// integer, 0 when absent or malformed: a list route's page_size.
-	"atoi": func(v any) int {
-		n, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(v)))
-		if err != nil || n < 0 {
-			return 0
-		}
-		return n
-	},
 	// get retrieves a key from a map. Pipeline-friendly: {{ .State | get "status" | get "device" | get "power" }}
 	"get": func(key string, m any) any {
 		switch v := m.(type) {
@@ -879,128 +750,6 @@ var templateFuncs = template.FuncMap{
 		default:
 			return nil
 		}
-	},
-
-	// xor_checksum returns the XOR of every byte in s as a single
-	// raw byte (string of length 1). Used by AV protocols like LG
-	// `ka 01 00 11` where the trailing byte is the XOR of the
-	// preceding command bytes. Compose into a response template:
-	//   {{ printf "ka %s %s" .Args.id .Args.val }}{{ xor_checksum .Args.command }}\r
-	"xor_checksum": func(s string) string {
-		var x byte
-		for i := 0; i < len(s); i++ {
-			x ^= s[i]
-		}
-		return string([]byte{x})
-	},
-
-	// sum_byte_checksum_hex returns the modulo-256 byte sum of s as
-	// a two-character uppercase hex string. Used by Sony BVM, NEC
-	// display, and various Crestron-derived protocols.
-	"sum_byte_checksum_hex": func(s string) string {
-		var sum byte
-		for i := 0; i < len(s); i++ {
-			sum += s[i]
-		}
-		return fmt.Sprintf("%02X", sum)
-	},
-
-	// ascii_hex formats an integer as a fixed-width uppercase hex
-	// string, padded with leading zeros. Used by NEC monitor IDs,
-	// LG channel numbers, and any protocol that frames a numeric
-	// field as ASCII hex (`%02X` etc). Example:
-	//   {{ ascii_hex .Args.monitor_id 2 }} → "0F" for monitor_id=15
-	"ascii_hex": func(v any, width int) string {
-		switch x := v.(type) {
-		case int:
-			return fmt.Sprintf("%0*X", width, x)
-		case int64:
-			return fmt.Sprintf("%0*X", width, x)
-		case float64:
-			return fmt.Sprintf("%0*X", width, int(x))
-		case string:
-			// Allow string args from .Args.<name>, parse as int.
-			n, err := strconv.ParseInt(strings.TrimSpace(x), 0, 64)
-			if err != nil {
-				return ""
-			}
-			return fmt.Sprintf("%0*X", width, n)
-		}
-		return ""
-	},
-
-	// hex_byte returns a single raw byte from a 2-character hex
-	// pair. Useful for embedding STX (02), ETX (03), or vendor
-	// opcodes in inline response templates without YAML escape
-	// gymnastics: `{{ hex_byte "02" }}` → "\x02".
-	"hex_byte": func(pair string) string {
-		s := strings.TrimSpace(pair)
-		if len(s) != 2 {
-			return ""
-		}
-		decoded, err := decodeHexBytes(s)
-		if err != nil {
-			return ""
-		}
-		return decoded
-	},
-
-	// byte_of returns a single raw byte holding the low 8 bits of an
-	// integer value, for binary AV protocols whose response frames carry
-	// a numeric field as one raw byte (not ASCII). The Tessellate Census
-	// hex control band uses it to pack people_count into the count byte
-	// of its `AA 81 <count>` response frame:
-	//   {{ byte_of .State.status.occupancy.people_count }}
-	// Accepts int/int64/float64/string (parsed). Out-of-range values are
-	// masked to their low byte (0-255); a non-numeric string yields a NUL
-	// byte rather than an error, keeping the frame fixed-width.
-	"byte_of": func(v any) string {
-		var n int64
-		switch x := v.(type) {
-		case int:
-			n = int64(x)
-		case int64:
-			n = x
-		case float64:
-			n = int64(x)
-		case string:
-			parsed, err := strconv.ParseInt(strings.TrimSpace(x), 0, 64)
-			if err != nil {
-				return string([]byte{0})
-			}
-			n = parsed
-		default:
-			return string([]byte{0})
-		}
-		return string([]byte{byte(n)})
-	},
-
-	// round and sigfig are exposed to route response templates as
-	// well as behaviors so authors can format precision-sensitive
-	// values inline (drift fields, sensor reads, computed ratios)
-	// without leaking float64's full 16-digit precision into JSON
-	// bodies. See behavior_funcs.go for the implementation.
-	"round":  roundN,
-	"sigfig": sigfigN,
-
-	// b64enc standard-base64-encodes its argument. Used by the newtron
-	// touch-panel web template to embed a value into the served HTML as
-	// an opaque blob, so a plaintext `curl GET /` scrape can't read it;
-	// only client JS that runs atob() in a real browser renders it into
-	// the DOM. The web-driver-only teaching surface. Accepts any value
-	// (stringified via fmt) so authors can pipe a state field straight
-	// in: {{ b64enc (.State | get "configuration" | get "room" | get "config_version") }}.
-	"b64enc": func(v any) string {
-		var s string
-		switch x := v.(type) {
-		case nil:
-			s = ""
-		case string:
-			s = x
-		default:
-			s = fmt.Sprintf("%v", x)
-		}
-		return base64.StdEncoding.EncodeToString([]byte(s))
 	},
 }
 
@@ -1030,20 +779,6 @@ func (d *Device) SetClock(now func() time.Time) {
 	d.now = now
 }
 
-// routeFuncs is the FuncMap a route or a command compiles against: the
-// package's templateFuncs with `now` on the device's clock, so a stamp a
-// request writes (a reboot's boot_epoch, a webhook's ts) is in the same time
-// the device's uptime and calendar reads are, whatever the engine's clock
-// offset (#2800).
-func (d *Device) routeFuncs() template.FuncMap {
-	funcs := make(template.FuncMap, len(templateFuncs))
-	for name, fn := range templateFuncs {
-		funcs[name] = fn
-	}
-	funcs["now"] = func() int64 { return d.clock().Unix() }
-	return funcs
-}
-
 // clock returns the device's clock, defaulting to time.Now for devices
 // constructed without going through NewDevice (older test fixtures).
 func (d *Device) clock() time.Time {
@@ -1051,12 +786,6 @@ func (d *Device) clock() time.Time {
 		return time.Now()
 	}
 	return d.now()
-}
-
-// AddComputedFromProfile registers a YAML profile's read-derived field; its
-// only kind is elapsed, which AddElapsed serves.
-func (d *Device) AddComputedFromProfile(c *profile.Computed) error {
-	return d.AddElapsed(spec.Elapsed{Path: c.Path, Since: c.Since})
 }
 
 // AddElapsed registers a read-derived uptime and seeds its anchor: if the
@@ -1127,67 +856,6 @@ func (d *Device) resolvedStateCopyLocked() map[string]any {
 // doesn't ripple through every test fixture and call site.
 func (d *Device) SetDefaults(defaults map[string]any) {
 	d.defaults = defaults
-}
-
-// AddRoute registers an HTTP route with a compiled template and
-// pre-compiled mutations from the legacy map shape only. Mutations run
-// before the response template renders, so the response reflects
-// post-mutation state. Use AddRouteFromProfile when the profile may
-// declare the list-of-objects mutation shape (with enum / pattern
-// validation).
-func (d *Device) AddRoute(match, tmplPath string, tmplContent string, mutate map[string]any) error {
-	return d.addRoute(match, tmplPath, tmplContent, mutate, nil, nil, nil)
-}
-
-// AddRouteFromProfile registers a route from a profile.Route. Accepts
-// both the legacy map shape (route.Mutate) and the list-of-objects
-// shape (route.Mutations); both are compiled into a single mutation
-// list with list items running first. Pattern regex compile errors
-// surface here so a malformed profile fails loudly at load time.
-func (d *Device) AddRouteFromProfile(route *profile.Route, tmplContent string) error {
-	if err := d.addRoute(route.Match, route.Template, tmplContent, route.Mutate, route.Mutations, route.Events, route.Emit); err != nil {
-		return err
-	}
-	d.registerSets(route.Sets())
-	return nil
-}
-
-func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation, events []profile.RouteEvent, emit *profile.Emit) error {
-	method, path, err := parseMatch(match)
-	if err != nil {
-		return err
-	}
-
-	funcs := d.routeFuncs()
-	tmpl, err := template.New(tmplPath).Funcs(funcs).Funcs(d.listingFuncs()).Parse(tmplContent)
-	if err != nil {
-		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
-	}
-
-	muts, err := compileMergedWith(mutate, items, funcs)
-	if err != nil {
-		return fmt.Errorf("compiling mutations for %q: %w", match, err)
-	}
-
-	evs, err := compileNamedEvents("route "+strconv.Quote(match), events, funcs)
-	if err != nil {
-		return err
-	}
-
-	em, err := compileEmit(emit, funcs)
-	if err != nil {
-		return fmt.Errorf("route %q: %w", match, err)
-	}
-
-	d.routes = append(d.routes, routeEntry{
-		Method:    method,
-		Path:      path,
-		Template:  tmpl,
-		Mutations: muts,
-		Events:    evs,
-		Emit:      em,
-	})
-	return nil
 }
 
 // State returns a snapshot of the device's current state, with any
@@ -1336,111 +1004,10 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 	}
 
 	for _, route := range d.routes {
-		if r.Method != route.Method || r.URL.Path != route.Path {
-			continue
-		}
-		if route.Go != nil {
+		if r.Method == route.Method && r.URL.Path == route.Path {
 			d.serveFamilyRoute(rec, r, route.Go, reqCtx)
 			return
 		}
-
-		// Mutations and render both touch state. Hold the write lock
-		// across both so a concurrent reader never observes a state
-		// that has been mutated but not yet rendered from.
-		d.mu.Lock()
-		data := templateData{
-			State:    d.state,
-			Defaults: d.defaults,
-			Hostname: d.Hostname,
-			DeviceID: d.DeviceID,
-			IP:       d.LoopbackIP.String(),
-			Request:  reqCtx,
-		}
-		diffs, mutErrs := applyRouteMutations(d.state, route.Mutations, data)
-		for _, err := range mutErrs {
-			slog.Warn("mutation failed",
-				"device", d.DeviceID,
-				"route", route.Method+" "+route.Path,
-				"error", err,
-			)
-		}
-		// Required mutation failures translate to 400 so a misbehaving
-		// client sees the failure instead of a green 200 over silently
-		// unchanged state. Mutations marked optional in the profile log
-		// a warning but stay on the success path. When every required
-		// failure happens to be a validation error the response uses
-		// the validation-specific body shape (fields[]); otherwise it
-		// falls back to the generic failed_mutations body.
-		requiredErrs := collectRequiredErrors(mutErrs)
-		if len(requiredErrs) > 0 {
-			d.mu.Unlock()
-			if validationErrs := collectValidationErrors(requiredErrs); len(validationErrs) == len(requiredErrs) {
-				writeValidationError(rec, validationErrs)
-			} else {
-				writeMutationError(rec, requiredErrs)
-			}
-			return
-		}
-		if len(diffs) > 0 {
-			d.Version++
-			// Publish under the lock so concurrent writers can never
-			// deliver diffs to the publisher out of version order, two
-			// requests racing to Publish after unlock would let the
-			// later one be received by the consumer first, causing
-			// version conflicts and dropped diffs. Publishers are
-			// required to be non-blocking so holding the lock costs
-			// only the channel send.
-			if d.DiffPublisher != nil {
-				d.DiffPublisher(StateChange{
-					DeviceID: d.DeviceID,
-					Version:  d.Version,
-					Diffs:    diffs,
-					Cause:    "route:" + route.Method + " " + route.Path,
-				})
-			}
-			d.fanoutToSessions(diffs)
-		}
-		// The route's named events (#1145), after its changes, rendered
-		// against the state they left, in the same numbered stream.
-		if d.events != nil {
-			for _, ev := range route.Events {
-				var buf bytes.Buffer
-				if err := ev.data.Execute(&buf, data); err != nil {
-					slog.Warn("route event not rendered", "device", d.DeviceID, "route", route.Method+" "+route.Path, "event", ev.name, "error", err)
-					continue
-				}
-				d.events.publish(ev.name, buf.String())
-			}
-		}
-		// The route's webhook (#1024), rendered under the lock against the
-		// state its mutations left, posted off it.
-		d.runEmit(route.Emit, "route:"+route.Method+" "+route.Path, data)
-
-		// Render against resolved state so a response template that emits
-		// a computed field (e.g. status.device.uptime) reflects the
-		// derived value. Mutations above ran against real state; only the
-		// render sees the overlay, and only when computed fields exist.
-		if len(d.computed) > 0 {
-			data.State = d.resolvedStateCopyLocked()
-		}
-		var rendered bytes.Buffer
-		tmplErr := route.Template.Execute(&rendered, data)
-		d.mu.Unlock()
-
-		if tmplErr != nil {
-			slog.Error("template execution failed",
-				"device", d.DeviceID,
-				"template", route.Template.Name(),
-				"error", tmplErr,
-			)
-			http.Error(rec, "template error", http.StatusInternalServerError)
-			return
-		}
-
-		rec.Header().Set("Content-Type", contentTypeFor(route.Template.Name()))
-		rec.WriteHeader(http.StatusOK)
-		_, _ = rec.Write(rendered.Bytes())
-		return
 	}
 
 	// Liveness fallback for HEAD / GET on "/". A collector's HTTPS
@@ -1461,108 +1028,6 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 	}
 
 	http.NotFound(rec, r)
-}
-
-// collectRequiredErrors returns the subset of mutation errors whose
-// underlying mutation was not marked optional in the profile. These are
-// the failures that turn a request into a 400. Optional failures are
-// excluded so the caller can still render the success template after
-// logging them. Non-MutationError values are treated as required since
-// they originate outside the per-mutation flag plumbing.
-func collectRequiredErrors(errs []error) []error {
-	var out []error
-	for _, e := range errs {
-		var me *MutationError
-		if errors.As(e, &me) && me.Optional {
-			continue
-		}
-		out = append(out, e)
-	}
-	return out
-}
-
-// collectValidationErrors returns the *ValidationError entries from a
-// mutation-error slice in their original order. Non-validation errors
-// are dropped. Used to detect the all-validation case so the response
-// body can use the existing validation-specific fields[] shape.
-func collectValidationErrors(errs []error) []*ValidationError {
-	var out []*ValidationError
-	for _, e := range errs {
-		var v *ValidationError
-		if errors.As(e, &v) {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-// writeMutationError serializes a 400 response body listing every
-// required mutation that failed at runtime. Used when at least one
-// failure is not a validation error (e.g. path render failed, state
-// write failed): the validation-specific body shape would lose the
-// underlying error text, so this body shape carries it explicitly.
-// Path falls back to the raw template source when the rendered path
-// is empty (path-template render failure).
-func writeMutationError(w http.ResponseWriter, errs []error) {
-	type failure struct {
-		Path  string `json:"path"`
-		Error string `json:"error"`
-	}
-	type body struct {
-		Error           string    `json:"error"`
-		FailedMutations []failure `json:"failed_mutations"`
-	}
-	out := body{Error: "mutation failed", FailedMutations: make([]failure, 0, len(errs))}
-	for _, e := range errs {
-		f := failure{Error: e.Error()}
-		var me *MutationError
-		if errors.As(e, &me) {
-			f.Path = me.Path
-		}
-		out.FailedMutations = append(out.FailedMutations, f)
-	}
-	buf, err := json.Marshal(out)
-	if err != nil {
-		http.Error(w, "mutation failed", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_, _ = w.Write(buf)
-}
-
-// writeValidationError serializes a 400 response body listing every
-// validation failure in the request. Operators reading the response see
-// the path, the offending value, and what the value was checked against,
-// so a misbehaving caller can fix its payload without server-log access.
-func writeValidationError(w http.ResponseWriter, errs []*ValidationError) {
-	type field struct {
-		Path    string   `json:"path"`
-		Value   string   `json:"value"`
-		Enum    []string `json:"enum,omitempty"`
-		Pattern string   `json:"pattern,omitempty"`
-	}
-	type body struct {
-		Error  string  `json:"error"`
-		Fields []field `json:"fields"`
-	}
-	out := body{Error: "validation failed", Fields: make([]field, 0, len(errs))}
-	for _, e := range errs {
-		out.Fields = append(out.Fields, field{
-			Path:    e.Path,
-			Value:   e.Value,
-			Enum:    e.Enum,
-			Pattern: e.Pattern,
-		})
-	}
-	buf, err := json.Marshal(out)
-	if err != nil {
-		http.Error(w, "validation failed", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_, _ = w.Write(buf)
 }
 
 // parseRequestContext extracts body and query into the struct exposed
@@ -1600,21 +1065,6 @@ func parseRequestContext(r *http.Request) requestContext {
 		ctx.Body = body
 	}
 	return ctx
-}
-
-func contentTypeFor(tmplName string) string {
-	switch {
-	case strings.HasSuffix(tmplName, ".xml.gotempl"):
-		return "application/xml"
-	case strings.HasSuffix(tmplName, ".json.gotempl"):
-		return "application/json"
-	case strings.HasSuffix(tmplName, ".txt.gotempl"):
-		return "text/plain"
-	case strings.HasSuffix(tmplName, ".gotempl"):
-		return "text/html"
-	default:
-		return "application/json"
-	}
 }
 
 // StartHTTP starts the device's HTTP listener on its loopback IP. When
@@ -1744,226 +1194,18 @@ func (d *Device) StopHTTP() {
 	d.httpServing.Wait()
 }
 
-// AddCommand registers a CLI command with a compiled template. Reused
-// by SSH and Telnet listeners: the inbound line is matched exact-only
-// against Command.Match, and the template is executed with the same
-// templateData the HTTP handler uses (.State, .Hostname, .DeviceID, .IP).
-// Accepts the legacy map shape only; use AddCommandFromProfile for the
-// list-of-objects mutation shape.
-func (d *Device) AddCommand(match, tmplPath, tmplContent string, mutate map[string]any) error {
-	return d.addCommand(match, tmplPath, tmplContent, mutate, nil, "", "", "", "")
-}
-
-// AddCommandFromProfile registers a CLI command from a profile.Command.
-// Accepts both the legacy map shape (cmd.Mutate) and the list-of-objects
-// shape (cmd.Mutations). When cmd.Action is set, the resulting entry
-// also captures the subscribe/unsubscribe metadata for the
-// persistent-session shell loop.
-//
-// MatchHex (when present) overrides Match, the hex-pair string is
-// decoded once at registration so persistent-shell dispatch can match
-// against the resulting binary literal without escape-rule contortions
-// in the YAML.
-func (d *Device) AddCommandFromProfile(cmd *profile.Command, tmplContent string) error {
-	match := cmd.Match
-	if cmd.MatchHex != "" {
-		decoded, err := decodeHexBytes(cmd.MatchHex)
-		if err != nil {
-			return fmt.Errorf("command %q: %w", cmd.MatchHex, err)
-		}
-		match = decoded
-	}
-	return d.addCommand(match, cmd.Template, tmplContent, cmd.Mutate, cmd.Mutations,
-		cmd.Action, cmd.Subject, cmd.Token, cmd.IntervalMs)
-}
-
-// decodeHexBytes parses whitespace-separated hex pairs into a string.
-// Useful for command matches that carry literal control bytes (STX,
-// ETX, vendor-defined opcodes) which would otherwise need awkward
-// YAML escapes. Whitespace between pairs is ignored; case is
-// insensitive. Returns an error on odd-length tokens or non-hex
-// characters so a typo fails loudly at profile load.
-func decodeHexBytes(s string) (string, error) {
-	cleaned := strings.Map(func(r rune) rune {
-		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
-			return -1
-		}
-		return r
-	}, s)
-	if len(cleaned)%2 != 0 {
-		return "", fmt.Errorf("match_hex must contain whole bytes (even number of hex chars), got %d", len(cleaned))
-	}
-	out := make([]byte, len(cleaned)/2)
-	for i := 0; i < len(cleaned); i += 2 {
-		hi, err := hexNybble(cleaned[i])
-		if err != nil {
-			return "", fmt.Errorf("match_hex pos %d: %w", i, err)
-		}
-		lo, err := hexNybble(cleaned[i+1])
-		if err != nil {
-			return "", fmt.Errorf("match_hex pos %d: %w", i+1, err)
-		}
-		out[i/2] = hi<<4 | lo
-	}
-	return string(out), nil
-}
-
-func hexNybble(c byte) (byte, error) {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0', nil
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10, nil
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10, nil
-	}
-	return 0, fmt.Errorf("not a hex digit: %q", c)
-}
-
-func (d *Device) addCommand(match, tmplPath, tmplContent string, mutate map[string]any, items []profile.Mutation,
-	action, subjectTmpl, tokenTmpl, intervalTmpl string) error {
-	funcs := d.routeFuncs()
-	tmpl, err := template.New(tmplPath).Funcs(funcs).Parse(tmplContent)
-	if err != nil {
-		return fmt.Errorf("parsing template %q: %w", tmplPath, err)
-	}
-	muts, err := compileMergedWith(mutate, items, funcs)
-	if err != nil {
-		return fmt.Errorf("compiling mutations for %q: %w", match, err)
-	}
-	entry := commandEntry{
-		Match:     match,
-		Template:  tmpl,
-		Mutations: muts,
-		Action:    action,
-	}
-	if subjectTmpl != "" {
-		entry.Subject, err = template.New(match + ".subject").Funcs(funcs).Parse(subjectTmpl)
-		if err != nil {
-			return fmt.Errorf("parsing subject template for %q: %w", match, err)
-		}
-	}
-	if tokenTmpl != "" {
-		entry.Token, err = template.New(match + ".token").Funcs(funcs).Parse(tokenTmpl)
-		if err != nil {
-			return fmt.Errorf("parsing token template for %q: %w", match, err)
-		}
-	}
-	if intervalTmpl != "" {
-		entry.IntervalMs, err = template.New(match + ".interval_ms").Funcs(funcs).Parse(intervalTmpl)
-		if err != nil {
-			return fmt.Errorf("parsing interval_ms template for %q: %w", match, err)
-		}
-	}
-	d.commands = append(d.commands, entry)
-	return nil
-}
-
 // RunCommand looks up cmd against the device's registered commands and
 // returns a CommandResult. ok=false means no matching command; callers
 // decide how to respond (SSH sends exit-status 127, telnet writes an
-// unknown-command banner). Exact match only. Mutations are applied
-// before rendering so the command's response reflects the
-// post-mutation state.
-//
-// When the matched commandEntry has a non-empty Action, the result's
-// Action / Subject / Token / IntervalMs fields are populated for the
-// caller to drive the per-session SessionRegistry. Subject / Token /
-// IntervalMs templates are rendered against the same templateData the
-// response template sees. A malformed IntervalMs (template renders to
-// non-integer) returns an error so the caller can surface "-ERR" to
-// the wire instead of silently downgrading to on-change.
+// unknown-command banner). Exact match only. A command the family lists
+// answers with its Go handler, else the attached surfaces answer, and the
+// result carries the subscription verb a persistent session acts on.
 func (d *Device) RunCommand(cmd string) (result CommandResult, ok bool, err error) {
 	cmd = strings.TrimSpace(cmd)
 	for _, ce := range d.commands {
-		if ce.Match != cmd {
-			continue
-		}
-		if ce.Go != nil {
+		if ce.Match == cmd {
 			return d.runFamilyCommand(ce), true, nil
 		}
-		d.mu.Lock()
-		data := templateData{
-			State:    d.state,
-			Defaults: d.defaults,
-			Hostname: d.Hostname,
-			DeviceID: d.DeviceID,
-			IP:       d.LoopbackIP.String(),
-		}
-		diffs, mutErrs := applyMutations(d.state, ce.Mutations, data)
-		for _, e := range mutErrs {
-			slog.Warn("command mutation failed",
-				"device", d.DeviceID,
-				"command", cmd,
-				"error", e,
-			)
-		}
-		if len(diffs) > 0 {
-			d.Version++
-			if d.DiffPublisher != nil {
-				d.DiffPublisher(StateChange{
-					DeviceID: d.DeviceID,
-					Version:  d.Version,
-					Diffs:    diffs,
-					Cause:    "command:" + cmd,
-				})
-			}
-			d.fanoutToSessions(diffs)
-		}
-
-		// Render against resolved state so computed fields surface in the
-		// command response (see the route render for rationale).
-		if len(d.computed) > 0 {
-			data.State = d.resolvedStateCopyLocked()
-		}
-		var buf bytes.Buffer
-		execErr := ce.Template.Execute(&buf, data)
-		// Render Action templates while still holding the lock so the
-		// rendered Subject reflects the same state snapshot as the
-		// response. Errors are returned with ok=true so the caller
-		// can wire-format the failure rather than treating it as
-		// "no such command".
-		if execErr == nil && ce.Action != "" {
-			result.Action = CommandAction(ce.Action)
-			if ce.Subject != nil {
-				var sub bytes.Buffer
-				if subErr := ce.Subject.Execute(&sub, data); subErr != nil {
-					d.mu.Unlock()
-					return CommandResult{}, true, fmt.Errorf("rendering subject: %w", subErr)
-				}
-				result.Subject = strings.TrimSpace(sub.String())
-			}
-			if ce.Token != nil {
-				var tok bytes.Buffer
-				if tokErr := ce.Token.Execute(&tok, data); tokErr != nil {
-					d.mu.Unlock()
-					return CommandResult{}, true, fmt.Errorf("rendering token: %w", tokErr)
-				}
-				result.Token = strings.TrimSpace(tok.String())
-			}
-			if ce.IntervalMs != nil {
-				var iv bytes.Buffer
-				if ivErr := ce.IntervalMs.Execute(&iv, data); ivErr != nil {
-					d.mu.Unlock()
-					return CommandResult{}, true, fmt.Errorf("rendering interval_ms: %w", ivErr)
-				}
-				ivStr := strings.TrimSpace(iv.String())
-				if ivStr != "" {
-					n, parseErr := strconv.Atoi(ivStr)
-					if parseErr != nil || n < 0 {
-						d.mu.Unlock()
-						return CommandResult{}, true, fmt.Errorf("interval_ms must be a non-negative integer, got %q", ivStr)
-					}
-					result.IntervalMs = n
-				}
-			}
-		}
-		d.mu.Unlock()
-		if execErr != nil {
-			return CommandResult{}, true, execErr
-		}
-		result.Response = buf.String()
-		return result, true, nil
 	}
 	return d.runGoCommand(cmd)
 }

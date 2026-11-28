@@ -38,7 +38,7 @@ func gazeCal(seed int64, k calendar.Knobs) *calendar.Calendar {
 }
 
 // calDevice is one device of the product in room on a pinned clock, over the
-// shipped catalog (YAML profiles and Go families), with the calendar and the
+// shipped catalog (the Go families), with the calendar and the
 // world installed on its engine.
 func calDevice(t *testing.T, product, hostname string, room calendar.Room, cal *calendar.Calendar, w *world.World, at *time.Time) *Device {
 	t.Helper()

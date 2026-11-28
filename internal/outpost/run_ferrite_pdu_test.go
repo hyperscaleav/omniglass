@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostFerritePDUReadsOutletsCurrentAndVoltage (#1368): the shipped
@@ -20,7 +18,7 @@ func TestOutpostFerritePDUReadsOutletsCurrentAndVoltage(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var pdu string
-	s := newHTTPStack(t, "edge-pdu", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-pdu", nil, func(store *fleetShape) []string {
 		pdu = driverProfile(t, store, "ferrite-pdu-snmp")
 		return []string{pdu}
 	})

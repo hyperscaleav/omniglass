@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The http login faces (#1114): a form login answering a session cookie, a
@@ -211,15 +211,15 @@ func TestHTTPLoginFacesTrustTheConsoleAndLetItExpireSessions(t *testing.T) {
 }
 
 func TestHTTPAuthFromProfileReadsTheLoginFaces(t *testing.T) {
-	form := httpAuthFromProfile(profile.Auth{Type: "form", DefaultUser: "admin", DefaultPassword: "pw", Enforce: true, ExpirePath: "/x"})
+	form := httpAuthFromProfile(wire.Auth{Type: "form", DefaultUser: "admin", DefaultPassword: "pw", Enforce: true, ExpirePath: "/x"})
 	if form.Mode != HTTPAuthForm || form.LoginPath != "/login" || form.ExpirePath != "/x" {
 		t.Fatalf("form = %+v, want /login by default", form)
 	}
-	token := httpAuthFromProfile(profile.Auth{Type: "token", DefaultUser: "admin", DefaultPassword: "pw", Enforce: true, SessionTTL: 30})
+	token := httpAuthFromProfile(wire.Auth{Type: "token", DefaultUser: "admin", DefaultPassword: "pw", Enforce: true, SessionTTL: 30})
 	if token.Mode != HTTPAuthToken || token.LoginPath != "/api/login" || token.SessionTTL != 30 {
 		t.Fatalf("token = %+v, want /api/login by default", token)
 	}
-	digest := httpAuthFromProfile(profile.Auth{Type: "digest", DefaultUser: "admin", DefaultPassword: "pw", Enforce: true})
+	digest := httpAuthFromProfile(wire.Auth{Type: "digest", DefaultUser: "admin", DefaultPassword: "pw", Enforce: true})
 	if digest.Mode != HTTPAuthDigest || digest.Algorithm != "MD5" {
 		t.Fatalf("digest = %+v, want MD5 by default", digest)
 	}

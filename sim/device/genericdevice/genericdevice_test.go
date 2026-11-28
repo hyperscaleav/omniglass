@@ -38,7 +38,7 @@ func TestSysUpTimeCountsFromTheBootAnchor(t *testing.T) {
 // A family of one is named for its product, so the product resolves to the
 // family itself and carries the row's identity.
 func TestTheFamilyOfOneIsItsOwnProduct(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

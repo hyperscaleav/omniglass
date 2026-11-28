@@ -11,9 +11,7 @@ import (
 func newObservedSSHDevice(t *testing.T) (*Device, string) {
 	t.Helper()
 	dev := NewDevice("d", "ssh-host", net.ParseIP("127.0.0.1"), "p", 1, map[string]any{})
-	if err := dev.AddCommand("show version", "v.tmpl", "1.0\n", nil); err != nil {
-		t.Fatal(err)
-	}
+	serveLine(dev, "show version", "1.0\n")
 	if err := dev.StartSSH(0, "admin", "kestrel", false); err != nil {
 		t.Fatal(err)
 	}

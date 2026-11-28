@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // httpAuthFromProfile derives a runtime HTTPAuth from a profile's auth
@@ -15,7 +15,7 @@ import (
 // can render "default user: admin" hints) without forcing every
 // request to authenticate. Unrecognized auth types fall back to no
 // gate, with a warning logged at startup elsewhere.
-func httpAuthFromProfile(a profile.Auth) HTTPAuth {
+func httpAuthFromProfile(a wire.Auth) HTTPAuth {
 	if !a.Enforce {
 		return HTTPAuth{}
 	}

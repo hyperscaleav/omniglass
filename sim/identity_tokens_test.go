@@ -3,31 +3,31 @@ package sim
 import (
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // TestLoadDevicesExpandsIdentityTokensPerRoom verifies the simulator expands
-// {site}/{building}/{room} and {room-device:<profile>} tokens in a profile's
-// defaults per device. Reset-to-defaults reads {{ .Defaults.* }}, so without
+// {site}/{building}/{room} and {room-device:<profile>} tokens in a family's
+// default state per device. Reset-to-defaults reads {{ .Defaults.* }}, so without
 // this the raw template ("room-{site}-...") would be written back on a
 // factory reset. The two rooms also prove cross-device resolution picks the
 // paired panel in the SAME room even when the panel's hostname suffix differs
 // per system (TP1 vs touch-panel1), the case a fixed-suffix template can't
 // handle.
 func TestLoadDevicesExpandsIdentityTokensPerRoom(t *testing.T) {
-	store := &profile.Store{Devices: map[string]*profile.DeviceProfile{
-		"vbar": {
-			Name: "vbar",
-			Defaults: map[string]any{
-				"status": map[string]any{
-					"app":         map[string]any{"signin": "room-{site}-{building}-{room}@shinra.lan"},
-					"peripherals": map[string]any{"pair": "{room-device:panel}"},
-				},
+	cat, err := spec.NewCatalog(
+		spec.Spec{Name: "vbar", State: map[string]any{
+			"status": map[string]any{
+				"app":         map[string]any{"signin": "room-{site}-{building}-{room}@shinra.lan"},
+				"peripherals": map[string]any{"pair": "{room-device:panel}"},
 			},
-		},
-		"panel": {Name: "panel"},
-	}}
-	e := NewEngine(store, nil)
+		}},
+		spec.Spec{Name: "panel"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := NewEngineOver(cat)
 
 	snaps := []DeviceSnapshot{
 		{DeviceID: "vb-300", Hostname: "BOI-17C-300-COD1", LoopbackIP: "127.0.0.1", ProfileName: "vbar", SiteCode: "BOI", Building: "17C", Room: "300", State: map[string]any{}},

@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostPolarisAmpReadsItsOperatingState (#898): the shipped
@@ -23,7 +21,7 @@ func TestOutpostPolarisAmpReadsItsOperatingState(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var amp string
-	s := newHTTPStack(t, "edge-amp", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-amp", nil, func(store *fleetShape) []string {
 		amp = driverProfile(t, store, "polaris-amp-snmp")
 		return []string{amp}
 	})

@@ -3,7 +3,6 @@ package sim
 import (
 	"sync"
 	"sync/atomic"
-	"text/template"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
@@ -106,36 +105,6 @@ func (d *Device) roomState(room calendar.Room) calendar.RoomState {
 		}
 	})
 	return e.state
-}
-
-// roomPhaseFuncs are the template functions that read a room's phase through
-// the device's clock (the seam a test pins). Each reads a map with every key
-// present (calendar.RoomState.Map), so a profile branches on has_calendar and
-// never on a missing key:
-//
-//	roomPhase        -> the device's own room
-//	roomPhaseOf s b r -> the room site s, building b, room r (a service that speaks for many)
-//	ownerPhase o     -> the room of the system o in the world (a push's .Owner); a system the
-//	                    world does not name reads as a room with no calendar
-//
-// The keys: phase (idle, waking, in-meeting, sharing, cooldown or impaired),
-// occupancy (the phase the meetings alone give), has_calendar, scheduled,
-// in_use, call_active, attendees, sharing, impaired, building_open, use_until,
-// recording_pending and meeting (the meeting running now, nil when none).
-func (d *Device) roomPhaseFuncs() template.FuncMap {
-	return template.FuncMap{
-		"roomPhase": func() map[string]any { return d.roomState(d.room).Map() },
-		"roomPhaseOf": func(site, building, room string) map[string]any {
-			return d.roomState(calendar.Room{Site: site, Building: building, Room: room}).Map()
-		},
-		"ownerPhase": func(owner string) map[string]any {
-			p, ok := d.world().PlaceSystem(owner)
-			if !ok {
-				return d.roomState(calendar.Room{}).Map()
-			}
-			return d.roomState(p.CalRoom()).Map()
-		},
-	}
 }
 
 // bookingsRead is the device's room's booked meetings at its clock as a Go

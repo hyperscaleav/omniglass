@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The server-sent events face (#1038): a simulated component's web server
@@ -20,7 +20,7 @@ import (
 func newEventsDevice(t *testing.T, auth HTTPAuth) (*Device, string) {
 	t.Helper()
 	dev := newAuthDevice(t, auth)
-	dev.SetEvents(profile.Events{Path: "/api/events", RetryMS: 1500, Paths: []string{"power"}, DropPath: "/api/admin/streams/drop"})
+	dev.SetEvents(wire.Events{Path: "/api/events", RetryMS: 1500, Paths: []string{"power"}, DropPath: "/api/admin/streams/drop"})
 	if err := dev.StartHTTP(0, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestEventsFaceSitsBehindTheAuthGate(t *testing.T) {
 }
 
 func TestEventsHubFiltersAndBoundsItsReplay(t *testing.T) {
-	h := newEventHub(profile.Events{Path: "/e", Paths: []string{"status.audio"}})
+	h := newEventHub(wire.Events{Path: "/e", Paths: []string{"status.audio"}})
 	h.fanout(map[string]any{"status.audio.volume": 40, "status.device.uptime": 9, "status.audio.mic_mute": true})
 	if len(h.ring) != 2 || h.ring[0].id != 1 || !strings.Contains(h.ring[0].data, "mic_mute") || !strings.Contains(h.ring[1].data, `"value":40`) {
 		t.Fatalf("ring = %+v, want the two audio changes, in path order", h.ring)

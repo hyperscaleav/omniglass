@@ -9,10 +9,10 @@ package spectest
 import (
 	"fmt"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -55,9 +55,9 @@ func Spec() spec.Spec {
 				State: map[string]any{"configuration": map[string]any{"device": map[string]any{"diagonal": r.Diagonal}}},
 			}
 		}),
-		Interfaces: []profile.Interface{
-			{Name: "api", Protocol: "http", Port: 8080, Doc: profile.Doc{Summary: "Display API"}},
-			{Name: "console", Protocol: "telnet", Port: 2323, Auth: profile.Auth{Permissive: true}},
+		Interfaces: []wire.Interface{
+			{Name: "api", Protocol: "http", Port: 8080, Doc: wire.Doc{Summary: "Display API"}},
+			{Name: "console", Protocol: "telnet", Port: 2323, Auth: wire.Auth{Permissive: true}},
 			{Name: "panel", Protocol: "tcp", Port: 5000, Persistent: true},
 		},
 		State: map[string]any{
@@ -115,3 +115,9 @@ func power(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	}
 	return spec.JSON(map[string]string{"power": want})
 }
+
+// Catalog is the family alone, as the simulator holds it.
+func Catalog() (*spec.Catalog, error) { return spec.NewCatalog(Spec()) }
+
+// Products are the family's products, one per row of its table.
+var Products = []string{"tf-display-55", "tf-display-65"}

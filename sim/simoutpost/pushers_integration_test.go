@@ -14,8 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // The emulator's booking service pushes through POST /telemetry:push with
@@ -58,11 +57,7 @@ func TestTheEmulatorsBookingServiceLandsItsBookings(t *testing.T) {
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithTelemetryPublisher(busSrv)))
 	defer apiSrv.Close()
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e, err := startPushers(catalogOf(t, store), apiSrv.URL, []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Token: tok}}, nil, sim.Clock{})
+	e, err := startPushers(shipped.Catalog(t), apiSrv.URL, []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Token: tok}}, nil, sim.Clock{})
 	if err != nil {
 		t.Fatalf("startPushers: %v", err)
 	}

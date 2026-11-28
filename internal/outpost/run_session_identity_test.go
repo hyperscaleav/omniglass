@@ -25,8 +25,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/spec"
@@ -72,10 +70,7 @@ func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*spec.Spe
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := newFleetShape()
 	panelProfile := nvpProfile(t, store)
 	var shaped []spec.Spec
 	if shape != nil {
@@ -84,7 +79,7 @@ func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*spec.Spe
 		fam.Name, fam.Models = newtronpanel.Name+"-shaped", nil
 		shaped, panelProfile = append(shaped, fam), fam.Name
 	}
-	engine := shipped.EngineFrom(t, store, shaped...)
+	engine := shipped.Engine(t, shaped...)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	snaps := []sim.DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip, ProfileName: panelProfile, Version: 1}}

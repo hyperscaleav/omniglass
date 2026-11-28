@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Fault is a state path the device holds off its default: a display powered
@@ -16,7 +16,7 @@ type Fault struct {
 }
 
 // registerSets remembers the state paths a route sets from its body, once each.
-func (d *Device) registerSets(sets []profile.Set) {
+func (d *Device) registerSets(sets []wire.Set) {
 	for _, s := range sets {
 		if !slices.Contains(d.setPaths, s.Path) {
 			d.setPaths = append(d.setPaths, s.Path)
@@ -32,7 +32,7 @@ func (d *Device) registerSets(sets []profile.Set) {
 func (d *Device) Faults() []Fault {
 	var out []Fault
 	for _, path := range d.setPaths {
-		def, ok := profile.DefaultAt(d.defaults, path)
+		def, ok := wire.DefaultAt(d.defaults, path)
 		if !ok {
 			continue
 		}

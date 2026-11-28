@@ -13,7 +13,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // A command's status from issue to settlement, end to end (#1155): the API
@@ -97,7 +96,7 @@ func TestOutpostCommandWaitSettlesWithItsReply(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-cmd", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-cmd", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})

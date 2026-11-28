@@ -29,8 +29,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
@@ -64,10 +62,7 @@ func TestOutpostHoldsASessionThroughADeviceOutage(t *testing.T) {
 	// kernel handed it (unprivileged, and never another run's), which the
 	// endpoint takes from the panel.
 	panelIP := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load profiles: %v", err)
-	}
+	store := newFleetShape()
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
@@ -232,10 +227,7 @@ func TestOutpostLandsPushedSamplesThroughARecover(t *testing.T) {
 	all := scope.Set{All: true}
 
 	panelIP := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load profiles: %v", err)
-	}
+	store := newFleetShape()
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
@@ -352,7 +344,7 @@ func panelPort(t *testing.T, panel *sim.Device, protocol string) int {
 // nvpProfile picks the simulator profile serving a product the shipped
 // newtron-panel-nvp driver reads, derived from both catalogs rather than named, so
 // a catalog rename touches the YAML and nothing here (#804).
-func nvpProfile(t *testing.T, store *profile.Store) string {
+func nvpProfile(t *testing.T, store *fleetShape) string {
 	t.Helper()
 	raw, err := seed.FactsJSON()
 	if err != nil {
@@ -500,10 +492,7 @@ func TestOutpostRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load profiles: %v", err)
-	}
+	store := newFleetShape()
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)

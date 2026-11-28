@@ -3,25 +3,36 @@ package simfleet
 import (
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
+// defOf is a definition that declares the given interfaces and nothing else,
+// as a family does.
+func defOf(t testing.TB, ifaces ...wire.Interface) spec.Definition {
+	t.Helper()
+	f, err := spec.NewFamily(spec.Spec{Name: "x", Interfaces: ifaces})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
 func TestPlan(t *testing.T) {
-	profiles := map[string]*profile.DeviceProfile{
-		"x-display": {Interfaces: []profile.Interface{{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}}},
-		"x-panel":   {Interfaces: []profile.Interface{{Protocol: "tcp", Port: 51325}}},
-		"x-bar":     {Interfaces: []profile.Interface{{Protocol: "http", Port: 443, TLS: true}}},
-		"x-sensor":  {Interfaces: []profile.Interface{{Protocol: "http", Port: 80}, {Protocol: "tcp", Port: 5000}}},
-		"x-cam":     {Interfaces: []profile.Interface{{Protocol: "http", Port: 443, TLS: true}}},
-		"x-player":  {Interfaces: []profile.Interface{{Protocol: "http", Port: 80}}},
+	profiles := map[string][]wire.Interface{
+		"x-display": {{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}},
+		"x-panel":   {{Protocol: "tcp", Port: 51325}},
+		"x-bar":     {{Protocol: "http", Port: 443, TLS: true}},
+		"x-sensor":  {{Protocol: "http", Port: 80}, {Protocol: "tcp", Port: 5000}},
+		"x-cam":     {{Protocol: "http", Port: 443, TLS: true}},
+		"x-player":  {{Protocol: "http", Port: 80}},
 	}
 	profileFor := func(p string) (spec.Definition, bool) {
 		d, ok := profiles[p]
 		if !ok {
 			return nil, false
 		}
-		return spec.FromProfile(d), true
+		return defOf(t, d...), true
 	}
 	driverOf := map[string]string{"x-display": "snmp-generic", "x-panel": "newtron-panel-nvp", "x-bar": "kestrel-api", "x-sensor": "tessellate-census-http",
 		"x-cam": "a-stub", "x-player": "a-stub"}
@@ -88,8 +99,8 @@ func TestAddressesStayInTheBlock(t *testing.T) {
 // earlier run keeps its address, and a new one takes the lowest free one,
 // whatever was deleted or added in between.
 func TestPlanNeverHandsOutAnAddressInUse(t *testing.T) {
-	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{{Protocol: "http", Port: 80}}}
-	profileFor := func(string) (spec.Definition, bool) { return spec.FromProfile(prof), true }
+	prof := []wire.Interface{{Protocol: "http", Port: 80}}
+	profileFor := func(string) (spec.Definition, bool) { return defOf(t, prof...), true }
 	driverOf := func(string) string { return "" }
 	// 01a and 01c were wired on an earlier run at .1 and .3; 01b (which held
 	// .2) was deleted; 02b is new.
@@ -106,13 +117,13 @@ func TestPlanNeverHandsOutAnAddressInUse(t *testing.T) {
 // The simulated block is finite; a plan past it says so rather than
 // wrapping into addresses outside the block.
 func TestPlanRefusesPastTheBlock(t *testing.T) {
-	prof := &profile.DeviceProfile{}
+	var prof []wire.Interface
 	used := map[string]bool{}
 	for i := 0; i < AddressCap; i++ {
 		used[Address(i)] = true
 	}
 	_, err := Plan([]Component{{ID: "late", Product: "x"}}, used, Catalog{
-		ProfileFor: func(string) (spec.Definition, bool) { return spec.FromProfile(prof), true }, DriverOf: func(string) string { return "" }})
+		ProfileFor: func(string) (spec.Definition, bool) { return defOf(t, prof...), true }, DriverOf: func(string) string { return "" }})
 	if err == nil {
 		t.Fatal("a full block planned an address")
 	}
@@ -122,9 +133,9 @@ func TestPlanRefusesPastTheBlock(t *testing.T) {
 // secret is missing) falls back to a probe instead of an endpoint that
 // cannot resolve.
 func TestPlanProbesWhenTheDriverCannotBeAttached(t *testing.T) {
-	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}}}
+	prof := []wire.Interface{{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}}
 	got, err := Plan([]Component{{ID: "c1", Product: "x"}}, nil, Catalog{
-		ProfileFor: func(string) (spec.Definition, bool) { return spec.FromProfile(prof), true },
+		ProfileFor: func(string) (spec.Definition, bool) { return defOf(t, prof...), true },
 		DriverOf:   func(string) string { return "snmp-generic" },
 		Attachable: func(string) bool { return false },
 	})
@@ -146,9 +157,9 @@ func TestFreeAddressIsTheLowestUnused(t *testing.T) {
 // the driver that reads it, at the same address behind its login (#2649); one
 // not asked, or whose control face cannot be attached, keeps the one endpoint.
 func TestPlanAddsTheControlFaceOnlyWhereAsked(t *testing.T) {
-	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}}}
+	prof := []wire.Interface{{Protocol: "http", Port: 80}, {Protocol: "snmp", Port: 161}}
 	cat := Catalog{
-		ProfileFor: func(string) (spec.Definition, bool) { return spec.FromProfile(prof), true },
+		ProfileFor: func(string) (spec.Definition, bool) { return defOf(t, prof...), true },
 		DriverOf:   func(string) string { return "boreal-edge-snmp" },
 		PortOffset: 10000,
 	}
@@ -181,11 +192,11 @@ func TestPlanAddsTheControlFaceOnlyWhereAsked(t *testing.T) {
 // address, both behind the bar's simulated login, the ports lifted as the
 // simulator lifts them; one not asked keeps the https API alone.
 func TestPlanGivesAControlledVideoBarItsHTTPSAndWSSEndpoints(t *testing.T) {
-	prof := &profile.DeviceProfile{Interfaces: []profile.Interface{
-		{Protocol: "http", Port: 443, TLS: true}, {Protocol: "websocket", Port: 9443, TLS: true},
-	}}
+	prof := []wire.Interface{
+		{Protocol: "http", Port: 443, TLS: true}, {Protocol: "websocket", Port: 9443, TLS: true, WebSocket: wire.WebSocket{Path: "/ws"}},
+	}
 	cat := Catalog{
-		ProfileFor: func(string) (spec.Definition, bool) { return spec.FromProfile(prof), true },
+		ProfileFor: func(string) (spec.Definition, bool) { return defOf(t, prof...), true },
 		DriverOf:   func(string) string { return "kestrel-api" },
 		PortOffset: 10000,
 	}

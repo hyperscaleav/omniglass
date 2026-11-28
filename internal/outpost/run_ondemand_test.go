@@ -5,17 +5,16 @@ package outpost_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // The on-demand outpost run over the real wire (#1163): the API, the bus, a real
@@ -44,13 +43,10 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := newFleetShape()
 	prof := loginProfile(t, store, "digest", "POST /api/display/power")
 	auth := faceAuth(store, prof)
-	s := newHTTPStack(t, "edge-run", nil, func(st *profile.Store) []string { return []string{prof} })
+	s := newHTTPStack(t, "edge-run", nil, func(st *fleetShape) []string { return []string{prof} })
 	ip, port := s.ips[prof], panelPort(t, s.devices[prof], "http")
 	owner := s.ownerToken()
 	sec, err := s.gw.CreateSecret(s.ctx, "", storage.SecretSpec{

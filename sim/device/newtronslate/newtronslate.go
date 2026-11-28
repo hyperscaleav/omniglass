@@ -10,8 +10,8 @@
 // own. BOOK and RELEASE are its own buttons, a momentary override that holds
 // until the calendar's reading of the room next changes.
 //
-// The family replaced the newtron-slate-5 YAML profile; wire parity with it is
-// held by golden transcripts (sim/testdata/wire).
+// The family replaced the newtron-slate-5 YAML profile; its wire matched the profile's before the
+// profile was deleted (#2826); the driver contract test now holds it.
 package newtronslate
 
 import (
@@ -19,9 +19,9 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -88,12 +88,12 @@ func Spec() spec.Spec {
 				State: map[string]any{"configuration": map[string]any{"device": map[string]any{"model": r.Model}, "firmware": map[string]any{"version": r.Firmware}}},
 			}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: nvpFace, Protocol: "tcp", Port: 51325, Persistent: true, LineEnding: "\r\n",
-				Doc: profile.Doc{Summary: "NVP line protocol: the room's booking and its next meeting"},
+				Doc: wire.Doc{Summary: "NVP line protocol: the room's booking and its next meeting"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State:   stateFor(Rows[0]),
 		Elapsed: []spec.Elapsed{{Path: pathUptime, Since: pathBootEpoch}},
