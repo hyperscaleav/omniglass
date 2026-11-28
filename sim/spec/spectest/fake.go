@@ -2,6 +2,7 @@ package spectest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -65,39 +66,81 @@ func (f *Fake) WriteMany(changes ...surface.Change) error {
 func look(root map[string]any, path string) any {
 	var cur any = root
 	for _, seg := range strings.Split(path, ".") {
-		m, ok := cur.(map[string]any)
-		if !ok {
+		switch c := cur.(type) {
+		case map[string]any:
+			cur = c[seg]
+		case []any:
+			i, err := strconv.Atoi(seg)
+			if err != nil || i < 0 || i >= len(c) {
+				return nil
+			}
+			cur = c[i]
+		default:
 			return nil
 		}
-		cur = m[seg]
 	}
 	return cur
 }
 
+// set writes a path, a list element by its index; a map along the way that is
+// not there is made, a list element that is not there is left alone.
 func set(root map[string]any, path string, v any) {
 	segs := strings.Split(path, ".")
-	cur := root
+	var cur any = root
 	for _, seg := range segs[:len(segs)-1] {
-		next, ok := cur[seg].(map[string]any)
-		if !ok {
-			next = map[string]any{}
-			cur[seg] = next
+		switch c := cur.(type) {
+		case map[string]any:
+			next, ok := c[seg].(map[string]any)
+			if _, isList := c[seg].([]any); isList {
+				cur = c[seg]
+				continue
+			}
+			if !ok {
+				next = map[string]any{}
+				c[seg] = next
+			}
+			cur = next
+		case []any:
+			i, err := strconv.Atoi(seg)
+			if err != nil || i < 0 || i >= len(c) {
+				return
+			}
+			cur = c[i]
+		default:
+			return
 		}
-		cur = next
 	}
-	cur[segs[len(segs)-1]] = v
+	last := segs[len(segs)-1]
+	switch c := cur.(type) {
+	case map[string]any:
+		c[last] = v
+	case []any:
+		if i, err := strconv.Atoi(last); err == nil && i >= 0 && i < len(c) {
+			c[i] = v
+		}
+	}
 }
 
 func clone(m map[string]any) map[string]any {
 	out := make(map[string]any, len(m))
 	for k, v := range m {
-		if sub, ok := v.(map[string]any); ok {
-			out[k] = clone(sub)
-			continue
-		}
-		out[k] = v
+		out[k] = cloneValue(v)
 	}
 	return out
+}
+
+func cloneValue(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		return clone(x)
+	case []any:
+		out := make([]any, len(x))
+		for i := range x {
+			out[i] = cloneValue(x[i])
+		}
+		return out
+	}
+	return v
 }
 
 func merge(dst, src map[string]any) {
