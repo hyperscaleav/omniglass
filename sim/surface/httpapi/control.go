@@ -41,6 +41,12 @@ type Field struct {
 type Control struct {
 	Match, Summary, Example string
 	Fields                  []Field
+	// Also are the changes the route makes beside its fields, read from the
+	// values the fields are writing (state path to value): a fixed change, or
+	// one the field's value decides (a preset recalled moves the lens). It runs
+	// after every field has been checked, and what it returns is written with
+	// them, a path it names again taking its value.
+	Also func(written map[string]any) []surface.Change
 	// Ack is the document answered, read from the device after the writes.
 	Ack func(d spec.Device) any
 	// Indented answers Ack as an indented document, as a GET of the same
@@ -95,6 +101,13 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	}
 	if len(refused) > 0 {
 		return refusal(refused)
+	}
+	if c.Also != nil {
+		written := make(map[string]any, len(changes))
+		for _, ch := range changes {
+			written[ch.Path] = ch.Value
+		}
+		changes = append(changes, c.Also(written)...)
 	}
 	if err := d.WriteMany(changes...); err != nil {
 		return spec.Failure(500, err.Error())
