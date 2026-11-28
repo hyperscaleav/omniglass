@@ -11,14 +11,15 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
-// Parity of sim/behave with the profile behaviors it replaces (#2830). Each
-// test drives today's YAML profile through the engine on a pinned clock, one
+// Parity of sim/behave with the families that use it (#2830; the YAML profiles
+// it was first proven against are gone, #2837). Each test drives a family
+// through the engine on a pinned clock, one
 // tick at a time over the pinned room day (the calendar package's hand-checked
 // day), and before every tick reads the typed state the device holds, runs the
 // matching primitive from it with a twin of the device's own random source,
-// and compares what the primitive owns with what the profile wrote. A tick
+// and compares what the primitive owns with what the family wrote. A tick
 // that drew a different number of times than the primitive desyncs the twin
-// and fails the very next comparison. Nothing here changes a profile.
+// and fails the very next comparison.
 
 var parityRoom = calendar.Room{Site: "hq", Building: "tower", Room: "tower-1-01"}
 
@@ -189,7 +190,7 @@ func (p *parityRun) s(path string) string {
 func (p *parityRun) same(hms, path string, want any) {
 	p.t.Helper()
 	if got, w := p.get(path), norm(want); got != w {
-		p.t.Fatalf("%s: %s is %v (%T) in the profile, %v (%T) from sim/behave", hms, path, got, got, w, w)
+		p.t.Fatalf("%s: %s is %v (%T) in the family, %v (%T) from sim/behave", hms, path, got, got, w, w)
 	}
 }
 
