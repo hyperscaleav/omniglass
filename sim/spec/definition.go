@@ -210,9 +210,7 @@ func (f *Family) Handlers() Handlers {
 func (f *Family) Products() []string {
 	out := make([]string, 0, len(f.s.Models))
 	for _, m := range f.s.Models {
-		if m.Product != f.s.Name {
-			out = append(out, m.Product)
-		}
+		out = append(out, m.Product)
 	}
 	return out
 }
