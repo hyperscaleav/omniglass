@@ -323,7 +323,7 @@ and never from the server or its database; Omniglass learns the world only by co
 reader beside the simulators is a lab server's own ground-truth route, which reads the same file to
 serve [the calendar back](#reading-the-calendar-back) and feeds nothing it reads into detection.
 With the file, `sim run` (and `outpost run --simulate`) builds the [lab calendar](#the-lab-calendar)
-from the world's seed and knobs and installs it on the engine, so `meetingNow` reads a real room. With
+from the world's seed and knobs and installs it on the engine, so a family's tick reads a real room (`TickContext.Room`). With
 none there is no calendar and no room, as before.
 
 Each pull is joined to the world by the component's **name**. The world gives every planned device
@@ -603,8 +603,8 @@ Devices that read the calendar:
   (power on, the conferencing input) by default two minutes before a booked meeting someone will attend, at the
   start of a walk-in, and sleep by default five minutes after it ends, a no-show leaving them as they were; the
   projector's light-source hours grow only while it is on. The Cast signage player follows the
-  building's day instead: `buildingHours` reads the hours the building's rooms declare for their meetings (the widest span
-  the world's knobs give them), and the
+  building's day instead: its tick reads `TickContext.Hours`, the hours the building's rooms declare for their meetings
+  (`behave.BuildingSpan`, the widest span the world's knobs give them), and the
   player plays inside them and stops outside.
 - **The people counter** (`tessellate-census-c1`) reports who the calendar says is in its room: a held
   meeting's or walk-in's actual attendees (over the room's capacity when the payload says so), zero in a
@@ -615,8 +615,8 @@ Devices that read the calendar:
 
 
 - **The scheduling surfaces** (#2765): the booking service, the scheduling service and the Slate 5
-  panel say what the calendar says of a room, through `bookings`, `roomBookings` and `ownerBookings`
-  (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked
+  panel say what the calendar says of a room, a panel's tick through `TickContext.ReadBookings` and a service
+  through `spec.RoomsOf(d).Bookings` for each room it serves (booked entries alone, on the device's clock: a walk-in is nobody's booking, a no-show is). A booked
   meeting holds its room from the earlier of its slot's start and its own to the later of its slot's
   end and its own.
   - The **booking service** pushes each system's `booking-count` (booked meetings left in the day, the

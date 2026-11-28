@@ -24,7 +24,7 @@ import (
 // package (*.html), which is neither.
 func retiredYAMLFindings(root string) ([]string, error) {
 	var found []string
-	err := filepath.Walk(filepath.Join(root, "sim"), func(path string, info os.FileInfo, err error) error {
+	visit := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -38,7 +38,7 @@ func retiredYAMLFindings(root string) ([]string, error) {
 		}
 		switch ext := strings.ToLower(filepath.Ext(path)); {
 		case ext == ".yaml" || ext == ".yml":
-			found = append(found, rel+": a YAML file under sim/ (a device is a Go family)")
+			found = append(found, rel+": a YAML file in the simulator (a device is a Go family)")
 		case strings.HasSuffix(path, ".gotempl") || strings.HasSuffix(path, ".gotmpl"):
 			found = append(found, rel+": a behavior or response template (a device answers in Go)")
 		case ext == ".go":
@@ -47,13 +47,22 @@ func retiredYAMLFindings(root string) ([]string, error) {
 				return rerr
 			}
 			if strings.Contains(string(b), `"gopkg.in/yaml.v3"`) {
-				found = append(found, rel+": imports the YAML decoder (nothing under sim/ reads a profile file)")
+				found = append(found, rel+": imports the YAML decoder (nothing in the simulator reads a profile file)")
 			}
 		}
 		return nil
-	})
+	}
+	for _, dir := range []string{"sim", filepath.Join("internal", "simfamilygen")} {
+		start := filepath.Join(root, dir)
+		if _, err := os.Stat(start); os.IsNotExist(err) {
+			continue
+		}
+		if err := filepath.Walk(start, visit); err != nil {
+			return nil, err
+		}
+	}
 	sort.Strings(found)
-	return found, err
+	return found, nil
 }
 
 // TestNoYAMLDeviceProfileOrBehaviorTemplateReappears fails the build when a
@@ -89,11 +98,12 @@ func TestRetiredYAMLGuardSeesWhatItGuards(t *testing.T) {
 		t.Fatalf("a Go-only tree: %v, %v", got, err)
 	}
 	for name, file := range map[string][2]string{
-		"a device profile":      {"sim/profiles/devices/lamp.yaml", "name: lamp\n"},
-		"a profile under sim":   {"sim/lamp.yml", "name: lamp\n"},
-		"a behavior template":   {"sim/device/lamp/status.json.gotempl", "{}\n"},
-		"a template, other ext": {"sim/device/lamp/status.gotmpl", "{}\n"},
-		"a YAML loader":         {"sim/loader/load.go", "package loader\nimport \"gopkg.in/yaml.v3\"\n"},
+		"a device profile":                      {"sim/profiles/devices/lamp.yaml", "name: lamp\n"},
+		"a profile under sim":                   {"sim/lamp.yml", "name: lamp\n"},
+		"a behavior template":                   {"sim/device/lamp/status.json.gotempl", "{}\n"},
+		"a template, other ext":                 {"sim/device/lamp/status.gotmpl", "{}\n"},
+		"a YAML loader":                         {"sim/loader/load.go", "package loader\nimport \"gopkg.in/yaml.v3\"\n"},
+		"a profile beside the family generator": {"internal/simfamilygen/families.yaml", "a: b\n"},
 	} {
 		root := t.TempDir()
 		write(root, file[0], file[1])
