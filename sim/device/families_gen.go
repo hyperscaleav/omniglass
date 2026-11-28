@@ -10,6 +10,11 @@ import (
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
 	fam_lyraarc "github.com/hyperscaleav/omniglass/sim/device/lyraarc"
 	fam_lyrahx "github.com/hyperscaleav/omniglass/sim/device/lyrahx"
+	fam_meridianextender "github.com/hyperscaleav/omniglass/sim/device/meridianextender"
+	fam_meridianswitcher "github.com/hyperscaleav/omniglass/sim/device/meridianswitcher"
+	fam_newtroncore "github.com/hyperscaleav/omniglass/sim/device/newtroncore"
+	fam_newtronpanel "github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
+	fam_newtronslate "github.com/hyperscaleav/omniglass/sim/device/newtronslate"
 	fam_polarisamp "github.com/hyperscaleav/omniglass/sim/device/polarisamp"
 	fam_polarisdsp "github.com/hyperscaleav/omniglass/sim/device/polarisdsp"
 )
@@ -22,6 +27,11 @@ func families() []spec.Spec {
 		fam_borealedge.Spec(),
 		fam_lyraarc.Spec(),
 		fam_lyrahx.Spec(),
+		fam_meridianextender.Spec(),
+		fam_meridianswitcher.Spec(),
+		fam_newtroncore.Spec(),
+		fam_newtronpanel.Spec(),
+		fam_newtronslate.Spec(),
 		fam_polarisamp.Spec(),
 		fam_polarisdsp.Spec(),
 	}

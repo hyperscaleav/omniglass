@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,10 +51,9 @@ type wireStep struct {
 	NoKey bool
 	// Snapshot records the device's whole state after the step.
 	Snapshot bool
-	// Set puts state paths where a scenario or an earlier reading would have
-	// them before the request is made (a latched protect state, a drifted
-	// temperature), so a route that resets or clears them shows its effect.
-	Set map[string]any
+	// Hand is state set on the device before the request, an operator's hand
+	// (a cable pulled, a link down).
+	Hand map[string]any `json:"Hand,omitempty"`
 	// Quirk marks a request the YAML profile answered with an accident of its
 	// templates (an unquoted word in a JSON document, "<no value>" written to
 	// state); the family refuses it instead, and the replay checks that
@@ -97,7 +95,11 @@ type wireTranscript struct {
 	Walks    map[string][]wireOID    `json:"walks,omitempty"`
 	Ticks    map[string][]any        `json:"ticks,omitempty"`
 	RoomDays map[string][]wireChange `json:"room_days,omitempty"`
-	// The line-protocol half (wire_lines_test.go).
+	// Lines are the steps of a line protocol's script, Help the commands the
+	// device lists (see wire_lines_test.go).
+	Lines []wireLineResult `json:"lines,omitempty"`
+	Help  []string         `json:"help,omitempty"`
+	// The line-protocol half (wire_shell_test.go).
 	Faces    []wireFace          `json:"faces,omitempty"`
 	Sessions []wireSessionResult `json:"sessions,omitempty"`
 	Echo     []wireEcho          `json:"echo,omitempty"`
@@ -135,6 +137,10 @@ type wireFamily struct {
 	OIDs, Walks []string
 	// Ticks are the drifting behaviors ticked tickRuns times each.
 	Ticks []tickPlan
+	// Lines is the script of the family's line protocol, played on the TCP face
+	// named LineFace ("nvp" when empty) or direct against its command table.
+	Lines    []wireLine
+	LineFace string
 	// RoomDay walks the device through the parity room day and returns what
 	// moved; the harness runs it once with the lab calendar and once without.
 	// Nil for a family that does not follow a room.
@@ -145,7 +151,7 @@ type wireFamily struct {
 	Body func(t *testing.T, product, golden string) string
 	// Faces records the interfaces the family declares; Sessions are scripts
 	// played over its persistent line faces, Echo the UDP echo faces answered
-	// a datagram (wire_lines_test.go). All three are empty for a family that
+	// a datagram (wire_shell_test.go). All three are empty for a family that
 	// serves HTTP and SNMP alone.
 	Faces    bool
 	Sessions []wireSession
@@ -236,6 +242,9 @@ func wireDevice(t *testing.T, fam wireFamily, product string) *Device {
 // fires an operation: past a login face, with an api key's header set.
 func wireRequest(t *testing.T, d *Device, st wireStep) wireResult {
 	t.Helper()
+	if st.Hand != nil {
+		handSet(t, d, st.Hand)
+	}
 	req := httptest.NewRequest(st.Method, st.Path, strings.NewReader(st.Body))
 	req.RemoteAddr = "console"
 	if st.NoKey {
@@ -248,9 +257,6 @@ func wireRequest(t *testing.T, d *Device, st wireStep) wireResult {
 	}
 	if st.Body != "" {
 		req.Header.Set("Content-Type", "application/json")
-	}
-	for path, v := range st.Set {
-		setWirePath(t, d, path, v)
 	}
 	before := stateJSON(d)
 	w := httptest.NewRecorder()
@@ -477,13 +483,18 @@ func collectWire(t *testing.T, fam wireFamily, product string) wireTranscript {
 		d = wireDevice(t, fam, product)
 	}
 	tr.HTTP = runWireHTTP(t, d, fam.Script)
+	if len(fam.Lines) > 0 {
+		ld := wireDevice(t, fam, product)
+		tr.Help = ld.CommandList()
+		tr.Lines = runWireLines(t, ld, fam.LineFace, fam.Lines)
+	}
 	if len(fam.Ticks) > 0 {
 		tr.Ticks = recordTicks(wireDevice(t, fam, product), fam.Ticks)
 	}
 	if fam.RoomDay != nil {
 		tr.RoomDays = roomDays(t, fam, product)
 	}
-	collectWireLines(t, fam, product, &tr)
+	collectWireShells(t, fam, product, &tr)
 	return tr
 }
 
@@ -540,6 +551,10 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 			add("%s: %s: state after:\n got %s\nwant %s", product, name, canon(t, have.State), canon(t, w.State))
 		}
 	}
+	out = append(out, diffWireLines(t, product, got.Lines, want.Lines)...)
+	if !reflect.DeepEqual(got.Help, want.Help) {
+		add("%s: the command list (a shell's help) differs:\n got %v\nwant %v", product, got.Help, want.Help)
+	}
 	if !sameJSON(t, got.Ticks, want.Ticks) {
 		add("%s: drift sequences differ from the recorded seeded run:\n got %v\nwant %v", product, got.Ticks, want.Ticks)
 	}
@@ -549,7 +564,7 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 			add("%s: the %s room day differs from the recorded one:\n got %v\nwant %v", product, key, firstChanges(got.RoomDays[key]), firstChanges(want.RoomDays[key]))
 		}
 	}
-	return append(out, diffWireLines(product, got, want)...)
+	return append(out, diffWireShells(product, got, want)...)
 }
 
 // replayWire holds one product of a family to its golden transcript.
@@ -642,39 +657,4 @@ func firstDiff(a, b string) string {
 	}
 	start := max(i-40, 0)
 	return a[start:min(i+80, len(a))]
-}
-
-// setWirePath sets a state path as an operator's hand or a scenario would, a
-// list element by its index.
-func setWirePath(t testing.TB, d *Device, path string, v any) {
-	t.Helper()
-	state := d.State()
-	var cur any = state
-	parts := splitPath(path)
-	for _, part := range parts[:len(parts)-1] {
-		switch c := cur.(type) {
-		case map[string]any:
-			cur = c[part]
-		case []any:
-			idx, err := strconv.Atoi(part)
-			if err != nil || idx < 0 || idx >= len(c) {
-				t.Fatalf("%s: %q is not an index", path, part)
-			}
-			cur = c[idx]
-		}
-	}
-	last := parts[len(parts)-1]
-	switch c := cur.(type) {
-	case map[string]any:
-		c[last] = v
-	case []any:
-		idx, err := strconv.Atoi(last)
-		if err != nil || idx < 0 || idx >= len(c) {
-			t.Fatalf("%s: %q is not an index", path, last)
-		}
-		c[idx] = v
-	default:
-		t.Fatalf("%s: cannot set under %T", path, cur)
-	}
-	d.SetState(state, d.Version+1)
 }

@@ -132,10 +132,39 @@ func (f *Family) Surfaces() []profile.Interface {
 			}
 		case "ssh", "telnet", "tcp", "udp":
 			for _, c := range f.s.Commands {
+				if c.Face != "" && c.Face != iface.Name {
+					continue
+				}
 				iface.Commands = append(iface.Commands, profile.Command{Match: c.Match, Doc: profile.Doc{Summary: c.Summary}, Example: c.Example, Native: true})
 			}
+			iface.Commands = append(iface.Commands, f.surfaceCommands(iface.Name)...)
 		}
 		out[i] = iface
+	}
+	return out
+}
+
+// surfaceCommands is the lines the family's surface answers, as the console
+// lists them under the interface the surface names: each command with the
+// subscription verb it carries. The surface is built against a device that
+// holds nothing, so asking it to answer a line writes nowhere.
+func (f *Family) surfaceCommands(iface string) []profile.Command {
+	if f.s.Surface == nil {
+		return nil
+	}
+	sf := f.s.Surface(listingDevice{})
+	if sf.ListedOn != iface {
+		return nil
+	}
+	var out []profile.Command
+	for _, c := range sf.Commanders {
+		for _, line := range c.Commands() {
+			cmd := profile.Command{Match: line, Native: true}
+			if reply, ok := c.Handle(line); ok {
+				cmd.Action = string(reply.Action)
+			}
+			out = append(out, cmd)
+		}
 	}
 	return out
 }

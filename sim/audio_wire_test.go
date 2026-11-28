@@ -3,7 +3,6 @@
 package sim
 
 import (
-	"testing"
 	"time"
 )
 
@@ -49,8 +48,8 @@ func lyraScript() []wireStep {
 		wirePost("mute with a null field", "/api/mute", `{"mute": null}`),
 		{Name: "no reboot on a microphone", Method: "POST", Path: "/api/admin/reboot", Body: `{}`},
 		wirePost("a level set by the scenario, then a mute", "/api/mute", `{"mute": true}`),
-		{Name: "the status with a scenario's level", Method: "GET", Path: "/api/status", Set: map[string]any{"status.mic.level_db": -31.5}},
-		{Name: "the status with a whole level", Method: "GET", Path: "/api/status", Set: map[string]any{"status.mic.level_db": -20}},
+		{Name: "the status with a scenario's level", Method: "GET", Path: "/api/status", Hand: map[string]any{"status.mic.level_db": -31.5}},
+		{Name: "the status with a whole level", Method: "GET", Path: "/api/status", Hand: map[string]any{"status.mic.level_db": -20}},
 		// A body no one can read came back as a field with no value from the
 		// profile; the family refuses it as unreadable (ADR-2832).
 		unreadable("mute with an array", "/api/mute", `[true]`),
@@ -71,7 +70,7 @@ func unreadable(name, path, body string) wireStep {
 func lyraWrites() []wireStep {
 	return []wireStep{
 		wirePost("mute", "/api/mute", `{"mute": true}`),
-		{Name: "a pack drained to a fraction", Method: "GET", Path: "/api/status", Set: map[string]any{"status.mic.battery_percent": 64.5}},
+		{Name: "a pack drained to a fraction", Method: "GET", Path: "/api/status", Hand: map[string]any{"status.mic.battery_percent": 64.5}},
 	}
 }
 
@@ -104,19 +103,16 @@ func lyraHXTicks() []tickPlan {
 // audioOperator is the parity day's operator: a hand on a path at given times.
 func audioOperator(d *Device, hand map[string]map[string]any) func(string) {
 	return func(hms string) {
+		st := d.State()
 		for path, v := range hand[hms] {
-			setWirePath(nil2t{}, d, path, v)
+			if err := SetPath(st, path, v); err != nil {
+				panic("wire operator: " + err.Error())
+			}
+		}
+		if len(hand[hms]) > 0 {
+			d.SetState(st, d.Version+1)
 		}
 	}
-}
-
-// nil2t is a testing.TB for an operator hand that cannot fail the test it is
-// not given: a bad path in the script panics, which fails it loudly.
-type nil2t struct{ testing.TB }
-
-func (nil2t) Helper() {}
-func (nil2t) Fatalf(format string, args ...any) {
-	panic("wire operator: " + format)
 }
 
 func lyraRoomDay(d *Device, at *time.Time) []wireChange {
@@ -181,13 +177,13 @@ func dspScript() []wireStep {
 		wirePost("output a number", "/api/output/mute", `{"mute": 1}`),
 		wirePost("output with no field", "/api/output/mute", `{}`),
 		wirePost("output with no body", "/api/output/mute", ``),
-		{Name: "reboot with the volatile state drifted", Method: "POST", Path: "/api/admin/reboot", Body: `{}`, Snapshot: true, Set: map[string]any{
+		{Name: "reboot with the volatile state drifted", Method: "POST", Path: "/api/admin/reboot", Body: `{}`, Snapshot: true, Hand: map[string]any{
 			"status.dsp.cpu_load": 55, "status.dsp.temperature": 51, "status.dsp.fan_rpm": 4100, "status.dsp.active_channels": 3,
 			"status.output.mute": true, "status.output.level_db": -9.5, "status.channels.0.gain": -20,
 		}},
 		wireGet("the status after a reboot", "/api/status"),
 		wireGet("the channels after a reboot", "/api/channels"),
-		{Name: "factory reset with the volatile state drifted", Method: "POST", Path: "/api/admin/factory-reset", Body: `{}`, Snapshot: true, Set: map[string]any{
+		{Name: "factory reset with the volatile state drifted", Method: "POST", Path: "/api/admin/factory-reset", Body: `{}`, Snapshot: true, Hand: map[string]any{
 			"status.dsp.cpu_load": 44, "status.dsp.temperature": 49, "status.dsp.fan_rpm": 4300, "status.dsp.active_channels": 2,
 			"status.output.mute": true, "status.output.level_db": -30.5,
 		}},
@@ -196,7 +192,7 @@ func dspScript() []wireStep {
 		wireGet("the dashboard with a drifted device", "/"),
 	}
 	// the last step reads a device a scenario has moved
-	steps[len(steps)-1].Set = map[string]any{
+	steps[len(steps)-1].Hand = map[string]any{
 		"status.dsp.cpu_load": 61.5, "status.dsp.temperature": 47.3, "status.dsp.fan_rpm": 4012, "status.dsp.active_channels": 5,
 		"status.channels.0.gate": true, "status.channels.0.peak_db": -33.5, "status.channels.0.gain": 3, "status.channels.1.mute": true,
 	}
@@ -227,7 +223,7 @@ func quirk(name, path, body, why string) wireStep {
 func dspWrites() []wireStep {
 	return []wireStep{
 		wirePost("output muted", "/api/output/mute", `{"mute": true}`),
-		{Name: "the level a scenario set", Method: "GET", Path: "/api/status", Set: map[string]any{"status.output.level_db": -23.5, "status.dsp.cpu_load": 33.5, "status.dsp.active_channels": 4, "status.dsp.temperature": 44.5, "status.dsp.fan_rpm": 3900}},
+		{Name: "the level a scenario set", Method: "GET", Path: "/api/status", Hand: map[string]any{"status.output.level_db": -23.5, "status.dsp.cpu_load": 33.5, "status.dsp.active_channels": 4, "status.dsp.temperature": 44.5, "status.dsp.fan_rpm": 3900}},
 	}
 }
 
@@ -295,25 +291,25 @@ func dspSessions() []wireSession {
 			{Name: "the first gain moves unheard", Do: &wireStep{Name: "gain again", Method: "POST", Path: "/api/channels/gain", Body: `{"index": 0, "gain": -4}`}},
 			{Name: "subscribe to the load", Send: []string{"subscribe dsp.cpu_load"}},
 			{Name: "a reboot moves the drifted load", Do: &wireStep{Name: "reboot", Method: "POST", Path: "/api/admin/reboot", Body: `{}`,
-				Set: set("status.dsp.cpu_load", 55, "status.dsp.temperature", 51.5, "status.output.mute", true)}},
+				Hand: set("status.dsp.cpu_load", 55, "status.dsp.temperature", 51.5, "status.output.mute", true)}},
 			{Name: "the reboot over the shell", Send: []string{"show dsp"}},
 			{Name: "a reboot that moves nothing", Do: &wireStep{Name: "reboot again", Method: "POST", Path: "/api/admin/reboot", Body: `{}`}},
 			{Name: "a factory reset moves the load again", Do: &wireStep{Name: "factory reset", Method: "POST", Path: "/api/admin/factory-reset", Body: `{}`,
-				Set: set("status.dsp.cpu_load", 41, "status.dsp.temperature", 44, "status.dsp.active_channels", 6, "status.dsp.fan_rpm", 4100)}},
+				Hand: set("status.dsp.cpu_load", 41, "status.dsp.temperature", 44, "status.dsp.active_channels", 6, "status.dsp.fan_rpm", 4100)}},
 			{Name: "the shell sees a drift", Send: []string{"show dsp"}, Do: &wireStep{Name: "drift", Method: "GET", Path: "/api/status",
-				Set: set("status.dsp.cpu_load", 63, "status.dsp.temperature", 55.5, "status.output.mute", true, "status.output.level_db", -3.5)}},
+				Hand: set("status.dsp.cpu_load", 63, "status.dsp.temperature", 55.5, "status.output.mute", true, "status.output.level_db", -3.5)}},
 			{Name: "system reboot", Send: []string{"system reboot"}},
 			{Name: "system reboot with nothing to move", Send: []string{"system reboot"}},
 			{Name: "the state after the shell's reboot", Send: []string{"show dsp"}, Do: &wireStep{Name: "the status", Method: "GET", Path: "/api/status",
-				Set: set("status.dsp.cpu_load", 52, "status.dsp.temperature", 50, "status.dsp.active_channels", 1, "status.dsp.fan_rpm", 3300)}},
+				Hand: set("status.dsp.cpu_load", 52, "status.dsp.temperature", 50, "status.dsp.active_channels", 1, "status.dsp.fan_rpm", 3300)}},
 			{Name: "system factory-reset", Send: []string{"system factory-reset"}},
 			{Name: "show after the factory reset", Send: []string{"show dsp", "show channels"}},
 			{Name: "unsubscribe the load", Send: []string{"unsubscribe dsp.cpu_load", "unsubscribe channels.0.mute"}},
 			{Name: "subscribe to the temperature", Send: []string{"subscribe dsp.temperature"}},
 			{Name: "the shell resets a drifted temperature", Send: []string{"system reboot"}, Do: &wireStep{Name: "drift", Method: "GET", Path: "/api/status",
-				Set: set("status.dsp.cpu_load", 31, "status.dsp.temperature", 53.5)}},
+				Hand: set("status.dsp.cpu_load", 31, "status.dsp.temperature", 53.5)}},
 			{Name: "the shell factory-resets a drifted temperature", Send: []string{"system factory-reset"}, Do: &wireStep{Name: "drift again", Method: "GET", Path: "/api/status",
-				Set: set("status.dsp.cpu_load", 32, "status.dsp.temperature", 48.5)}},
+				Hand: set("status.dsp.cpu_load", 32, "status.dsp.temperature", 48.5)}},
 			{Name: "unsubscribe the temperature", Send: []string{"unsubscribe dsp.temperature", "unsubscribe dsp.cpu_load"}},
 			{Name: "bye", Send: []string{"bye"}},
 		}}
@@ -359,13 +355,13 @@ func ampScript() []wireStep {
 		wirePost("power with no body", "/api/power", ``),
 		wirePost("power with a boolean", "/api/power", `{"power": true}`),
 		{Name: "protect reset while normal", Method: "POST", Path: "/api/protect/reset", Body: `{}`, Snapshot: true},
-		{Name: "protect reset while latched", Method: "POST", Path: "/api/protect/reset", Body: `{}`, Snapshot: true, Set: map[string]any{"status.amp.protect": "protect"}},
-		{Name: "the status with a latched protect and a clip", Method: "GET", Path: "/api/status", Set: map[string]any{
+		{Name: "protect reset while latched", Method: "POST", Path: "/api/protect/reset", Body: `{}`, Snapshot: true, Hand: map[string]any{"status.amp.protect": "protect"}},
+		{Name: "the status with a latched protect and a clip", Method: "GET", Path: "/api/status", Hand: map[string]any{
 			"status.amp.protect": "protect", "status.amp.signal_present": true, "status.amp.temperature": 48.5, "status.amp.fan_rpm": 3100,
 			"status.channels.1.clip": true, "status.channels.1.output_db": -12.5, "status.channels.2.load_ohms": 4.5,
 		}},
-		{Name: "protect reset with no body", Method: "POST", Path: "/api/protect/reset", Body: ``, Snapshot: true, Set: map[string]any{"status.amp.protect": "overheat"}},
-		{Name: "reboot with the volatile state drifted", Method: "POST", Path: "/api/admin/reboot", Body: `{}`, Snapshot: true, Set: map[string]any{
+		{Name: "protect reset with no body", Method: "POST", Path: "/api/protect/reset", Body: ``, Snapshot: true, Hand: map[string]any{"status.amp.protect": "overheat"}},
+		{Name: "reboot with the volatile state drifted", Method: "POST", Path: "/api/admin/reboot", Body: `{}`, Snapshot: true, Hand: map[string]any{
 			"status.amp.protect": "protect", "status.amp.temperature": 50.5, "status.amp.fan_rpm": 3300, "status.amp.signal_present": true,
 		}},
 		wireGet("the status after a reboot", "/api/status"),
@@ -378,7 +374,7 @@ func ampScript() []wireStep {
 func ampWrites() []wireStep {
 	return []wireStep{
 		wirePost("standby", "/api/power", `{"power": "standby"}`),
-		{Name: "values a scenario set", Method: "GET", Path: "/api/status", Set: map[string]any{
+		{Name: "values a scenario set", Method: "GET", Path: "/api/status", Hand: map[string]any{
 			"status.amp.protect": "protect", "status.amp.temperature": 49.5, "status.amp.fan_rpm": 3000,
 			"status.channels.0.output_db": -13.5, "status.channels.1.clip": true, "status.channels.3.load_ohms": 16,
 		}},

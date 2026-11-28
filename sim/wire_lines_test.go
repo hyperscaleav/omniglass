@@ -4,308 +4,218 @@ package sim
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
-	"io"
+	"fmt"
 	"net"
 	"reflect"
-	"strconv"
-	"sync"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
-// The line-protocol half of the golden wire harness (#2835): what a family
-// declares beside its HTTP and SNMP faces. The faces it serves (each
-// interface's protocol, port, auth, framing, welcome and subscribable subjects),
-// the bytes a persistent shell session writes for a script of lines and of state
-// changes made while it listens (replies, pushes, the help listing), and the
-// datagrams a UDP echo face returns. A family supplies Sessions and Echo in its
-// wireFamily; the recorder and the replay run them with the rest of the script.
-//
-// A session runs the same shell loop the SSH, Telnet and raw-TCP listeners all
-// run (runShellSession), over a pipe instead of a socket, so what is recorded is
-// the loop's own bytes: the transport's login dialog is the transport's, held by
-// its own tests.
+// Line protocols in the golden wire transcripts (#2833). A device that speaks a
+// line protocol (NVP over TCP, a CLI over SSH) is held to the lines it
+// answered: each step is one line sent, the reply it drew, the lines pushed to a
+// subscriber after it, and whether and how the device's state moved. A step is
+// either played on the device's raw TCP face (the bytes a driver sees, CRLF and
+// pushes included) or run direct against the device's command table (a shell's
+// verb, which carries no framing of its own). The device's own list of
+// commands, the order a shell's help names them in, is recorded beside.
 
-// wireFace is one interface a family declares, as the engine reads it. The
-// subjects a persistent face may push are not listed here: what a session is
-// pushed is recorded by the sessions themselves.
-type wireFace struct {
-	Name       string `json:"name"`
-	Protocol   string `json:"protocol"`
-	Port       int    `json:"port"`
-	TLS        bool   `json:"tls,omitempty"`
-	APISurface string `json:"api_surface,omitempty"`
-	Auth       struct {
-		Type, User, Password, Header, APIKey, Realm string
-		Community, RefusedCommunity                 string
-		Enforce                                     bool
-		PublicPaths                                 []string
-	} `json:"auth"`
-	Persistent bool       `json:"persistent,omitempty"`
-	LineEnding string     `json:"line_ending,omitempty"`
-	FrameStart string     `json:"frame_start,omitempty"`
-	FrameEnd   string     `json:"frame_end,omitempty"`
-	Welcome    string     `json:"welcome,omitempty"`
-	Limits     wireLimits `json:"limits,omitempty"`
-	Reachable  string     `json:"reachable_when,omitempty"`
-}
-
-type wireLimits struct {
-	MaxSubs, MinIntervalMs, MaxSessions, OutBuffer int
-}
-
-// wireFacesOf is the interfaces a catalog definition serves.
-func wireFacesOf(ifaces []profile.Interface) []wireFace {
-	out := make([]wireFace, 0, len(ifaces))
-	for _, i := range ifaces {
-		f := wireFace{Name: i.Name, Protocol: i.Protocol, Port: i.Port, TLS: i.TLS, APISurface: i.APISurface, Persistent: i.Persistent,
-			LineEnding: i.LineEnding, FrameStart: i.FrameStart, FrameEnd: i.FrameEnd, Welcome: i.Welcome, Reachable: i.ReachableWhen}
-		f.Auth.Type, f.Auth.User, f.Auth.Password, f.Auth.Header, f.Auth.APIKey, f.Auth.Realm = i.Auth.Type, i.Auth.DefaultUser, i.Auth.DefaultPassword, i.Auth.Header, i.Auth.APIKey, i.Auth.Realm
-		f.Auth.Community, f.Auth.RefusedCommunity, f.Auth.Enforce, f.Auth.PublicPaths = i.Auth.Community, i.Auth.RefusedCommunity, i.Auth.Enforce, i.Auth.PublicPaths
-		if i.Persistent {
-			l := i.Limits.WithDefaults()
-			f.Limits = wireLimits{l.MaxSubsPerSession, l.PublishMinIntervalMs, l.MaxSessionsPerDevice, l.OutBuffer}
-		}
-		out = append(out, f)
-	}
-	return out
-}
-
-// wireSession is a script played over one persistent face.
-type wireSession struct {
-	Face  string
-	Steps []wireLineStep
-}
-
-// wireLineStep is one moment of a session: lines the client sends back to back,
-// and a request made to the device while the session listens (a state change it
-// may push). A step with neither collects what the device wrote on its own (the
-// welcome banner).
-type wireLineStep struct {
+// wireLine is one step of a family's line script.
+type wireLine struct {
 	Name string
-	Send []string
-	Do   *wireStep
+	// Line is sent on the TCP face; Direct runs it through the device's command
+	// table instead, as a shell session would.
+	Line   string
+	Direct bool
+	// Then is an HTTP request played after the line is sent and before the
+	// pushes are read: how a subscriber hears of a change made elsewhere.
+	Then *wireStep
+	// NoReply says the line draws no reply (a blank line), so none is waited
+	// for.
+	NoReply bool
+	// Hand is state set on the device before the line, an operator's hand.
+	Hand map[string]any
+	// Snapshot records the whole state after the step.
+	Snapshot bool
 }
 
-// wireSessionStep is what the device wrote during one step.
-type wireSessionStep struct {
-	Name string   `json:"name"`
-	Send []string `json:"send,omitempty"`
-	Do   string   `json:"do,omitempty"`
-	Out  string   `json:"out"`
+// wireLineResult is what one line step put on the wire.
+type wireLineResult struct {
+	Name        string          `json:"name"`
+	Line        string          `json:"line"`
+	Direct      bool            `json:"direct,omitempty"`
+	Reply       string          `json:"reply"`
+	Pushed      []string        `json:"pushed,omitempty"`
+	Action      string          `json:"action,omitempty"`
+	Subject     string          `json:"subject,omitempty"`
+	Token       string          `json:"token,omitempty"`
+	Failed      string          `json:"failed,omitempty"`
+	Unknown     bool            `json:"unknown,omitempty"`
+	StateChange bool            `json:"state_change"`
+	State       json.RawMessage `json:"state,omitempty"`
 }
 
-type wireSessionResult struct {
-	Face  string            `json:"face"`
-	Steps []wireSessionStep `json:"steps"`
-}
+// lineQuiet is how long a connection is silent before the pushes of a step are
+// taken as all in: loopback, so a push follows its reply within microseconds.
+const lineQuiet = 80 * time.Millisecond
 
-// wireEcho is what a UDP echo face answered a datagram with.
-type wireEcho struct {
-	Face string `json:"face"`
-	Sent string `json:"sent"`
-	Got  string `json:"got"`
-}
-
-// lockedBuf is the bytes a session wrote, readable while it still writes.
-type lockedBuf struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (b *lockedBuf) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *lockedBuf) len() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.buf.Len()
-}
-
-// take is what was written since the last take.
-func (b *lockedBuf) take() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	s := b.buf.String()
-	b.buf.Reset()
-	return s
-}
-
-// wireQuiet is how long a session must write nothing before a step is over.
-const wireQuiet = 120 * time.Millisecond
-
-func (b *lockedBuf) settle() {
-	last, since := -1, time.Now()
-	for time.Since(since) < wireQuiet {
-		if n := b.len(); n != last {
-			last, since = n, time.Now()
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// registryOf is the session registry of the interface with this name.
-func registryOf(t *testing.T, d *Device, iface profile.Interface) *SessionRegistry {
+// runWireLines plays a family's line script on a started device and returns the
+// results and the device's command list.
+func runWireLines(t *testing.T, d *Device, face string, steps []wireLine) []wireLineResult {
 	t.Helper()
-	switch iface.Protocol {
-	case "ssh":
-		return d.SSHSession()
-	case "telnet":
-		return d.TelnetSession()
-	case "tcp":
-		for _, r := range d.TCPSessions() {
-			if r.cfg.Port == iface.Port {
-				return r
+	if face == "" {
+		face = "nvp"
+	}
+	var (
+		conn net.Conn
+		rd   *bufio.Reader
+	)
+	for _, st := range steps {
+		if !st.Direct && conn == nil {
+			c, err := net.DialTimeout("tcp", faceAddr(t, d, face), 2*time.Second)
+			if err != nil {
+				t.Fatalf("dial the %s face: %v", face, err)
 			}
+			t.Cleanup(func() { _ = c.Close() })
+			conn, rd = c, bufio.NewReader(c)
 		}
 	}
-	t.Fatalf("%s: no session registry for the %s face", d.DeviceID, iface.Name)
-	return nil
-}
-
-// playWireSession runs a script over one persistent face and returns what the
-// device wrote at each step.
-func playWireSession(t *testing.T, d *Device, ifaces []profile.Interface, s wireSession) wireSessionResult {
-	t.Helper()
-	var iface profile.Interface
-	found := false
-	for _, i := range ifaces {
-		if i.Name == s.Face {
-			iface, found = i, true
+	out := make([]wireLineResult, 0, len(steps))
+	for _, st := range steps {
+		if st.Hand != nil {
+			handSet(t, d, st.Hand)
 		}
-	}
-	if !found {
-		t.Fatalf("%s declares no %s face", d.DeviceID, s.Face)
-	}
-	reg := registryOf(t, d, iface)
-	sess, err := reg.Open("wire")
-	if err != nil {
-		t.Fatal(err)
-	}
-	pr, pw := io.Pipe()
-	out := &lockedBuf{}
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		runShellSession(d, sess, bufio.NewReader(pr), out, iface.Port, iface.Protocol)
-	}()
-	defer func() {
-		_ = pw.Close()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			t.Errorf("%s: the %s session never ended", d.DeviceID, s.Face)
-		}
-		reg.Close(sess)
-	}()
-
-	res := wireSessionResult{Face: s.Face}
-	out.settle()
-	res.Steps = append(res.Steps, wireSessionStep{Name: "connect", Out: out.take()})
-	end := reg.cfg.LineEnding
-	for _, st := range s.Steps {
-		rec := wireSessionStep{Name: st.Name, Send: st.Send}
-		if st.Do != nil {
-			wireRequest(t, d, *st.Do)
-			rec.Do = st.Do.Name
-		}
-		for _, line := range st.Send {
-			if _, err := io.WriteString(pw, line+end); err != nil {
-				break
+		before := stateJSON(d)
+		res := wireLineResult{Name: st.Name, Line: st.Line, Direct: st.Direct}
+		if st.Direct {
+			r, ok, err := d.RunCommand(st.Line)
+			res.Reply, res.Action, res.Subject, res.Token = r.Response, string(r.Action), r.Subject, r.Token
+			res.Unknown = !ok
+			if err != nil {
+				res.Failed = err.Error()
 			}
-		}
-		out.settle()
-		rec.Out = out.take()
-		res.Steps = append(res.Steps, rec)
-	}
-	return res
-}
-
-// playWireEcho sends one datagram to a UDP echo face and returns the answer.
-func playWireEcho(t *testing.T, d *Device, face string) wireEcho {
-	t.Helper()
-	const sent = "wire-echo"
-	c, err := net.Dial("udp", net.JoinHostPort(d.LoopbackIP.String(), strconv.Itoa(facePort(t, d, face))))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	_ = c.SetDeadline(time.Now().Add(2 * time.Second))
-	if _, err := c.Write([]byte(sent)); err != nil {
-		t.Fatal(err)
-	}
-	buf := make([]byte, 64)
-	n, err := c.Read(buf)
-	if err != nil {
-		t.Fatalf("%s: the %s face did not echo: %v", d.DeviceID, face, err)
-	}
-	return wireEcho{Face: face, Sent: sent, Got: string(buf[:n])}
-}
-
-// collectWireLines gathers the line-protocol half of a transcript: the faces,
-// each session and each echo.
-func collectWireLines(t *testing.T, fam wireFamily, product string, tr *wireTranscript) {
-	t.Helper()
-	if len(fam.Sessions) == 0 && len(fam.Echo) == 0 && !fam.Faces {
-		return
-	}
-	e := fam.Engine(t)
-	r, ok := e.cat.ForProduct(product)
-	if !ok {
-		t.Fatalf("the catalog simulates no %s", product)
-	}
-	ifaces := r.Definition.Surfaces()
-	if fam.Faces {
-		tr.Faces = wireFacesOf(ifaces)
-	}
-	for _, s := range fam.Sessions {
-		// A session starts from a device at rest, as an HTTP script does.
-		d := wireDevice(t, fam, product)
-		tr.Sessions = append(tr.Sessions, playWireSession(t, d, ifaces, s))
-	}
-	if len(fam.Echo) > 0 {
-		d := wireDevice(t, fam, product)
-		for _, face := range fam.Echo {
-			tr.Echo = append(tr.Echo, playWireEcho(t, d, face))
-		}
-	}
-}
-
-// diffWireLines is what a replayed line-protocol half differs in, one line each.
-func diffWireLines(product string, got, want wireTranscript) []string {
-	var out []string
-	if !reflect.DeepEqual(got.Faces, want.Faces) {
-		out = append(out, "faces differ:\n got "+jsonOf(got.Faces)+"\nwant "+jsonOf(want.Faces))
-	}
-	if len(got.Sessions) != len(want.Sessions) {
-		return append(out, product+": "+strconv.Itoa(len(got.Sessions))+" sessions replayed, "+strconv.Itoa(len(want.Sessions))+" recorded")
-	}
-	for i, w := range want.Sessions {
-		g := got.Sessions[i]
-		if g.Face != w.Face || len(g.Steps) != len(w.Steps) {
-			out = append(out, product+": the "+w.Face+" session has a different shape")
-			continue
-		}
-		for j, ws := range w.Steps {
-			if g.Steps[j].Out != ws.Out {
-				out = append(out, product+": "+w.Face+": "+ws.Name+": the device wrote\n got "+strconv.Quote(g.Steps[j].Out)+"\nwant "+strconv.Quote(ws.Out))
+			if st.Then != nil {
+				wireRequest(t, d, *st.Then)
 			}
+		} else {
+			if st.Line != "" {
+				if _, err := conn.Write([]byte(st.Line + "\r\n")); err != nil {
+					t.Fatalf("%s: %v", st.Name, err)
+				}
+				if !st.NoReply {
+					// The reply is read before anything else is done, so a push
+					// a later step draws cannot overtake it.
+					res.Reply = readReply(conn, rd)
+				}
+			}
+			if st.Then != nil {
+				wireRequest(t, d, *st.Then)
+			}
+			res.Pushed = readLines(conn, rd)
 		}
-	}
-	if !reflect.DeepEqual(got.Echo, want.Echo) {
-		out = append(out, product+": the echo faces answered "+jsonOf(got.Echo)+", recorded "+jsonOf(want.Echo))
+		after := stateJSON(d)
+		res.StateChange = string(before) != string(after)
+		if st.Snapshot {
+			res.State = after
+		}
+		out = append(out, res)
 	}
 	return out
 }
 
-func jsonOf(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
+// replyWait is how long a reply is waited for.
+const replyWait = 500 * time.Millisecond
+
+// readReply reads the one line a request draws, "" when none arrives.
+func readReply(conn net.Conn, rd *bufio.Reader) string {
+	_ = conn.SetReadDeadline(time.Now().Add(replyWait))
+	s, _ := rd.ReadString('\n')
+	return strings.TrimRight(s, "\r\n")
+}
+
+// readLines reads every line the connection delivers until it falls quiet.
+func readLines(conn net.Conn, rd *bufio.Reader) []string {
+	var out []string
+	for {
+		_ = conn.SetReadDeadline(time.Now().Add(lineQuiet))
+		s, err := rd.ReadString('\n')
+		if s != "" {
+			out = append(out, strings.TrimRight(s, "\r\n"))
+		}
+		if err != nil {
+			return out
+		}
+	}
+}
+
+// handSet sets state paths on the device as an operator would, past any
+// surface.
+func handSet(t *testing.T, d *Device, set map[string]any) {
+	t.Helper()
+	s := d.State()
+	for path, v := range set {
+		if err := SetPath(s, path, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.SetState(s, d.Version+1)
+}
+
+// diffWireLines is what a replayed line script differs in from the golden.
+func diffWireLines(t *testing.T, product string, got, want []wireLineResult) []string {
+	t.Helper()
+	var out []string
+	if len(got) != len(want) {
+		return []string{fmt.Sprintf("%s: %d line steps replayed, %d recorded", product, len(got), len(want))}
+	}
+	for i, w := range want {
+		g := got[i]
+		g.State, w.State = canonRaw(t, g.State), canonRaw(t, w.State)
+		if !reflect.DeepEqual(g, w) {
+			out = append(out, fmt.Sprintf("%s: line %q:\n got %s\nwant %s", product, w.Name, lineSummary(g), lineSummary(w)))
+		}
+	}
+	return out
+}
+
+// canonRaw is a recorded state in canonical form, nil when none was recorded.
+func canonRaw(t *testing.T, raw json.RawMessage) json.RawMessage {
+	t.Helper()
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	return json.RawMessage(canon(t, raw))
+}
+
+// handPath sets one state path on a device as an operator's hand would, past
+// any surface: what a room day's operator does mid-walk.
+func handPath(d *Device, path string, v any) {
+	s := d.State()
+	if err := SetPath(s, path, v); err != nil {
+		panic(err)
+	}
+	d.SetState(s, d.Version+1)
+}
+
+// wireLine1 is a line sent on the TCP face.
+func wireLine1(name, line string) wireLine { return wireLine{Name: name, Line: line} }
+
+// wireLineSnap is a line sent on the TCP face whose state after is recorded.
+func wireLineSnap(name, line string) wireLine {
+	return wireLine{Name: name, Line: line, Snapshot: true}
+}
+
+// wireCmd is a verb run direct against the command table, state recorded.
+func wireCmd(name, line string) wireLine {
+	return wireLine{Name: name, Line: line, Direct: true, Snapshot: true}
+}
+
+// lineSummary is a line step's result as one readable line, its state as text.
+func lineSummary(r wireLineResult) string {
+	state := string(r.State)
+	r.State = nil
+	b, _ := json.Marshal(r)
+	return string(b) + " state " + state
 }

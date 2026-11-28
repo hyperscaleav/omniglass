@@ -55,7 +55,7 @@ func servePanel(t *testing.T, ip string) *Device {
 	t.Helper()
 	e := newCatalogEngine(t)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "panel", Hostname: "panel", LoopbackIP: ip,
-		ProfileName: "newtron-panel-7", Version: 1}}); err != nil {
+		ProfileName: profileOf(t, e, "newtron-panel-7"), Product: "newtron-panel-7", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	return e.Devices()[0]

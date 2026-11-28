@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,18 @@ func parityStore(t *testing.T) *profile.Store {
 	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("loading catalog: %v", err)
+	}
+	return store
+}
+
+// nvpFixtureStore is the NVP faces of the Newtron Panel 7 YAML profile as they
+// were before it became a Go family (#2833), kept as a fixture beside the
+// nvp-room surface they include: the YAML the shared Go surface is held to.
+func nvpFixtureStore(t *testing.T) *profile.Store {
+	t.Helper()
+	store, err := profile.LoadStoreFS(os.DirFS("testdata/nvp"))
+	if err != nil {
+		t.Fatalf("loading the NVP fixture: %v", err)
 	}
 	return store
 }
@@ -107,7 +120,7 @@ func serveNVP(t *testing.T, dev *Device, iface profile.Interface) string {
 // state behind the second.
 func nvpPair(t *testing.T) (yamlDev *Device, yamlAddr string, goDev *Device, goAddr string, matches []string) {
 	t.Helper()
-	iface := ifaceNamed(t, parityStore(t), "newtron-panel-7", "nvp")
+	iface := ifaceNamed(t, nvpFixtureStore(t), "nvp-room-fixture", "nvp")
 
 	yamlDev = NewDevice("yaml", "yaml", net.ParseIP("127.0.0.1"), "newtron-panel-7", 1, nvpState())
 	for i := range iface.Commands {
@@ -252,7 +265,7 @@ func TestParityNVPRoomSurface(t *testing.T) {
 // The Go declaration's subscriptions and the YAML's are the same set: the
 // panel's SSH, TLS and Telnet faces each declare the input subject alone.
 func TestParityNVPInputSubject(t *testing.T) {
-	iface := ifaceNamed(t, parityStore(t), "newtron-panel-7", "nvp-tls")
+	iface := ifaceNamed(t, nvpFixtureStore(t), "nvp-room-fixture", "nvp-tls")
 	if len(iface.Subjects) != 1 {
 		t.Fatalf("nvp-tls declares %d subjects", len(iface.Subjects))
 	}
@@ -502,9 +515,9 @@ func TestParitySNMPSystemAndIdentity(t *testing.T) {
 		})
 	}
 	// Nine profiles repeated the identity arc before the Boreal displays and
-	// projector (#2832) and the Lyra and Polaris audio products (#2835) became Go
-	// families; three remain in YAML.
-	if identities < 3 {
+	// projector (#2832), two more (#2833) and the Lyra and Polaris audio products
+	// (#2835) became Go families; one remains in YAML.
+	if identities < 1 {
 		t.Fatalf("only %d profiles map the identity arc; the helper's reason to exist is gone", identities)
 	}
 }
@@ -564,7 +577,13 @@ func TestParityHTTPStatusDocument(t *testing.T) {
 	for _, c := range cases {
 		orders[c.order]++
 		t.Run(c.profile, func(t *testing.T) {
+			// The template a profile serves, or, once its profile became a Go family,
+			// the template as it was, kept under testdata/status: the layout the Go
+			// document is held to.
 			tmpl, err := fs.ReadFile(profiles.Templates(), "api/"+c.profile+"/status.json.gotempl")
+			if err != nil {
+				tmpl, err = os.ReadFile("testdata/status/" + c.profile + ".json.gotempl")
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

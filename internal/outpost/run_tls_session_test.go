@@ -14,8 +14,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // The line protocol over tls end to end (#1035): Postgres, the bus, a real
@@ -34,12 +34,10 @@ func panelKey(t *testing.T, panel *sim.Device) string {
 }
 
 // tenDayCertificates gives the panel's tls face a ten-day window.
-func tenDayCertificates(store *profile.Store) {
-	for _, p := range store.Devices {
-		for i := range p.Interfaces {
-			if p.Interfaces[i].TLS && p.Interfaces[i].Protocol == "tcp" {
-				p.Interfaces[i].TLSValidityDays = 10
-			}
+func tenDayCertificates(fam *spec.Spec) {
+	for i := range fam.Interfaces {
+		if fam.Interfaces[i].TLS && fam.Interfaces[i].Protocol == "tcp" {
+			fam.Interfaces[i].TLSValidityDays = 10
 		}
 	}
 }

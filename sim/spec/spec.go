@@ -167,7 +167,11 @@ type Command struct {
 	Match   string
 	Summary string
 	Example string
-	Handle  LineHandler
+	// Face is the line interface the console lists the command under; the
+	// command answers on every line interface whatever it says. Empty lists it
+	// under every one.
+	Face   string
+	Handle LineHandler
 }
 
 // Animator runs while its device serves: the engine calls it when the device
@@ -193,6 +197,20 @@ type TickContext struct {
 	// none for a room with no calendar. A read that follows the room's
 	// meetings over a stretch of time, not only at an instant, asks here.
 	Spans func(from, to time.Time) []behave.Span
+
+	// Bookings reads the booked meetings of the device's room (behave.BookingsAt
+	// through the lab calendar), computed on the first call; nil when the engine
+	// supplies none (ReadBookings is the safe way in).
+	Bookings func() behave.Bookings
+}
+
+// ReadBookings is the room's booked meetings, a free and empty room when the
+// context carries no reader: a tick of a scheduling panel reads its room here.
+func (c TickContext) ReadBookings() behave.Bookings {
+	if c.Bookings == nil {
+		return behave.Bookings{State: behave.StateFree}
+	}
+	return c.Bookings()
 }
 
 // Tick is a typed behavior of a Go family: a function that runs on an
@@ -226,6 +244,10 @@ type Surface struct {
 	// Subjects are the subscription subjects of a persistent interface, by
 	// the interface's name: each face declares its own set.
 	Subjects map[string][]surface.Subject
+	// ListedOn is the line interface the console lists the Commanders' commands
+	// under (each answers on every persistent line interface whatever it says);
+	// empty lists them under none.
+	ListedOn string
 }
 
 // SurfaceFunc builds a device's Surface. It runs once per device, as the
@@ -324,6 +346,9 @@ func (s Spec) validate() error {
 			return fmt.Errorf("family %q lists command %q twice", s.Name, c.Match)
 		}
 		cmds[c.Match] = true
+		if c.Face != "" && !lineFace(s.Interfaces, c.Face) {
+			return fmt.Errorf("family %q lists command %q under %q, which is no line interface", s.Name, c.Match, c.Face)
+		}
 	}
 	if len(s.HTTP) > 0 && !hasProtocol(s.Interfaces, "http") {
 		return fmt.Errorf("family %q has HTTP routes and no http interface", s.Name)
@@ -332,6 +357,16 @@ func (s Spec) validate() error {
 		return fmt.Errorf("family %q has commands and no ssh, telnet, tcp or udp interface", s.Name)
 	}
 	return nil
+}
+
+// lineFace says an interface of that name speaks a line protocol.
+func lineFace(ifaces []profile.Interface, name string) bool {
+	for _, i := range ifaces {
+		if i.Name == name {
+			return hasProtocol([]profile.Interface{i}, "ssh", "telnet", "tcp", "udp")
+		}
+	}
+	return false
 }
 
 func hasProtocol(ifaces []profile.Interface, protocols ...string) bool {
