@@ -14,7 +14,7 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 | Path | What it is |
 | --- | --- |
 | `sim/` | The engine: devices, faces per protocol, behavior, faults, state, observation. |
-| `sim/profiles/` | Device profiles as data (`devices/`, `surfaces/`, `templates/`), embedded into the binary. |
+| `sim/profiles/` | Device profiles as data (`devices/`, `templates/`), embedded into the binary; a `surfaces/` piece two profiles share joins the embed when one is needed. |
 | `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. |
 | `sim/behave/` | The shared, typed behavior primitives a family composes. |
 | `sim/profile/` | The profile model: parse, validate, resolve includes. |
@@ -43,7 +43,7 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 A profile is one YAML file in `sim/profiles/devices/`, named for the product it simulates. It
 declares the product's identity (`name`, `manufacturer`, `model`, `device_type`), its interfaces
 and protocol surfaces, its state, and the behavior that moves that state. Surface pieces two
-profiles share live in `sim/profiles/surfaces/` and are taken in with `include:`. The editor
+profiles share live in `sim/profiles/surfaces/` (none today) and are taken in with `include:`. The editor
 schema is `sim/profiles/devices/schema.json`; the first line of a profile points at it. Start
 from the closest existing profile and copy its shape. Coverage of seeded products by profiles is
 accounted for in `sim/profiles/coverage.yaml` and checked by the tests.
@@ -121,6 +121,14 @@ Written once here, so the next family repeats no workaround.
 - **A correction to the profile is written down and pinned.** The replay's `Body` and `Diverges` hooks map the
   recorded transcript to what the family means to say, and fail when the recording no longer holds what they
   correct; the divergence is an ADR.
+- **A line command is listed where it is served.** A `spec.Command` names its `Face` (the interface the
+  console lists it under) and a family's `Surface` names `ListedOn` for the shared surface's commands; a
+  line protocol is recorded in the wire script's `Lines` (each line on the device's TCP face, or a verb
+  direct against its command table), with the pushes each draws and the device's own command list.
+- **Free text and derived writes.** A control route that took any string is an `httpapi.Text` field (with a
+  `Pattern` when the profile held one); a route that lands a value derived from the request in the same
+  change (the signal on the input just routed) is a `Control.Also`. A tick that reads its room's booked
+  meetings calls `c.ReadBookings()`.
 
 `sim/spec/spectest` is also a small family used by the engine's tests.
 

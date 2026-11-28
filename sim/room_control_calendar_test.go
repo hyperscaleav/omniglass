@@ -30,7 +30,7 @@ func roomEngine(t *testing.T, seed int64, k calendar.Knobs, at *time.Time, profi
 	var snaps []DeviceSnapshot
 	for i, name := range profileNames {
 		id := fmt.Sprintf("d-%d", i)
-		snaps = append(snaps, DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: name, Version: 1,
+		snaps = append(snaps, DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, name), Product: name, Version: 1,
 			SiteCode: roomHQ.Site, Building: roomHQ.Building, Room: roomHQ.Room})
 	}
 	if err := e.LoadDevices(snaps); err != nil {
@@ -39,7 +39,7 @@ func roomEngine(t *testing.T, seed int64, k calendar.Knobs, at *time.Time, profi
 	out := map[string]*Device{}
 	for _, d := range e.Devices() {
 		d.SetClock(pinned(at))
-		out[d.ProfileName] = d
+		out[d.Product] = d
 	}
 	return out
 }

@@ -11,6 +11,11 @@ import (
 	fam_kestrelgaze "github.com/hyperscaleav/omniglass/sim/device/kestrelgaze"
 	fam_kestrelrelay "github.com/hyperscaleav/omniglass/sim/device/kestrelrelay"
 	fam_kestrelvroom "github.com/hyperscaleav/omniglass/sim/device/kestrelvroom"
+	fam_meridianextender "github.com/hyperscaleav/omniglass/sim/device/meridianextender"
+	fam_meridianswitcher "github.com/hyperscaleav/omniglass/sim/device/meridianswitcher"
+	fam_newtroncore "github.com/hyperscaleav/omniglass/sim/device/newtroncore"
+	fam_newtronpanel "github.com/hyperscaleav/omniglass/sim/device/newtronpanel"
+	fam_newtronslate "github.com/hyperscaleav/omniglass/sim/device/newtronslate"
 )
 
 // families is every Go device family under sim/device, by directory.
@@ -22,5 +27,10 @@ func families() []spec.Spec {
 		fam_kestrelgaze.Spec(),
 		fam_kestrelrelay.Spec(),
 		fam_kestrelvroom.Spec(),
+		fam_meridianextender.Spec(),
+		fam_meridianswitcher.Spec(),
+		fam_newtroncore.Spec(),
+		fam_newtronpanel.Spec(),
+		fam_newtronslate.Spec(),
 	}
 }

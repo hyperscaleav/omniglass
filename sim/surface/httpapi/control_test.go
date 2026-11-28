@@ -219,7 +219,7 @@ func TestControlRefusesAnUnreadableBodyAndWritesNothing(t *testing.T) {
 // again takes the later value (#2834).
 func TestControlWritesItsAlsoChangesWithTheFieldsInOneChange(t *testing.T) {
 	c := Control{Match: "POST /x", Fields: []Field{{Path: "p", Name: "power", Kind: Choice, Values: []string{"on", "off"}}},
-		Also: func(w map[string]any) []surface.Change {
+		Also: func(_ spec.Device, w map[string]any) []surface.Change {
 			return []surface.Change{{Path: "n", Value: int64(len(w["p"].(string)))}, {Path: "p", Value: "typed-" + w["p"].(string)}}
 		},
 		Ack: func(spec.Device) any { return ack{} }}

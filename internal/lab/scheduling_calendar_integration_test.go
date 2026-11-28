@@ -65,7 +65,7 @@ func TestIntegrationCorporateSchedulingReadsTheCalendar(t *testing.T) {
 	for _, s := range w.Sites {
 		for _, r := range s.Rooms {
 			for _, d := range r.Devices {
-				if strings.HasPrefix(d.Profile, "newtron-slate-") && panel == "" {
+				if strings.HasPrefix(d.Profile, "newtron-slate") && panel == "" {
 					panel, panelRoom = d.Name, r.System
 				}
 			}

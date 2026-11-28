@@ -16,7 +16,7 @@ func TestLoadStore(t *testing.T) {
 
 	// The catalog's generic-vendor devices. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet seed.
-	expectedDevices := []string{"generic-device", "newtron-panel-7", "ferrite-pdu-4c", "polaris-dsp-16"}
+	expectedDevices := []string{"generic-device", "ferrite-pdu-4c", "polaris-dsp-16"}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
@@ -81,7 +81,6 @@ func TestRebootMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		cliVerb  string // empty means HTTP-only profile
 	}{
 		{"polaris-dsp-16", "POST /api/admin/reboot", "system reboot"},
-		{"newtron-panel-7", "POST /api/admin/reboot", "reboot"},
 	}
 
 	for _, c := range cases {
@@ -146,7 +145,6 @@ func TestFactoryResetMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		cliVerb  string
 	}{
 		{"polaris-dsp-16", "POST /api/admin/factory-reset", "system factory-reset"},
-		{"newtron-panel-7", "POST /api/admin/factory-reset", "factory-reset"},
 	}
 
 	for _, c := range cases {

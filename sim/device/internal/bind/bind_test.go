@@ -106,3 +106,26 @@ func TestWearAddsOnlyWhileThePowerReadsOn(t *testing.T) {
 		t.Fatalf("lit for a minute the hours are %v, want 10.0167", got)
 	}
 }
+
+// The NVP room surface reads the device's own input and scene, and a command
+// reports the change it made for the engine to apply: the surface writes
+// nothing itself.
+func TestNVPRoomReadsTheDevicesStateAndReportsItsChanges(t *testing.T) {
+	f := spectest.NewFake(spec.Spec{Name: "room", State: map[string]any{"status": map[string]any{
+		"video": map[string]any{"input": "dp1"}, "room": map[string]any{"scene": "vc"},
+	}}}, "")
+	room := bind.NVPRoom(f)
+	if r, ok := room.Handle("GET INPUT"); !ok || r.Text != "INPUT dp1" {
+		t.Fatalf("GET INPUT = %+v %v", r, ok)
+	}
+	if r, ok := room.Handle("GET SCENE"); !ok || r.Text != "SCENE vc" {
+		t.Fatalf("GET SCENE = %+v %v", r, ok)
+	}
+	r, ok := room.Handle("SET INPUT usbc")
+	if !ok || r.Text != "INPUT usbc" || len(r.Changes) != 1 || r.Changes[0].Path != "status.video.input" || r.Changes[0].Value != "usbc" {
+		t.Fatalf("SET INPUT usbc = %+v %v", r, ok)
+	}
+	if len(f.Writes) != 0 || spec.String(f, "status.video.input") != "dp1" {
+		t.Fatalf("the surface wrote to the device itself: %+v", f.Writes)
+	}
+}

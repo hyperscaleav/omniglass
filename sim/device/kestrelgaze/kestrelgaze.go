@@ -256,7 +256,7 @@ func routes() []spec.HTTPRoute {
 		httpapi.Control{
 			Match: "POST /api/camera/preset", Summary: "Recall a stored preset", Example: "{\"preset\": 2}\n",
 			Fields: []httpapi.Field{{Path: pathPreset, Name: "preset", Kind: httpapi.Choice, Values: []string{"1", "2", "3"}}},
-			Also: func(written map[string]any) []surface.Change {
+			Also: func(_ spec.Device, written map[string]any) []surface.Change {
 				name, _ := written[pathPreset].(string)
 				n, _ := strconv.ParseInt(name, 10, 64)
 				p := presets[name]
@@ -274,7 +274,7 @@ func routes() []spec.HTTPRoute {
 				{Path: pathTilt, Name: "tilt", Kind: httpapi.Number},
 				{Path: pathMag, Name: "magnification", Kind: httpapi.Number},
 			},
-			Also: func(map[string]any) []surface.Change {
+			Also: func(spec.Device, map[string]any) []surface.Change {
 				return []surface.Change{{Path: pathPreset, Value: 0}, {Path: pathTracking, Value: manual}}
 			},
 			Ack: func(spec.Device) any { return ack{true} },

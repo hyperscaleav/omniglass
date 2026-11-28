@@ -12,8 +12,6 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -42,10 +40,10 @@ func startMeridian(t *testing.T, name string) *Device {
 	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: ip, ProfileName: name, Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: ip, ProfileName: profileOf(t, e, name), Product: name, Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	d := deviceByProfile(t, e, name)
+	d := deviceByProfile(t, e, profileOf(t, e, name))
 	d.StopBehaviors() // hold the readings still between reads
 	return d
 }
@@ -235,18 +233,9 @@ func TestMeridianSwitcherSignalFollowsTheRoutedInput(t *testing.T) {
 	d := startMeridian(t, "meridian-mx-84")
 	tick := func() {
 		t.Helper()
-		d.behaviorMu.Lock()
-		var b *behaviorEntry
-		for i := range d.behaviors {
-			if d.behaviors[i].Name == "signal_follow" {
-				b = &d.behaviors[i]
-			}
-		}
-		d.behaviorMu.Unlock()
-		if b == nil {
+		if !d.TickBehavior("signal_follow") {
 			t.Fatalf("no signal_follow behavior; have %v", d.Behaviors())
 		}
-		d.tickBehavior(b)
 	}
 	routed := fmt.Sprint(d.ReadPath("status.switcher.input"))
 	for _, signal := range []string{"absent", "present"} {
@@ -259,15 +248,12 @@ func TestMeridianSwitcherSignalFollowsTheRoutedInput(t *testing.T) {
 }
 
 // TestMeridianProductsHaveProfiles: each Meridian product in the catalog is
-// simulated by a profile.
+// simulated by a definition (a Go family since #2833).
 func TestMeridianProductsHaveProfiles(t *testing.T) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shippedCatalog(t)
 	for _, name := range []string{"meridian-mx-84", "meridian-xl-1"} {
-		if _, _, ok := store.ForProduct(name); !ok {
-			t.Errorf("no profile simulates %s", name)
+		if _, ok := cat.ForProduct(name); !ok {
+			t.Errorf("nothing simulates %s", name)
 		}
 	}
 }

@@ -97,6 +97,7 @@ func TestCatalogRefusesWhatItCouldNotServeFaithfully(t *testing.T) {
 			s.Ticks = []spec.Tick{{Name: "t", Run: func(spec.Device, spec.TickContext) []surface.Change { return nil }}}
 		}, "no interval"},
 		"a command listed twice":     {func(s *spec.Spec) { s.Commands = append(s.Commands, s.Commands[0]) }, "twice"},
+		"a command under no face":    {func(s *spec.Spec) { s.Commands[0].Face = "nowhere" }, "no line interface"},
 		"commands with no line face": {func(s *spec.Spec) { s.Interfaces = s.Interfaces[:1] }, "no ssh, telnet, tcp or udp interface"},
 	}
 	for name, c := range cases {

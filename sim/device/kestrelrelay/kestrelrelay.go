@@ -243,8 +243,10 @@ func routes() []spec.HTTPRoute {
 		httpapi.Control{
 			Match: "POST /api/content/share", Summary: "Start sharing content from a source", Example: "{\"source\": \"hdmi1\"}\n",
 			Fields: []httpapi.Field{{Path: pathSource, Name: "source", Kind: httpapi.Choice, Values: sources}},
-			Also:   func(map[string]any) []surface.Change { return []surface.Change{{Path: pathSharing, Value: true}} },
-			Ack:    func(spec.Device) any { return ack{true} },
+			Also: func(spec.Device, map[string]any) []surface.Change {
+				return []surface.Change{{Path: pathSharing, Value: true}}
+			},
+			Ack: func(spec.Device) any { return ack{true} },
 		}.Route(),
 		httpapi.Action{
 			Match: "POST /api/content/stop", Summary: "Stop sharing content", Example: "{}",

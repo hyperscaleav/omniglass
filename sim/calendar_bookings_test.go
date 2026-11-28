@@ -159,7 +159,7 @@ func bookingEngineIn(t *testing.T, cal *calendar.Calendar, profileName string, s
 			{System: "sys-101", Site: "hq", Building: "tower", Room: "r101", Label: "Curie"}, {System: "sys-102", Site: "hq", Building: "tower", Room: "r102", Label: "Hopper"}}}}
 	}
 	e.SetWorld(w)
-	snap := DeviceSnapshot{DeviceID: "svc-1", Hostname: "svc-1", LoopbackIP: "127.0.0.1", ProfileName: profileName, Version: 1}
+	snap := DeviceSnapshot{DeviceID: "svc-1", Hostname: "svc-1", LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, profileName), Product: profileName, Version: 1}
 	if placed {
 		snap.SiteCode, snap.Building, snap.Room = "hq", "tower", "r101"
 	}

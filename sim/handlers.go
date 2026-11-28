@@ -107,7 +107,7 @@ func (d *Device) runTick(t spec.Tick, stop <-chan struct{}, done *sync.WaitGroup
 func (d *Device) applyTick(t spec.Tick) {
 	now := d.clock()
 	span, known := behave.BuildingSpan(d.world(), d.calendarSrc(), d.room)
-	c := spec.TickContext{Room: d.roomState(d.room), Now: now, Rand: d.fam.src, Hours: behave.ReadBuildingHours(span, known, now)}
+	c := spec.TickContext{Room: d.roomState(d.room), Now: now, Rand: d.fam.src, Hours: behave.ReadBuildingHours(span, known, now), Bookings: d.bookingsRead}
 	d.writeTick(t, t.Run(goDevice{d}, c))
 	if t.Emit != nil {
 		for _, e := range t.Emit(goDevice{d}, c) {
