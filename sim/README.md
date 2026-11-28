@@ -14,7 +14,7 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 | Path | What it is |
 | --- | --- |
 | `sim/` | The engine: devices, faces per protocol, behavior, faults, state, observation. |
-| `sim/profiles/` | Device profiles as data (`devices/`, `templates/`), embedded into the binary; a `surfaces/` piece two profiles share joins the embed when one is needed. |
+| `sim/profiles/` | The YAML profile store, retiring (#2837): no product ships a profile now; only the editor schema, `coverage.yaml` and an empty `templates/` remain. |
 | `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. `httpapi` has the status document, the `Control` route (choices, numbers, flags and true/false switches), `Element` (a control on one element of a list named by the body), `Action` and `Sections`. |
 | `sim/behave/` | The shared, typed behavior primitives a family composes. |
 | `sim/profile/` | The profile model: parse, validate, resolve includes. |
@@ -38,7 +38,10 @@ It is part of the single Omniglass Go module and binary, not a separate program.
   `make test-lab LAB_RUN=<test>` runs one lab scenario test.
 - `make bench-sim` serves a 1,000-device fleet and reports startup time.
 
-## Writing a device profile
+## Writing a device profile (retiring)
+
+Every shipped product is a [Go device family](#writing-a-go-device-family); write a new device as one. The
+YAML path below remains until the store is retired (#2837), with no profile left as an exemplar.
 
 A profile is one YAML file in `sim/profiles/devices/`, named for the product it simulates. It
 declares the product's identity (`name`, `manufacturer`, `model`, `device_type`), its interfaces
@@ -52,7 +55,7 @@ accounted for in `sim/profiles/coverage.yaml` and checked by the tests.
 
 A family is a package `sim/device/<family>` that exports `func Spec() spec.Spec`: one wire API,
 implemented once, its models the rows of a typed table. `make gen` registers the package; a product
-resolves to a family when one claims it, else to its YAML profile. The worked example is
+resolves to a family when one claims it (every shipped product does). The worked example is
 `sim/device/borealedge`, the Boreal Edge display, with `borealbeam` and `borealcast` beside it.
 
 1. **Record the profile first**, when one exists. On the base branch, play the family's script against
