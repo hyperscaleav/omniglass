@@ -49,6 +49,10 @@ type Field struct {
 type Control struct {
 	Match, Summary, Example string
 	Fields                  []Field
+	// Also derives writes from the values the request set, keyed by state path:
+	// they are made in the same change, after the fields, and only once every
+	// field has been accepted.
+	Also func(d spec.Device, set map[string]any) []surface.Change
 	// Ack is the document answered, read from the device after the writes.
 	Ack func(d spec.Device) any
 	// Indented answers Ack as an indented document, as a GET of the same
@@ -121,6 +125,13 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 	}
 	if len(refused) > 0 {
 		return refusal(refused)
+	}
+	if c.Also != nil {
+		set := make(map[string]any, len(changes))
+		for _, ch := range changes {
+			set[ch.Path] = ch.Value
+		}
+		changes = append(changes, c.Also(d, set)...)
 	}
 	if err := d.WriteMany(changes...); err != nil {
 		return spec.Failure(500, err.Error())
