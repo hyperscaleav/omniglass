@@ -5,6 +5,7 @@ package device
 import (
 	"github.com/hyperscaleav/omniglass/sim/spec"
 
+	fam_bookingservice "github.com/hyperscaleav/omniglass/sim/device/bookingservice"
 	fam_borealbeam "github.com/hyperscaleav/omniglass/sim/device/borealbeam"
 	fam_borealcast "github.com/hyperscaleav/omniglass/sim/device/borealcast"
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
@@ -18,6 +19,7 @@ import (
 // families is every Go device family under sim/device, by directory.
 func families() []spec.Spec {
 	return []spec.Spec{
+		fam_bookingservice.Spec(),
 		fam_borealbeam.Spec(),
 		fam_borealcast.Spec(),
 		fam_borealedge.Spec(),

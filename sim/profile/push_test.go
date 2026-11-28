@@ -45,19 +45,3 @@ func TestPushFaceLoadsAndIsValidated(t *testing.T) {
 		}
 	}
 }
-
-// The shipped booking service is a push face: it pushes on a cadence and
-// declares no webhook, which is a different face.
-func TestTheShippedBookingServiceHasAPushFace(t *testing.T) {
-	store, err := LoadStore(findProfilesRoot(t))
-	if err != nil {
-		t.Fatalf("LoadStore: %v", err)
-	}
-	p, ok := store.Devices["booking-service"]
-	if !ok {
-		t.Fatal("no booking-service profile")
-	}
-	if p.Push == nil || p.Webhook != nil || p.DeviceType != "cloud-service" {
-		t.Errorf("booking-service: push %+v webhook %+v type %s, want a cloud service with a push face and no webhook", p.Push, p.Webhook, p.DeviceType)
-	}
-}

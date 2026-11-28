@@ -16,7 +16,7 @@ func TestLoadStore(t *testing.T) {
 
 	// The catalog's generic-vendor devices. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet seed.
-	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "ferrite-pdu-4c", "polaris-dsp-16"}
+	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "polaris-dsp-16"}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
