@@ -27,3 +27,11 @@ func TestOIDConstructorsReturnTheirKindsGoType(t *testing.T) {
 		t.Error("ticks")
 	}
 }
+
+func TestEncodedRendersAValueAsItsJSONForm(t *testing.T) {
+	for in, want := range map[any]string{"decreased": `"decreased"`, 4: "4", true: "true", nil: "null", 2.5: "2.5"} {
+		if got := Encoded(in); got != want {
+			t.Errorf("Encoded(%v) = %s, want %s", in, got, want)
+		}
+	}
+}

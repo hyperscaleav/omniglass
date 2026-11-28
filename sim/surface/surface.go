@@ -73,6 +73,19 @@ func Raw(v any) string {
 	return string(b)
 }
 
+// Encoded renders a pushed value as its JSON form, a string quoted: what a line
+// protocol prints for a value it types.
+func Encoded(v any) string {
+	if v == nil {
+		return "null"
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 // Response is an HTTP answer.
 type Response struct {
 	Status      int
