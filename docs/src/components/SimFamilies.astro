@@ -1,0 +1,33 @@
+---
+// The simulator's families and their models, rendered from the generated facts
+// (docs/src/generated/simulation.json, written by make gen via cmd/simgen from
+// the typed family specs and their model tables). The simulation page used to
+// hold these tables by hand, so a family added or a model row added left them
+// stale with nothing failing; this renders what the code holds.
+//
+// Usage: <SimFamilies /> for every family. Each row is one package under
+// sim/device: what it serves, the faces it answers on, and the rows of its
+// model table with the driver that collects each product.
+import facts from '../generated/simulation.json';
+
+const faces = (f: (typeof facts.families)[number]) =>
+  f.interfaces.map((i) => `${i.protocol}${i.port ? ' ' + i.port : ''}${i.tls ? ' (tls)' : ''}`).join(', ');
+---
+
+<table class="sim-families">
+  <thead><tr><th>Package</th><th>Serves</th><th>Faces</th><th>Models</th></tr></thead>
+  <tbody>
+    {facts.families.map((f) => (
+      <tr>
+        <td><code>{f.package}</code></td>
+        <td>{f.summary}</td>
+        <td>{faces(f) || 'none (it reports by pushing)'}</td>
+        <td>
+          {f.models.map((m, i) => (
+            <>{i > 0 && ', '}<code>{m.product}</code>{m.driver ? ` (${m.driver})` : ''}</>
+          ))}
+        </td>
+      </tr>
+    ))}
+  </tbody>
+</table>

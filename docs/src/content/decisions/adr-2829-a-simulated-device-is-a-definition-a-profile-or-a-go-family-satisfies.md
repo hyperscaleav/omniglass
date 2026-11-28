@@ -2,7 +2,7 @@
 title: "A simulated device is a definition that a YAML profile or a Go family satisfies"
 date: 2026-11-27
 status: Accepted
-summary: "Every consumer of the simulator catalog reads one Definition interface; a Go family (one package per wire API, models as a typed table, handlers as Go funcs) and a YAML profile both satisfy it, and a product resolves to a family when one claims it, else to its YAML profile. The list of families is generated."
+summary: "Every consumer of the simulator catalog reads one Definition interface; a Go family (one package per wire API, models as a typed table, handlers as Go funcs) satisfied it beside the YAML profiles while the simulator migrated, and is the only thing that does now (#2837). The list of families is generated."
 refs: [2829, 2826]
 ---
 
@@ -27,3 +27,14 @@ refs: [2829, 2826]
   `Spec.Elapsed`, not the YAML `profile.Computed` it first reused; `Definition.ElapsedList` replaces
   `ComputedList`, and a YAML profile's `computed:` block is presented through the same list. The value
   read, and so every wire transcript, is unchanged.
+- **Amended (#2837):** the strangler ended. The last YAML profile was deleted with #2836, and #2837 deleted
+  what only profiles used: the YAML store and its loader, `schema.json`, the surface fragments and the
+  response and behavior templates, the `spec.FromProfile` adapter and `Kind` (a definition has no second
+  kind to name), `Definition.BehaviorList` and `Spec.Behaviors`, the engine's template routes, commands and
+  behaviors, and the `Native` workaround fields (a family's listing is built from its own typed
+  declarations, `wire.Route.Sets` and `wire.Interface.OIDs`). `sim/profile`, a package of what a family
+  still composes, is `sim/wire`. `spec.NewCatalog` takes the families alone, and a guard test fails the
+  build if a YAML profile or a behavior template reappears. A product resolves to the family that claims
+  it; there is no fallback to resolve to. The coverage accounting moved from `coverage.yaml` to Go
+  (`sim/device/coverage.go`), and the simulation page's family and coverage tables are generated from the
+  specs (`cmd/simgen`).

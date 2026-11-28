@@ -72,8 +72,9 @@ fixes it the same way. The conflicts that remain are real: two PRs adding a row 
 spot of one list conflict in the YAML and the derived file alike: resolve the YAML by hand and let
 the regeneration settle the derived file.
 
-`sim/simfleet/plan.go` and `sim/profiles/coverage.yaml` are not derived: no generator
-writes them, so they are edited and merged like any source.
+`sim/simfleet/plan.go` and `sim/device/coverage.go` are not derived: no generator
+writes them, so they are edited and merged like any source (the simulation page's coverage table is
+rendered from the second).
 
 ## A name is the address, a uuid is identity
 
