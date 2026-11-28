@@ -202,6 +202,9 @@ func wireDevice(t *testing.T, fam wireFamily, product string) *Device {
 	}
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
+	// A behavior that ticks as the device starts reads the world's clock, which
+	// is the transcript's, so what it writes at start repeats on any day.
+	e.SetClock(Clock{Offset: wireClock.Sub(time.Now())})
 	id := "wire-" + product
 	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: r.Definition.ID(), Product: product, Version: 1}
 	if err := e.Sync([]DeviceSnapshot{snap}); err != nil {
