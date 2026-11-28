@@ -8,7 +8,7 @@ refs: [2835, 2832, 2826]
 
 - **Date:** 2026-11-28 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/)
 - **Decision:** The Polaris DSP family (#2835) keeps the wire of the YAML profile it replaced, proven by the
-  transcripts the profile recorded ([ADR-2832](/architecture/decisions/#adr-2832-a-go-family-keeps-a-profiles-wire-byte-for-byte-and-corrects-only-the-profiles-accidents)),
+  transcripts the profile recorded ([ADR-2832](/architecture/decisions/#adr-2832-a-go-family-keeps-its-profiles-wire-byte-for-byte-and-corrects-only-the-profiles-accidents)),
   and corrects the accidents of its templates, each listed as a `Quirk` step in the audio wire script. The
   channel routes (`POST /api/channels/mute`, `POST /api/channels/gain`) took `status.channels.<index>.<field>`
   from the body: an `index` with a decimal point (`1.5`, `"2.5"`) wrote a key that is no channel, nested inside
