@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"sync"
 	"time"
 
@@ -130,7 +129,7 @@ func (d *Device) writeTick(t spec.Tick, changes []surface.Change) {
 		if _, over := held[ch.Path]; over {
 			continue
 		}
-		if reflect.DeepEqual(lookupStatePath(d.state, ch.Path), ch.Value) {
+		if sameValue(lookupStatePath(d.state, ch.Path), ch.Value) {
 			continue
 		}
 		if err := SetPath(d.state, ch.Path, ch.Value); err != nil {
