@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed devices/*.yaml devices/schema.json coverage.yaml all:templates
+//go:embed devices/schema.json coverage.yaml all:templates
 var FS embed.FS
 
 // Templates is the catalog's templates tree, rooted so profile template

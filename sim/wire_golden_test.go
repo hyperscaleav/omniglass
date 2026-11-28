@@ -106,6 +106,10 @@ type wireTranscript struct {
 	// device lists (see wire_lines_test.go).
 	Lines []wireLineResult `json:"lines,omitempty"`
 	Help  []string         `json:"help,omitempty"`
+	// The line-protocol half (wire_shell_test.go).
+	Faces    []wireFace          `json:"faces,omitempty"`
+	Sessions []wireSessionResult `json:"sessions,omitempty"`
+	Echo     []wireEcho          `json:"echo,omitempty"`
 }
 
 // defaultWireDir is where a family's goldens live unless it says otherwise.
@@ -160,6 +164,13 @@ type wireFamily struct {
 	// for a difference that is not a response body (a log line the profile
 	// wrote wrongly, in a room day). Nil compares the transcript as recorded.
 	Diverges func(t *testing.T, product string, golden wireTranscript) wireTranscript
+	// Faces records the interfaces the family declares; Sessions are scripts
+	// played over its persistent line faces, Echo the UDP echo faces answered
+	// a datagram (wire_shell_test.go). All three are empty for a family that
+	// serves HTTP and SNMP alone.
+	Faces    bool
+	Sessions []wireSession
+	Echo     []string
 }
 
 func (f wireFamily) dir() string {
@@ -547,6 +558,7 @@ func collectWire(t *testing.T, fam wireFamily, product string) wireTranscript {
 			tr.Extra[k] = b
 		}
 	}
+	collectWireShells(t, fam, product, &tr)
 	return tr
 }
 
@@ -628,7 +640,7 @@ func diffWire(t *testing.T, fam wireFamily, product string, got, want wireTransc
 			add("%s: the %s room day differs from the recorded one:\n got %v\nwant %v", product, key, firstChanges(got.RoomDays[key]), firstChanges(want.RoomDays[key]))
 		}
 	}
-	return out
+	return append(out, diffWireShells(product, got, want)...)
 }
 
 // replayWire holds one product of a family to its golden transcript.

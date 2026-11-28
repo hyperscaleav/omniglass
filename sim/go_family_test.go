@@ -53,7 +53,7 @@ func deviceNamed(t *testing.T, e *Engine, id string) *Device {
 // engine answers as it always did.
 func TestGoFamilyServesItsModelTableBesideYAMLProfiles(t *testing.T) {
 	e := familyEngine(t, spectest.Spec())
-	snaps := []DeviceSnapshot{dspSnapshot("dsp-a", "127.88.20.1")}
+	snaps := []DeviceSnapshot{{DeviceID: "dsp-a", Hostname: "dsp-a", LoopbackIP: "127.88.20.1", ProfileName: "generic-device", Version: 1}}
 	for i, r := range spectest.Rows {
 		snaps = append(snaps, familySnap("tf-"+r.Product, "127.88.20."+string(rune('2'+i)), r.Product))
 	}
@@ -81,9 +81,9 @@ func TestGoFamilyServesItsModelTableBesideYAMLProfiles(t *testing.T) {
 		}
 	}
 
-	dsp := deviceNamed(t, e, "dsp-a")
-	if code, body := dspDo(t, "GET", dspURL(t, dsp, "/api/status"), ""); code != 200 {
-		t.Fatalf("the YAML device did not answer beside the family: %d %s", code, body)
+	yaml := deviceNamed(t, e, "dsp-a")
+	if got := beamSNMP(t, yaml, "1.3.6.1.2.1.1.1.0")["1.3.6.1.2.1.1.1.0"]; got != "Generic SNMP Device" {
+		t.Fatalf("the YAML device did not answer beside the family: sysDescr = %q", got)
 	}
 }
 

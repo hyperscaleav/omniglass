@@ -199,27 +199,6 @@ func driverProfile(t *testing.T, store *profile.Store, driver string) string {
 	return names[0]
 }
 
-// xmlProfile is the simulator profile whose http face serves its status as
-// namespaced XML (GET /api/status.xml) beside an HTML dashboard.
-func xmlProfile(t *testing.T, store *profile.Store) string {
-	t.Helper()
-	var names []string
-	for name, d := range store.Devices {
-		for _, iface := range d.Interfaces {
-			for _, r := range iface.Routes {
-				if iface.Protocol == "http" && r.Match == "GET /api/status.xml" {
-					names = append(names, name)
-				}
-			}
-		}
-	}
-	if len(names) == 0 {
-		t.Fatal("no simulator profile serves GET /api/status.xml")
-	}
-	sort.Strings(names)
-	return names[0]
-}
-
 // commandStatus is the latest command of a type's recorded status.
 func (s *httpStack) commandStatus(typ string) string {
 	s.t.Helper()
@@ -387,16 +366,10 @@ func TestOutpostHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
+	// The DSP's family serves the namespaced XML beside an HTML dashboard; a
+	// copy of it under another name logs in another way.
 	variant := func(store *profile.Store, name string, auth profile.Auth) {
-		base := *store.Devices[xmlProfile(t, store)]
-		base.Name = name
-		base.Interfaces = append([]profile.Interface(nil), base.Interfaces...)
-		for i := range base.Interfaces {
-			if base.Interfaces[i].Protocol == "http" {
-				base.Interfaces[i].Auth = auth
-			}
-		}
-		store.Devices[name] = &base
+		familyLoginVariant(store, "polaris-dsp", name, auth)
 	}
 	var sensorProfile string
 	s := newHTTPStack(t, "edge-http", func(store *profile.Store) {

@@ -22,9 +22,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 const runPortShift = 23000
@@ -34,10 +33,7 @@ const runPortShift = 23000
 // port. Derived rather than named, so the test follows the catalogs.
 func simulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn) (string, int) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	rows, err := conn.Query(ctx, `select name from product`)
 	if err != nil {
 		t.Fatal(err)
@@ -53,15 +49,15 @@ func simulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn) (string
 	rows.Close()
 	sort.Strings(names)
 	for _, n := range names {
-		if p, ok := store.Devices[n]; ok {
-			for _, iface := range p.Interfaces {
+		if r, ok := cat.ForProduct(n); ok {
+			for _, iface := range r.Definition.Surfaces() {
 				if iface.Protocol == "http" && !iface.TLS {
 					return n, iface.Port
 				}
 			}
 		}
 	}
-	t.Fatal("no seeded product has a simulator profile with plain HTTP")
+	t.Fatal("no seeded product has a simulator definition with plain HTTP")
 	return "", 0
 }
 

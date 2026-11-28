@@ -29,6 +29,9 @@ func TestDeviceWebTemplates_NoBareAbsoluteAPICalls(t *testing.T) {
 	root := webTemplatesRoot(t)
 
 	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		t.Skip("no YAML web template remains: every page is a family's own (#2837 deletes this check)")
+	}
 	if err != nil {
 		t.Fatalf("read web templates dir: %v", err)
 	}

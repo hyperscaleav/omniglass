@@ -23,6 +23,11 @@ const (
 	Number
 	// Flag is a boolean: true or false, or the text "true" or "false".
 	Flag
+	// Switch is a flag a profile declared with the enum [true, false]: written
+	// as a boolean, and a value that is neither true nor false (text or not)
+	// is refused with the validation document that names the enum, as a
+	// Choice is, where a Flag answers a one-line error.
+	Switch
 	// Text is a string written as sent, whatever it says, the typed form of a
 	// route's mutation that lists no values; a Pattern refuses what does not
 	// match. A body field that is not a string is refused.
@@ -71,6 +76,8 @@ func (c Control) Route() spec.HTTPRoute {
 		switch f.Kind {
 		case Choice:
 			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), f.Values...)})
+		case Switch:
+			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), switchValues...)})
 		case Text:
 			if f.Pattern != "" {
 				c.patterns[f.Name] = regexp.MustCompile(f.Pattern)
@@ -109,6 +116,13 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 			b, ok := asFlag(raw)
 			if !ok {
 				return badField(f, "true or false")
+			}
+			changes = append(changes, surface.Change{Path: f.Path, Value: b})
+		case Switch:
+			b, ok := asFlag(FieldText(raw))
+			if !ok {
+				refused = append(refused, Invalid{Path: f.Path, Value: FieldText(raw), Enum: switchValues})
+				continue
 			}
 			changes = append(changes, surface.Change{Path: f.Path, Value: b})
 		case Text:
@@ -269,6 +283,9 @@ func asFlag(v any) (bool, bool) {
 	}
 	return false, false
 }
+
+// switchValues are the two values a Switch takes.
+var switchValues = []string{"true", "false"}
 
 func contains(list []string, s string) bool {
 	for _, v := range list {

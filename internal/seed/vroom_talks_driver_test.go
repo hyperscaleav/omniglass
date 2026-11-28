@@ -313,7 +313,7 @@ func TestKestrelAPIListenersLandParticipantsAndLogLines(t *testing.T) {
 func TestPolarisDSPSNMPReadsTheDSPsLoadAndIdentity(t *testing.T) {
 	cat := loadShippedCatalog(t)
 	e := shipped.Engine(t)
-	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "dsp", Hostname: "hq-conf-1-dsp-1", LoopbackIP: "127.60.0.10", ProfileName: "polaris-dsp-16", Version: 1}}); err != nil {
+	if err := e.LoadDevices([]sim.DeviceSnapshot{{DeviceID: "dsp", Hostname: "hq-conf-1-dsp-1", LoopbackIP: "127.60.0.10", ProfileName: "polaris-dsp", Product: "polaris-dsp-16", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]
@@ -322,16 +322,11 @@ func TestPolarisDSPSNMPReadsTheDSPsLoadAndIdentity(t *testing.T) {
 	answer := func(oids []string) driver.Payload {
 		vals := map[string]string{}
 		for _, oid := range oids {
-			path, ok := d.OIDMap[oid]
-			if !ok {
-				t.Fatalf("the DSP's agent serves no %s", oid)
+			res := d.Operate(sim.Operation{Kind: "snmp", OID: oid})
+			if res.Error != "" {
+				t.Fatalf("the DSP's agent serves no %s: %s", oid, res.Error)
 			}
-			v := d.ReadPath(path)
-			if f, ok := asFloat(v); ok {
-				vals[oid] = fmt.Sprint(int64(f))
-			} else {
-				vals[oid] = fmt.Sprint(v)
-			}
+			vals[oid] = res.Body
 		}
 		return driver.Payload{Values: vals}
 	}

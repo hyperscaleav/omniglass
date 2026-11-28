@@ -16,7 +16,8 @@ func TestLoadStore(t *testing.T) {
 
 	// The catalog's generic-vendor devices. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet seed.
-	expectedDevices := []string{"lyra-hx-1", "polaris-dsp-16"}
+	// Every shipped profile is a Go family now; #2837 deletes this test with the store.
+	expectedDevices := []string{}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
@@ -44,9 +45,7 @@ func TestRebootMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		device   string
 		httpPath string
 		cliVerb  string // empty means HTTP-only profile
-	}{
-		{"polaris-dsp-16", "POST /api/admin/reboot", "system reboot"},
-	}
+	}{}
 
 	for _, c := range cases {
 		t.Run(c.device, func(t *testing.T) {
@@ -108,9 +107,7 @@ func TestFactoryResetMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		device   string
 		httpPath string
 		cliVerb  string
-	}{
-		{"polaris-dsp-16", "POST /api/admin/factory-reset", "system factory-reset"},
-	}
+	}{}
 
 	for _, c := range cases {
 		t.Run(c.device, func(t *testing.T) {

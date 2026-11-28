@@ -117,7 +117,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	if n := len(e.Devices()); n < 2 {
 		t.Fatalf("fleet served %d devices, want the whole fleet", n)
 	}
-	dsp := deviceByProfile(t, e, "polaris-dsp-16")
+	dsp := deviceByProfile(t, e, "polaris-dsp")
 	ip := dsp.LoopbackIP.String()
 
 	var hitsMu sync.Mutex

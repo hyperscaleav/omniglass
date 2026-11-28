@@ -15,7 +15,7 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 | --- | --- |
 | `sim/` | The engine: devices, faces per protocol, behavior, faults, state, observation. |
 | `sim/profiles/` | Device profiles as data (`devices/`, `templates/`), embedded into the binary; a `surfaces/` piece two profiles share joins the embed when one is needed. |
-| `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. |
+| `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. `httpapi` has the status document, the `Control` route (choices, numbers, flags and true/false switches), `Element` (a control on one element of a list named by the body), `Action` and `Sections`. |
 | `sim/behave/` | The shared, typed behavior primitives a family composes. |
 | `sim/profile/` | The profile model: parse, validate, resolve includes. |
 | `sim/spec/` | What defines a device either way: the `Definition` every consumer reads, the Go family `Spec`, and the `Catalog` that resolves a product. |

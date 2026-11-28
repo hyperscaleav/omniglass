@@ -159,7 +159,7 @@ func compileSessionSubject(s *profile.Subject) (*sessionSubject, error) {
 		return nil, fmt.Errorf("subject: match is required")
 	}
 	out := &sessionSubject{def: s}
-	if s.Push == nil {
+	if s.Push == nil && s.PushLine == nil {
 		if s.PushFormat == "" {
 			return nil, fmt.Errorf("subject %q: push_format is required", s.Match)
 		}
@@ -615,6 +615,9 @@ func (s *Session) emit(line []byte, sub *Subscription, value any) {
 }
 
 func (s *Session) renderPush(sub *Subscription, value any) ([]byte, error) {
+	if fn := sub.def.def.PushLine; fn != nil {
+		return []byte(s.registry.cfg.WrapOutbound(fn(sub.subject, sub.token, value))), nil
+	}
 	if fn := sub.def.def.Push; fn != nil {
 		return []byte(s.registry.cfg.WrapOutbound(fn(value))), nil
 	}

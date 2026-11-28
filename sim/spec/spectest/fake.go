@@ -109,14 +109,19 @@ func look(root map[string]any, path string) any {
 	return cur
 }
 
-// set writes a path, a list element by its index, making the maps it lacks.
+// set writes a path, a list element by its index; a map along the way that is
+// not there is made, a list element that is not there is left alone.
 func set(root map[string]any, path string, v any) {
 	segs := strings.Split(path, ".")
 	var cur any = root
 	for _, seg := range segs[:len(segs)-1] {
 		switch c := cur.(type) {
 		case map[string]any:
-			next, ok := c[seg]
+			next, ok := c[seg].(map[string]any)
+			if _, isList := c[seg].([]any); isList {
+				cur = c[seg]
+				continue
+			}
 			if !ok {
 				next = map[string]any{}
 				c[seg] = next
@@ -128,6 +133,8 @@ func set(root map[string]any, path string, v any) {
 				return
 			}
 			cur = c[i]
+		default:
+			return
 		}
 	}
 	last := segs[len(segs)-1]
@@ -155,8 +162,8 @@ func cloneValue(v any) any {
 		return clone(x)
 	case []any:
 		out := make([]any, len(x))
-		for i, e := range x {
-			out[i] = cloneValue(e)
+		for i := range x {
+			out[i] = cloneValue(x[i])
 		}
 		return out
 	}

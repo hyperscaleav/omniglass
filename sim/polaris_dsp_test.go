@@ -29,10 +29,10 @@ func startDSP(t *testing.T) *Device {
 	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: "dsp-1", Hostname: "dsp-1", LoopbackIP: ip, ProfileName: "polaris-dsp-16", Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "dsp-1", Hostname: "dsp-1", LoopbackIP: ip, ProfileName: "polaris-dsp", Product: "polaris-dsp-16", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	return deviceByProfile(t, e, "polaris-dsp-16")
+	return deviceByProfile(t, e, "polaris-dsp")
 }
 
 func dspPostRaw(t *testing.T, d *Device, path, body string) int {
@@ -118,25 +118,14 @@ func TestPolarisDSPOutputLevelDrifts(t *testing.T) {
 	d.StopBehaviors()
 	var diffs map[string]any
 	d.DiffPublisher = func(c StateChange) { diffs = c.Diffs }
-	d.behaviorMu.Lock()
-	entries := append([]behaviorEntry(nil), d.behaviors...)
-	d.behaviorMu.Unlock()
-	found := false
-	for _, b := range entries {
-		if b.Name != "output_level_drift" {
-			continue
+	// A random step can land on the value it started from; a few ticks move it.
+	for i := 0; i < 20; i++ {
+		if !d.TickBehavior("output_level_drift") {
+			t.Fatalf("no output_level_drift behavior; have %v", d.Behaviors())
 		}
-		found = true
-		// A random step can land on the value it started from; a few ticks move it.
-		for i := 0; i < 20; i++ {
-			d.tickBehavior(&b)
-			if _, ok := diffs["status.output.level_db"]; ok {
-				break
-			}
+		if _, ok := diffs["status.output.level_db"]; ok {
+			break
 		}
-	}
-	if !found {
-		t.Fatalf("no output_level_drift behavior; have %v", d.Behaviors())
 	}
 	if _, ok := diffs["status.output.level_db"]; !ok {
 		t.Errorf("output_level_drift wrote no status.output.level_db (diffs %v)", diffs)
