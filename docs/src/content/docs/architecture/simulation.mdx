@@ -124,8 +124,8 @@ one JSON route, one control, SNMP uptime and one tick.
 
 3. **Register and test.** `make gen` adds the package to the generated list of families and to the docs table above.
    `spectest.Conform(t, Spec())` runs over every row, and the family's own tests drive a handler against
-   a `spectest.NewFake`. A wire test (`sim/wire_family_test.go` is the smallest) records the family's
-   answers once and holds them from then on.
+   a `spectest.NewFake`. A capture of the real device can be held to the family through the wire replay
+   seam (`sim/wire_replay_test.go`, below).
 
 4. **Account for it.** A seeded product on the network that no family serves is listed in
    `sim/device/coverage.go` with its issue; a product served by a family is dropped from that list.
@@ -165,21 +165,26 @@ It names only fictional vendors, as the boot seed does, and a test refuses a rea
 
 The simulator began as YAML device profiles and response templates, and moved to Go families one wire API
 at a time (#2826, [ADR-2829](/architecture/decisions/#adr-2829-a-simulated-device-is-a-definition-that-a-yaml-profile-or-a-go-family-satisfies)).
-**Parity with the profile was proven, not argued.** Before each profile was deleted a recorder played one
-script against it (every route valid and refused, SNMP gets and walks, the drift its seeded source draws, a
-pinned room day with and without a calendar, each line protocol's conversation and every event and post) and
-its transcript was committed beside the tests (`sim/testdata/wire`). The family's parity test replayed the
-script and held the status, headers, bytes and state of every answer, the SNMP types and values, and every
-behavior's sequence to the recording. The families keep the profile's wire byte for byte and correct only
-its accidents, each correction an ADR
+**Parity with the profile was proven, then the proof was retired.** Before each profile was deleted a recorder
+played one script against it (every route valid and refused, SNMP gets and walks, the drift its seeded source
+draws, a pinned room day with and without a calendar, each line protocol's conversation and every event and post)
+and the family was held to the transcript: status, headers, bytes and state of every answer, SNMP types and values,
+and every behavior's sequence. The families kept the profile's wire byte for byte and corrected only its accidents,
+each correction an ADR
 ([ADR-2832](/architecture/decisions/#adr-2832-a-go-family-keeps-its-profiles-wire-byte-for-byte-and-corrects-only-the-profiles-accidents),
 [ADR-2834](/architecture/decisions/#adr-2834-a-go-family-reports-its-profiles-named-events-on-the-live-feed-and-corrects-only-the-profiles-malformed-words),
 [ADR-2835](/architecture/decisions/#adr-2835-a-mixer-channel-the-profile-addressed-by-accident-is-refused),
 [ADR-2836](/architecture/decisions/#adr-2836-the-census-the-pdu-and-the-cloud-services-are-families-of-one-named-for-their-product-and-the-profiles-template-accidents-are-refused-plainly)).
-The recordings stay as frozen transcripts: a family is held to what its profile said, and is never
-re-recorded from itself. When the last profile went (#2837) the YAML store, its schema, the loader, the
-surface fragments and every response and behavior template went with it, and a guard test fails the build if
-one comes back.
+When the last profile went (#2837) the YAML store, its schema, the loader, the surface fragments and every
+response and behavior template went with it, and a guard test fails the build if one comes back. The recorded
+goldens, the recorder and the parity hooks (`Frozen`, `Quirk`, `Diverges`) went too: with no YAML left to compare
+against, they proved nothing a family's own tests do not.
+
+What stays is the **replay seam** (`sim/wire_replay_test.go`): a transcript is JSON for one product, the requests
+of a script with each one's status, headers, body, whether it moved state, the named events it published and
+optionally the state after, and `replayWire` plays it against a Go family and reports every difference by step.
+It is where a capture from a real device plugs in: write the capture as a transcript, name the family, replay.
+`sim/wire_replay_seam_test.go` proves the seam against `borealedge` and that an altered expectation fails.
 
 What the conversions settled is written once, for the next family:
 
@@ -188,8 +193,7 @@ What the conversions settled is written once, for the next family:
   does not advertise is `Private`. A control route can **write the changes a field implies** beside it
   (`httpapi.Control.Also`), and a document that kept a template's comment lines keeps them
   (`httpapi.Annotated`), because a collector reads the bytes.
-- A line protocol is held by the same recordings as an HTTP one (each line sent on the device's own face, its
-  reply and the pushes it draws); a command is listed under the face that serves it (`Command.Face`); a
+- A command is listed under the face that serves it (`Command.Face`); a
   control route may take free text held to a pattern (`httpapi.Text`); a tick reads its room's booked meetings
   (`TickContext.ReadBookings`). A push line is a Go func of the subject, the token and the value
   (`wire.Subject.PushLine`).
@@ -755,7 +759,7 @@ calendar is read only by the few readers that say so.
 
 Each primitive has a table test over the pinned room day of the calendar's own phase tests (a booked meeting, a
 walk-in, a back-to-back pair, a meeting that shares, a no-show, a scripted impairment, and a room with no calendar),
-and a **parity test** that drove the profile it replaced through the engine on a pinned clock, a tick at a time over that
+and a **parity test** (`sim/behave_parity_test.go`) that drives the family through the engine on a pinned clock, a tick at a time over that
 day, runs the primitive from the typed state the device holds with a twin of its random source, and compares every
 path the primitive owns. The two cannot drift apart unseen: a tick that draws a different number of times fails the
 next comparison.

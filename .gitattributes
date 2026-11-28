@@ -16,7 +16,3 @@ docs/src/content/docs/reference/cli/index.md linguist-generated=true
 docs/src/content/docs/reference/mcp/index.md linguist-generated=true
 docs/src/content/docs/architecture/data-model.md linguist-generated=true
 docs/public/d2/** linguist-generated=true
-# Golden wire transcripts (#2826): machine-recorded proof, read by the replay tests,
-# not by people. Diffs show them as changed without their content, so a review
-# prompt holds the code, not 5 MB of JSON.
-sim/testdata/wire/*.json -diff linguist-generated=true

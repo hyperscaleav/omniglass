@@ -47,13 +47,10 @@ simulation page's family table (`docs/src/generated/simulation.json`, by `cmd/si
 `sim/device/borealedge`, the Boreal Edge display, with `borealbeam` and `borealcast` beside it, and the
 [simulation page](../docs/src/content/docs/architecture/simulation.mdx) walks a new device from table to test.
 
-1. **Record what it answers.** A family's script is one `wireFamily` value (its products, requests, SNMP
-   reads, drifting behaviors and room day) in a `sim/<family>_wire_test.go`, recorded with one command,
-   `go test ./sim -run 'TestRecordWire$' -wire.family=<name>`; see
-   [sim/testdata/wire/README.md](testdata/wire/README.md). Add its replay, `replayWire(t, family, product)`:
-   same status, headers, bytes, state, SNMP types and values, drift sequences and room-day behavior
-   (`sim/wire_family_test.go` is the smallest worked example). The families that replaced a YAML profile
-   are `Frozen`: their transcripts were recorded from the profile and are never re-recorded from the family.
+1. **Know what it answers.** Read the real device's manual, or a capture of it, and write down the
+   routes, statuses, headers and bytes it answers before writing the family. A capture can be held to the
+   family afterward: the wire replay seam in `sim/wire_replay_test.go` plays a transcript's requests
+   against a family and reports every difference (see "The wire replay seam" below).
 2. **The model table.** A typed `Row` (`Product`, `Diagonal`, `Resolution`, and whatever else the
    models differ by) written once, wrapped with `spec.Table`, each row's `Model`, `Summary` and `State`
    overlay saying what the product reports of itself. Five sizes are five rows, never five packages;
@@ -72,7 +69,7 @@ simulation page's family table (`docs/src/generated/simulation.json`, by `cmd/si
    second family will want it.
 6. **Tests.** `spectest.Conform(t, Spec())` over the whole table, then the family's own: a
    `spectest.NewFake` stands in for the device, so a handler, a surface and a tick are unit tests with
-   no engine. The engine-level proof is the wire replay above. A test outside package `sim` that needs an
+   no engine. The engine-level proof is the family's own behavior tests and the driver contract test. A test outside package `sim` that needs an
    engine takes `shipped.Engine(t)` (or `shipped.Catalog(t)`) from `sim/simtest/shipped`, and inside
    package `sim` `shippedEngine(t)`: both serve every family, and take a family of the test's own beside them.
 7. **Account for it.** The seeded products on the network that no family serves are listed in
@@ -83,11 +80,6 @@ simulation page's family table (`docs/src/generated/simulation.json`, by `cmd/si
 
 Written once here, so the next family repeats no workaround.
 
-- **Quirk steps last.** A request the YAML profile (before its deletion) answered with an accident of its templates (an
-  unquoted word written into a JSON document, `<no value>` written to state) is marked `Quirk` in the
-  script: the family refuses it with a 400 that changes nothing, and the replay checks that
-  divergence, not the bytes. Such a request leaves state behind in the recording, which would carry
-  into every step after it, so the quirk steps go at the end of the script.
 - **`httpapi.Control` refuses an unreadable body.** A body that was sent but is not a JSON object
   (text, an array, `null`, a truncated document) is a 400 `{"error":"the request body is not a JSON
   object"}` and writes nothing, as a field outside its list or of the wrong type already is. An empty
@@ -102,21 +94,18 @@ Written once here, so the next family repeats no workaround.
 - **Uptime is `spec.Elapsed`.** Read-derived, with no goroutine and no event.
 - **Named events are published after the writes they follow.** A route calls `d.Publish(spec.Event{Name,
   Data})` after its `WriteMany`; a tick names its events in `Tick.Emit`, which reads the device once the
-  tick's changes are written. The transcripts record them (`events`, `#events`), so they are held byte for
-  byte. A route a web page calls but does not advertise is `Private: true`.
+  tick's changes are written. A route a web page calls but does not advertise is `Private: true`.
 - **A document that kept a template's comment lines keeps them.** `httpapi.Annotated` writes a whitespace-only
   line before a `Noted` key, because a collector reads the bytes; a document with no comment is
   `httpapi.Document`.
-- **A correction to the profile is written down and pinned.** The replay's `Body` and `Diverges` hooks map the
-  recorded transcript to what the family means to say, and fail when the recording no longer holds what they
-  correct; the divergence is an ADR.
+- **A correction to a profile's accident is written down.** Where a family does not repeat what the YAML profile
+  did, the divergence is an ADR (ADR-2832 to ADR-2836 record them); the proof that held the rest byte for byte
+  was retired with the profiles (#2837).
 - **A line command is listed where it is served.** A `spec.Command` names its `Face` (the interface the
   console lists it under) and a family's `Surface` names `ListedOn` for the shared surface's commands (a
   commander that is also a `surface.Described` gives each line its summary; a binary frame is listed as a
   hex command on its own interface). `spectest.Conform` fails a family that answers a typed line no
-  interface lists. A
-  line protocol is recorded in the wire script's `Lines` (each line on the device's TCP face, or a verb
-  direct against its command table), with the pushes each draws and the device's own command list.
+  interface lists.
 - **Free text and derived writes.** A control route that took any string is an `httpapi.Text` field (with a
   `Pattern` when the profile held one); a route that lands a value derived from the request in the same
   change (the signal on the input just routed) is a `Control.Also`. A tick that reads its room's booked
@@ -127,14 +116,24 @@ Written once here, so the next family repeats no workaround.
 - **A service that speaks for rooms reads them through `spec.RoomsOf(d)`**, sends a webhook with
   `spec.Send` (signed as the subscription says) and names a stream event with `spec.Report`; a pusher
   declares `Spec.Push` and a webhook sender `Spec.Webhook`. A paged list declares its names once
-  (`httpapi.Paging`, `Cut`, `PagedDocument`). The wire script's `Extra` hook records what is not HTTP or
-  SNMP: `wireConverse` (a conversation on a line face), `wireStream` (an event stream), `wireRecv` (the
-  posts a device makes, and whether each signature verifies).
+  (`httpapi.Paging`, `Cut`, `PagedDocument`).
 - **Text stays text.** A value the YAML templates coerced (an id of digits into a number) is stored as the
-  string it is, and a field that is not a string is refused; the recording marks such a step `Quirk` or
-  leaves its state out of the comparison (ADR-2836).
+  string it is, and a field that is not a string is refused (ADR-2836).
 
 `sim/spec/spectest` is also a small family used by the engine's tests.
+
+### The wire replay seam
+
+`sim/wire_replay_test.go` holds the one harness kept from the YAML-parity work (#2826). It was the proof that
+each Go family answered byte for byte as the profile it replaced; that proof was retired in #2837, once no YAML
+remained, along with the recorded goldens, the recorder and the `Frozen`, `Quirk` and `Diverges` hooks.
+ADR-2832 to ADR-2836 record what diverged. What stays is the replay: a `wireTranscript` (JSON, one product:
+the requests of a script, each with its status, headers, body, whether state moved, the named events it
+published and optionally the state after) and `replayWire`, which plays the requests against a family and
+reports each difference by step. It is the seam a capture from a real device plugs into: write the capture
+as a transcript under `sim/testdata/wire/<product>.json`, name the family as a `wireFamily`, call
+`replayWire(t, family, product)`. `sim/wire_replay_seam_test.go` proves it works against `borealedge`, and
+that an altered expectation is reported.
 
 ## Where the docs live
 
