@@ -30,7 +30,7 @@ func TestTheVRoomFamilyServesItsFeedAndControlSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := e.Devices()[0]
-	d.StopBehaviors() // hold the readings still
+	d.StopBehaviors()                                                                                                                    // hold the readings still
 	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // the sim's self-signed identity
 	api := "https://" + faceAddr(t, d, "http-api")
 
