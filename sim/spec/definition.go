@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
 // Kind is which way a definition is written.
@@ -179,6 +180,9 @@ func (f *Family) surfaceCommands(iface string) []profile.Command {
 				continue
 			}
 			cmd := profile.Command{Match: line, Native: true}
+			if d, ok := c.(surface.Described); ok {
+				cmd.Doc.Summary = d.Summary(line)
+			}
 			if reply, ok := c.Handle(line); ok {
 				cmd.Action = string(reply.Action)
 			}

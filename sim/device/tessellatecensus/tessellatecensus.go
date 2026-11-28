@@ -139,7 +139,7 @@ func Spec() spec.Spec {
 				// The poll is a binary frame, so the console lists it as hex here;
 				// the control Commander answers it.
 				Commands: []profile.Command{{MatchHex: "AA 01", Native: true,
-					Doc: profile.Doc{Summary: "Hex poll: people_count (request AA 01, response AA 81 <count>)"}}},
+					Doc: profile.Doc{Summary: "Hex poll: people_count (request AA 01 → response AA 81 <count>)"}}},
 			},
 			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
@@ -297,6 +297,17 @@ type control struct{ d spec.Device }
 func (control) Commands() []string {
 	out := []string{"COUNT?", "VACANT?", "SUBSCRIBE COUNT", "SUBSCRIBE VACANT", "SUBSCRIBE EVENT", "UNSUBSCRIBE COUNT", "UNSUBSCRIBE VACANT"}
 	return append(out, hexPoll)
+}
+
+// Summary documents the query lines as the console lists them.
+func (control) Summary(line string) string {
+	switch line {
+	case "COUNT?":
+		return "Query live people count"
+	case "VACANT?":
+		return "Query vacant flag"
+	}
+	return ""
 }
 
 // hexPoll is the binary poll's payload: the magic byte and the opcode.

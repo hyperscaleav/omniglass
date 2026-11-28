@@ -48,6 +48,12 @@ type Commander interface {
 	Handle(line string) (Reply, bool)
 }
 
+// Described is a Commander that documents its lines: Summary is what the
+// console lists beside a line, empty for one it leaves undescribed.
+type Described interface {
+	Summary(line string) string
+}
+
 // Subject is a state path a session may subscribe to, with the line it
 // pushes when the path changes. Push gets the new value.
 type Subject struct {
