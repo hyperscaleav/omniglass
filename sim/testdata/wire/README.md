@@ -32,6 +32,14 @@ and `sim/boreal_parity_test.go` the worked example of a conversion.
    product. It fails with one line per difference (status, headers, bytes, state,
    SNMP, drift, room day).
 
+A family with persistent line faces (SSH, Telnet, raw TCP) or a UDP echo face adds three things to its
+`wireFamily`: `Faces` records each interface it declares (protocol, port, auth, framing, welcome, limits),
+`Sessions` are scripts played over a persistent face through the shell loop the three transports share (each
+step sends lines back to back and may fire an HTTP request while the session listens, so a push is recorded;
+subscribe to one subject at a time, since the order a change to several is pushed in is not fixed), and `Echo`
+names the UDP echo faces to send a datagram to. A step's `Set` puts state paths where a scenario would have
+them before the request, so a route that resets drift shows its effect.
+
 A family replacing a profile sets `Frozen` once the profile is deleted: the
 recorder then refuses it, because recording the family from itself would make
 the hold on the profile vacuous.

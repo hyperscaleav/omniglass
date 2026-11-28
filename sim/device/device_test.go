@@ -13,9 +13,9 @@ func TestCatalogHoldsTheShippedProfilesAndEveryFamily(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, ok := cat.ForProduct("polaris-dsp-16")
+	r, ok := cat.ForProduct("generic-device")
 	if !ok || r.Definition.Kind() != spec.KindYAML {
-		t.Fatalf("polaris-dsp-16 resolved to %+v (ok=%v), want its YAML profile", r, ok)
+		t.Fatalf("generic-device resolved to %+v (ok=%v), want its YAML profile", r, ok)
 	}
 	for _, fam := range Families() {
 		d, ok := cat.Lookup(fam.Name)

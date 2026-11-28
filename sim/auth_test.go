@@ -348,7 +348,7 @@ func TestHTTPAuthFromProfile_CatalogProfiles(t *testing.T) {
 		"boreal-beam":     HTTPAuthDigest,
 		"boreal-cast":     HTTPAuthHeader,
 		"kestrel-vroom":   HTTPAuthBasic,
-		"polaris-dsp-16":  HTTPAuthHeader,
+		"polaris-dsp":     HTTPAuthHeader,
 		"newtron-panel-7": HTTPAuthForm,
 	}
 

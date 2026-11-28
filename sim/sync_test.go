@@ -43,7 +43,7 @@ func device(t *testing.T, e *Engine, id string) *Device {
 }
 
 func dspSnapshot(id, ip string) DeviceSnapshot {
-	return DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: "polaris-dsp-16", Version: 1}
+	return DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: ip, ProfileName: "polaris-dsp", Product: "polaris-dsp-16", Version: 1}
 }
 
 // dspURL is a URL on the DSP's HTTP face, at the address it bound.

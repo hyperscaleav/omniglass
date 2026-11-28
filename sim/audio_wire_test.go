@@ -20,9 +20,9 @@ const (
 	polarisAmpProd = "polaris-amp-4100"
 )
 
-// audioFrozen is the note every audio family carries once its profile is gone;
-// empty while the profiles still stand, so the recorder will run.
-const audioFrozen = ""
+// audioFrozen is the note every audio family carries now its profiles are
+// gone: recording a family from itself would make the hold on them vacuous.
+const audioFrozen = "recorded from the YAML profile before its deletion (#2835); re-recording from the Go family would hold it to itself"
 
 const wireAudioSource = "recorded from the YAML profile before its deletion (#2835); see sim/testdata/wire/README.md"
 

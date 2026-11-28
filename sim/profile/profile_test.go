@@ -16,7 +16,7 @@ func TestLoadStore(t *testing.T) {
 
 	// The catalog's generic-vendor devices. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet seed.
-	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "ferrite-pdu-4c", "polaris-dsp-16"}
+	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "ferrite-pdu-4c", "generic-device"}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
@@ -152,7 +152,6 @@ func TestRebootMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		// interface (HTTP JSON). No CLI verb to cross-check; the reboot
 		// anchor lives entirely on the HTTP route.
 		{"kestrel-vroom", "POST /api/admin/reboot", ""},
-		{"polaris-dsp-16", "POST /api/admin/reboot", "system reboot"},
 		{"newtron-panel-7", "POST /api/admin/reboot", "reboot"},
 	}
 
@@ -219,7 +218,6 @@ func TestFactoryResetMutationsAnchoredAcrossSurfaces(t *testing.T) {
 	}{
 		// kestrel-vroom is HTTP-only now (see reboot test note).
 		{"kestrel-vroom", "POST /api/admin/factory-reset", ""},
-		{"polaris-dsp-16", "POST /api/admin/factory-reset", "system factory-reset"},
 		{"newtron-panel-7", "POST /api/admin/factory-reset", "factory-reset"},
 	}
 
