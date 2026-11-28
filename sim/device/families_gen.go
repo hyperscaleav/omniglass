@@ -14,6 +14,7 @@ import (
 	fam_recordingservice "github.com/hyperscaleav/omniglass/sim/device/recordingservice"
 	fam_schedulingservice "github.com/hyperscaleav/omniglass/sim/device/schedulingservice"
 	fam_tessellatecensus "github.com/hyperscaleav/omniglass/sim/device/tessellatecensus"
+	fam_uccplatform "github.com/hyperscaleav/omniglass/sim/device/uccplatform"
 )
 
 // families is every Go device family under sim/device, by directory.
@@ -28,5 +29,6 @@ func families() []spec.Spec {
 		fam_recordingservice.Spec(),
 		fam_schedulingservice.Spec(),
 		fam_tessellatecensus.Spec(),
+		fam_uccplatform.Spec(),
 	}
 }

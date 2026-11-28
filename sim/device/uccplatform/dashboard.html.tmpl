@@ -15,18 +15,10 @@
 <body>
 <div class="bar"><span class="brand">SHINRA UCC</span> &middot; {{ .Hostname }} &middot; every room on the account</div>
 <main>
-{{- range $id, $r := (.State | get "status" | get "rooms") }}
-  <div class="row"><span class="k">{{ index $r "name" }} ({{ $id }})</span><span>{{ index $r "state" }}</span></div>
+{{- range .Rooms }}
+  <div class="row"><span class="k">{{ .Name }} ({{ .ID }})</span><span>{{ .State }}</span></div>
 {{- end }}
 </main>
-<script>
-  // apiURL() resolves absolute "/api/..." paths against the page's own
-  // path, the convention every device page keeps (read-only today).
-  function apiURL(path) {
-    if (!path.startsWith('/')) return path;
-    const base = location.pathname.replace(/\/$/, '');
-    return base + path;
-  }
-</script>
+<script>{{ .Script }}</script>
 </body>
 </html>
