@@ -1,4 +1,0 @@
-{
-  "last_event": "{{ .State | get "status" | get "occupancy" | get "last_event" }}",
-  "vacant": {{ .State | get "status" | get "occupancy" | get "vacant" }}
-}

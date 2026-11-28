@@ -207,6 +207,12 @@ type TickContext struct {
 	// holds hours for it and whether it is inside them (behave.ReadBuildingHours
 	// over behave.BuildingSpan).
 	Hours behave.HoursReading
+	// Spans are the meetings of the device's room overlapping [from, to), in
+	// start order, as the battery primitive reads them (behave.SpansBetween):
+	// none for a room with no calendar. A read that follows the room's
+	// meetings over a stretch of time, not only at an instant, asks here.
+	Spans func(from, to time.Time) []behave.Span
+
 	// Bookings reads the booked meetings of the device's room (behave.BookingsAt
 	// through the lab calendar), computed on the first call; nil when the engine
 	// supplies none (ReadBookings is the safe way in).
@@ -270,6 +276,15 @@ type Surface struct {
 // surface's typed accessors read and write through d).
 type SurfaceFunc func(d Device) Surface
 
+// PushFace is the face of a device that is an outside actor, not a device on the
+// network: it holds a bearer token, reads the systems its grant names and pushes
+// each one's batch on a cadence (#1743). Body is that batch for one system, JSON,
+// read from the device and its clock.
+type PushFace struct {
+	Every time.Duration
+	Body  func(d Device, owner string) ([]byte, error)
+}
+
 // Handlers is what a family's protocol servers call.
 type Handlers struct {
 	HTTP     []HTTPRoute
@@ -277,6 +292,7 @@ type Handlers struct {
 	Animate  Animator
 	Surface  SurfaceFunc
 	Ticks    []Tick
+	Push     *PushFace
 }
 
 // Spec is a Go device family: one API, its models as a table. A family
@@ -307,6 +323,12 @@ type Spec struct {
 	Surface SurfaceFunc
 	// Elapsed are the read-derived uptimes the device reports (see Elapsed).
 	Elapsed []Elapsed
+	// Push is the face of a family that reports by pushing, nil for one that
+	// does not (#2836).
+	Push *PushFace
+	// Webhook says how a simulator subscribes the family's service to a webhook
+	// endpoint, and which driver receives its posts, nil for none (#2836).
+	Webhook *profile.WebhookSubscribe
 	// Behaviors are YAML-style, run by the engine's existing behavior
 	// machinery until the shared primitives replace them (#2830).
 	Behaviors []profile.Behavior
@@ -317,18 +339,23 @@ func (s Spec) validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("a family has no name")
 	}
-	seen := map[string]bool{s.Name: true}
+	// A family of one product may be named for it: its one row then carries
+	// the identity of the family's own name.
+	seen := map[string]bool{}
 	for _, m := range s.Models {
 		if m.Product == "" {
 			return fmt.Errorf("family %q has a model with no product", s.Name)
 		}
 		if seen[m.Product] {
-			return fmt.Errorf("family %q lists product %q twice (or as its own name)", s.Name, m.Product)
+			return fmt.Errorf("family %q lists product %q twice", s.Name, m.Product)
 		}
 		seen[m.Product] = true
 	}
 	if err := validateElapsed(s.Name, s.Elapsed); err != nil {
 		return err
+	}
+	if s.Push != nil && (s.Push.Body == nil || s.Push.Every < time.Second) {
+		return fmt.Errorf("family %q has a push face with no body or a cadence under a second", s.Name)
 	}
 	routes := map[string]bool{}
 	for _, r := range s.HTTP {

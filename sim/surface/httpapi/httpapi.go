@@ -87,6 +87,29 @@ func Status(id Identity, order Order, sections ...Section) []byte {
 	return b.Bytes()
 }
 
+// Sections renders a document of top-level sections alone, with no identity
+// block, laid out as Status lays out what follows its own: each key on its own
+// line, a Block spread over lines and an Inline compact, ending in a newline.
+func Sections(sections ...Section) []byte {
+	var b bytes.Buffer
+	b.WriteString("{")
+	for i, s := range sections {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n  ")
+		b.Write(encode(s.Key, "", ""))
+		b.WriteString(": ")
+		if s.Inline {
+			b.Write(encode(s.Value, "", ""))
+		} else {
+			writeBlock(&b, s.Value)
+		}
+	}
+	b.WriteString("\n}\n")
+	return b.Bytes()
+}
+
 func writeBlock(b *bytes.Buffer, v any) {
 	b.Write(encode(v, "  ", "  "))
 }

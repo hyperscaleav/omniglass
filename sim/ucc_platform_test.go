@@ -10,8 +10,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/hyperscaleav/omniglass/internal/ingress"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 )
 
 // The account-wide UCC platform speaks for many rooms (#1282): one API lists
@@ -202,17 +200,23 @@ func TestTheUCCPlatformAddsRoomsAndReportsOnItsOwn(t *testing.T) {
 		t.Error("a refused room id still wrote state")
 	}
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reports := 0
-	for _, b := range store.Devices["ucc-platform"].Behaviors {
-		if b.Emit != nil && b.Emit.Headers["X-UCC-Event"] == "rooms.state" && b.Emit.Sign != nil && b.Schedule.Interval != "" {
-			reports++
+	// The account reports on its own: exactly one scheduled behavior posts the
+	// signed rooms.state report, and it posts it once a tick.
+	scheduled := 0
+	for _, name := range d.Behaviors() {
+		if name == "rooms_report" {
+			scheduled++
 		}
 	}
-	if reports != 1 {
-		t.Fatalf("%d scheduled, signed rooms.state behaviors, want one", reports)
+	if scheduled != 1 {
+		t.Fatalf("%d scheduled rooms.state behaviors, want one", scheduled)
+	}
+	var c caught
+	sub, _ := json.Marshal(map[string]string{"url": c.server(t).URL, "scheme": "hmac", "secret": "ucc-lab-signing-key"})
+	uccCall(t, d, http.MethodPost, "/api/webhooks", string(sub))
+	tickByName(t, d, "rooms_report")
+	posts := c.wait(t, 1)
+	if len(posts) != 1 || posts[0].Header.Get("X-UCC-Event") != "rooms.state" || posts[0].Header.Get("X-UCC-Signature") == "" {
+		t.Fatalf("a tick of the report posts %d signed rooms.state posts, want one", len(posts))
 	}
 }

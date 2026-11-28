@@ -346,6 +346,9 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
 	}
 	dev.push = push
+	if g, ok := def.(spec.Served); ok && g.Handlers().Push != nil && push != nil {
+		push.goBody = g.Handlers().Push.Body
+	}
 
 	e.installSeams(dev)
 	return dev, nil

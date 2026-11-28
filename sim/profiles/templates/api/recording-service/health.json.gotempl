@@ -1,5 +1,0 @@
-{
-  "status": "{{ .State | get "status" | get "service" | get "state" }}",
-  "version": "{{ .State | get "configuration" | get "software" | get "version" }}",
-  "uptime": {{ .State | get "status" | get "device" | get "uptime" }}
-}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 // The push face (#1743): a device that is an outside actor, not a device on
@@ -36,6 +37,9 @@ var pushClient = &http.Client{Timeout: pushTimeout}
 type pushFace struct {
 	every time.Duration
 	body  *template.Template
+	// goBody is the batch a Go family renders in place of body's template
+	// (#2836), read from the device and its clock.
+	goBody func(d spec.Device, owner string) ([]byte, error)
 
 	mu     sync.Mutex
 	server string
@@ -166,6 +170,16 @@ var errNoPushFace = errors.New("the device's profile declares no push face")
 func (d *Device) RenderPush(owner string) ([]byte, error) {
 	if d.push == nil {
 		return nil, errNoPushFace
+	}
+	if d.push.goBody != nil {
+		b, err := d.push.goBody(goDevice{d}, owner)
+		if err != nil {
+			return nil, fmt.Errorf("rendering the push for %s: %w", owner, err)
+		}
+		if !json.Valid(b) {
+			return nil, fmt.Errorf("the push rendered for %s is not JSON: %s", owner, b)
+		}
+		return b, nil
 	}
 	now := d.clock()
 	d.mu.RLock()

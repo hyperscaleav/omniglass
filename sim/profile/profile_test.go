@@ -16,46 +16,12 @@ func TestLoadStore(t *testing.T) {
 
 	// The catalog's generic-vendor devices. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet seed.
-	expectedDevices := []string{"generic-device", "ferrite-pdu-4c", "polaris-dsp-16"}
+	// Every shipped profile is a Go family now; #2837 deletes this test with the store.
+	expectedDevices := []string{}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
 		}
-	}
-}
-
-func TestDeviceProfileFields(t *testing.T) {
-	root := findProfilesRoot(t)
-	store, err := LoadStore(root)
-	if err != nil {
-		t.Fatalf("LoadStore: %v", err)
-	}
-
-	kv := store.Devices["generic-device"]
-	if kv == nil {
-		t.Fatal("generic-device not loaded")
-	}
-
-	if kv.Manufacturer != "Generic" {
-		t.Errorf("manufacturer = %q, want Generic", kv.Manufacturer)
-	}
-	if kv.Model != "Generic SNMP Device" {
-		t.Errorf("model = %q, want Generic SNMP Device", kv.Model)
-	}
-	if kv.SlugPrefix != "generic-device" {
-		t.Errorf("slug_prefix = %q, want generic-device", kv.SlugPrefix)
-	}
-	if kv.DeviceType != "generic-device" {
-		t.Errorf("device_type = %q, want generic-device", kv.DeviceType)
-	}
-	if len(kv.Interfaces) == 0 {
-		t.Error("expected at least one interface")
-	}
-	if len(kv.Computed) == 0 {
-		t.Error("expected at least one computed field (uptime)")
-	}
-	if kv.Defaults == nil {
-		t.Error("expected defaults to be loaded")
 	}
 }
 
@@ -79,9 +45,7 @@ func TestRebootMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		device   string
 		httpPath string
 		cliVerb  string // empty means HTTP-only profile
-	}{
-		{"polaris-dsp-16", "POST /api/admin/reboot", "system reboot"},
-	}
+	}{}
 
 	for _, c := range cases {
 		t.Run(c.device, func(t *testing.T) {
@@ -143,9 +107,7 @@ func TestFactoryResetMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		device   string
 		httpPath string
 		cliVerb  string
-	}{
-		{"polaris-dsp-16", "POST /api/admin/factory-reset", "system factory-reset"},
-	}
+	}{}
 
 	for _, c := range cases {
 		t.Run(c.device, func(t *testing.T) {

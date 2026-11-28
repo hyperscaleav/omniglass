@@ -27,10 +27,10 @@ func startAmp(t *testing.T) *Device {
 	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: "amp-1", Hostname: "amp-1", LoopbackIP: ip, ProfileName: "polaris-amp-4100", Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "amp-1", Hostname: "amp-1", LoopbackIP: ip, ProfileName: "polaris-amp", Product: "polaris-amp-4100", Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	return deviceByProfile(t, e, "polaris-amp-4100")
+	return deviceByProfile(t, e, "polaris-amp")
 }
 
 func ampSNMP(t *testing.T, d *Device, oids ...string) []gosnmp.SnmpPDU {
@@ -252,29 +252,21 @@ func TestPolarisAmpDrifts(t *testing.T) {
 	}
 	var diffs map[string]any
 	d.DiffPublisher = func(c StateChange) { diffs = c.Diffs }
-	d.behaviorMu.Lock()
-	entries := append([]behaviorEntry(nil), d.behaviors...)
-	d.behaviorMu.Unlock()
-	for _, b := range entries {
-		paths, ok := want[b.Name]
-		if !ok {
-			continue
-		}
-		delete(want, b.Name)
+	for name, paths := range want {
 		diffs = nil
 		// A random step can land on the value it started from; a few ticks
 		// move it.
 		for i := 0; i < 20 && len(diffs) < len(paths); i++ {
-			d.tickBehavior(&b)
+			if !d.TickBehavior(name) {
+				t.Errorf("behavior %s missing; have %v", name, d.Behaviors())
+				break
+			}
 		}
 		for _, p := range paths {
 			if _, ok := diffs[p]; !ok {
-				t.Errorf("behavior %s wrote no %s (diffs %v)", b.Name, p, diffs)
+				t.Errorf("behavior %s wrote no %s (diffs %v)", name, p, diffs)
 			}
 		}
-	}
-	for name := range want {
-		t.Errorf("behavior %s missing; have %v", name, d.Behaviors())
 	}
 	inBand := func(path string, lo, hi float64) {
 		f, _, err := toFloat(d.ReadPath(path))

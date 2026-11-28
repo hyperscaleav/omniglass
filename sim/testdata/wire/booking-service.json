@@ -1,0 +1,1119 @@
+{
+ "product": "booking-service",
+ "source": "recorded from the YAML profile before its deletion (#2836); see sim/testdata/wire/README.md",
+ "state": {
+  "configuration": {
+   "calendar": {
+    "bookings": [
+     "09:00-10:00",
+     "10:30-11:30",
+     "13:00-14:00",
+     "15:00-16:30"
+    ]
+   }
+  },
+  "status": {
+   "device": {
+    "boot_epoch": 1793703600,
+    "uptime": 3600
+   }
+  }
+ },
+ "http": [],
+ "room_days": {
+  "calendar": [
+   {
+    "at": "start",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "start",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "start",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "start",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "08:00:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "08:15:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "08:29:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "08:30:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "08:30:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":9}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "08:45:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":9}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "08:45:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":9}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "09:00:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":9}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "09:00:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":8}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "09:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "09:01:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "09:16:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":7}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "09:30:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":8}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "09:30:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":6}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:00:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:00:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":7}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "10:00:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "10:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "10:15:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":7}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:29:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:30:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:31:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":6}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "10:45:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":6}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:45:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "11:00:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "11:00:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "11:00:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "11:30:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "11:30:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "11:45:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "12:15:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "12:15:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "12:30:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "12:30:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "12:35:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "12:45:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "12:45:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "13:00:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "13:00:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "13:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "13:01:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "13:30:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "13:45:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "14:00:00",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "14:00:00",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "14:00:00",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "14:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "15:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   }
+  ],
+  "no-calendar": [
+   {
+    "at": "start",
+    "path": "push.sys-a",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "start",
+    "path": "push.sys-b",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "start",
+    "path": "push.sys-c",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "start",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "09:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "10:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "10:30:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "11:30:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "13:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "at": "14:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "at": "15:00:00",
+    "path": "push.sys-nobody",
+    "value": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   }
+  ]
+ },
+ "extra": {
+  "day": [
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "00:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "00:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "01:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "01:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "02:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "02:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "03:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "03:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "04:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "04:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "05:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "05:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "06:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "06:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "07:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "07:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "08:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "08:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "09:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "09:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "10:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "10:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "11:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "11:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "12:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "12:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "13:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "13:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "14:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "14:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "15:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "15:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "16:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "16:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "17:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "17:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "18:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "18:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "19:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "19:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "20:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "20:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "21:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "21:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "22:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "22:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "23:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "23:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   }
+  ],
+  "day_in_room": [
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "00:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "00:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "01:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "01:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "02:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "02:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "03:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "03:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "04:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "04:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "05:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "05:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "06:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "06:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "07:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "07:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "08:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":11}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "08:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":10}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":9}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "09:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":9}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":8}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "09:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":8}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":6}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "10:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":7}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "10:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":7}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "11:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "11:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":5}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "12:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":3}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "12:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":4}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "13:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "13:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":2}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "14:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "14:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "15:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "15:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n",
+    "at": "16:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":1}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"booked\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "16:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "17:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "17:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "18:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "18:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "19:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "19:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "20:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "20:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "21:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "21:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "22:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "22:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "23:00:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   },
+   {
+    "": "{\"owner\":{\"kind\":\"system\",\"ref\":\"\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "at": "23:30:00",
+    "sys-a": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-a\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-b": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-b\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-c": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-c\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n",
+    "sys-nobody": "{\"owner\":{\"kind\":\"system\",\"ref\":\"sys-nobody\"},\n \"source\":\"sim-booking-service\",\n \"metrics\":[{\"name\":\"booking-count\",\"value\":0}],\n \"properties\":[{\"name\":\"booking-state\",\"value\":\"free\"}]}\n"
+   }
+  ],
+  "every": "30"
+ }
+}

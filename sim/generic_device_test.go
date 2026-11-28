@@ -5,8 +5,6 @@ package sim
 import (
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 )
 
@@ -15,15 +13,12 @@ import (
 
 func TestGenericDeviceServesSysDescrAndSysUpTime(t *testing.T) {
 	ip := simtest.ClaimLoopback(t)
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	name, _, ok := store.ForProduct("generic-device")
+	e := shippedEngine(t)
+	r, ok := e.cat.ForProduct("generic-device")
 	if !ok {
 		t.Fatal("no profile resolves for the generic-device product")
 	}
-	e := shippedEngine(t)
+	name := r.Definition.ID()
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	if err := e.Sync([]DeviceSnapshot{{DeviceID: "generic-1", Hostname: "generic-1", LoopbackIP: ip, ProfileName: name, Version: 1}}); err != nil {

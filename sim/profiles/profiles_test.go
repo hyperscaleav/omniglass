@@ -164,15 +164,8 @@ func TestPerRoomUCCServiceProfileIsRetired(t *testing.T) {
 	if _, _, ok := store.ForProduct("ucc-service"); ok {
 		t.Error("a simulator profile still serves the ucc-service product (#1390)")
 	}
-	ucc := 0
-	for name := range store.Devices {
-		if strings.HasPrefix(name, "ucc-") {
-			ucc++
-		}
-	}
-	if ucc != 1 {
-		t.Errorf("%d ucc device profiles load, want the one account-wide conduit", ucc)
-	}
+	// The one account-wide conduit is a Go family now: sim/device holds that
+	// there is exactly one ucc definition (TestTheLabShowsOneUCCFanOutShape).
 	raw, err := fs.ReadFile(FS, "coverage.yaml")
 	if err != nil {
 		t.Fatal(err)

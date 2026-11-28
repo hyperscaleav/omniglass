@@ -48,6 +48,12 @@ type Commander interface {
 	Handle(line string) (Reply, bool)
 }
 
+// Described is a Commander that documents its lines: Summary is what the
+// console lists beside a line, empty for one it leaves undescribed.
+type Described interface {
+	Summary(line string) string
+}
+
 // Subject is a state path a session may subscribe to, with the line it
 // pushes when the path changes. Push gets the new value.
 type Subject struct {
@@ -63,6 +69,19 @@ func Raw(v any) string {
 	if s, ok := v.(string); ok {
 		return s
 	}
+	if v == nil {
+		return "null"
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// Encoded renders a pushed value as its JSON form, a string quoted: what a line
+// protocol prints for a value it types.
+func Encoded(v any) string {
 	if v == nil {
 		return "null"
 	}

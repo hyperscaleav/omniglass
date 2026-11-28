@@ -20,8 +20,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
@@ -86,17 +84,13 @@ func TestAWebhookEndpointReportsItsOwnPosts(t *testing.T) {
 	mustJSON(t, c.do(owner, http.MethodPost, "/secrets/"+strings.ReplaceAll(ep.Webhook.Secret, "/", "%2F")+":reveal", nil, http.StatusOK), &revealed)
 	hookURL := srv.URL + "/api/v1/webhooks/" + revealed.Fields["token"]
 
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	uccProfile := ""
-	for name, p := range store.Devices {
-		if p.Model == "UCC Platform (account)" {
-			uccProfile = name
+	for _, def := range shipped.Catalog(t).Definitions() {
+		if def.Identity().Model == "UCC Platform (account)" {
+			uccProfile = def.ID()
 		}
 	}
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc", Hostname: "ucc", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: uccProfile, Version: 1}}); err != nil {

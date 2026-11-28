@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
 )
 
 // Kind is which way a definition is written.
@@ -114,8 +115,16 @@ func (f *Family) Identity() Identity                     { return f.s.Identity }
 func (f *Family) InitialState() map[string]any           { return f.s.State }
 func (f *Family) BehaviorList() []profile.Behavior       { return f.s.Behaviors }
 func (f *Family) ElapsedList() []Elapsed                 { return f.s.Elapsed }
-func (f *Family) PushFace() *profile.Push                { return nil }
-func (f *Family) WebhookFace() *profile.WebhookSubscribe { return nil }
+func (f *Family) WebhookFace() *profile.WebhookSubscribe { return f.s.Webhook }
+
+// PushFace is the family's push face as a profile declares one: its cadence,
+// the body left to the family's Go func (Handlers.Push).
+func (f *Family) PushFace() *profile.Push {
+	if f.s.Push == nil {
+		return nil
+	}
+	return &profile.Push{Every: f.s.Push.Every.String()}
+}
 
 // Surfaces are the family's interfaces, each listing the routes and commands
 // its protocol answers, marked Native: the same listing a profile's surface
@@ -165,7 +174,15 @@ func (f *Family) surfaceCommands(iface string) []profile.Command {
 	var out []profile.Command
 	for _, c := range sf.Commanders {
 		for _, line := range c.Commands() {
+			if !typed(line) {
+				// A binary frame (a hex poll) is no line an operator types; the
+				// family lists it as a hex command on its own band.
+				continue
+			}
 			cmd := profile.Command{Match: line, Native: true}
+			if d, ok := c.(surface.Described); ok {
+				cmd.Doc.Summary = d.Summary(line)
+			}
 			if reply, ok := c.Handle(line); ok {
 				cmd.Action = string(reply.Action)
 			}
@@ -173,6 +190,17 @@ func (f *Family) surfaceCommands(iface string) []profile.Command {
 		}
 	}
 	return out
+}
+
+// typed reports whether a command line is printable text, as an operator
+// types it.
+func typed(line string) bool {
+	for _, r := range line {
+		if r < 0x20 || r > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // nativeOIDs is the OIDs the family's surface serves, as the console lists
@@ -193,7 +221,7 @@ func (f *Family) nativeOIDs() map[string]string {
 }
 
 func (f *Family) Handlers() Handlers {
-	return Handlers{HTTP: f.s.HTTP, Commands: f.s.Commands, Animate: f.s.Animate, Surface: f.s.Surface, Ticks: f.s.Ticks}
+	return Handlers{HTTP: f.s.HTTP, Commands: f.s.Commands, Animate: f.s.Animate, Surface: f.s.Surface, Ticks: f.s.Ticks, Push: f.s.Push}
 }
 
 // Products lists the products the family simulates, its model rows in order.
@@ -266,7 +294,14 @@ func NewCatalog(store *profile.Store, families ...Spec) (*Catalog, error) {
 			if m.Summary != "" {
 				id.Summary = m.Summary
 			}
-			if err := claim(m.Product, Resolved{Definition: f, Product: m.Product, Identity: id, Overlay: m.State, Model: m}); err != nil {
+			r := Resolved{Definition: f, Product: m.Product, Identity: id, Overlay: m.State, Model: m}
+			if m.Product == f.ID() {
+				// A family of one, named for its product: the row is the
+				// family's own entry.
+				c.products[m.Product] = r
+				continue
+			}
+			if err := claim(m.Product, r); err != nil {
 				return nil, err
 			}
 		}

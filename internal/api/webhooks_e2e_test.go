@@ -20,8 +20,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
@@ -144,17 +142,13 @@ func TestWebhookIngressEndToEnd(t *testing.T) {
 		map[string]string{"owner_kind": "component", "owner": "room-1"}, http.StatusOK)
 
 	// The simulated UCC platform, subscribed to the endpoint's URL.
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load profiles: %v", err)
-	}
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	uccProfile := ""
-	for name, p := range store.Devices {
-		if p.Model == "UCC Platform (account)" {
-			uccProfile = name
+	for _, def := range shipped.Catalog(t).Definitions() {
+		if def.Identity().Model == "UCC Platform (account)" {
+			uccProfile = def.ID()
 		}
 	}
 	if err := engine.Sync([]sim.DeviceSnapshot{{DeviceID: "ucc", Hostname: "ucc", LoopbackIP: simtest.ClaimLoopback(t), ProfileName: uccProfile, Version: 1}}); err != nil {

@@ -107,6 +107,29 @@ func TestWearAddsOnlyWhileThePowerReadsOn(t *testing.T) {
 	}
 }
 
+// A whole-number drift is the primitive over the path, written as the integer it
+// rounds to, held in the band and drawn from the device's own source.
+func TestDriftWholeWritesTheIntegerTheBandKeeps(t *testing.T) {
+	const path = "status.mains.voltage_mv"
+	band := behave.Band{Lo: 226000, Hi: 234000, Step: 600}
+	tick := bind.DriftWhole("mains_drift", 30*time.Second, path, band)
+	if tick.Name != "mains_drift" || tick.Interval != 30*time.Second || len(tick.Writes) != 1 || tick.Writes[0] != path {
+		t.Fatalf("tick = %+v", tick)
+	}
+	f := spectest.NewFake(spec.Spec{Name: "bound", State: map[string]any{"status": map[string]any{"mains": map[string]any{"voltage_mv": 230100}}}}, "")
+	src, twin := behave.NewSource("d-1"), behave.NewSource("d-1")
+	prev := 230100.0
+	for i := 0; i < 50; i++ {
+		want := behave.Drift(prev, band, twin, behave.Places(0))
+		got := tick.Run(f, spec.TickContext{Rand: src})
+		if len(got) != 1 || got[0].Path != path || got[0].Value != int64(want) {
+			t.Fatalf("tick %d wrote %+v (%T), the primitive says %v", i, got, got[0].Value, int64(want))
+		}
+		_ = f.Write(path, got[0].Value)
+		prev = want
+	}
+}
+
 // The NVP room surface reads the device's own input and scene, and a command
 // reports the change it made for the engine to apply: the surface writes
 // nothing itself.

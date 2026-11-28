@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -211,6 +212,42 @@ func TestControlRefusesAnUnreadableBodyAndWritesNothing(t *testing.T) {
 	d := newFake()
 	if res := powerControl().Route().Handle(d, spec.HTTPRequest{Raw: []byte("  ")}); res.Status != 400 || !strings.Contains(string(res.Body.([]byte)), "validation failed") {
 		t.Errorf("a blank body: %d %s", res.Status, res.Body)
+	}
+}
+
+// A text field takes a string and only a string: a number, a boolean, null or a
+// missing field is refused 400 and nothing is written.
+func TestATextFieldTakesOnlyAString(t *testing.T) {
+	c := Control{
+		Match:  "POST /api/webhook",
+		Fields: []Field{{Path: "u", Name: "url", Kind: Text}},
+		Ack:    func(d spec.Device) any { return map[string]any{"ok": true} },
+	}
+	for _, tc := range []struct {
+		name, body string
+		want       int
+		wrote      bool
+	}{
+		{"a string", `{"url": "https://collector.example/x"}`, 200, true},
+		{"an empty string", `{"url": ""}`, 200, true},
+		{"a number", `{"url": 5}`, 400, false},
+		{"a boolean", `{"url": true}`, 400, false},
+		{"null", `{"url": null}`, 400, false},
+		{"missing", `{}`, 400, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFake()
+			var body map[string]any
+			_ = json.Unmarshal([]byte(tc.body), &body)
+			res := c.Route().Handle(f, spec.HTTPRequest{Body: body, Raw: []byte(tc.body)})
+			status := res.Status
+			if status == 0 {
+				status = 200
+			}
+			if status != tc.want || (len(f.writes) > 0) != tc.wrote {
+				t.Errorf("status %d with %d writes, want %d (written: %v)", status, len(f.writes), tc.want, tc.wrote)
+			}
+		})
 	}
 }
 

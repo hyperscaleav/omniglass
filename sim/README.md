@@ -14,8 +14,8 @@ It is part of the single Omniglass Go module and binary, not a separate program.
 | Path | What it is |
 | --- | --- |
 | `sim/` | The engine: devices, faces per protocol, behavior, faults, state, observation. |
-| `sim/profiles/` | Device profiles as data (`devices/`, `templates/`), embedded into the binary; a `surfaces/` piece two profiles share joins the embed when one is needed. |
-| `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. |
+| `sim/profiles/` | The YAML profile store, retiring (#2837): no product ships a profile now; only the editor schema, `coverage.yaml` and an empty `templates/` remain. |
+| `sim/surface/` | Protocol surfaces a Go device family declares in Go (`nvp`, `snmp`, `httpapi`), byte for byte what the YAML surfaces and repeated profile pieces answer. `httpapi` has the status document, the `Control` route (choices, numbers, flags and true/false switches), `Element` (a control on one element of a list named by the body), `Action` and `Sections`. |
 | `sim/behave/` | The shared, typed behavior primitives a family composes. |
 | `sim/profile/` | The profile model: parse, validate, resolve includes. |
 | `sim/spec/` | What defines a device either way: the `Definition` every consumer reads, the Go family `Spec`, and the `Catalog` that resolves a product. |
@@ -38,7 +38,10 @@ It is part of the single Omniglass Go module and binary, not a separate program.
   `make test-lab LAB_RUN=<test>` runs one lab scenario test.
 - `make bench-sim` serves a 1,000-device fleet and reports startup time.
 
-## Writing a device profile
+## Writing a device profile (retiring)
+
+Every shipped product is a [Go device family](#writing-a-go-device-family); write a new device as one. The
+YAML path below remains until the store is retired (#2837), with no profile left as an exemplar.
 
 A profile is one YAML file in `sim/profiles/devices/`, named for the product it simulates. It
 declares the product's identity (`name`, `manufacturer`, `model`, `device_type`), its interfaces
@@ -52,7 +55,7 @@ accounted for in `sim/profiles/coverage.yaml` and checked by the tests.
 
 A family is a package `sim/device/<family>` that exports `func Spec() spec.Spec`: one wire API,
 implemented once, its models the rows of a typed table. `make gen` registers the package; a product
-resolves to a family when one claims it, else to its YAML profile. The worked example is
+resolves to a family when one claims it (every shipped product does). The worked example is
 `sim/device/borealedge`, the Boreal Edge display, with `borealbeam` and `borealcast` beside it.
 
 1. **Record the profile first**, when one exists. On the base branch, play the family's script against
@@ -122,13 +125,28 @@ Written once here, so the next family repeats no workaround.
   recorded transcript to what the family means to say, and fail when the recording no longer holds what they
   correct; the divergence is an ADR.
 - **A line command is listed where it is served.** A `spec.Command` names its `Face` (the interface the
-  console lists it under) and a family's `Surface` names `ListedOn` for the shared surface's commands; a
+  console lists it under) and a family's `Surface` names `ListedOn` for the shared surface's commands (a
+  commander that is also a `surface.Described` gives each line its summary; a binary frame is listed as a
+  hex command on its own interface). `spectest.Conform` fails a family that answers a typed line no
+  interface lists. A
   line protocol is recorded in the wire script's `Lines` (each line on the device's TCP face, or a verb
   direct against its command table), with the pushes each draws and the device's own command list.
 - **Free text and derived writes.** A control route that took any string is an `httpapi.Text` field (with a
   `Pattern` when the profile held one); a route that lands a value derived from the request in the same
   change (the signal on the input just routed) is a `Control.Also`. A tick that reads its room's booked
   meetings calls `c.ReadBookings()`.
+
+- **A family of one is named for its product.** A model row may carry the family's own name, so the
+  lab's manifests, pushers and senders, which name a product as a profile, resolve it unchanged.
+- **A service that speaks for rooms reads them through `spec.RoomsOf(d)`**, sends a webhook with
+  `spec.Send` (signed as the subscription says) and names a stream event with `spec.Report`; a pusher
+  declares `Spec.Push` and a webhook sender `Spec.Webhook`. A paged list declares its names once
+  (`httpapi.Paging`, `Cut`, `PagedDocument`). The wire script's `Extra` hook records what is not HTTP or
+  SNMP: `wireConverse` (a conversation on a line face), `wireStream` (an event stream), `wireRecv` (the
+  posts a device makes, and whether each signature verifies).
+- **Text stays text.** A value the YAML templates coerced (an id of digits into a number) is stored as the
+  string it is, and a field that is not a string is refused; the recording marks such a step `Quirk` or
+  leaves its state out of the comparison (ADR-2836).
 
 `sim/spec/spectest` is also a small family used by the engine's tests.
 

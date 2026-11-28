@@ -39,13 +39,13 @@ type audioRig struct {
 	at  time.Time
 }
 
-func newAudioRig(t *testing.T, profileName string, seed int64, k calendar.Knobs) *audioRig {
+func newAudioRig(t *testing.T, product string, seed int64, k calendar.Knobs) *audioRig {
 	t.Helper()
 	e := shippedEngine(t)
 	cal := calendar.New(seed, func(calendar.Room) (calendar.Knobs, bool) { return k, true })
 	e.SetCalendar(cal)
-	id := profileName + "-1"
-	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileName, Version: 1,
+	id := product + "-1"
+	snap := DeviceSnapshot{DeviceID: id, Hostname: id, LoopbackIP: "127.0.0.1", ProfileName: profileOf(t, e, product), Product: product, Version: 1,
 		SiteCode: audioRoom.Site, Building: audioRoom.Building, Room: audioRoom.Room}
 	if err := e.LoadDevices([]DeviceSnapshot{snap}); err != nil {
 		t.Fatal(err)

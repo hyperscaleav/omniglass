@@ -515,9 +515,12 @@ func TestParitySNMPSystemAndIdentity(t *testing.T) {
 		})
 	}
 	// Nine profiles repeated the identity arc before the Boreal displays and
-	// projector became Go families (#2832), and two more before the Meridian
-	// switcher and extender did (#2833); five remain in YAML.
-	if identities < 5 {
+	// projector (#2832), two more (#2833) and the Lyra and Polaris audio products
+	// (#2835) became Go families; one remains in YAML.
+	if identities == 0 {
+		t.Skip("no YAML profile maps the identity arc: every device is a family (#2837 deletes this comparison)")
+	}
+	if identities < 1 {
 		t.Fatalf("only %d profiles map the identity arc; the helper's reason to exist is gone", identities)
 	}
 }
@@ -531,10 +534,6 @@ func serveGET(t *testing.T, dev *Device, path string) (int, string, []byte) {
 	return rec.Code, rec.Header().Get("Content-Type"), rec.Body.Bytes()
 }
 
-type sortedMic struct {
-	LevelDB int  `json:"level_db"`
-	Mute    bool `json:"mute"`
-}
 type extender struct {
 	Link   string `json:"link"`
 	Signal bool   `json:"signal"`
@@ -542,27 +541,6 @@ type extender struct {
 type switcher struct {
 	Input  string `json:"input"`
 	Signal bool   `json:"signal"`
-}
-type dspBlock struct {
-	CPULoad        int `json:"cpu_load"`
-	ActiveChannels int `json:"active_channels"`
-	Temperature    int `json:"temperature"`
-	FanRPM         int `json:"fan_rpm"`
-}
-type outputBlock struct {
-	Mute    bool `json:"mute"`
-	LevelDB int  `json:"level_db"`
-}
-type ampBlock struct {
-	Power         string `json:"power"`
-	Protect       string `json:"protect"`
-	SignalPresent bool   `json:"signal_present"`
-	Temperature   int    `json:"temperature"`
-	FanRPM        int    `json:"fan_rpm"`
-}
-type channel struct {
-	Clip     bool `json:"clip"`
-	OutputDB int  `json:"output_db"`
 }
 type occupancyBlock struct {
 	LastEvent string `json:"last_event"`
@@ -587,24 +565,10 @@ func TestParityHTTPStatusDocument(t *testing.T) {
 		config  map[string]any
 		blocks  []httpapi.Section
 	}{
-		{"lyra-mic", httpapi.ModelFirst, map[string]any{"mic": map[string]any{"mute": true, "level_db": -31}}, nil,
-			[]httpapi.Section{httpapi.Inline("mic", sortedMic{LevelDB: -31, Mute: true})}},
 		{"meridian-extender", httpapi.ModelFirst, map[string]any{"extender": map[string]any{"link": "up", "signal": true}}, nil,
 			[]httpapi.Section{httpapi.Inline("extender", extender{Link: "up", Signal: true})}},
 		{"meridian-switcher", httpapi.ModelFirst, map[string]any{"switcher": map[string]any{"input": "hdmi2", "signal": false}}, nil,
 			[]httpapi.Section{httpapi.Inline("switcher", switcher{Input: "hdmi2"})}},
-		{"polaris-dsp", httpapi.UptimeFirst, map[string]any{
-			"dsp":    map[string]any{"cpu_load": 12, "active_channels": 8, "temperature": 41, "fan_rpm": 2100},
-			"output": map[string]any{"mute": false, "level_db": -12}}, nil,
-			[]httpapi.Section{
-				httpapi.Block("dsp", dspBlock{CPULoad: 12, ActiveChannels: 8, Temperature: 41, FanRPM: 2100}),
-				httpapi.Block("output", outputBlock{LevelDB: -12})}},
-		{"polaris-amp", httpapi.UptimeFirst, map[string]any{
-			"amp":      map[string]any{"power": "on", "protect": "ok", "signal_present": true, "temperature": 38, "fan_rpm": 1800},
-			"channels": []any{map[string]any{"clip": false, "output_db": -6}, map[string]any{"clip": true, "output_db": 0}}}, nil,
-			[]httpapi.Section{
-				httpapi.Block("amp", ampBlock{Power: "on", Protect: "ok", SignalPresent: true, Temperature: 38, FanRPM: 1800}),
-				httpapi.Inline("channels", []channel{{Clip: false, OutputDB: -6}, {Clip: true, OutputDB: 0}})}},
 		{"tessellate-census", httpapi.UptimeFirst, map[string]any{
 			"occupancy": map[string]any{"last_event": "entered", "vacant": false}},
 			map[string]any{"webhook": map[string]any{"url": "https://hooks.example/x?a=1&b=<2>"}},
@@ -656,8 +620,11 @@ func TestParityHTTPStatusDocument(t *testing.T) {
 			}
 		})
 	}
-	if orders[httpapi.ModelFirst] < 3 || orders[httpapi.UptimeFirst] < 3 {
-		t.Fatalf("each key order needs three profiles behind it: %v", orders)
+	// The Lyra and Polaris status documents laid out in these orders are held to
+	// their profiles' bytes by the golden wire transcripts (#2835); the orders
+	// stay proven here against the profiles that remain.
+	if orders[httpapi.ModelFirst] < 1 || orders[httpapi.UptimeFirst] < 1 {
+		t.Fatalf("each key order needs a profile behind it: %v", orders)
 	}
 }
 

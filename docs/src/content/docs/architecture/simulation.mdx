@@ -65,10 +65,13 @@ shows a profile's. A family's behavior is typed `Tick`s: each runs on an interva
 source, and returns the state paths to write, which the engine applies as a profile behavior's mutations
 are. The `sim/behave` primitives plug in there; an `Animator` is the escape hatch for anything else, and
 a family may still run YAML-style behaviors. A `Surface` func builds the shared protocol surfaces
-(`sim/surface`) for each device. The Boreal Edge displays, the Beam projector and the Cast player are families
-([a worked example](#a-go-family-worked-the-boreal-displays)), and so are room control and switching
-([the second wave](#the-second-wave-room-control-and-switching)) and the Kestrel bar, codec and camera
-([the conferencing families](#conferencing-and-cameras-the-kestrel-families)); the rest are profiles until their families land.
+(`sim/surface`) for each device. Every shipped product is now a family: the Boreal Edge displays, the Beam
+projector and the Cast player ([a worked example](#a-go-family-worked-the-boreal-displays)), the Kestrel bar,
+codec and camera ([the conferencing families](#conferencing-and-cameras-the-kestrel-families)), room control and
+switching ([the second wave](#the-second-wave-room-control-and-switching)), room audio
+([one API is one family](#room-audio-one-api-is-one-family-a-different-driver-is-another)) and occupancy, power and
+the cloud services ([the third wave](#the-third-wave-occupancy-power-and-the-cloud-services)). No YAML profile
+ships; the profile store stays until it is retired (#2837).
 
 ### A Go family, worked: the Boreal displays
 
@@ -157,6 +160,48 @@ names); a command is listed under the face that serves it (`Command.Face`, and `
 the shared surface's); a control route may take free text held to a pattern (`httpapi.Text`) and write what
 it derives in the same change (`Control.Also`); and a tick reads its room's booked meetings
 (`TickContext.ReadBookings`).
+
+### Room audio: one API is one family, a different driver is another
+
+The Lyra microphones and the Polaris DSP and amplifier (#2835) are four families, grouped by the wire API and the
+way the seed collects them (the catalog's alignment test refuses a family whose models have different drivers or
+component types):
+
+| Package | Serves | Models |
+| --- | --- | --- |
+| `lyraarc` | the ceiling array microphone: a status and mute behind the Lyra key, mute and level on the Lyra SNMP arc | `lyra-arc-a2` |
+| `lyrahx` | the wireless microphone system: the same API with the pack's transmitting state and battery | `lyra-hx-1` |
+| `polarisdsp` | the DSP: an HTTP API with a public dashboard, SNMP, an SSH and Telnet CLI and a raw-TCP JSON-RPC plane that push what a subscribed value does, and a UDP echo | `polaris-dsp-16`, its sixteen strips a typed table in the row |
+| `polarisamp` | the amplifier: SNMP with a channel table, and standby and a protect reset over HTTP | `polaris-amp-4100`, its four zones a typed table in the row |
+
+The two Lyra families are one body (`sim/device/internal/lyra`), each a one-row table. A line protocol is a `surface.Commander`
+the face is documented against: the DSP's shell answers one command set on every face (a device has one), each face
+lists the lines it was documented with, and a push line is a Go func of the subject, the token and the value
+(`profile.Subject.PushLine`). A control on one element of a list, the DSP's channel strips, is `httpapi.Element`.
+The wire harness records a family's faces, its shell sessions and its UDP echo beside the HTTP and SNMP script, so a
+family with line protocols is held to its profile the same way
+([ADR-2835](/architecture/decisions/#adr-2835-a-mixer-channel-the-profile-addressed-by-accident-is-refused)).
+
+### The third wave: occupancy, power and the cloud services
+
+Seven more families replaced seven profiles (#2836), each a family of one named for its product:
+
+| Package | Serves | Product |
+| --- | --- | --- |
+| `tessellatecensus` | the people counter: a REST and event API behind a key, a raw-TCP feed with push subscriptions, a binary hex poll | `tessellate-census-c1` |
+| `ferritepdu` | the rack PDU: a JSON document, outlet switching behind a login, SNMP with an outlet table | `ferrite-pdu-4c` |
+| `genericdevice` | the unclassified SNMP box: sysDescr and sysUpTime | `generic-device` |
+| `uccplatform` | the account-wide meeting platform: paged room and device lists, meeting routes, signed webhooks, the calendar | `ucc-platform` |
+| `schedulingservice` | the booking platform: bookings and a paged room list | `scheduling-service` |
+| `recordingservice` | the recording service: health, work, a paged room list, a failure feed | `recording-service` |
+| `bookingservice` | the booking integration: no face, a push of each granted system's day | `booking-service` |
+
+A service that speaks for many rooms reads them through `spec.RoomsOf(d)` (the world's covers, a room's phase,
+meeting and bookings, the devices a platform lists, memoized once a room a second); it sends a webhook with
+`spec.Send`, signed as a sender's is, and names an event on its stream with `Publish`. A device that
+reports by pushing declares `Spec.Push`, and one a lab subscribes to a webhook endpoint declares `Spec.Webhook`.
+A list pages by the names its API declares (`httpapi.Paging`, `Cut`), and the wire harness records a line
+protocol, an event stream and every post a device makes.
 
 The catalog holds devices and nothing above them: no room archetype and no fleet layout, since a
 simulated system is built to the platform's own standards ([fleets](#fleets),

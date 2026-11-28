@@ -32,11 +32,11 @@ func TestTheSimulatorSubscribesAServiceToItsWebhookEndpoint(t *testing.T) {
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
-	// A profile that posts webhooks, found by its subscribe route.
+	// A definition that posts webhooks, found by its subscribe route.
 	var sender []string
-	for name, p := range store.Devices {
-		if p.Webhook != nil {
-			sender = append(sender, name)
+	for _, def := range catalogOf(t, store).Definitions() {
+		if def.WebhookFace() != nil {
+			sender = append(sender, def.ID())
 		}
 	}
 	if len(sender) == 0 {
@@ -114,12 +114,12 @@ func TestTheSimulatorAddsEveryBoundRoomToItsPlatform(t *testing.T) {
 	// The platform is the profile whose webhook face posts to the ucc-webhook
 	// driver and provisions its rooms, found by that face rather than named.
 	platform := ""
-	for name, p := range store.Devices {
-		if p.Webhook != nil && p.Webhook.Provision != "" && p.Webhook.Driver == "ucc-webhook" {
+	for _, def := range catalogOf(t, store).Definitions() {
+		if w := def.WebhookFace(); w != nil && w.Provision != "" && w.Driver == "ucc-webhook" {
 			if platform != "" {
-				t.Fatalf("profiles %s and %s both provision rooms for ucc-webhook, want one", platform, name)
+				t.Fatalf("definitions %s and %s both provision rooms for ucc-webhook, want one", platform, def.ID())
 			}
-			platform = name
+			platform = def.ID()
 		}
 	}
 	if platform == "" {

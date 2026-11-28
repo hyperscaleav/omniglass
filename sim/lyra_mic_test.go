@@ -34,10 +34,10 @@ func startLyra(t *testing.T, name string) *Device {
 	e := shippedEngine(t)
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
-	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: ip, ProfileName: name, Version: 1}}); err != nil {
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: name + "-1", Hostname: name + "-1", LoopbackIP: ip, ProfileName: profileOf(t, e, name), Product: name, Version: 1}}); err != nil {
 		t.Fatal(err)
 	}
-	d := deviceByProfile(t, e, name)
+	d := deviceByProfile(t, e, profileOf(t, e, name))
 	d.StopBehaviors() // hold the readings still between reads
 	return d
 }
@@ -144,18 +144,9 @@ func TestLyraMicBehaviors(t *testing.T) {
 	d := startLyra(t, "lyra-hx-1")
 	tick := func(name string) {
 		t.Helper()
-		d.behaviorMu.Lock()
-		var b *behaviorEntry
-		for i := range d.behaviors {
-			if d.behaviors[i].Name == name {
-				b = &d.behaviors[i]
-			}
-		}
-		d.behaviorMu.Unlock()
-		if b == nil {
+		if !d.TickBehavior(name) {
 			t.Fatalf("no %s behavior; have %v", name, d.Behaviors())
 		}
-		d.tickBehavior(b)
 	}
 	read := func(path string) float64 {
 		f, _, err := toFloat(d.ReadPath(path))

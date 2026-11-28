@@ -94,6 +94,18 @@ func Wear(name string, every time.Duration, path string, p behave.WearParams) sp
 	}
 }
 
+// DriftWhole is Drift for a reading kept in whole numbers (millivolts,
+// milliamps): the value at path, a step at a time, written as the integer it
+// is rounded to.
+func DriftWhole(name string, every time.Duration, path string, band behave.Band) spec.Tick {
+	return spec.Tick{
+		Name: name, Interval: every, Writes: []string{path},
+		Run: func(d spec.Device, c spec.TickContext) []surface.Change {
+			return []surface.Change{{Path: path, Value: int64(behave.Drift(spec.Float(d, path), band, c.Rand, behave.Places(0)))}}
+		},
+	}
+}
+
 // NVPRoom is the NVP room surface (sim/surface/nvp) over the device's own state:
 // the input and the scene it reads are the paths the surface names, and the
 // changes a command reports are applied by the engine, so the surface's own Set
