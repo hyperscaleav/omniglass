@@ -8,6 +8,7 @@ import (
 	fam_borealbeam "github.com/hyperscaleav/omniglass/sim/device/borealbeam"
 	fam_borealcast "github.com/hyperscaleav/omniglass/sim/device/borealcast"
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
+	fam_ferritepdu "github.com/hyperscaleav/omniglass/sim/device/ferritepdu"
 	fam_genericdevice "github.com/hyperscaleav/omniglass/sim/device/genericdevice"
 )
 
@@ -17,6 +18,7 @@ func families() []spec.Spec {
 		fam_borealbeam.Spec(),
 		fam_borealcast.Spec(),
 		fam_borealedge.Spec(),
+		fam_ferritepdu.Spec(),
 		fam_genericdevice.Spec(),
 	}
 }

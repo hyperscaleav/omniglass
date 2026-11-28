@@ -204,18 +204,9 @@ func pduSwitch(t *testing.T, d *Device, password, body string) (int, []byte) {
 // outlet's current and sums the total.
 func pduTickLoad(t *testing.T, d *Device) {
 	t.Helper()
-	d.behaviorMu.Lock()
-	var b *behaviorEntry
-	for i := range d.behaviors {
-		if d.behaviors[i].Name == "load_drift" {
-			b = &d.behaviors[i]
-		}
-	}
-	d.behaviorMu.Unlock()
-	if b == nil {
+	if !d.TickBehavior("load_drift") {
 		t.Fatalf("no load_drift behavior; have %v", d.Behaviors())
 	}
-	d.tickBehavior(b)
 }
 
 // pduOutput reads outlet n (numbered from 1) from the status document.
@@ -329,18 +320,9 @@ func TestFerritePDUDrifts(t *testing.T) {
 	d := startPDU(t)
 	tick := func(name string) {
 		t.Helper()
-		d.behaviorMu.Lock()
-		var b *behaviorEntry
-		for i := range d.behaviors {
-			if d.behaviors[i].Name == name {
-				b = &d.behaviors[i]
-			}
-		}
-		d.behaviorMu.Unlock()
-		if b == nil {
+		if !d.TickBehavior(name) {
 			t.Fatalf("no %s behavior; have %v", name, d.Behaviors())
 		}
-		d.tickBehavior(b)
 	}
 	read := func(path string) float64 {
 		f, _, err := toFloat(d.ReadPath(path))
