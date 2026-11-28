@@ -38,7 +38,7 @@ func tick(t *testing.T, name string) spec.Tick {
 // The model table is the line: a product the catalog resolves to the family,
 // with a channel for each zone it drives.
 func TestTheRowIsAProductWithAChannelPerZone(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

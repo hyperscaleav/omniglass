@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
@@ -80,7 +79,7 @@ func startPushers(cat *spec.Catalog, server string, ps []Pusher, w *world.World,
 		}
 		snaps[i] = sim.DeviceSnapshot{DeviceID: p.Name, Hostname: p.Name, LoopbackIP: "127.0.0.1", ProfileName: p.Profile, Version: 1}
 	}
-	e := sim.NewEngineOver(cat, profiles.Templates())
+	e := sim.NewEngineOver(cat)
 	installWorld(e, w)
 	e.SetClock(clock)
 	if err := e.LoadDevices(snaps); err != nil {

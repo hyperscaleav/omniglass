@@ -2,6 +2,8 @@ package sim
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"slices"
@@ -10,9 +12,45 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 	"golang.org/x/crypto/ssh"
 )
+
+// ptpCommands is the PTP-style verb set the shell tests drive: a read, a write
+// that moves state from inside the session, and the subscribe and unsubscribe
+// verbs (on change, with a token, on an interval).
+type ptpCommands struct{}
+
+var ptpTable = []struct {
+	line  string
+	reply surface.Reply
+}{
+	{"Mixer1 get level", surface.Reply{Text: `+OK "value":-12.5`}},
+	{"Mixer1 set level -6", surface.Reply{Text: "+OK", Changes: []surface.Change{{Path: "status.channels.0.level", Value: int64(-6)}}}},
+	{"Mixer1 subscribe level", surface.Reply{Text: "+OK", Action: surface.ActionSubscribe, Subject: "status.channels.0.level"}},
+	{"Mixer1 unsubscribe level", surface.Reply{Text: "+OK", Action: surface.ActionUnsubscribe, Subject: "status.channels.0.level"}},
+	{"Mixer1 subscribe level bgMeter1", surface.Reply{Text: "+OK", Action: surface.ActionSubscribe, Subject: "status.channels.0.level", Token: "bgMeter1"}},
+	// 100ms is well above the default publish_min_interval_ms floor (50).
+	{"Mixer1 subscribe level 100", surface.Reply{Text: "+OK", Action: surface.ActionSubscribe, Subject: "status.channels.0.level", IntervalMs: 100}},
+}
+
+func (ptpCommands) Commands() []string {
+	var out []string
+	for _, c := range ptpTable {
+		out = append(out, c.line)
+	}
+	return out
+}
+
+func (ptpCommands) Handle(line string) (surface.Reply, bool) {
+	for _, c := range ptpTable {
+		if c.line == line {
+			return c.reply, true
+		}
+	}
+	return surface.Reply{}, false
+}
 
 // newPTPDevice builds a minimal device that exposes a persistent SSH
 // shell with PTP-style verbs over the loopback interface. Used by the
@@ -30,76 +68,23 @@ func newPTPDevice(t *testing.T, hostname string) (*Device, *eventCollector) {
 			},
 		})
 
-	mustAdd := func(c *profile.Command) {
-		t.Helper()
-		response := c.Response
-		if response == "" {
-			response = "+OK"
-		}
-		c.Response = response
-		if err := dev.AddCommandFromProfile(c, response); err != nil {
-			t.Fatalf("AddCommand %q: %v", c.Match, err)
-		}
-	}
+	dev.AttachCommands(ptpCommands{})
 
-	// Reads
-	mustAdd(&profile.Command{
-		Match:    "Mixer1 get level",
-		Response: `+OK "value":-12.5`,
-	})
-	// Writes, drive state mutation from inside the session for one
-	// of the test scenarios.
-	mustAdd(&profile.Command{
-		Match:    "Mixer1 set level -6",
-		Response: "+OK",
-		Mutate: map[string]any{
-			"status.channels.0.level": "-6",
-		},
-	})
-	// On-change subscribe / unsubscribe to Mixer1.level.
-	mustAdd(&profile.Command{
-		Match:    "Mixer1 subscribe level",
-		Action:   "subscribe",
-		Subject:  "status.channels.0.level",
-		Response: "+OK",
-	})
-	mustAdd(&profile.Command{
-		Match:    "Mixer1 unsubscribe level",
-		Action:   "unsubscribe",
-		Subject:  "status.channels.0.level",
-		Response: "+OK",
-	})
-	// Tokenized subscribe.
-	mustAdd(&profile.Command{
-		Match:    "Mixer1 subscribe level bgMeter1",
-		Action:   "subscribe",
-		Subject:  "status.channels.0.level",
-		Token:    "bgMeter1",
-		Response: "+OK",
-	})
-	// Interval subscribe, 100ms is well above the default
-	// publish_min_interval_ms floor (50).
-	mustAdd(&profile.Command{
-		Match:      "Mixer1 subscribe level 100",
-		Action:     "subscribe",
-		Subject:    "status.channels.0.level",
-		IntervalMs: "100",
-		Response:   "+OK",
-	})
-
-	iface := &profile.Interface{
+	iface := &wire.Interface{
 		Name:       "ptp",
 		Protocol:   "ssh",
 		Port:       0,
 		Persistent: true,
 		LineEnding: "\r\n",
 		Welcome:    "Welcome to PTP",
-		Subjects: []profile.Subject{
+		Subjects: []wire.Subject{
 			{
 				Match:        "status.channels.*.level",
-				Path:         "{{ .Subject }}",
 				PublishToken: "level",
-				PushFormat:   `! "publishToken":"{{ .Token }}" "subject":"{{ .Subject }}" "value":{{ .Value }}`,
+				PushLine: func(subject, token string, value any) string {
+					raw, _ := json.Marshal(value)
+					return fmt.Sprintf(`! "publishToken":"%s" "subject":"%s" "value":%s`, token, subject, raw)
+				},
 			},
 		},
 	}
@@ -421,14 +406,14 @@ func TestPersistentSession_ExitClosesSession(t *testing.T) {
 // SetBus call, actually publishes events.
 func TestSessionRegistry_SetBusLateBinding(t *testing.T) {
 	dev := NewDevice("late-bind-1", "late-bind-host", net.ParseIP("127.0.0.1"), "test", 1, map[string]any{})
-	cfg, err := CompileSessionConfig(&profile.Interface{
+	cfg, err := CompileSessionConfig(&wire.Interface{
 		Name:       "ssh",
 		Protocol:   "ssh",
 		Port:       22,
 		Persistent: true,
 		LineEnding: "\r\n",
-		Subjects: []profile.Subject{{
-			Match: "*.*", Path: "{{ .Subject }}", PushFormat: "ok",
+		Subjects: []wire.Subject{{
+			Match: "*.*", Push: func(any) string { return "ok" },
 		}},
 	})
 	if err != nil {
@@ -576,9 +561,9 @@ func TestPersistentSession_Unsubscribe(t *testing.T) {
 // session while short-lived connections come and go beside it (#1784).
 func TestSessionRegistryNamesItsOpenSessions(t *testing.T) {
 	dev := NewDevice("ids-1", "ids-host", net.ParseIP("127.0.0.1"), "test", 1, map[string]any{})
-	cfg, err := CompileSessionConfig(&profile.Interface{
+	cfg, err := CompileSessionConfig(&wire.Interface{
 		Name: "ssh", Protocol: "ssh", Port: 22, Persistent: true, LineEnding: "\r\n",
-		Subjects: []profile.Subject{{Match: "*.*", Path: "{{ .Subject }}", PushFormat: "ok"}},
+		Subjects: []wire.Subject{{Match: "*.*", Push: func(any) string { return "ok" }}},
 	})
 	if err != nil {
 		t.Fatalf("CompileSessionConfig: %v", err)

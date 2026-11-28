@@ -8,8 +8,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // subscriber points the simulated services at their webhook endpoints
@@ -65,7 +65,7 @@ func (s *subscriber) reconcile(listed []collection.SimDevice, served []*sim.Devi
 			continue
 		}
 		def, found := s.cat.Lookup(d.ProfileName)
-		var wh *profile.WebhookSubscribe
+		var wh *wire.WebhookSubscribe
 		if found {
 			wh = def.WebhookFace()
 		}

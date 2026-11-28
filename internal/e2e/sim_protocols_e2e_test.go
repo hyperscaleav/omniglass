@@ -24,9 +24,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 const protocolsPortShift = 25000
@@ -48,13 +47,10 @@ func simulatedProductOn(t *testing.T, driverID string) string {
 	if err := json.Unmarshal(raw, &facts); err != nil {
 		t.Fatal(err)
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	var names []string
 	for _, p := range facts.Products {
-		if _, _, ok := store.ForProduct(p.ID); ok && p.DriverID == driverID {
+		if _, ok := cat.ForProduct(p.ID); ok && p.DriverID == driverID {
 			names = append(names, p.ID)
 		}
 	}

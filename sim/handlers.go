@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // goHandlers is what a Go device family answers in Go (#2829), registered on
@@ -297,13 +297,13 @@ func (d *Device) runFamilyCommand(ce commandEntry) CommandResult {
 // withSurfaceSubjects is an interface's declared subjects with a family
 // surface's appended, each as the profile subject the session compiles (its
 // token is the publish token, its Push the line).
-func withSurfaceSubjects(declared []profile.Subject, from []surface.Subject) []profile.Subject {
+func withSurfaceSubjects(declared []wire.Subject, from []surface.Subject) []wire.Subject {
 	if len(from) == 0 {
 		return declared
 	}
-	out := append([]profile.Subject(nil), declared...)
+	out := append([]wire.Subject(nil), declared...)
 	for _, s := range from {
-		out = append(out, profile.Subject{Match: s.Match, Path: s.Path, PublishToken: s.Token, Push: s.Push})
+		out = append(out, wire.Subject{Match: s.Match, Path: s.Path, PublishToken: s.Token, Push: s.Push})
 	}
 	return out
 }

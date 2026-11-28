@@ -3,16 +3,14 @@ package sim
 import (
 	"testing"
 	"time"
-
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // pinned is a clock that reads whatever *at holds.
 func pinned(at *time.Time) func() time.Time { return func() time.Time { return *at } }
 
-// A behavior reads the wall clock through its device's clock (#2754), so a
+// An override reads the wall clock through its device's clock (#2754), so a
 // room's meeting schedule can sit on the hour and a test can pin the hour.
-func TestABehaviorsNowIsItsDevicesClock(t *testing.T) {
+func TestAnOverridesNowIsItsDevicesClock(t *testing.T) {
 	at := time.Date(2026, 11, 26, 10, 7, 30, 0, time.UTC)
 	funcs := behaviorFuncs(newDeviceRand("bar"), pinned(&at))
 	now := funcs["now"].(func() int64)
@@ -26,13 +24,11 @@ func TestABehaviorsNowIsItsDevicesClock(t *testing.T) {
 
 	d := newTestDevice(t, "bar", map[string]any{"t": int64(0)})
 	d.SetClock(pinned(&at))
-	if err := d.AddBehaviorFromProfile(&profile.Behavior{Name: "stamp", Schedule: profile.Schedule{Interval: "60s"},
-		Mutations: []profile.Mutation{{Path: "t", Value: "{{ now }}"}}}); err != nil {
+	if err := d.WritePath("stamp", "t", "{{ now }}"); err != nil {
 		t.Fatal(err)
 	}
-	d.TickBehavior("stamp")
 	if got := d.ReadPath("t"); got != at.Unix() {
-		t.Fatalf("a tick stamped %v, want the device clock's %d", got, at.Unix())
+		t.Fatalf("an override stamped %v, want the device clock's %d", got, at.Unix())
 	}
 }
 

@@ -20,10 +20,10 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -120,12 +120,12 @@ func Spec() spec.Spec {
 				},
 			}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: nvpFace, Protocol: "tcp", Port: 51325, Persistent: true, LineEnding: "\r\n",
-				Doc: profile.Doc{Summary: "NVP line protocol: room control, program state, control ports and connected panels"},
+				Doc: wire.Doc{Summary: "NVP line protocol: room control, program state, control ports and connected panels"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State: stateFor(Rows[0]),
 		// Uptime is read-derived: now minus the boot anchor, never a timer.

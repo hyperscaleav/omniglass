@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostBorealCastReadsItsPlayback (#893): the shipped boreal-cast-api
@@ -22,7 +21,7 @@ func TestOutpostBorealCastReadsItsPlayback(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var cast string
-	s := newHTTPStack(t, "edge-cast", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-cast", nil, func(store *fleetShape) []string {
 		cast = driverProfile(t, store, "boreal-cast-api")
 		return []string{cast}
 	})

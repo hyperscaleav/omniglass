@@ -23,11 +23,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -148,14 +148,14 @@ func stateFor(r Row) map[string]any {
 }
 
 // session is what a persistent CLI face shares: the framing and the limits.
-func session(name, protocol string, port int, summary string) profile.Interface {
-	return profile.Interface{
+func session(name, protocol string, port int, summary string) wire.Interface {
+	return wire.Interface{
 		Name: name, Protocol: protocol, Port: port, APISurface: Name,
-		Doc:        profile.Doc{Summary: summary, Tags: []string{"management", "cli", "persistent-session"}},
-		Auth:       profile.Auth{Type: "password", DefaultUser: cliUser, DefaultPassword: cliPassword},
+		Doc:        wire.Doc{Summary: summary, Tags: []string{"management", "cli", "persistent-session"}},
+		Auth:       wire.Auth{Type: "password", DefaultUser: cliUser, DefaultPassword: cliPassword},
 		Persistent: true, LineEnding: "\r\n", Commands: listed(protocol == "telnet"),
 		Welcome:  "Polaris DSP CLI ready. 'subscribe <path>' for live updates.",
-		Limits:   profile.SessionLimits{MaxSubsPerSession: 64, PublishMinIntervalMs: 50, MaxSessionsPerDevice: 16, OutBuffer: 256},
+		Limits:   wire.SessionLimits{MaxSubsPerSession: 64, PublishMinIntervalMs: 50, MaxSessionsPerDevice: 16, OutBuffer: 256},
 		Subjects: cliSubjects(),
 	}
 }
@@ -176,31 +176,31 @@ func Spec() spec.Spec {
 				},
 			}}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: "http-api", Protocol: "http", Port: 80, APISurface: Name,
-				Doc: profile.Doc{Summary: "Polaris web and JSON API", Tags: []string{"management", "api"}},
+				Doc: wire.Doc{Summary: "Polaris web and JSON API", Tags: []string{"management", "api"}},
 				// Header-based API key: every /api request must carry the token,
 				// otherwise the listener answers 401 naming the header it
 				// expects. The dashboard page is public so an operator can paste
 				// their token into it; every /api endpoint stays gated.
-				Auth: profile.Auth{Type: "header", Header: "X-Polaris-Token", APIKey: apiToken, Enforce: true, PublicPaths: []string{"/"}},
+				Auth: wire.Auth{Type: "header", Header: "X-Polaris-Token", APIKey: apiToken, Enforce: true, PublicPaths: []string{"/"}},
 			},
 			session("ssh-console", "ssh", 22, "SSH CLI with persistent-session subscriptions"),
 			session("telnet-console", "telnet", 23, "Telnet CLI with persistent-session subscriptions"),
 			qrcFace(),
 			{
 				Name: "snmp", Protocol: "snmp", Port: 161, APISurface: Name,
-				Doc: profile.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
+				Doc: wire.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
 				// A community the agent knows and refuses answers
 				// authorizationError, where any other is dropped silently.
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
 			{
 				Name: "udp-echo", Protocol: "udp", Port: 9000, APISurface: Name,
-				Doc: profile.Doc{Summary: "UDP echo responder for custom protocol probing", Tags: []string{"diagnostic"}},
+				Doc: wire.Doc{Summary: "UDP echo responder for custom protocol probing", Tags: []string{"diagnostic"}},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: stateFor(r),
 		HTTP:  routes(),

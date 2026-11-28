@@ -24,11 +24,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -124,16 +124,16 @@ func Spec() spec.Spec {
 				State: map[string]any{"configuration": map[string]any{"device": map[string]any{"model": r.Model}, "firmware": map[string]any{"version": r.Firmware}}},
 			}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
-				Name: "http-api", Protocol: "http", Port: 80, Doc: profile.Doc{Summary: "Meridian JSON control API"},
-				Auth: profile.Auth{Type: "header", Header: "X-Meridian-Key", APIKey: "meridian-lab-key", Enforce: true},
+				Name: "http-api", Protocol: "http", Port: 80, Doc: wire.Doc{Summary: "Meridian JSON control API"},
+				Auth: wire.Auth{Type: "header", Header: "X-Meridian-Key", APIKey: "meridian-lab-key", Enforce: true},
 			},
 			{
-				Name: "snmp", Protocol: "snmp", Port: 161, Doc: profile.Doc{Summary: "SNMP monitoring"},
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Name: "snmp", Protocol: "snmp", Port: 161, Doc: wire.Doc{Summary: "SNMP monitoring"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State:   stateFor(Rows[0]),
 		HTTP:    routes(),

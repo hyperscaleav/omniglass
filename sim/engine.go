@@ -3,7 +3,6 @@ package sim
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"strings"
@@ -13,16 +12,15 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/fleet"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
 // Engine manages all simulated devices for a site.
 type Engine struct {
 	cat        *spec.Catalog
-	templates  fs.FS
 	portMap    func(int) int // nil serves each profile port as declared
 	syncMu     sync.Mutex    // serializes Sync
 	mu         sync.Mutex    // guards devices and fleet
@@ -52,25 +50,13 @@ type Engine struct {
 	rooms roomMemo
 }
 
-// NewEngine creates a simulator engine over a profile store and a templates
-// tree (profiles.Templates() for the embedded catalog). A nil templates tree
-// is valid for profiles that render no templates.
-func NewEngine(store *profile.Store, templates fs.FS) *Engine {
-	cat, err := spec.NewCatalog(store)
-	if err != nil {
-		panic(err) // no families, so nothing to refuse
-	}
-	return NewEngineOver(cat, templates)
-}
-
-// NewEngineOver creates a simulator engine over a catalog of YAML profiles
-// and Go families (#2829): a snapshot's profile resolves to a family when one
-// claims its product, else to its YAML profile.
-func NewEngineOver(cat *spec.Catalog, templates fs.FS) *Engine {
+// NewEngineOver creates a simulator engine over a catalog of Go families
+// (#2829): a snapshot's profile name resolves to the family of that name, and
+// its product to the family that claims it.
+func NewEngineOver(cat *spec.Catalog) *Engine {
 	e := &Engine{
-		cat:       cat,
-		templates: templates,
-		obs:       newEndpointObservation(),
+		cat: cat,
+		obs: newEndpointObservation(),
 	}
 	e.arb = NewArbiter(e.Now) // stamps an unplugged-since on the simulated world's clock
 	e.arb.Derive("scripted-problem", e.scriptedOffline)
@@ -169,7 +155,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// serial and MAC from its id, address), so a reset to defaults keeps
 	// the identity the device started with.
 	peers := peersByRoom[roomKey{snap.SiteCode, snap.Building, snap.Room}]
-	defaults := profile.ExpandIdentityTokens(def.InitialState(), snap.SiteCode, snap.Building, snap.Room, peers)
+	defaults := wire.ExpandIdentityTokens(def.InitialState(), snap.SiteCode, snap.Building, snap.Room, peers)
 	if defaults == nil {
 		defaults = map[string]any{}
 	}
@@ -226,54 +212,13 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		famSubjects = sf.Subjects
 	}
 
-	// Register routes, commands, and OID bindings from every interface
-	// the profile declares. Listeners are started later in StartAll; this
-	// step is pure state population.
+	// A persistent line interface holds its sessions: the registry the
+	// family's commands and the subjects its surface declares are served
+	// through. Listeners start later in StartAll; this step is pure state
+	// population.
 	for _, iface := range def.Surfaces() {
 		switch iface.Protocol {
-		case "http":
-			for i := range iface.Routes {
-				route := &iface.Routes[i]
-				if route.Native {
-					continue // a Go family's, answered by its handler
-				}
-				tmplContent, err := e.loadTemplate(route.Template)
-				if err != nil {
-					slog.Warn("skipping route, template not found",
-						"device", snap.Hostname, "route", route.Match,
-						"template", route.Template, "error", err,
-					)
-					continue
-				}
-				if err := dev.AddRouteFromProfile(route, tmplContent); err != nil {
-					return nil, fmt.Errorf("adding route %q to %q: %w", route.Match, snap.Hostname, err)
-				}
-			}
 		case "ssh", "telnet", "tcp", "udp":
-			for i := range iface.Commands {
-				cmd := &iface.Commands[i]
-				if cmd.Native {
-					continue // a Go family's, answered by its handler
-				}
-				var tmplContent string
-				switch {
-				case cmd.Response != "":
-					tmplContent = cmd.Response
-				case cmd.Template != "":
-					content, err := e.loadTemplate(cmd.Template)
-					if err != nil {
-						slog.Warn("skipping command, template not found",
-							"device", snap.Hostname, "command", cmd.Match,
-							"template", cmd.Template, "error", err,
-						)
-						continue
-					}
-					tmplContent = content
-				}
-				if err := dev.AddCommandFromProfile(cmd, tmplContent); err != nil {
-					return nil, fmt.Errorf("adding command %q to %q: %w", cmd.Match, snap.Hostname, err)
-				}
-			}
 			if iface.Persistent {
 				iface.Subjects = withSurfaceSubjects(iface.Subjects, famSubjects[iface.Name])
 				cfg, err := CompileSessionConfig(&iface)
@@ -293,36 +238,14 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 					dev.AttachUDPSession(reg)
 				}
 			} else if iface.Protocol == "tcp" {
-				// Raw-TCP listeners exist solely to host
-				// persistent sessions, there is no one-shot
-				// TCP listener mode in the simulator (TCP probes
-				// are agent-driven connect tests, not server-
-				// side dispatch). A non-persistent tcp interface
-				// is almost certainly a profile mistake.
+				// Raw-TCP listeners exist solely to host persistent
+				// sessions, there is no one-shot TCP listener mode in the
+				// simulator (TCP probes are agent-driven connect tests,
+				// not server-side dispatch). A non-persistent tcp
+				// interface is almost certainly a family mistake.
 				slog.Warn("tcp interface declared without persistent: true; listener will not start",
 					"device", snap.Hostname, "name", iface.Name, "port", iface.Port)
 			}
-		case "snmp":
-			// OID map is shared across all SNMP interfaces on a device;
-			// in practice profiles declare only one.
-			if dev.OIDMap == nil {
-				dev.OIDMap = make(map[string]string, len(iface.OIDMap))
-			}
-			for statePath, oid := range iface.OIDMap {
-				dev.OIDMap[oid] = statePath
-			}
-		}
-	}
-
-	// Behaviors compile last so they can see all interfaces if
-	// a future phase wants to gate one on a declared port. Per
-	// phase 1 of omniglass-lab#52, behavior compile failures stop the
-	// load: a malformed schedule or template should fail loudly
-	// at startup rather than silently not animating the device.
-	behaviors := def.BehaviorList()
-	for i := range behaviors {
-		if err := dev.AddBehaviorFromProfile(&behaviors[i]); err != nil {
-			return nil, fmt.Errorf("registering behavior on %q: %w", snap.Hostname, err)
 		}
 	}
 
@@ -336,14 +259,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		}
 	}
 
-	push, err := compilePush(def.ID(), def.PushFace(), dev.calendarFuncs())
-	if err != nil {
-		return nil, fmt.Errorf("compiling the push face on %q: %w", snap.Hostname, err)
-	}
-	dev.push = push
-	if g, ok := def.(spec.Served); ok && g.Handlers().Push != nil && push != nil {
-		push.goBody = g.Handlers().Push.Body
-	}
+	dev.push = compilePush(def.PushFace())
 
 	e.installSeams(dev)
 	return dev, nil
@@ -536,7 +452,7 @@ type fleetState struct {
 // asks for, and records the face with the address it bound. Returns nil
 // silently for protocols this simulator does not (yet) implement so
 // LoadDevices never blocks on declared-but-unimplemented interfaces.
-func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
+func (e *Engine) startInterface(dev *Device, iface wire.Interface) error {
 	bound, err := e.bindInterface(dev, iface)
 	if err != nil || bound == nil {
 		return err
@@ -547,7 +463,7 @@ func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
 
 // bindInterface starts one interface's listener and returns the address it
 // bound, nil for an interface that binds nothing.
-func (e *Engine) bindInterface(dev *Device, iface profile.Interface) (net.Addr, error) {
+func (e *Engine) bindInterface(dev *Device, iface wire.Interface) (net.Addr, error) {
 	port := e.port(iface.Port)
 	switch iface.Protocol {
 	case "http":
@@ -720,19 +636,6 @@ func (e *Engine) installSeams(dev *Device) {
 			pub(c)
 		}
 	}
-}
-
-// loadTemplate reads a template from the templates tree. Profile template
-// paths are slash-separated and relative (api/kestrel-vroom/status.json.gotempl).
-func (e *Engine) loadTemplate(tmplPath string) (string, error) {
-	if e.templates == nil {
-		return "", fmt.Errorf("template %q: engine has no templates tree", tmplPath)
-	}
-	data, err := fs.ReadFile(e.templates, tmplPath)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 // AddLoopbackIPs adds loopback IP addresses to the local network interface.

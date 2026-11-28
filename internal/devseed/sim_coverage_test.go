@@ -5,22 +5,23 @@ import (
 	"strings"
 	"testing"
 
+	simdevice "github.com/hyperscaleav/omniglass/sim/device"
+
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/seed"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 // TestEverySeededComponentIsSimulatedOrAccountedFor holds the lab to "every
 // seeded component is collected" (#1359, #1266). Every component the dev fleet
 // places (its sim_components included) has a product a simulator profile
-// serves, or one coverage.yaml lists:
+// serves, or one the coverage accounting (sim/device/coverage.go) lists:
 //   - unsimulated, with the issue that adds its profile;
 //   - passive, with no network interface and how it is watched instead.
 //
 // No component is without a product: nothing can simulate one (the simulator
 // serves products), so a fixture adding one fails here. The catalog test
-// (sim) holds coverage.yaml itself true; this holds the fleet the lab
+// (sim) holds the coverage accounting (sim/device/coverage.go) itself true; this holds the fleet the lab
 // actually places to it, so a fixture adding a component of an unserved,
 // unlisted product fails here, naming the product and its components.
 func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
@@ -34,10 +35,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	cat := shipped.Catalog(t)
-	cov, err := profiles.LoadCoverage()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cov := simdevice.Accounted()
 
 	byProduct := map[string][]string{}
 	// The components the seed places, and the ones it places only with the
@@ -64,7 +62,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 		_, isPassive := cov.Passive[p]
 		switch {
 		case served && isPending:
-			t.Errorf("%s is simulated now; drop it from coverage.yaml's unsimulated", p)
+			t.Errorf("%s is simulated now; drop it from the coverage accounting's unsimulated", p)
 		case served:
 			simulated += len(comps)
 		case isPending:
@@ -73,7 +71,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 		case isPassive:
 			passive += len(comps)
 		default:
-			t.Errorf("%s is placed (%s) but no simulator profile serves it and coverage.yaml does not list it: write its profile, or list it as unsimulated with its issue (or passive, if it has no network interface)", p, strings.Join(comps, ", "))
+			t.Errorf("%s is placed (%s) but no simulator profile serves it and the coverage accounting (sim/device/coverage.go) does not list it: write its profile, or list it as unsimulated with its issue (or passive, if it has no network interface)", p, strings.Join(comps, ", "))
 		}
 	}
 	t.Logf("dev fleet: %d components simulated, %d awaiting a profile (%d products), %d passive",

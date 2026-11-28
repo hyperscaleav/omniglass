@@ -12378,7 +12378,7 @@ components:
       additionalProperties: false
       properties:
         emits:
-          description: Whether it posts a webhook each time.
+          description: "Deprecated, always false: a device posts its webhooks from its own handlers, not from a timer."
           type: boolean
         interval:
           description: "How often it runs, as a duration: 5s, 1m."

@@ -6,7 +6,6 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
@@ -28,10 +27,8 @@ func TestComputedElapsedReadPath(t *testing.T) {
 	}
 	d := newTestDevice(t, "d-1", state)
 	d.SetClock(fixedClock(&now))
-	if err := d.AddComputedFromProfile(&profile.Computed{
-		Path: "status.device.uptime", Kind: "elapsed", Since: "status.device.boot_epoch",
-	}); err != nil {
-		t.Fatalf("AddComputedFromProfile: %v", err)
+	if err := d.AddElapsed(spec.Elapsed{Path: "status.device.uptime", Since: "status.device.boot_epoch"}); err != nil {
+		t.Fatalf("AddElapsed: %v", err)
 	}
 
 	if got := d.ReadPath("status.device.uptime"); got != int64(1_000) {
@@ -74,7 +71,7 @@ func TestComputedElapsedClampsAndUnsetAnchor(t *testing.T) {
 	}
 }
 
-// TestComputedSeedsAnchorOnInstall verifies AddComputedFromProfile seeds
+// TestComputedSeedsAnchorOnInstall verifies AddElapsed seeds
 // an absent/zero anchor to "now" so a freshly-booted device reads ~0 and
 // counts up.
 func TestComputedSeedsAnchorOnInstall(t *testing.T) {
@@ -84,10 +81,8 @@ func TestComputedSeedsAnchorOnInstall(t *testing.T) {
 	}
 	d := newTestDevice(t, "d-1", state)
 	d.SetClock(fixedClock(&now))
-	if err := d.AddComputedFromProfile(&profile.Computed{
-		Path: "status.device.uptime", Kind: "elapsed", Since: "status.device.boot_epoch",
-	}); err != nil {
-		t.Fatalf("AddComputedFromProfile: %v", err)
+	if err := d.AddElapsed(spec.Elapsed{Path: "status.device.uptime", Since: "status.device.boot_epoch"}); err != nil {
+		t.Fatalf("AddElapsed: %v", err)
 	}
 
 	// Anchor was seeded to the install-time clock.
@@ -163,10 +158,8 @@ func TestComputedReadsEmitNoEvents(t *testing.T) {
 	var published int
 	d.DiffPublisher = func(StateChange) { published++ }
 
-	if err := d.AddComputedFromProfile(&profile.Computed{
-		Path: "status.device.uptime", Kind: "elapsed", Since: "status.device.boot_epoch",
-	}); err != nil {
-		t.Fatalf("AddComputedFromProfile: %v", err)
+	if err := d.AddElapsed(spec.Elapsed{Path: "status.device.uptime", Since: "status.device.boot_epoch"}); err != nil {
+		t.Fatalf("AddElapsed: %v", err)
 	}
 
 	for i := 0; i < 100; i++ {

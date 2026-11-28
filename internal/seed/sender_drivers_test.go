@@ -3,8 +3,8 @@ package seed
 import (
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // A simulated service a scale lab seeds as a webhook sender (#1747) names
@@ -15,7 +15,7 @@ import (
 func TestEverySimulatedWebhookSenderNamesAShippedWebhookDriver(t *testing.T) {
 	named := 0
 	for _, def := range shipped.Catalog(t).Definitions() {
-		name, p := def.ID(), struct{ Webhook *profile.WebhookSubscribe }{def.WebhookFace()}
+		name, p := def.ID(), struct{ Webhook *wire.WebhookSubscribe }{def.WebhookFace()}
 		if p.Webhook == nil || p.Webhook.Driver == "" {
 			continue
 		}

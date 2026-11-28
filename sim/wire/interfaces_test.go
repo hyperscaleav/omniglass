@@ -1,4 +1,4 @@
-package profile
+package wire
 
 import (
 	"strings"
@@ -9,16 +9,16 @@ import (
 // profile declaring a second of either fails to load instead of serving
 // only one of them. Several tcp interfaces are fine: each gets its own.
 func TestValidateInterfaces(t *testing.T) {
-	ifaces := func(protos ...string) DeviceProfile {
-		var p DeviceProfile
+	ifaces := func(protos ...string) []Interface {
+		var p []Interface
 		for i, pr := range protos {
-			p.Interfaces = append(p.Interfaces, Interface{Name: pr + string(rune('a'+i)), Protocol: pr, Port: 1000 + i})
+			p = append(p, Interface{Name: pr + string(rune('a'+i)), Protocol: pr, Port: 1000 + i})
 		}
 		return p
 	}
 	for _, tc := range []struct {
 		name    string
-		p       DeviceProfile
+		p       []Interface
 		wantErr bool
 	}{
 		{"one of each", ifaces("http", "ssh", "telnet", "tcp", "snmp"), false},
@@ -28,7 +28,7 @@ func TestValidateInterfaces(t *testing.T) {
 		{"two telnet", ifaces("telnet", "telnet"), true},
 		{"two snmp", ifaces("snmp", "snmp"), true},
 	} {
-		if err := validateInterfaces(&tc.p); (err != nil) != tc.wantErr {
+		if err := ValidateInterfaces(tc.p); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
 		}
 	}
@@ -47,8 +47,7 @@ func TestValidateInterfacesTLSValidity(t *testing.T) {
 		{"a window with no tls", Interface{Name: "a", Protocol: "tcp", Port: 1, TLSValidityDays: 10}, true},
 		{"a negative window", Interface{Name: "a", Protocol: "tcp", Port: 1, TLS: true, TLSValidityDays: -1}, true},
 	} {
-		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
-		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
+		if err := ValidateInterfaces([]Interface{tc.iface}); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
 		}
 	}
@@ -68,8 +67,7 @@ func TestValidateInterfacesLoss(t *testing.T) {
 		{"a negative loss", Interface{Name: "a", Protocol: "udp", Port: 1, LossPct: -1}, true},
 		{"over all of it", Interface{Name: "a", Protocol: "udp", Port: 1, LossPct: 101}, true},
 	} {
-		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
-		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
+		if err := ValidateInterfaces([]Interface{tc.iface}); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
 		}
 	}
@@ -87,8 +85,7 @@ func TestValidateInterfacesRefusedCommunity(t *testing.T) {
 		{"refusing its own", Interface{Name: "a", Protocol: "snmp", Port: 1, Auth: Auth{Community: "public", RefusedCommunity: "public"}}, true},
 		{"on another face", Interface{Name: "a", Protocol: "http", Port: 1, Auth: Auth{RefusedCommunity: "revoked"}}, true},
 	} {
-		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
-		if err := validateInterfaces(&p); (err != nil) != tc.wantErr {
+		if err := ValidateInterfaces([]Interface{tc.iface}); (err != nil) != tc.wantErr {
 			t.Errorf("%s: err = %v, wantErr %v", tc.name, err, tc.wantErr)
 		}
 	}
@@ -110,8 +107,7 @@ func TestValidateInterfacesWebSocket(t *testing.T) {
 		{"a relative drop path", Interface{Name: "ws", Protocol: "websocket", WebSocket: WebSocket{Path: "/ws", DropPath: "drop"}}, "drop_path"},
 		{"a login auth", Interface{Name: "ws", Protocol: "websocket", WebSocket: WebSocket{Path: "/ws"}, Auth: Auth{Type: "form"}}, "form auth"},
 	} {
-		p := DeviceProfile{Interfaces: []Interface{tc.iface}}
-		err := validateInterfaces(&p)
+		err := ValidateInterfaces([]Interface{tc.iface})
 		if tc.want == "" {
 			if err != nil {
 				t.Errorf("%s: err = %v, want none", tc.name, err)

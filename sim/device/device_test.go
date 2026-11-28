@@ -3,26 +3,21 @@ package device
 import (
 	"strings"
 	"testing"
-
-	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
-// The shipped catalog holds the embedded YAML profiles and every registered
-// family, and a registered family's products resolve to it.
-func TestCatalogHoldsTheShippedProfilesAndEveryFamily(t *testing.T) {
+// The shipped catalog holds every registered family and nothing else, and a
+// registered family's products resolve to it.
+func TestCatalogHoldsEveryFamily(t *testing.T) {
 	cat, err := Catalog()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range cat.Definitions() {
-		if d.Kind() == spec.KindYAML {
-			t.Errorf("%s is still a YAML profile; every device is a family now", d.ID())
-		}
+	if got, want := len(cat.Definitions()), len(Families()); got != want {
+		t.Errorf("the catalog holds %d definitions, the registry %d families", got, want)
 	}
 	for _, fam := range Families() {
-		d, ok := cat.Lookup(fam.Name)
-		if !ok || d.Kind() != spec.KindGo {
-			t.Errorf("family %s is not in the catalog as a Go definition", fam.Name)
+		if _, ok := cat.Lookup(fam.Name); !ok {
+			t.Errorf("family %s is not in the catalog", fam.Name)
 		}
 		for _, m := range fam.Models {
 			if r, ok := cat.ForProduct(m.Product); !ok || r.Definition.ID() != fam.Name {

@@ -14,7 +14,7 @@ import (
 func TestFamilyConforms(t *testing.T) { spectest.Conform(t, Spec()) }
 
 func TestEveryRowIsAProductThatReportsItself(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

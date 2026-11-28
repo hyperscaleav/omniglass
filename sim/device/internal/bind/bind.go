@@ -5,9 +5,8 @@
 // mostly one of these. Only a behavior no primitive owns is written inline in
 // the family.
 //
-// The state a bound tick keeps follows one layout, the one the YAML profiles
-// used, so a device moved to Go keeps the paths a collector, a test or the
-// console already reads:
+// The state a bound tick keeps follows one layout, the one the devices have
+// always kept, so a collector, a test or the console reads the same paths:
 //
 //	status.device.power            the device's power
 //	status.sim.{busy,known,awake}  the room-following bookkeeping

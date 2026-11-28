@@ -14,7 +14,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // keyDevice is an http device that records the api key each request carried.
@@ -54,7 +53,7 @@ func TestARotatedSecretReachesTheOutpostAtOnce(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
-	s := newHTTPStack(t, "edge-rotate", nil, func(*profile.Store) []string { return nil })
+	s := newHTTPStack(t, "edge-rotate", nil, func(*fleetShape) []string { return nil })
 	s.authorDriver("keyed-json", map[string]any{
 		"version":   1,
 		"transport": "http",

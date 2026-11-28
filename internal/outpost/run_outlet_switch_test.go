@@ -12,7 +12,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestSwitchingAnOutletOffHoldsWhatItFeeds drives #1653 over the real wire:
@@ -31,7 +30,7 @@ func TestSwitchingAnOutletOffHoldsWhatItFeeds(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var pduProfile, sensorProfile string
-	s := newHTTPStack(t, "edge-outlet", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-outlet", nil, func(store *fleetShape) []string {
 		pduProfile = driverProfile(t, store, "ferrite-pdu-snmp")
 		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{pduProfile, sensorProfile}

@@ -8,12 +8,11 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The generic wire harness proven by a family of its own (#2845): a small lamp
@@ -57,9 +56,9 @@ func lampSpec(drifted bool) spec.Spec {
 		Models: spec.Table(lampRows, func(r lampRow) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model, State: map[string]any{"configuration": map[string]any{"device": map[string]any{"model": r.Model}}}}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{Name: "api", Protocol: "http", Port: 8080},
-			{Name: "snmp", Protocol: "snmp", Port: 161, Auth: profile.Auth{Community: "public"}},
+			{Name: "snmp", Protocol: "snmp", Port: 161, Auth: wire.Auth{Community: "public"}},
 		},
 		State: map[string]any{
 			"status": map[string]any{
@@ -107,7 +106,7 @@ func lampSpec(drifted bool) spec.Spec {
 
 func lampEngine(drifted bool) func(testing.TB) *Engine {
 	return func(t testing.TB) *Engine {
-		return NewEngineOver(shippedCatalog(t, lampSpec(drifted)), profiles.Templates())
+		return NewEngineOver(shippedCatalog(t, lampSpec(drifted)))
 	}
 }
 

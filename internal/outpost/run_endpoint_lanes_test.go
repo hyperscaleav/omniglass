@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // countingDevice is an http device that counts what it is asked and the most
@@ -86,7 +85,7 @@ func TestFiftyComponentsBesideASlowDeviceRunInTheirOwnLanes(t *testing.T) {
 		want  = 6 // two polls, three rounds each
 		bound = 30 * time.Second
 	)
-	s := newHTTPStack(t, "edge-lanes", nil, func(*profile.Store) []string { return nil })
+	s := newHTTPStack(t, "edge-lanes", nil, func(*fleetShape) []string { return nil })
 	poll := func(name string) map[string]any {
 		return map[string]any{"name": name, "schedule": map[string]any{"every": "1s"}, "request": map[string]any{"path": "/" + name},
 			"emits": []any{map[string]any{"name": "uptime", "extract": map[string]any{"jsonpath": "uptime"}}}}

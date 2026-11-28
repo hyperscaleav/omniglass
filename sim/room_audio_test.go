@@ -8,7 +8,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // A room's audio chain shows its meeting (#2774): the ceiling and wireless
@@ -413,36 +412,14 @@ func TestAStandbyAmplifierCarriesNoSignalInAMeeting(t *testing.T) {
 			break
 		}
 	}
-	if err := r.dev.AddBehaviorFromProfile(&profile.Behavior{Name: "standby", Schedule: profile.Schedule{Interval: "60s"},
-		Mutations: []profile.Mutation{{Path: "status.amp.power", Value: "standby"}}}); err != nil {
+	if err := r.dev.WritePath("standby", "status.amp.power", "standby"); err != nil {
 		t.Fatal(err)
 	}
-	r.tick(t, at, "standby")
 	for range 3 {
 		r.tick(t, at, "output_drift")
 	}
 	if r.is("status.amp.signal_present") {
 		t.Fatal("a standby amplifier reports signal present in a meeting")
-	}
-}
-
-// meetingsBetween hands a template the room's meetings over a window, the
-// same ones the calendar derives, and none without a calendar.
-func TestMeetingsBetweenReadsTheRoomsWindowOffTheCalendar(t *testing.T) {
-	day := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
-	at := day.Add(12 * time.Hour)
-	e, d := calEngine(t, 11, audioRoom, &at)
-	want := len(e.Calendar().Entries(audioRoom, day, day.Add(24*time.Hour), calendar.MeetingKinds))
-	if want == 0 {
-		t.Fatal("the day holds no meeting")
-	}
-	expr := fmt.Sprintf("{{ len (meetingsBetween %d %d) }}", day.Unix(), day.Add(24*time.Hour).Unix())
-	if got := stampBehavior(t, d, expr); fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("meetingsBetween holds %v meetings, the calendar %d", got, want)
-	}
-	e.SetCalendar(nil)
-	if got := stampBehavior(t, d, expr); fmt.Sprint(got) != "0" {
-		t.Fatalf("with no calendar meetingsBetween holds %v", got)
 	}
 }
 

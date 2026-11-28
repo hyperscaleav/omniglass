@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/device"
 	"github.com/hyperscaleav/omniglass/sim/impair"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
 
@@ -68,7 +68,7 @@ func newProblemRig(t *testing.T) *problemRig {
 				mk("hq-mr65-1", "main-display", "boreal-edge-86")}},
 		}}},
 	}
-	e := sim.NewEngineOver(cat, profiles.Templates())
+	e := sim.NewEngineOver(cat)
 	installWorld(e, w)
 	var snaps []sim.DeviceSnapshot
 	ip := 1
@@ -219,7 +219,7 @@ func TestUnpluggedAndLossProblemsAskTheNetworkForTheirWindow(t *testing.T) {
 // A world with no scripted problems has no executor: a device is untouched.
 func TestAWorldWithNoProblemsHasNoExecutor(t *testing.T) {
 	w := worldFixture()
-	e := sim.NewEngine(nil, nil)
+	e := shipped.Engine(t)
 	installWorld(e, w)
 	if newProblemExecutor(w, e.Calendar(), e.Arbiter(), nil, slog.Default()) != nil || newProblemExecutor(nil, nil, nil, nil, slog.Default()) != nil {
 		t.Fatal("an executor exists for a world with no problems")

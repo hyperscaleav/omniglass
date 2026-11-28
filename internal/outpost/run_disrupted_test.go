@@ -17,7 +17,6 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain drives #1651 over
@@ -36,7 +35,7 @@ func TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var sensorProfile string
-	s := newHTTPStack(t, "edge-reboot", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-reboot", nil, func(store *fleetShape) []string {
 		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile}
 	})

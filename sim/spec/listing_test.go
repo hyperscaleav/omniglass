@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The console lists a family's line commands where the family serves them
@@ -35,7 +35,7 @@ func listingFamily() spec.Spec {
 	return spec.Spec{
 		Name:     "listing-family",
 		Identity: spec.Identity{Manufacturer: "Acme", Model: "L1", DeviceType: "display"},
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{Name: "shell", Protocol: "ssh", Port: 22, Persistent: true},
 			{Name: "line", Protocol: "tcp", Port: 5000, Persistent: true},
 			{Name: "other", Protocol: "telnet", Port: 23, Persistent: true},
@@ -56,11 +56,11 @@ func TestAFamilyListsItsLineCommandsWhereItServesThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := map[string][]profile.Command{}
+	got := map[string][]wire.Command{}
 	for _, iface := range f.Surfaces() {
 		got[iface.Name] = iface.Commands
 	}
-	match := func(cs []profile.Command) (out [][2]string) {
+	match := func(cs []wire.Command) (out [][2]string) {
 		for _, c := range cs {
 			out = append(out, [2]string{c.Match, c.Action})
 		}
@@ -73,11 +73,6 @@ func TestAFamilyListsItsLineCommandsWhereItServesThem(t *testing.T) {
 	} {
 		if !reflect.DeepEqual(match(got[name]), want) {
 			t.Errorf("%s lists %v, want %v", name, match(got[name]), want)
-		}
-	}
-	for _, c := range got["shell"] {
-		if !c.Native {
-			t.Errorf("%s is listed but not marked native", c.Match)
 		}
 	}
 	if got["shell"][0].Doc.Summary != "Show it" {

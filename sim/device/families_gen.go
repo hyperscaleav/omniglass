@@ -56,3 +56,32 @@ func families() []spec.Spec {
 		fam_uccplatform.Spec(),
 	}
 }
+
+// familyDirs is the directory of each family under sim/device, in the order
+// families lists them: where a family's package is, for the docs generated from it.
+func familyDirs() []string {
+	return []string{
+		"bookingservice",
+		"borealbeam",
+		"borealcast",
+		"borealedge",
+		"ferritepdu",
+		"genericdevice",
+		"kestrelgaze",
+		"kestrelrelay",
+		"kestrelvroom",
+		"lyraarc",
+		"lyrahx",
+		"meridianextender",
+		"meridianswitcher",
+		"newtroncore",
+		"newtronpanel",
+		"newtronslate",
+		"polarisamp",
+		"polarisdsp",
+		"recordingservice",
+		"schedulingservice",
+		"tessellatecensus",
+		"uccplatform",
+	}
+}

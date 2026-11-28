@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostBorealBeamReadsItsProjectorState (#899): the shipped
@@ -23,7 +22,7 @@ func TestOutpostBorealBeamReadsItsProjectorState(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var beam string
-	s := newHTTPStack(t, "edge-beam", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-beam", nil, func(store *fleetShape) []string {
 		beam = driverProfile(t, store, "boreal-beam-snmp")
 		return []string{beam}
 	})

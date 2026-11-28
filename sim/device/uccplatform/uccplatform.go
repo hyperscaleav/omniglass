@@ -42,8 +42,8 @@ package uccplatform
 
 import (
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry: the product it is
@@ -136,13 +136,13 @@ func Spec() spec.Spec {
 		Models: spec.Table(Rows, func(r Row) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: "http-api", Protocol: "http", Port: 443, TLS: true, APISurface: "ucc-platform",
-				Doc:  profile.Doc{Summary: "UCC platform admin HTTP API + dashboard", Tags: []string{"management", "api", "cloud"}},
-				Auth: profile.Auth{Type: "header", Header: "X-UCC-Token", APIKey: "ucc-lab-token", Enforce: true, PublicPaths: []string{"/"}},
+				Doc:  wire.Doc{Summary: "UCC platform admin HTTP API + dashboard", Tags: []string{"management", "api", "cloud"}},
+				Auth: wire.Auth{Type: "header", Header: "X-UCC-Token", APIKey: "ucc-lab-token", Enforce: true, PublicPaths: []string{"/"}},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: stateFor(Rows[0]),
 		HTTP:  routes(),
@@ -164,6 +164,6 @@ func Spec() spec.Spec {
 		// a ucc-webhook endpoint on its component, and the simulator adds each room
 		// bound on that endpoint to the account through the provision route, so the
 		// account's periodic report names every bound room.
-		Webhook: &profile.WebhookSubscribe{Subscribe: "/api/webhooks", Driver: "ucc-webhook", Provision: "/api/rooms"},
+		Webhook: &wire.WebhookSubscribe{Subscribe: "/api/webhooks", Driver: "ucc-webhook", Provision: "/api/rooms"},
 	}
 }

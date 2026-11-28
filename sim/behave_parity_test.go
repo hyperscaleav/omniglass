@@ -975,31 +975,3 @@ func TestBehaveParitySchedulingServiceTotalsAndRooms(t *testing.T) {
 	p.same("10:00:00", "status.bookings.remaining", sum.Remaining)
 	p.same("10:00:00", "status.bookings.in_progress", sum.InProgress)
 }
-
-// The fixed meeting day a booking service keeps with no calendar is the
-// engine's bookingsAt, minute by minute.
-func TestBehaveParityFixedDayIsBookingsAt(t *testing.T) {
-	p := newParity(t, "booking-service", "booking-1", nil, nil, calendar.Room{})
-	raw, ok := p.d.ReadPath("configuration.calendar.bookings").([]any)
-	if !ok || len(raw) == 0 {
-		t.Fatalf("the profile's meeting day: %v", p.d.ReadPath("configuration.calendar.bookings"))
-	}
-	var spec []string
-	for _, w := range raw {
-		spec = append(spec, fmt.Sprint(w))
-	}
-	windows, err := behave.ParseWindows(spec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for tm := parityDay; tm.Before(parityDay.Add(48 * time.Hour)); tm = tm.Add(time.Minute) {
-		want, err := bookingsAt(tm, raw)
-		if err != nil {
-			t.Fatal(err)
-		}
-		state, remaining := behave.FixedDay(tm, windows)
-		if state != want.State || remaining != want.Remaining {
-			t.Fatalf("%s: %s with %d left from sim/behave, %s with %d in the engine", tm.Format("Jan 2 15:04"), state, remaining, want.State, want.Remaining)
-		}
-	}
-}

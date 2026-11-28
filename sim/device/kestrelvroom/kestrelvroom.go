@@ -34,10 +34,10 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -197,9 +197,9 @@ func Spec() spec.Spec {
 		Models: spec.Table(Rows, func(r Row) spec.Model {
 			return spec.Model{Product: r.Product, Model: r.Model, Summary: fmt.Sprintf("Kestrel %s video conferencing bar", r.Model)}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
-				Name: "http-api", Protocol: "http", Port: 443, TLS: true, Doc: profile.Doc{Summary: "Kestrel HTTP JSON API + web admin UI"},
+				Name: "http-api", Protocol: "http", Port: 443, TLS: true, Doc: wire.Doc{Summary: "Kestrel HTTP JSON API + web admin UI"},
 				Auth: auth(),
 				// The live feed the web admin page updates from: every change
 				// to the call's state and participant count, the volume, the
@@ -207,21 +207,21 @@ func Spec() spec.Spec {
 				// the same basic auth. A reconnect's Last-Event-ID replays from
 				// that event, and the console drops every stream by firing POST
 				// at the drop path.
-				Events: profile.Events{Path: "/api/events", RetryMS: 2000, Paths: feedPaths, DropPath: "/api/admin/streams/drop"},
+				Events: wire.Events{Path: "/api/events", RetryMS: 2000, Paths: feedPaths, DropPath: "/api/admin/streams/drop"},
 			},
 			{
 				// The control socket the room's touch panel drives the bar over:
 				// a JSON message per text frame, behind the same basic auth as
 				// the web API but its own port.
 				Name: "ws-api", Protocol: "websocket", Port: 9443, TLS: true,
-				Doc:  profile.Doc{Summary: "Kestrel control socket (JSON over a websocket): subscribe, get, set"},
+				Doc:  wire.Doc{Summary: "Kestrel control socket (JSON over a websocket): subscribe, get, set"},
 				Auth: auth(),
-				WebSocket: profile.WebSocket{
+				WebSocket: wire.WebSocket{
 					Path: "/api/ws", Paths: []string{pathVolume, pathMute, "status.call", pathPower},
 					Settable: []string{pathVolume, pathMute}, DropPath: "/api/admin/sockets/drop",
 				},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State:   stateFor(Rows[0]),
 		HTTP:    routes(),
@@ -230,8 +230,8 @@ func Spec() spec.Spec {
 	}
 }
 
-func auth() profile.Auth {
-	return profile.Auth{Type: "basic", DefaultUser: "admin", DefaultPassword: "kestrel", Realm: "Kestrel VRoom", Enforce: true}
+func auth() wire.Auth {
+	return wire.Auth{Type: "basic", DefaultUser: "admin", DefaultPassword: "kestrel", Realm: "Kestrel VRoom", Enforce: true}
 }
 
 // ---- behavior ----

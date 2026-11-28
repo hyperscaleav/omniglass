@@ -1,15 +1,14 @@
-// Package spec is how a simulated device is defined, whichever way it is
-// written. A YAML profile (sim/profile) and a Go device family (sim/device/*)
-// both present one Definition, and a Catalog resolves a product to the one
-// that serves it: a Go family when one claims the product, else its YAML
-// profile (#2829, the first slice of the Go-families epic #2826).
+// Package spec is how a simulated device is defined. A Go device family
+// (sim/device/*) presents one Definition, and a Catalog resolves a product to the
+// family that claims it (#2829, #2826; the YAML profiles it once sat beside are
+// gone, #2837).
 //
 // A family implements one wire API once, against a Spec, and its models are
 // rows of a typed table: the five sizes of one display are five Models, not
 // five packages. Its protocol handlers are Go funcs the engine's protocol
 // servers call (HTTPHandler, LineHandler); its responses are typed Go values.
 //
-// This package is a leaf: it imports sim/profile and nothing of the engine, so
+// This package is a leaf: it imports sim/wire and nothing of the engine, so
 // a family imports only spec, and the engine imports spec to run what it
 // defines.
 package spec
@@ -21,8 +20,8 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Identity is what a definition says about the product it simulates.
@@ -48,8 +47,7 @@ type Model struct {
 	// own summary stands when empty.
 	Summary string
 	// State is deep-merged over the family's State for this product, the
-	// per-model difference (its model name, serial prefix, size), the way a
-	// YAML profile's products: overrides are.
+	// per-model difference (its model name, serial prefix, size).
 	State map[string]any
 	// Row is the family's own typed row, the one the table was written in.
 	Row any
@@ -96,8 +94,7 @@ type Device interface {
 	// advances and the change reaches everything that watches state (the diff
 	// stream, a subscribed session, an event stream).
 	Write(path string, value any) error
-	// WriteMany sets several state paths as one change, as a YAML route's
-	// mutations are applied: one version, one diff, and either every path is
+	// WriteMany sets several state paths as one change: one version, one diff, and either every path is
 	// written or none.
 	WriteMany(changes ...surface.Change) error
 	// Now is the time the device reads: the simulated world's clock, which a
@@ -106,8 +103,7 @@ type Device interface {
 	// Publish reports a named occurrence (a call started, a log line) on the
 	// device's live feed, numbered with the state changes the feed streams and
 	// kept for a reconnect's replay as they are. A device whose face declares
-	// no feed drops it. Call it after the writes the occurrence follows, as a
-	// YAML route's events are reported after its mutations.
+	// no feed drops it. Call it after the writes the occurrence follows.
 	Publish(e Event)
 }
 
@@ -154,7 +150,7 @@ func Failure(status int, msg string) HTTPResponse {
 type HTTPHandler func(d Device, r HTTPRequest) HTTPResponse
 
 // HTTPRoute is one route a family serves on its http interfaces. Match is
-// "METHOD /path", exactly as a YAML profile writes it.
+// "METHOD /path".
 type HTTPRoute struct {
 	Match string
 	// Summary and Example document the route where the console lists a
@@ -168,7 +164,7 @@ type HTTPRoute struct {
 	// to a fixed list of values: what the console offers as quick sets and
 	// the simulator reads to tell a path driven away from its default. A route
 	// built by httpapi.Control carries its own.
-	Sets   []profile.Set
+	Sets   []wire.Set
 	Handle HTTPHandler
 }
 
@@ -177,7 +173,7 @@ type HTTPRoute struct {
 type LineHandler func(d Device) string
 
 // Command is one command of a line protocol a family serves, matched exactly
-// against the trimmed line, as a YAML profile's commands are.
+// against the trimmed line.
 type Command struct {
 	Match   string
 	Summary string
@@ -231,7 +227,7 @@ func (c TickContext) ReadBookings() behave.Bookings {
 // Tick is a typed behavior of a Go family: a function that runs on an
 // interval, reads the device's typed state and the room, calls sim/behave
 // primitives, and returns the state paths it wants written. The engine applies
-// them the way a YAML behavior's mutations are applied: only what changed is
+// them so that only what changed is
 // written, so the version advances, the diff stream and subscribed sessions
 // see it, and a path an operator has overridden is left alone.
 type Tick struct {
@@ -245,8 +241,7 @@ type Tick struct {
 	OnStart bool
 	Run     func(d Device, c TickContext) []surface.Change
 	// Emit names the occurrences the tick reports on the device's live feed,
-	// read from the device after Run's changes are written (as a YAML
-	// behavior's events are rendered against the state its mutations left),
+	// read from the device after Run's changes are written,
 	// numbered with the state changes. A tick that reports nothing leaves it
 	// nil; an event with no name is not this tick's.
 	Emit func(d Device, c TickContext) []Event
@@ -308,7 +303,7 @@ type Spec struct {
 	Models []Model
 	// Interfaces are the surfaces and ports the family serves. They declare
 	// protocol, port, auth and sessions; what answers on them is Handlers.
-	Interfaces []profile.Interface
+	Interfaces []wire.Interface
 	// State is the state tree with its defaults.
 	State map[string]any
 	// HTTP and Commands are the protocol handlers.
@@ -328,10 +323,7 @@ type Spec struct {
 	Push *PushFace
 	// Webhook says how a simulator subscribes the family's service to a webhook
 	// endpoint, and which driver receives its posts, nil for none (#2836).
-	Webhook *profile.WebhookSubscribe
-	// Behaviors are YAML-style, run by the engine's existing behavior
-	// machinery until the shared primitives replace them (#2830).
-	Behaviors []profile.Behavior
+	Webhook *wire.WebhookSubscribe
 }
 
 // validate refuses a family the engine could not serve faithfully.
@@ -350,6 +342,9 @@ func (s Spec) validate() error {
 			return fmt.Errorf("family %q lists product %q twice", s.Name, m.Product)
 		}
 		seen[m.Product] = true
+	}
+	if err := wire.ValidateInterfaces(s.Interfaces); err != nil {
+		return fmt.Errorf("family %q: %w", s.Name, err)
 	}
 	if err := validateElapsed(s.Name, s.Elapsed); err != nil {
 		return err
@@ -402,16 +397,16 @@ func (s Spec) validate() error {
 }
 
 // lineFace says an interface of that name speaks a line protocol.
-func lineFace(ifaces []profile.Interface, name string) bool {
+func lineFace(ifaces []wire.Interface, name string) bool {
 	for _, i := range ifaces {
 		if i.Name == name {
-			return hasProtocol([]profile.Interface{i}, "ssh", "telnet", "tcp", "udp")
+			return hasProtocol([]wire.Interface{i}, "ssh", "telnet", "tcp", "udp")
 		}
 	}
 	return false
 }
 
-func hasProtocol(ifaces []profile.Interface, protocols ...string) bool {
+func hasProtocol(ifaces []wire.Interface, protocols ...string) bool {
 	for _, i := range ifaces {
 		for _, p := range protocols {
 			if i.Protocol == p {

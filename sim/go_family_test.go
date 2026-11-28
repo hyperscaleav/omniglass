@@ -5,6 +5,7 @@ package sim
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net"
 	"slices"
 	"strings"
@@ -15,18 +16,17 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/spec/spectest"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // familyEngine serves the test family beside the shipped YAML profiles.
 func familyEngine(t *testing.T, fam spec.Spec) *Engine {
 	t.Helper()
-	e := NewEngineOver(shippedCatalog(t, fam), profiles.Templates())
+	e := NewEngineOver(shippedCatalog(t, fam))
 	e.SetPortMap(EphemeralPorts)
 	t.Cleanup(e.StopAll)
 	return e
@@ -206,42 +206,39 @@ func TestGoFamilyOwnNameServesTheBaseState(t *testing.T) {
 	}
 }
 
-// The engine builds a family's product exactly as it builds the YAML twin's
-// (#2829): the same faces at the same declared ports, the same state with the
-// product's overlay merged, the same identity in its enriched state.
-func TestEngineBuildsAFamilyProductAsItBuildsItsYAMLTwin(t *testing.T) {
-	cat, err := spectest.Catalog()
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := NewEngineOver(cat, nil)
-	e.SetPortMap(EphemeralPorts)
-	t.Cleanup(e.StopAll)
+// The engine builds a family's product with the faces the family declares at
+// their declared ports, the state with the product's overlay merged, and the
+// product named on the device (#2829).
+func TestEngineBuildsAFamilyProduct(t *testing.T) {
+	e := familyEngine(t, spectest.Spec())
 	var snaps []DeviceSnapshot
-	for i, p := range spectest.Pairs {
-		ip := func(k int) string { return "127.88.25." + string(rune('1'+k)) }
-		snaps = append(snaps,
-			DeviceSnapshot{DeviceID: "go-" + p.Go, Hostname: "go-" + p.Go, LoopbackIP: ip(2 * i), ProfileName: spectest.Name, Product: p.Go, Version: 1},
-			DeviceSnapshot{DeviceID: "yaml-" + p.YAML, Hostname: "yaml-" + p.YAML, LoopbackIP: ip(2*i + 1), ProfileName: spectest.TwinName, Product: p.YAML, Version: 1})
+	products := []struct {
+		name     string
+		diagonal string
+	}{{"tf-display-55", "55"}, {"tf-display-65", "65"}}
+	for i, p := range products {
+		snaps = append(snaps, familySnap("go-"+p.name, "127.88.25."+string(rune('1'+i)), p.name))
 	}
 	if err := e.Sync(snaps); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range spectest.Pairs {
-		g, y := deviceNamed(t, e, "go-"+p.Go), deviceNamed(t, e, "yaml-"+p.YAML)
+	for _, p := range products {
+		g := deviceNamed(t, e, "go-"+p.name)
 		for _, face := range []string{"api", "console"} {
-			gf, yf := faceOf(t, g, face), faceOf(t, y, face)
-			if gf.Protocol != yf.Protocol || gf.Declared != yf.Declared || gf.TLS != yf.TLS {
-				t.Errorf("%s: face %s = %+v, twin %+v", p.Go, face, gf, yf)
+			if f := faceOf(t, g, face); f.Declared == 0 {
+				t.Errorf("%s: face %s = %+v, want it at its declared port", p.name, face, f)
 			}
 		}
-		for _, path := range []string{"status.device.power", "configuration.firmware.version", "configuration.device.diagonal"} {
-			if gv, yv := g.ReadPath(path), y.ReadPath(path); gv != yv || gv == nil {
-				t.Errorf("%s: %s = %v, twin %v", p.Go, path, gv, yv)
+		if got := fmt.Sprint(g.ReadPath("configuration.device.diagonal")); got != p.diagonal {
+			t.Errorf("%s: diagonal = %s, want the row's %s", p.name, got, p.diagonal)
+		}
+		for _, path := range []string{"status.device.power", "configuration.firmware.version"} {
+			if g.ReadPath(path) == nil {
+				t.Errorf("%s: %s is unset", p.name, path)
 			}
 		}
-		if g.Product != p.Go || y.Product != p.YAML {
-			t.Errorf("products = %s, %s", g.Product, y.Product)
+		if g.Product != p.name {
+			t.Errorf("product = %s, want %s", g.Product, p.name)
 		}
 	}
 }
@@ -445,7 +442,7 @@ func TestGoFamilyRouteSetsReportFaultsAndListOnTheSurface(t *testing.T) {
 	fam.HTTP = append([]spec.HTTPRoute(nil), fam.HTTP...)
 	for i := range fam.HTTP {
 		if fam.HTTP[i].Match == "POST /api/power" {
-			fam.HTTP[i].Sets = []profile.Set{{Path: "status.device.power", Field: "power", Values: []string{"on", "off"}}}
+			fam.HTTP[i].Sets = []wire.Set{{Path: "status.device.power", Field: "power", Values: []string{"on", "off"}}}
 		}
 	}
 	e := familyEngine(t, fam)
@@ -463,10 +460,10 @@ func TestGoFamilyRouteSetsReportFaultsAndListOnTheSurface(t *testing.T) {
 		t.Fatalf("faults = %+v, want the power held off its default", f)
 	}
 	def, _ := e.cat.Lookup(spectest.Name)
-	var listed []profile.Set
+	var listed []wire.Set
 	for _, s := range def.Surfaces() {
 		for _, r := range s.Routes {
-			listed = append(listed, r.Sets()...)
+			listed = append(listed, r.Sets...)
 		}
 	}
 	if len(listed) != 1 || listed[0].Field != "power" {
@@ -478,7 +475,7 @@ func TestGoFamilyRouteSetsReportFaultsAndListOnTheSurface(t *testing.T) {
 // surface lists each with the state path it reads, as a profile's OID map is.
 func TestGoFamilyOIDsAnswerTheConsoleAndAreListed(t *testing.T) {
 	fam := spectest.Spec()
-	fam.Interfaces = append(append([]profile.Interface(nil), fam.Interfaces...), profile.Interface{Name: "snmp", Protocol: "snmp", Port: 161})
+	fam.Interfaces = append(append([]wire.Interface(nil), fam.Interfaces...), wire.Interface{Name: "snmp", Protocol: "snmp", Port: 161})
 	fam.Surface = func(d spec.Device) spec.Surface {
 		return spec.Surface{OIDs: []surface.OID{
 			surface.Text("1.3.6.1.4.1.9.1.0", func() string { return spec.String(d, "status.device.power") }).At("status.device.power"),
@@ -502,7 +499,7 @@ func TestGoFamilyOIDsAnswerTheConsoleAndAreListed(t *testing.T) {
 	var listed map[string]string
 	for _, s := range def.Surfaces() {
 		if s.Protocol == "snmp" {
-			listed = s.NativeOIDs
+			listed = s.OIDs
 		}
 	}
 	if listed["status.device.power"] != "1.3.6.1.4.1.9.1.0" || len(listed) != 2 {

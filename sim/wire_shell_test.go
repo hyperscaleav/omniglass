@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The line-protocol half of the golden wire harness (#2835): what a family
@@ -59,7 +59,7 @@ type wireLimits struct {
 }
 
 // wireFacesOf is the interfaces a catalog definition serves.
-func wireFacesOf(ifaces []profile.Interface) []wireFace {
+func wireFacesOf(ifaces []wire.Interface) []wireFace {
 	out := make([]wireFace, 0, len(ifaces))
 	for _, i := range ifaces {
 		f := wireFace{Name: i.Name, Protocol: i.Protocol, Port: i.Port, TLS: i.TLS, APISurface: i.APISurface, Persistent: i.Persistent,
@@ -152,7 +152,7 @@ func (b *lockedBuf) settle() {
 }
 
 // registryOf is the session registry of the interface with this name.
-func registryOf(t *testing.T, d *Device, iface profile.Interface) *SessionRegistry {
+func registryOf(t *testing.T, d *Device, iface wire.Interface) *SessionRegistry {
 	t.Helper()
 	switch iface.Protocol {
 	case "ssh":
@@ -172,9 +172,9 @@ func registryOf(t *testing.T, d *Device, iface profile.Interface) *SessionRegist
 
 // playWireSession runs a script over one persistent face and returns what the
 // device wrote at each step.
-func playWireSession(t *testing.T, d *Device, ifaces []profile.Interface, s wireSession) wireSessionResult {
+func playWireSession(t *testing.T, d *Device, ifaces []wire.Interface, s wireSession) wireSessionResult {
 	t.Helper()
-	var iface profile.Interface
+	var iface wire.Interface
 	found := false
 	for _, i := range ifaces {
 		if i.Name == s.Face {

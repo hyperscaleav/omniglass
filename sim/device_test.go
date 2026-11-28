@@ -7,8 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 func TestDeviceServeHTTP(t *testing.T) {
@@ -36,10 +35,12 @@ func TestDeviceServeHTTP(t *testing.T) {
 
 	dev := NewDevice("test-id", "BOI-17C-415B-COD1", net.ParseIP("127.1.0.1"), "kestrel-vroom", 1, state)
 
-	tmpl := `{"model":"{{ .State | get "configuration" | get "device" | get "model" }}","uptime":{{ .State | get "status" | get "device" | get "uptime" }}}`
-	if err := dev.AddRoute("GET /status", "test.json.gotempl", tmpl, nil); err != nil {
-		t.Fatal(err)
-	}
+	serveRoute(t, dev, "GET /status", func(d spec.Device, _ spec.HTTPRequest) spec.HTTPResponse {
+		return spec.HTTPResponse{Body: map[string]any{
+			"model":  spec.String(d, "configuration.device.model"),
+			"uptime": spec.Int64(d, "status.device.uptime"),
+		}}
+	})
 
 	t.Run("matching route", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/status", nil)
@@ -72,7 +73,7 @@ func TestDeviceServeHTTP(t *testing.T) {
 
 	// A collector's HTTPS service check completes the TCP+TLS
 	// handshake then sends `HEAD /` to confirm the server answers.
-	// The simulator answers 200 even when no profile route matches "/",
+	// The simulator answers 200 even when no route matches "/",
 	// so the probe doesn't spam the event log with HEAD / 404.
 	t.Run("liveness HEAD /", func(t *testing.T) {
 		req := httptest.NewRequest("HEAD", "/", nil)
@@ -131,67 +132,5 @@ func TestParseMatch(t *testing.T) {
 		if method != tt.wantMethod || path != tt.wantPath {
 			t.Errorf("parseMatch(%q) = %q %q, want %q %q", tt.input, method, path, tt.wantMethod, tt.wantPath)
 		}
-	}
-}
-
-func TestMarshalFunc(t *testing.T) {
-	dev := NewDevice("test-id", "host", net.ParseIP("127.0.0.1"), "test", 1,
-		map[string]any{
-			"status": map[string]any{
-				"peripherals": []any{
-					map[string]any{"type": "camera", "status": "connected"},
-				},
-			},
-		})
-
-	tmpl := `{{ .State | get "status" | get "peripherals" | marshal }}`
-	if err := dev.AddRoute("GET /test", "test.json.gotempl", tmpl, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	dev.ServeHTTP(w, req)
-
-	body := w.Body.String()
-	if !strings.Contains(body, `"camera"`) {
-		t.Errorf("body = %s, missing camera", body)
-	}
-}
-
-func TestEngineLoadTemplates(t *testing.T) {
-	// Every template the catalog references resolves from the embedded
-	// tree. LoadDevices only warns and drops the route on a miss, so this
-	// is the check that keeps the catalog whole.
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("loading catalog: %v", err)
-	}
-	e := shippedEngine(t)
-	seen := 0
-	for name, prof := range store.Devices {
-		for _, iface := range prof.Interfaces {
-			for _, r := range iface.Routes {
-				if r.Template == "" {
-					continue
-				}
-				seen++
-				if _, err := e.loadTemplate(r.Template); err != nil {
-					t.Errorf("%s route %q: %v", name, r.Match, err)
-				}
-			}
-			for _, c := range iface.Commands {
-				if c.Template == "" {
-					continue
-				}
-				seen++
-				if _, err := e.loadTemplate(c.Template); err != nil {
-					t.Errorf("%s command %q: %v", name, c.Match, err)
-				}
-			}
-		}
-	}
-	if seen == 0 {
-		t.Skip("no YAML profile references a template: every device is a family (#2837 deletes this check)")
 	}
 }

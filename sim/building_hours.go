@@ -1,8 +1,6 @@
 package sim
 
 import (
-	"text/template"
-
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
@@ -39,29 +37,4 @@ func buildingSpan(w *world.World, cal *calendar.Calendar, room calendar.Room) (c
 		return span, true
 	}
 	return cal.Hours(room)
-}
-
-// buildingFuncs are the template functions a device that follows the
-// building's day reads (#2768), through the device's clock:
-//
-//	buildingHours -> {start, end, open}: the hours the building its room sits
-//	                 in is open (whole UTC hours, the whole day when none are
-//	                 declared) and whether the clock is inside them; nil when
-//	                 the lab holds none for it
-//
-// The hours are the nearest fact the lab holds: the `hours` the scenario
-// declares in the meeting knobs of the building's rooms, which also bound
-// their meetings. A signage player reads it the way a video bar reads
-// meetingNow.
-func (d *Device) buildingFuncs() template.FuncMap {
-	return template.FuncMap{
-		"buildingHours": func() map[string]any {
-			h, ok := buildingSpan(d.world(), d.calendarSrc(), d.room)
-			if !ok {
-				return nil
-			}
-			s, e := h.Span()
-			return map[string]any{"start": s, "end": e, "open": h.Open(d.clock())}
-		},
-	}
 }

@@ -10,8 +10,6 @@ import (
 	"github.com/hyperscaleav/omniglass/sim"
 	"github.com/hyperscaleav/omniglass/sim/calendar"
 	"github.com/hyperscaleav/omniglass/sim/calendar/caltest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/world"
 )
@@ -131,11 +129,7 @@ func TestClockOffsetEnvReachesThePushersEngine(t *testing.T) {
 	if _, err := LoadClockOffset("soon"); err == nil {
 		t.Fatal("an offset that is no duration was read")
 	}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e, err := startPushers(catalogOf(t, store), "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
+	e, err := startPushers(shipped.Catalog(t), "http://127.0.0.1:1", nil, nil, sim.Clock{Offset: off})
 	if err != nil {
 		t.Fatal(err)
 	}

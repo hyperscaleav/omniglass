@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // FieldKind is what a control route reads a body field as.
@@ -70,14 +70,14 @@ type Control struct {
 // Route is the control as a family route. The quick sets the console offers
 // are the Choice fields, so the listing and the handler cannot differ.
 func (c Control) Route() spec.HTTPRoute {
-	var sets []profile.Set
+	var sets []wire.Set
 	c.patterns = map[string]*regexp.Regexp{}
 	for _, f := range c.Fields {
 		switch f.Kind {
 		case Choice:
-			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), f.Values...)})
+			sets = append(sets, wire.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), f.Values...)})
 		case Switch:
-			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), switchValues...)})
+			sets = append(sets, wire.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), switchValues...)})
 		case Text:
 			if f.Pattern != "" {
 				c.patterns[f.Name] = regexp.MustCompile(f.Pattern)

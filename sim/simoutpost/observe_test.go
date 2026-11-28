@@ -12,6 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/obsstat"
 	"github.com/hyperscaleav/omniglass/sim"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 func counters(received, answered int64) sim.ObservationCounters {
@@ -86,7 +87,7 @@ func TestObservationWireStaysBoundedAtFleetScale(t *testing.T) {
 // The simulator answers an observation request on its outpost's subject.
 func TestSubscribeObservationAnswersOnTheOutpostsSubject(t *testing.T) {
 	nc := startBus(t)
-	engine := sim.NewEngine(nil, nil)
+	engine := shipped.Engine(t)
 	sub, err := subscribeObservation(nc, "edge", engine, func() int { return 0 })
 	if err != nil {
 		t.Fatal(err)

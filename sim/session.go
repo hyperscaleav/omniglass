@@ -1,20 +1,17 @@
 package sim
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"text/template"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // SessionConfig is the per-interface persistent-session parameters,
@@ -23,7 +20,7 @@ import (
 // shape on the wire and apply uniformly across SSH, Telnet, and
 // raw TCP transports, the listener handles handshake and hands a
 // Reader+Writer to runShellSession, which honors these fields.
-// Limits is always populated via profile.SessionLimits.WithDefaults so
+// Limits is always populated via wire.SessionLimits.WithDefaults so
 // the registry can rely on non-zero values.
 type SessionConfig struct {
 	Protocol           string
@@ -34,7 +31,7 @@ type SessionConfig struct {
 	StripChecksumBytes int
 	Welcome            string
 	Subjects           []*sessionSubject
-	Limits             profile.SessionLimits
+	Limits             wire.SessionLimits
 }
 
 // ReadDelim returns the byte to pass to bufio.Reader.ReadBytes for
@@ -117,7 +114,7 @@ func bytesTrimPrefix(b []byte, pre string) []byte {
 // CompileSessionConfig pre-compiles an Interface's session block. Returns
 // nil when the interface is not Persistent so callers can switch on a
 // nil result to take the legacy one-shot code path.
-func CompileSessionConfig(iface *profile.Interface) (*SessionConfig, error) {
+func CompileSessionConfig(iface *wire.Interface) (*SessionConfig, error) {
 	if !iface.Persistent {
 		return nil, nil
 	}
@@ -147,36 +144,19 @@ func CompileSessionConfig(iface *profile.Interface) (*SessionConfig, error) {
 	return cfg, nil
 }
 
-// sessionSubject is a Subject with its push template pre-compiled.
+// sessionSubject is a Subject a session matches subscriptions against.
 type sessionSubject struct {
-	def      *profile.Subject
-	pushTmpl *template.Template // nil for a Go-declared subject (def.Push)
-	pathTmpl *template.Template // nil when Path is a literal
+	def *wire.Subject
 }
 
-func compileSessionSubject(s *profile.Subject) (*sessionSubject, error) {
+func compileSessionSubject(s *wire.Subject) (*sessionSubject, error) {
 	if s.Match == "" {
 		return nil, fmt.Errorf("subject: match is required")
 	}
-	out := &sessionSubject{def: s}
 	if s.Push == nil && s.PushLine == nil {
-		if s.PushFormat == "" {
-			return nil, fmt.Errorf("subject %q: push_format is required", s.Match)
-		}
-		t, err := template.New("push:" + s.Match).Funcs(templateFuncs).Parse(s.PushFormat)
-		if err != nil {
-			return nil, fmt.Errorf("subject %q push_format: %w", s.Match, err)
-		}
-		out.pushTmpl = t
+		return nil, fmt.Errorf("subject %q: a push line is required", s.Match)
 	}
-	if strings.Contains(s.Path, "{{") {
-		pt, err := template.New("path:" + s.Match).Funcs(templateFuncs).Parse(s.Path)
-		if err != nil {
-			return nil, fmt.Errorf("subject %q path: %w", s.Match, err)
-		}
-		out.pathTmpl = pt
-	}
-	return out, nil
+	return &sessionSubject{def: s}, nil
 }
 
 // matches returns true if subject is covered by this Subject's Match
@@ -213,23 +193,13 @@ func (s *sessionSubject) matches(subject string) bool {
 	return len(patSegs) == len(subSegs)
 }
 
-// resolvePath returns the state path for the rendered subject. When
-// the Subject's Path is a literal (no template syntax) it's returned
-// verbatim; when Path templates `.Subject` it's rendered against the
-// rendered subject string. Empty Path falls through to the subject
-// string itself, useful for the catch-all subject pattern.
+// resolvePath returns the state path for the subject: the Subject's Path, or
+// the subject string itself when none is declared (the catch-all pattern).
 func (s *sessionSubject) resolvePath(subject string) string {
 	if s.def.Path == "" {
 		return subject
 	}
-	if s.pathTmpl == nil {
-		return s.def.Path
-	}
-	var buf bytes.Buffer
-	if err := s.pathTmpl.Execute(&buf, struct{ Subject string }{Subject: subject}); err != nil {
-		return s.def.Path
-	}
-	return buf.String()
+	return s.def.Path
 }
 
 // SessionEvent is the simulator-side event a session emits for the
@@ -618,61 +588,7 @@ func (s *Session) renderPush(sub *Subscription, value any) ([]byte, error) {
 	if fn := sub.def.def.PushLine; fn != nil {
 		return []byte(s.registry.cfg.WrapOutbound(fn(sub.subject, sub.token, value))), nil
 	}
-	if fn := sub.def.def.Push; fn != nil {
-		return []byte(s.registry.cfg.WrapOutbound(fn(value))), nil
-	}
-	data := struct {
-		Subject  string
-		Path     string
-		Token    string
-		Value    string // JSON-encoded: typed and unambiguous
-		Raw      string // the bare value, for line protocols that print it as is
-		Hostname string
-		DeviceID string
-	}{
-		Subject:  sub.subject,
-		Path:     sub.path,
-		Token:    sub.token,
-		Value:    encodePushValue(value),
-		Raw:      rawPushValue(value),
-		Hostname: s.registry.device.Hostname,
-		DeviceID: s.registry.device.DeviceID,
-	}
-	var buf bytes.Buffer
-	if err := sub.def.pushTmpl.Execute(&buf, data); err != nil {
-		return nil, err
-	}
-	// Wrap the rendered payload in the same wire envelope used for
-	// command responses: FrameStart + payload + FrameEnd + LineEnding.
-	// Push lines must conform to the device's wire format exactly the
-	// way responses do, otherwise a Q-SYS-style NUL-terminated client
-	// would never see them framed correctly.
-	return []byte(s.registry.cfg.WrapOutbound(buf.String())), nil
-}
-
-// encodePushValue renders a state value into the wire-friendly text
-// the push template references via {{ .Value }}. JSON-encodes
-// everything so numbers, booleans, and strings all come out
-// unambiguously typed; callers that want to embed quoted strings
-// directly can do so without a separate quote step.
-// rawPushValue renders a value bare: a string as itself, anything else as
-// its JSON form.
-func rawPushValue(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return encodePushValue(v)
-}
-
-func encodePushValue(v any) string {
-	if v == nil {
-		return "null"
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return ""
-	}
-	return string(b)
+	return []byte(s.registry.cfg.WrapOutbound(sub.def.def.Push(value))), nil
 }
 
 // intervalPump emits one push per tick. Ticker is stopped on session

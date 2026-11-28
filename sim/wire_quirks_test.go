@@ -3,13 +3,14 @@ package sim
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"net"
-	"strings"
 	"testing"
-	"text/template"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/surface"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // TestSessionConfig_ReadDelim_StripInbound covers the inbound side of
@@ -120,82 +121,6 @@ func TestSessionConfig_WrapOutbound(t *testing.T) {
 	}
 }
 
-// TestDecodeHexBytes covers the match_hex pre-load decoder.
-// Whitespace-tolerant, case-insensitive, fails loudly on odd-length
-// or non-hex input.
-func TestDecodeHexBytes(t *testing.T) {
-	ok := []struct {
-		in   string
-		want string
-	}{
-		{"02 53 00 03", "\x02S\x00\x03"},
-		{"025300 03", "\x02S\x00\x03"},
-		{"deadBEEF", "\xde\xad\xbe\xef"},
-		{"", ""},
-	}
-	for _, c := range ok {
-		got, err := decodeHexBytes(c.in)
-		if err != nil {
-			t.Errorf("decodeHexBytes(%q) error: %v", c.in, err)
-			continue
-		}
-		if got != c.want {
-			t.Errorf("decodeHexBytes(%q) = %x, want %x", c.in, got, c.want)
-		}
-	}
-	bad := []string{"02 5", "0Z", "not-hex"}
-	for _, c := range bad {
-		if _, err := decodeHexBytes(c); err == nil {
-			t.Errorf("decodeHexBytes(%q): expected error, got nil", c)
-		}
-	}
-}
-
-// TestTemplateHelpers exercises the new wire-format helpers exposed
-// to profile templates: xor_checksum, sum_byte_checksum_hex,
-// ascii_hex, hex_byte. Each gets a small known-answer table.
-func TestTemplateHelpers(t *testing.T) {
-	tmpl, err := template.New("t").Funcs(templateFuncs).Parse(
-		`{{ xor_checksum "ABC" }}|` +
-			`{{ sum_byte_checksum_hex "ABC" }}|` +
-			`{{ ascii_hex 15 2 }}|` +
-			`{{ ascii_hex 255 4 }}|` +
-			`{{ hex_byte "02" }}|` +
-			`{{ hex_byte "FF" }}`,
-	)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, nil); err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	parts := strings.Split(buf.String(), "|")
-	if len(parts) != 6 {
-		t.Fatalf("got %d parts, want 6: %q", len(parts), buf.String())
-	}
-	// xor of 'A'=0x41, 'B'=0x42, 'C'=0x43 → 0x40
-	if parts[0] != "\x40" {
-		t.Errorf("xor_checksum: got %x, want 0x40", parts[0])
-	}
-	// 0x41+0x42+0x43 = 0xC6
-	if parts[1] != "C6" {
-		t.Errorf("sum_byte_checksum_hex: got %q, want C6", parts[1])
-	}
-	if parts[2] != "0F" {
-		t.Errorf("ascii_hex(15,2): got %q, want 0F", parts[2])
-	}
-	if parts[3] != "00FF" {
-		t.Errorf("ascii_hex(255,4): got %q, want 00FF", parts[3])
-	}
-	if parts[4] != "\x02" {
-		t.Errorf("hex_byte(02): got %x, want 02", parts[4])
-	}
-	if parts[5] != "\xff" {
-		t.Errorf("hex_byte(FF): got %x, want FF", parts[5])
-	}
-}
-
 // TestRawTCPSession exercises the full raw-TCP listener path: open a
 // TCP connection, send a NUL-terminated request, read a NUL-
 // terminated response, subscribe, mutate state to trigger a push,
@@ -258,6 +183,23 @@ func TestRawTCPSession(t *testing.T) {
 	}
 }
 
+// qrcCommands is the two lines the raw-TCP test drives: a write and a subscribe.
+type qrcCommands struct{}
+
+const qrcSubscribe = `{"jsonrpc":"2.0","method":"ChangeGroup.AddControl","params":{"Id":"sub1","Controls":["Mixer1.gain"]},"id":3}`
+
+func (qrcCommands) Commands() []string { return []string{"set channels.0.gain -9", qrcSubscribe} }
+
+func (qrcCommands) Handle(line string) (surface.Reply, bool) {
+	switch line {
+	case "set channels.0.gain -9":
+		return surface.Reply{Text: "+OK", Changes: []surface.Change{{Path: "status.channels.0.gain", Value: int64(-9)}}}, true
+	case qrcSubscribe:
+		return surface.Reply{Text: `{"jsonrpc":"2.0","result":true,"id":3}`, Action: surface.ActionSubscribe, Subject: "status.channels.0.gain", Token: "sub1"}, true
+	}
+	return surface.Reply{}, false
+}
+
 // newQRCDevice builds a minimal device with a Q-SYS-shaped (NUL-
 // terminated JSON) raw-TCP persistent interface and the few
 // commands the test needs. Mirrors newPTPDevice from the SSH-based
@@ -273,41 +215,25 @@ func newQRCDevice(t *testing.T, hostname string) (*Device, *eventCollector) {
 			},
 		})
 
-	// One mutate command so the test can drive a state change without
-	// HTTP; one subscribe + one unsubscribe; one read.
-	add := func(c profile.Command, body string) {
-		if c.Response == "" {
-			c.Response = body
-		}
-		if err := dev.AddCommandFromProfile(&c, c.Response); err != nil {
-			t.Fatalf("AddCommand %q: %v", c.Match, err)
-		}
-	}
-	add(profile.Command{
-		Match:  "set channels.0.gain -9",
-		Mutate: map[string]any{"status.channels.0.gain": "-9"},
-	}, "+OK")
-	add(profile.Command{
-		Match:    `{"jsonrpc":"2.0","method":"ChangeGroup.AddControl","params":{"Id":"sub1","Controls":["Mixer1.gain"]},"id":3}`,
-		Action:   "subscribe",
-		Subject:  "status.channels.0.gain",
-		Token:    "sub1",
-		Response: `{"jsonrpc":"2.0","result":true,"id":3}`,
-	}, "")
+	// One write so the test can drive a state change without HTTP, and one
+	// subscribe.
+	dev.AttachCommands(qrcCommands{})
 
-	iface := &profile.Interface{
+	iface := &wire.Interface{
 		Name:       "qrc",
 		Protocol:   "tcp",
 		Port:       0,
 		Persistent: true,
 		LineEnding: "\x00",
 		Welcome:    `{"jsonrpc":"2.0","method":"EngineStatus","params":{"State":"Active"}}`,
-		Subjects: []profile.Subject{
+		Subjects: []wire.Subject{
 			{
 				Match:        "status.channels.*.gain",
-				Path:         "{{ .Subject }}",
 				PublishToken: "Mixer1.gain",
-				PushFormat:   `{"jsonrpc":"2.0","method":"ChangeGroup.Poll","params":{"Id":"{{ .Token }}","Changes":[{"Component":"Mixer1","Name":"gain","Value":{{ .Value }}}]}}`,
+				PushLine: func(_, token string, value any) string {
+					raw, _ := json.Marshal(value)
+					return fmt.Sprintf(`{"jsonrpc":"2.0","method":"ChangeGroup.Poll","params":{"Id":"%s","Changes":[{"Component":"Mixer1","Name":"gain","Value":%s}]}}`, token, raw)
+				},
 			},
 		},
 	}

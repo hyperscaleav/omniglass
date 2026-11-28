@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"text/template"
 )
 
 // TestServeHTTP_LoggerCapturesPayload pins the new payload fields on
@@ -27,12 +26,7 @@ func TestServeHTTP_LoggerCapturesPayload(t *testing.T) {
 
 	// One open route that echoes a tiny JSON body, gives the
 	// recorder something non-empty to capture on both sides.
-	dev.routes = []routeEntry{{
-		Method:    "POST",
-		Path:      "/api/state",
-		Template:  mustTemplate(t, `{"ok":true}`),
-		Mutations: nil,
-	}}
+	serveText(t, dev, "POST /api/state", "application/json", `{"ok":true}`)
 
 	var (
 		mu    sync.Mutex
@@ -103,12 +97,7 @@ func TestServeHTTP_LoggerCapturesPayload(t *testing.T) {
 func TestServeHTTP_LoggerTruncatesLargeBodies(t *testing.T) {
 	dev := NewDevice("dev-1", "test-host", net.ParseIP("127.0.0.1"), "test-profile", 1, map[string]any{})
 	dev.Port = 8080
-	dev.routes = []routeEntry{{
-		Method:    "POST",
-		Path:      "/api/big",
-		Template:  mustTemplate(t, `ok`),
-		Mutations: nil,
-	}}
+	serveText(t, dev, "POST /api/big", "text/plain", `ok`)
 
 	var got RequestLog
 	dev.Logger = func(rl RequestLog) { got = rl }
@@ -126,19 +115,6 @@ func TestServeHTTP_LoggerTruncatesLargeBodies(t *testing.T) {
 	if !got.BodiesTrunc {
 		t.Errorf("BodiesTrunc = false on a 2× cap body, want true")
 	}
-}
-
-// mustTemplate compiles a Go text/template from src or fails the
-// test. Centralized here because newDevice's routes field expects
-// pre-compiled templates and the test fixtures need an easy way
-// to build one.
-func mustTemplate(t *testing.T, src string) *template.Template {
-	t.Helper()
-	tpl, err := template.New("route").Parse(src)
-	if err != nil {
-		t.Fatalf("parse template %q: %v", src, err)
-	}
-	return tpl
 }
 
 // silence unused imports kept for future test edits.

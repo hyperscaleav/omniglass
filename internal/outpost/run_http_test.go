@@ -14,7 +14,6 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -26,11 +25,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 	"github.com/hyperscaleav/omniglass/sim/spec"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -43,20 +41,18 @@ import (
 // refused credential is sent once per connection fingerprint, and a changed
 // https key is held beneath the gate until an operator trusts it.
 
-// familyVariants holds, per profile store, the Go families a test derived from a
-// shipped one (a copy that logs in another way), served beside the profiles.
-// A store is one test's, so the table never crosses tests.
-var familyVariants sync.Map // *profile.Store -> []spec.Spec
+// fleetShape is one test's own shaping of the simulated fleet: the Go families
+// it derived from shipped ones (a copy that logs in another way), served beside
+// the shipped catalog. A shape is one test's, so nothing crosses tests.
+type fleetShape struct{ variants []spec.Spec }
 
-// catalogOf is the simulator's catalog a test serves from: the store's YAML
-// profiles, every shipped Go family, and the variants derived for the store.
-func catalogOf(t testing.TB, store *profile.Store) *spec.Catalog {
+func newFleetShape() *fleetShape { return &fleetShape{} }
+
+// catalogOf is the simulator's catalog a test serves from: every shipped Go
+// family and the variants derived for the shape.
+func catalogOf(t testing.TB, shape *fleetShape) *spec.Catalog {
 	t.Helper()
-	var variants []spec.Spec
-	if v, ok := familyVariants.Load(store); ok {
-		variants = v.([]spec.Spec)
-	}
-	return shipped.CatalogFrom(t, store, variants...)
+	return shipped.Catalog(t, shape.variants...)
 }
 
 // httpStack is one test's server, simulated components and outpost.
@@ -73,7 +69,7 @@ type httpStack struct {
 // address; shape adds variants to the catalog first. The profiles are
 // derived from the catalogs (pick), never named, so a catalog rename touches
 // the YAML and nothing here (#804).
-func newHTTPStack(t *testing.T, outpostName string, shape func(*profile.Store), pick func(*profile.Store) []string) *httpStack {
+func newHTTPStack(t *testing.T, outpostName string, shape func(*fleetShape), pick func(*fleetShape) []string) *httpStack {
 	t.Helper()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -86,15 +82,12 @@ func newHTTPStack(t *testing.T, outpostName string, shape func(*profile.Store), 
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store := newFleetShape()
 	if shape != nil {
 		shape(store)
 	}
 	names := pick(store)
-	engine := sim.NewEngineOver(catalogOf(t, store), profiles.Templates())
+	engine := sim.NewEngineOver(catalogOf(t, store))
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
 	ips := map[string]string{}
@@ -168,7 +161,7 @@ func (s *httpStack) attachHTTP(comp, drv, outpostName string, inputs map[string]
 
 // driverProfile is the simulator profile serving a product the shipped
 // driver reads, derived from both catalogs.
-func driverProfile(t *testing.T, store *profile.Store, driver string) string {
+func driverProfile(t *testing.T, store *fleetShape, driver string) string {
 	t.Helper()
 	raw, err := seed.FactsJSON()
 	if err != nil {
@@ -234,7 +227,7 @@ func TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-https", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-https", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})
@@ -368,14 +361,14 @@ func TestOutpostHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 	}
 	// The DSP's family serves the namespaced XML beside an HTML dashboard; a
 	// copy of it under another name logs in another way.
-	variant := func(store *profile.Store, name string, auth profile.Auth) {
-		familyLoginVariant(store, "polaris-dsp", name, auth)
+	variant := func(store *fleetShape, name string, auth wire.Auth) {
+		loginVariant(store, "polaris-dsp", name, auth)
 	}
 	var sensorProfile string
-	s := newHTTPStack(t, "edge-http", func(store *profile.Store) {
-		variant(store, "dsp-bearer", profile.Auth{Type: "bearer", APIKey: "dsp-token", Enforce: true})
-		variant(store, "dsp-query", profile.Auth{Type: "query", Query: "key", APIKey: "dsp-key", Enforce: true})
-	}, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-http", func(store *fleetShape) {
+		variant(store, "dsp-bearer", wire.Auth{Type: "bearer", APIKey: "dsp-token", Enforce: true})
+		variant(store, "dsp-query", wire.Auth{Type: "query", Query: "key", APIKey: "dsp-key", Enforce: true})
+	}, func(store *fleetShape) []string {
 		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile, "dsp-bearer", "dsp-query"}
 	})

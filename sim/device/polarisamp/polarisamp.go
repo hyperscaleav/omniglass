@@ -26,11 +26,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -141,20 +141,20 @@ func Spec() spec.Spec {
 				"configuration": map[string]any{"device": map[string]any{"model": r.Model}, "firmware": map[string]any{"version": r.Firmware}},
 			}}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: "http-api", Protocol: "http", Port: 80, APISurface: Name,
-				Doc:  profile.Doc{Summary: "Polaris JSON control API", Tags: []string{"management", "api"}},
-				Auth: profile.Auth{Type: "header", Header: "X-Polaris-Token", APIKey: "polaris-lab-token", Enforce: true},
+				Doc:  wire.Doc{Summary: "Polaris JSON control API", Tags: []string{"management", "api"}},
+				Auth: wire.Auth{Type: "header", Header: "X-Polaris-Token", APIKey: "polaris-lab-token", Enforce: true},
 			},
 			{
 				Name: "snmp", Protocol: "snmp", Port: 161, APISurface: Name,
-				Doc: profile.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
+				Doc: wire.Doc{Summary: "SNMP monitoring", Tags: []string{"monitoring"}},
 				// A community the agent knows and refuses answers
 				// authorizationError, where any other is dropped silently.
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: stateFor(base()),
 		HTTP:  routes(),

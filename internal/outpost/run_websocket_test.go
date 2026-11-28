@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // A websocket end to end (#1034): Postgres, the bus, a real outpost, and the
@@ -43,7 +42,7 @@ func TestOutpostWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-ws", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-ws", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})

@@ -31,10 +31,10 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry: the product it is
@@ -89,15 +89,15 @@ func Spec() spec.Spec {
 			Summary: "Shinra recording service: health, work counters and a failure feed over https",
 		},
 		Models: spec.Table(Rows, func(r Row) spec.Model { return spec.Model{Product: r.Product, Model: "Recording Service"} }),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				Name: "http-api", Protocol: "http", Port: 443, TLS: true, APISurface: "recording-service",
-				Doc:  profile.Doc{Summary: "Recording service JSON API", Tags: []string{"management", "api", "cloud"}},
-				Auth: profile.Auth{Type: "header", Header: "X-Recording-Key", APIKey: "recording-lab-key", Enforce: true},
+				Doc:  wire.Doc{Summary: "Recording service JSON API", Tags: []string{"management", "api", "cloud"}},
+				Auth: wire.Auth{Type: "header", Header: "X-Recording-Key", APIKey: "recording-lab-key", Enforce: true},
 				// The live feed a recording's failure arrives on, behind the same key.
-				Events: profile.Events{Path: "/api/events", RetryMS: 2000, Paths: []string{"status.recordings.last_failure"}, DropPath: "/api/admin/streams/drop"},
+				Events: wire.Events{Path: "/api/events", RetryMS: 2000, Paths: []string{"status.recordings.last_failure"}, DropPath: "/api/admin/streams/drop"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability", Tags: []string{"monitoring"}}},
 		},
 		State: stateFor(Rows[0]),
 		HTTP: []spec.HTTPRoute{

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostRecordingServiceReportsItsWork (#1363): the shipped
@@ -22,7 +21,7 @@ func TestOutpostRecordingServiceReportsItsWork(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var rec string
-	s := newHTTPStack(t, "edge-rec", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-rec", nil, func(store *fleetShape) []string {
 		rec = driverProfile(t, store, "recording-service-api")
 		return []string{rec}
 	})

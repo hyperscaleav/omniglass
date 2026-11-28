@@ -15,11 +15,11 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -130,24 +130,24 @@ func Spec() spec.Spec {
 				},
 			}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
-				Name: "web-admin", Protocol: "http", Port: 80, Doc: profile.Doc{Summary: "Web-based management"},
+				Name: "web-admin", Protocol: "http", Port: 80, Doc: wire.Doc{Summary: "Web-based management"},
 				// HTTP Digest (RFC 7616): the nonce goes stale when the console
 				// expires the sessions (a reboot's effect), which a client
 				// answers afresh rather than reads as a refusal.
-				Auth: profile.Auth{
+				Auth: wire.Auth{
 					Type: "digest", DefaultUser: "admin", DefaultPassword: "boreal", Realm: "Boreal Edge Admin",
 					Algorithm: "MD5", Enforce: true, ExpirePath: "/api/admin/sessions/expire",
 				},
 			},
 			{
-				Name: "snmp", Protocol: "snmp", Port: 161, Doc: profile.Doc{Summary: "SNMP monitoring"},
+				Name: "snmp", Protocol: "snmp", Port: 161, Doc: wire.Doc{Summary: "SNMP monitoring"},
 				// A community the agent knows and refuses answers
 				// authorizationError, where any other is dropped silently.
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}, ReachableWhen: "status.device.power != 'off'"},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}, ReachableWhen: "status.device.power != 'off'"},
 		},
 		State: stateFor(base()),
 		HTTP:  routes(),

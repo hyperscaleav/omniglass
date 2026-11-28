@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostLyraMicsReadMuteLevelAndBattery (#894): the shipped Lyra drivers
@@ -21,7 +20,7 @@ func TestOutpostLyraMicsReadMuteLevelAndBattery(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var arc, hx string
-	s := newHTTPStack(t, "edge-lyra", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-lyra", nil, func(store *fleetShape) []string {
 		arc, hx = driverProfile(t, store, "lyra-arc-snmp"), driverProfile(t, store, "lyra-hx-snmp")
 		return []string{arc, hx}
 	})

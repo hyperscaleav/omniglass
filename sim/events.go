@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The server-sent events face (#1038): a simulated component's web server
@@ -40,7 +40,7 @@ type streamEvent struct {
 // eventHub is a face's events: the ring a reconnect replays, and the
 // streams connected now.
 type eventHub struct {
-	cfg  profile.Events
+	cfg  wire.Events
 	mu   sync.Mutex
 	seq  uint64
 	ring []streamEvent
@@ -61,7 +61,7 @@ type eventSub struct {
 
 func (s *eventSub) end() { s.once.Do(func() { close(s.stop) }) }
 
-func newEventHub(cfg profile.Events) *eventHub {
+func newEventHub(cfg wire.Events) *eventHub {
 	return &eventHub{cfg: cfg, subs: map[*eventSub]struct{}{}}
 }
 
@@ -180,7 +180,7 @@ func (h *eventHub) drop() int {
 
 // SetEvents gives the device's web server an events face. Call before the
 // http faces start.
-func (d *Device) SetEvents(cfg profile.Events) {
+func (d *Device) SetEvents(cfg wire.Events) {
 	if cfg.Path == "" {
 		d.events = nil
 		return

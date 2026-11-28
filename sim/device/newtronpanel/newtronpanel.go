@@ -22,12 +22,12 @@ import (
 
 	"github.com/hyperscaleav/omniglass/sim/behave"
 	"github.com/hyperscaleav/omniglass/sim/device/internal/bind"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 	"github.com/hyperscaleav/omniglass/sim/spec"
 	"github.com/hyperscaleav/omniglass/sim/surface"
 	"github.com/hyperscaleav/omniglass/sim/surface/httpapi"
 	"github.com/hyperscaleav/omniglass/sim/surface/nvp"
 	"github.com/hyperscaleav/omniglass/sim/surface/snmp"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // Name is the family's id, the profile name its devices carry.
@@ -116,7 +116,7 @@ func stateFor(r Row) map[string]any {
 
 // Spec is the family.
 func Spec() spec.Spec {
-	password := profile.Auth{Type: "password", DefaultUser: "admin", DefaultPassword: "newtron"}
+	password := wire.Auth{Type: "password", DefaultUser: "admin", DefaultPassword: "newtron"}
 	b := base()
 	return spec.Spec{
 		Name: Name,
@@ -133,32 +133,32 @@ func Spec() spec.Spec {
 				}},
 			}
 		}),
-		Interfaces: []profile.Interface{
+		Interfaces: []wire.Interface{
 			{
 				// A form sign-in: POST /login opens a session cookie, a request with
 				// no live session is sent to /login, a wrong password back to
 				// /login?error=1, and the console expires every session at once.
-				Name: faceWeb, Protocol: "http", Port: 443, TLS: true, Doc: profile.Doc{Summary: "Newtron HTTP API"},
-				Auth: profile.Auth{
+				Name: faceWeb, Protocol: "http", Port: 443, TLS: true, Doc: wire.Doc{Summary: "Newtron HTTP API"},
+				Auth: wire.Auth{
 					Type: "form", DefaultUser: "admin", DefaultPassword: "newtron", Enforce: true,
 					LoginPath: "/login", ExpirePath: "/api/admin/sessions/expire",
 				},
 			},
 			{
-				Name: faceShell, Protocol: "ssh", Port: 22, Doc: profile.Doc{Summary: "SSH diagnostic CLI (persistent session)"}, Auth: password,
+				Name: faceShell, Protocol: "ssh", Port: 22, Doc: wire.Doc{Summary: "SSH diagnostic CLI (persistent session)"}, Auth: password,
 				Persistent: true, LineEnding: "\r\n", Welcome: fmt.Sprintf("Newtron %s CLI ready.", b.Model),
-				Limits: profile.SessionLimits{MaxSessionsPerDevice: 16, OutBuffer: 256},
+				Limits: wire.SessionLimits{MaxSessionsPerDevice: 16, OutBuffer: 256},
 			},
 			{
 				Name: faceNVP, Protocol: "tcp", Port: 51325, Persistent: true, LineEnding: "\r\n",
-				Doc: profile.Doc{Summary: "NVP line protocol: video input status, selection and events"},
+				Doc: wire.Doc{Summary: "NVP line protocol: video input status, selection and events"},
 			},
 			{
 				// The same line protocol behind a real TLS handshake. The panel
 				// self-signs: its key is derived from the device's id, so a pinned
 				// endpoint stays pinned across a simulator restart.
 				Name: faceTLS, Protocol: "tcp", Port: 51326, TLS: true, TLSValidityDays: 397, Persistent: true, LineEnding: "\r\n",
-				Doc: profile.Doc{Summary: "NVP line protocol over TLS, the panel's own self-signed certificate"},
+				Doc: wire.Doc{Summary: "NVP line protocol over TLS, the panel's own self-signed certificate"},
 			},
 			{
 				// The same line protocol behind a login: "login: " and "Password: " with
@@ -166,22 +166,22 @@ func Spec() spec.Spec {
 				// hang-up, a good one greeted with the welcome line.
 				Name: faceTelnet, Protocol: "telnet", Port: 23, Auth: password, Persistent: true, LineEnding: "\r\n",
 				Welcome: fmt.Sprintf("Newtron %s NVP ready.", b.Model),
-				Doc:     profile.Doc{Summary: "NVP line protocol over Telnet, behind a login"},
+				Doc:     wire.Doc{Summary: "NVP line protocol over Telnet, behind a login"},
 			},
 			{
 				// The same line protocol as datagrams, one line each; every source
 				// address is its own session, and a seeded share is lost each way so a
 				// driver's retries are exercised on a real wire.
 				Name: faceUDP, Protocol: "udp", Port: 51327, LossPct: 5, Persistent: true, LineEnding: "\r\n",
-				Doc: profile.Doc{Summary: "NVP line protocol as UDP datagrams, with a seeded share lost"},
+				Doc: wire.Doc{Summary: "NVP line protocol as UDP datagrams, with a seeded share lost"},
 			},
 			{
 				// A community the agent knows and refuses answers authorizationError,
 				// where any other is dropped silently.
-				Name: "snmp", Protocol: "snmp", Port: 161, Doc: profile.Doc{Summary: "SNMP monitoring (MIB-2 only, teaching case)"},
-				Auth: profile.Auth{Community: "public", RefusedCommunity: "revoked"},
+				Name: "snmp", Protocol: "snmp", Port: 161, Doc: wire.Doc{Summary: "SNMP monitoring (MIB-2 only, teaching case)"},
+				Auth: wire.Auth{Community: "public", RefusedCommunity: "revoked"},
 			},
-			{Name: "icmp", Protocol: "icmp", Doc: profile.Doc{Summary: "ICMP ping reachability"}},
+			{Name: "icmp", Protocol: "icmp", Doc: wire.Doc{Summary: "ICMP ping reachability"}},
 		},
 		State:    stateFor(b),
 		HTTP:     routes(),

@@ -23,9 +23,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest"
+	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
 const simE2EPortShift = 24000
@@ -234,11 +233,11 @@ func TestSimulatorEndToEnd(t *testing.T) {
 // a GET route it serves.
 func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
+	def, ok := shipped.Catalog(t).ProfileFor(product)
+	if !ok {
+		t.Fatalf("no simulator family serves %s", product)
 	}
-	for _, iface := range store.Devices[product].Interfaces {
+	for _, iface := range def.Surfaces() {
 		if iface.Protocol != "http" || iface.TLS {
 			continue
 		}
@@ -259,10 +258,7 @@ func e2eSimulatedRoute(t *testing.T, product string) (string, string) {
 // a product missing one.
 func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn, also ...string) (string, int) {
 	t.Helper()
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cat := shipped.Catalog(t)
 	rows, err := conn.Query(ctx, `select name from product`)
 	if err != nil {
 		t.Fatal(err)
@@ -278,13 +274,13 @@ func e2eSimulatedProduct(t *testing.T, ctx context.Context, conn *pgx.Conn, also
 	rows.Close()
 	sort.Strings(names)
 	for _, n := range names {
-		p, ok := store.Devices[n]
+		p, ok := cat.ProfileFor(n)
 		if !ok {
 			continue
 		}
 		served := map[string]bool{}
 		port := 0
-		for _, iface := range p.Interfaces {
+		for _, iface := range p.Surfaces() {
 			served[iface.Protocol] = true
 			if iface.Protocol == "http" && !iface.TLS && port == 0 {
 				port = iface.Port

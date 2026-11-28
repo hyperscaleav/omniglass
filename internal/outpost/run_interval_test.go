@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/outpost"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestAPollRunsOnItsOwnIntervalBesideADeadDevice drives #1634 over the real
@@ -35,7 +34,7 @@ func TestAPollRunsOnItsOwnIntervalBesideADeadDevice(t *testing.T) {
 	}
 	const every = 10 * time.Second
 	var sensorProfile string
-	s := newHTTPStack(t, "edge-interval", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-interval", nil, func(store *fleetShape) []string {
 		sensorProfile = driverProfile(t, store, "tessellate-census-http")
 		return []string{sensorProfile}
 	})

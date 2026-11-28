@@ -16,7 +16,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // runOutpostReporting starts the outpost with its own collection report window, as
@@ -91,7 +90,7 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-report", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-report", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})
@@ -184,7 +183,7 @@ func TestAGatedPollAndARunNowCountInTheReport(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-gate-report", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-gate-report", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})

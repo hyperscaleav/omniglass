@@ -351,7 +351,7 @@ func TestTheDashboardListsTheRoomsAndEscapesThem(t *testing.T) {
 
 // The family declares the webhook face the simulator subscribes it through.
 func TestTheFamilyDeclaresItsWebhookFace(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

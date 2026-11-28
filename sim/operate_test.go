@@ -4,6 +4,8 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
 func operateDevice(t *testing.T) (*Device, *[]RequestEvent) {
@@ -13,12 +15,13 @@ func operateDevice(t *testing.T) (*Device, *[]RequestEvent) {
 		"sys":    map[string]any{"name": "lobby-display"},
 		"volume": 30,
 	})
-	if err := dev.AddRoute("GET /api/power", "p.gotempl", `{"power":"{{ .State | get "power" }}"}`, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := dev.AddCommand("power on", "on.gotempl", `OK {{ .State | get "power" }}`, map[string]any{"power": "on"}); err != nil {
-		t.Fatal(err)
-	}
+	serveRoute(t, dev, "GET /api/power", func(d spec.Device, _ spec.HTTPRequest) spec.HTTPResponse {
+		return spec.HTTPResponse{ContentType: "application/json", Body: `{"power":"` + spec.String(d, "power") + `"}`}
+	})
+	dev.commands = append(dev.commands, commandEntry{Match: "power on", Go: func(d spec.Device) string {
+		_ = d.Write("power", "on")
+		return "OK " + spec.String(d, "power")
+	}})
 	dev.OIDMap = map[string]string{"1.3.6.1.2.1.1.5.0": "sys.name", "1.3.6.1.4.1.9.1.0": "volume"}
 	var events []RequestEvent
 	dev.RequestPublisher = func(ev RequestEvent) { events = append(events, ev) }
@@ -114,9 +117,7 @@ func TestOperateRejectsAnUnknownKind(t *testing.T) {
 func TestOperateCapsTheBody(t *testing.T) {
 	dev, _ := operateDevice(t)
 	big := strings.Repeat("x", operateBodyCap+10)
-	if err := dev.AddRoute("GET /big", "b.gotempl", big, nil); err != nil {
-		t.Fatal(err)
-	}
+	serveText(t, dev, "GET /big", "text/plain", big)
 	res := dev.Operate(Operation{Kind: "http", Method: "GET", Path: "/big"})
 	if len(res.Body) != operateBodyCap || !res.Truncated {
 		t.Fatalf("body %d bytes truncated=%v, want %d and truncated", len(res.Body), res.Truncated, operateBodyCap)
@@ -144,9 +145,7 @@ func TestOperateRefusesAMalformedRequest(t *testing.T) {
 // surface lists it: "hex" and the pairs.
 func TestOperateFiresAHexCommand(t *testing.T) {
 	dev, _ := operateDevice(t)
-	if err := dev.AddCommand("\x02S\x03", "h.gotempl", "ACK", nil); err != nil {
-		t.Fatal(err)
-	}
+	serveLine(dev, "\x02S\x03", "ACK")
 	if res := dev.Operate(Operation{Kind: "command", Command: "hex 02 53 03"}); res.Error != "" || res.Body != "ACK" {
 		t.Fatalf("hex command answered %+v, want ACK", res)
 	}

@@ -5,7 +5,7 @@ package sim
 import (
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
+	"github.com/hyperscaleav/omniglass/sim/wire"
 )
 
 // The Kestrel products' wire script (#2834): the requests, drifting behaviors
@@ -145,7 +145,7 @@ var vroomWatch = []string{
 // The named events the feed numbered are recorded beside the state.
 func vroomRoomDay(d *Device, at *time.Time) []wireChange {
 	// The feed the bar's web admin updates from, as its interface declares it.
-	d.SetEvents(profile.Events{Path: "/api/events", RetryMS: 2000, DropPath: "/api/admin/streams/drop",
+	d.SetEvents(wire.Events{Path: "/api/events", RetryMS: 2000, DropPath: "/api/admin/streams/drop",
 		Paths: []string{"status.audio.volume", "status.audio.mic_mute", "status.call.active", "status.call.participants", "status.device.power"}})
 	w := newWatch(d, vroomWatch...)
 	w.sample("start")

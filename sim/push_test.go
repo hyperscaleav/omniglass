@@ -30,54 +30,6 @@ func bookingService(t *testing.T, at time.Time) *Device {
 	return devs[0]
 }
 
-// The booking service keeps one meeting day, the same every day (#1370,
-// #1743): a place reads booked while a meeting runs and free between, and
-// its count is the meetings left in the day, the one in progress included.
-func TestBookingsAtKeepsAMeetingDay(t *testing.T) {
-	day := []any{"09:00-10:00", "10:30-11:30", "13:00-14:00", "15:00-16:30"}
-	midnight := time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)
-	for _, c := range []struct {
-		at        string
-		state     string
-		remaining int
-	}{
-		{"08:59", "free", 4},
-		{"09:00", "booked", 4},
-		{"09:59", "booked", 4},
-		{"10:00", "free", 3},
-		{"10:45", "booked", 3},
-		{"12:00", "free", 2},
-		{"13:30", "booked", 2},
-		{"15:10", "booked", 1},
-		{"16:30", "free", 0},
-		{"23:59", "free", 0},
-	} {
-		at, err := time.Parse("15:04", c.at)
-		if err != nil {
-			t.Fatal(err)
-		}
-		now := midnight.Add(time.Duration(at.Hour())*time.Hour + time.Duration(at.Minute())*time.Minute)
-		b, err := bookingsAt(now, day)
-		if err != nil {
-			t.Fatalf("at %s: %v", c.at, err)
-		}
-		if b.State != c.state || b.Remaining != c.remaining {
-			t.Errorf("at %s: %s with %d left, want %s with %d", c.at, b.State, b.Remaining, c.state, c.remaining)
-		}
-	}
-}
-
-// A booking day that is not a list of HH:MM-HH:MM windows fails the render
-// rather than pushing a made-up day.
-func TestBookingsAtRefusesAMalformedDay(t *testing.T) {
-	now := time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)
-	for _, day := range []any{nil, "09:00-10:00", []any{"9-10"}, []any{"10:00-09:00"}, []any{"09:00-25:00"}, []any{3}} {
-		if _, err := bookingsAt(now, day); err == nil {
-			t.Errorf("bookingsAt(%v) took it, want refused", day)
-		}
-	}
-}
-
 // The push face renders the booking-service batch from a fixed clock
 // (#1743): the owner it is rendered for, the service's source, the meetings
 // left as booking-count and the place's state as booking-state, the batch

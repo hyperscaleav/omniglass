@@ -23,8 +23,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
 	"github.com/hyperscaleav/omniglass/sim/simtest/shipped"
 )
 
@@ -92,10 +90,7 @@ func TestOutpostLandsAnNVPPushOnEveryLane(t *testing.T) {
 	all := scope.Set{All: true}
 
 	panelIP := "127.89.17.2"
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		t.Fatalf("load profiles: %v", err)
-	}
+	store := newFleetShape()
 	engine := shipped.Engine(t)
 	engine.SetPortMap(sim.EphemeralPorts)
 	t.Cleanup(engine.StopAll)
@@ -225,7 +220,7 @@ func TestOutpostLandsKestrelCallEvents(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var barProfile string
-	s := newHTTPStack(t, "edge-calls", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-calls", nil, func(store *fleetShape) []string {
 		barProfile = driverProfile(t, store, "kestrel-api")
 		return []string{barProfile}
 	})

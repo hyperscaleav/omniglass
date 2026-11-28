@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/sim"
-	"github.com/hyperscaleav/omniglass/sim/profile"
 )
 
 // TestOutpostBorealEdgeReadsItsDisplayState (#1372): the shipped
@@ -21,7 +20,7 @@ func TestOutpostBorealEdgeReadsItsDisplayState(t *testing.T) {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
 	var edge string
-	s := newHTTPStack(t, "edge-display", nil, func(store *profile.Store) []string {
+	s := newHTTPStack(t, "edge-display", nil, func(store *fleetShape) []string {
 		edge = driverProfile(t, store, "boreal-edge-snmp")
 		return []string{edge}
 	})

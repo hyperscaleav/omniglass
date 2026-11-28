@@ -10,17 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/sim/profile"
-	"github.com/hyperscaleav/omniglass/sim/profiles"
+	"github.com/hyperscaleav/omniglass/sim/spec"
 )
 
-// thousandDevices spreads n devices across every catalog profile, each on
-// its own loopback address.
-func thousandDevices(b *testing.B, store *profile.Store, n int) []DeviceSnapshot {
+// thousandDevices spreads n devices across every family, each on its own
+// loopback address.
+func thousandDevices(b *testing.B, cat *spec.Catalog, n int) []DeviceSnapshot {
 	b.Helper()
-	names := make([]string, 0, len(store.Devices))
-	for name := range store.Devices {
-		names = append(names, name)
+	var names []string
+	for _, d := range cat.Definitions() {
+		names = append(names, d.ID())
 	}
 	sort.Strings(names)
 	snaps := make([]DeviceSnapshot, n)
@@ -40,11 +39,7 @@ func thousandDevices(b *testing.B, store *profile.Store, n int) []DeviceSnapshot
 // 1,000-device fleet: how long it takes to start, the goroutines and heap
 // it holds while serving, and the goroutines left behind once it stops.
 func BenchmarkServeThousandDevices(b *testing.B) {
-	store, err := profile.LoadStoreFS(profiles.FS)
-	if err != nil {
-		b.Fatal(err)
-	}
-	snaps := thousandDevices(b, store, 1000)
+	snaps := thousandDevices(b, shippedCatalog(b), 1000)
 	for i := 0; i < b.N; i++ {
 		runtime.GC()
 		var before runtime.MemStats

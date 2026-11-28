@@ -16,7 +16,7 @@ func TestFamilyConforms(t *testing.T) { spectest.Conform(t, Spec()) }
 // The model table is the line: five sizes, each a product with its own
 // identity, resolution and summary, the table's rows and the catalog agreeing.
 func TestEveryRowIsAProductThatReportsItself(t *testing.T) {
-	cat, err := spec.NewCatalog(nil, Spec())
+	cat, err := spec.NewCatalog(Spec())
 	if err != nil {
 		t.Fatal(err)
 	}

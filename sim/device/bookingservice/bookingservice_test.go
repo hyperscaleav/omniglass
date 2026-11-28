@@ -18,7 +18,7 @@ func TestFamilyConforms(t *testing.T) { spectest.Conform(t, Spec()) }
 // poll.
 func TestTheBookingServiceHasAPushFaceAndNoOther(t *testing.T) {
 	s := Spec()
-	cat, err := spec.NewCatalog(nil, s)
+	cat, err := spec.NewCatalog(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestTheBookingServiceHasAPushFaceAndNoOther(t *testing.T) {
 		t.Fatal("the catalog lacks the booking service")
 	}
 	p := r.Definition.PushFace()
-	if p == nil || p.Every != "30s" || r.Definition.WebhookFace() != nil || r.Identity.DeviceType != "cloud-service" {
+	if p == nil || p.Every != 30*time.Second || r.Definition.WebhookFace() != nil || r.Identity.DeviceType != "cloud-service" {
 		t.Errorf("push %+v webhook %+v type %s, want a cloud service with a push face and no webhook", p, r.Definition.WebhookFace(), r.Identity.DeviceType)
 	}
 	if len(s.Interfaces) != 0 || len(s.HTTP) != 0 || len(s.Ticks) != 0 {
