@@ -22,6 +22,11 @@ const (
 	Number
 	// Flag is a boolean: true or false, or the text "true" or "false".
 	Flag
+	// Switch is a flag a profile declared with the enum [true, false]: written
+	// as a boolean, and a value that is neither true nor false (text or not)
+	// is refused with the validation document that names the enum, as a
+	// Choice is, where a Flag answers a one-line error.
+	Switch
 )
 
 // Field is one state path a control route sets from a field of its JSON body.
@@ -53,8 +58,11 @@ type Control struct {
 func (c Control) Route() spec.HTTPRoute {
 	var sets []profile.Set
 	for _, f := range c.Fields {
-		if f.Kind == Choice {
+		switch f.Kind {
+		case Choice:
 			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), f.Values...)})
+		case Switch:
+			sets = append(sets, profile.Set{Path: f.Path, Field: f.Name, Values: append([]string(nil), switchValues...)})
 		}
 	}
 	return spec.HTTPRoute{Match: c.Match, Summary: c.Summary, Example: c.Example, Sets: sets, Handle: c.handle}
@@ -89,6 +97,13 @@ func (c Control) handle(d spec.Device, r spec.HTTPRequest) spec.HTTPResponse {
 			b, ok := asFlag(raw)
 			if !ok {
 				return badField(f, "true or false")
+			}
+			changes = append(changes, surface.Change{Path: f.Path, Value: b})
+		case Switch:
+			b, ok := asFlag(fieldText(raw))
+			if !ok {
+				refused = append(refused, refusedField{Path: f.Path, Value: fieldText(raw), Enum: switchValues})
+				continue
 			}
 			changes = append(changes, surface.Change{Path: f.Path, Value: b})
 		}
@@ -221,6 +236,9 @@ func asFlag(v any) (bool, bool) {
 	}
 	return false, false
 }
+
+// switchValues are the two values a Switch takes.
+var switchValues = []string{"true", "false"}
 
 func contains(list []string, s string) bool {
 	for _, v := range list {
