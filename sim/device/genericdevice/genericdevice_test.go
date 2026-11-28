@@ -47,3 +47,23 @@ func TestTheFamilyOfOneIsItsOwnProduct(t *testing.T) {
 		t.Fatalf("%s resolves to %+v", Name, r)
 	}
 }
+
+// The family's identity and shape are what the profile declared: a generic
+// manufacturer and model, a generic-device kind, an SNMP face and a read-derived
+// uptime, with defaults to start from.
+func TestTheFamilyDeclaresTheGenericIdentity(t *testing.T) {
+	s := Spec()
+	id := s.Identity
+	if id.Manufacturer != "Generic" || id.Model != "Generic SNMP Device" || id.DeviceType != "generic-device" {
+		t.Errorf("identity = %+v", id)
+	}
+	if len(s.Interfaces) == 0 || s.Interfaces[0].Protocol != "snmp" {
+		t.Error("expected an SNMP interface first")
+	}
+	if len(s.Elapsed) != 1 || s.Elapsed[0].Path != pathUptime {
+		t.Errorf("elapsed = %+v, want the uptime", s.Elapsed)
+	}
+	if s.State == nil {
+		t.Error("expected defaults")
+	}
+}

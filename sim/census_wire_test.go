@@ -80,10 +80,16 @@ func censusExtra(t *testing.T, fam wireFamily, product string) map[string]any {
 		{Name: "count after the moves", Send: "COUNT?\r\n"},
 		{Name: "subscribe to vacant", Send: "SUBSCRIBE VACANT\r\n"},
 		{Name: "subscribe to the event", Send: "SUBSCRIBE EVENT\r\n"},
-		{Name: "the room empties", Set: count(0, "decreased", true)},
+		// Subscriptions of one session are kept in a map, so the lines a batch of
+		// changes pushes arrive in no fixed order: each path moves on its own.
+		{Name: "the room empties: the count", Set: map[string]any{"status.occupancy.people_count": 0}},
+		{Name: "the room empties: vacant", Set: map[string]any{"status.occupancy.vacant": true}},
+		{Name: "the room empties: the event", Set: map[string]any{"status.occupancy.last_event": "decreased"}},
 		{Name: "vacant after the room empties", Send: "VACANT?\r\n"},
 		{Name: "unsubscribe from the count", Send: "UNSUBSCRIBE COUNT\r\n"},
-		{Name: "the count moves unheard", Set: count(7, "increased", false)},
+		{Name: "the count moves unheard", Set: map[string]any{"status.occupancy.people_count": 7}},
+		{Name: "vacant moves heard", Set: map[string]any{"status.occupancy.vacant": false}},
+		{Name: "the event moves heard", Set: map[string]any{"status.occupancy.last_event": "increased"}},
 		{Name: "unsubscribe from vacant", Send: "UNSUBSCRIBE VACANT\r\n"},
 		{Name: "unsubscribe from the event", Send: "UNSUBSCRIBE EVENT\r\n"},
 		{Name: "subscribe to a subject nobody has", Send: "SUBSCRIBE BOGUS\r\n"},

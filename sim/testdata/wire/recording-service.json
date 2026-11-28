@@ -255,7 +255,10 @@
      }
     }
    },
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"r-9001\",\"reason\":\"disk full\"}"
+   ]
   },
   {
    "Name": "the work after a failure",
@@ -317,7 +320,10 @@
      }
     }
    },
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"r-9002\",\"reason\":\"Lost the stream, retrying.\"}"
+   ]
   },
   {
    "Name": "an id of the longest",
@@ -362,7 +368,10 @@
      }
     }
    },
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"r-12345678901234567890123456789\",\"reason\":\"edge of the id\"}"
+   ]
   },
   {
    "Name": "an id of digits as text",
@@ -379,7 +388,10 @@
     ]
    },
    "response": "{\"ok\": true}\n",
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"12345\",\"reason\":\"digits\"}"
+   ]
   },
   {
    "Name": "an id that reads as a float",
@@ -396,7 +408,10 @@
     ]
    },
    "response": "{\"ok\": true}\n",
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"1e5\",\"reason\":\"exponent\"}"
+   ]
   },
   {
    "Name": "an id that reads as a flag",
@@ -413,7 +428,10 @@
     ]
    },
    "response": "{\"ok\": true}\n",
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"true\",\"reason\":\"flag\"}"
+   ]
   },
   {
    "Name": "a reason of the longest",
@@ -458,7 +476,10 @@
      }
     }
    },
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"r-9005\",\"reason\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+   ]
   },
   {
    "Name": "the work at the end",
@@ -1077,7 +1098,10 @@
      }
     }
    },
-   "state_change": true
+   "state_change": true,
+   "events": [
+    "recording-failed {\"id\":\"77\",\"reason\":\"numeric id\"}"
+   ]
   }
  ],
  "ticks": {

@@ -17910,10 +17910,22 @@
     "text": "\"#ACK SUBSCRIBE EVENT\\r\\n\""
    },
    {
-    "name": "the room empties",
+    "name": "the room empties: the count",
     "sent": "\"\"",
-    "hex": "23434f554e543d300d0a23564143414e543d747275650d0a234556454e543d22646563726561736564220d0a",
-    "text": "\"#COUNT=0\\r\\n#VACANT=true\\r\\n#EVENT=\\\"decreased\\\"\\r\\n\""
+    "hex": "23434f554e543d300d0a",
+    "text": "\"#COUNT=0\\r\\n\""
+   },
+   {
+    "name": "the room empties: vacant",
+    "sent": "\"\"",
+    "hex": "23564143414e543d747275650d0a",
+    "text": "\"#VACANT=true\\r\\n\""
+   },
+   {
+    "name": "the room empties: the event",
+    "sent": "\"\"",
+    "hex": "234556454e543d22646563726561736564220d0a",
+    "text": "\"#EVENT=\\\"decreased\\\"\\r\\n\""
    },
    {
     "name": "vacant after the room empties",
@@ -17930,8 +17942,20 @@
    {
     "name": "the count moves unheard",
     "sent": "\"\"",
-    "hex": "23564143414e543d66616c73650d0a234556454e543d22696e63726561736564220d0a",
-    "text": "\"#VACANT=false\\r\\n#EVENT=\\\"increased\\\"\\r\\n\""
+    "hex": "",
+    "text": "\"\""
+   },
+   {
+    "name": "vacant moves heard",
+    "sent": "\"\"",
+    "hex": "23564143414e543d66616c73650d0a",
+    "text": "\"#VACANT=false\\r\\n\""
+   },
+   {
+    "name": "the event moves heard",
+    "sent": "\"\"",
+    "hex": "234556454e543d22696e63726561736564220d0a",
+    "text": "\"#EVENT=\\\"increased\\\"\\r\\n\""
    },
    {
     "name": "unsubscribe from vacant",
