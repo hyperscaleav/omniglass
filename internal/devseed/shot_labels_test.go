@@ -1,7 +1,6 @@
 package devseed_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -143,6 +142,28 @@ func checkScript(t *testing.T, re *regexp.Regexp, fleet string, f *fleetLabels, 
 	return n
 }
 
+// systemLabelPattern finds a system a script names by its label: a
+// `[data-system-label]:text-is("X")` selector, or a button of the memberships
+// card named "X" (#2849). one of the four groups is the label.
+var systemLabelPattern = regexp.MustCompile(`data-system-label\][^)]*?text-is\((?:"([^"]+)"|'([^']+)')\)|leaf-memberships[^\n]*?name=(?:"([^"]+)"|'([^']+)')`)
+
+// namedSystems is each system label a text names, with its first line.
+func namedSystems(text string) map[string]int {
+	out := map[string]int{}
+	for i, line := range strings.Split(text, "\n") {
+		if proseLine.MatchString(line) {
+			continue
+		}
+		for _, m := range systemLabelPattern.FindAllStringSubmatch(line, -1) {
+			l := m[1] + m[2] + m[3] + m[4]
+			if _, ok := out[l]; !ok {
+				out[l] = i + 1
+			}
+		}
+	}
+	return out
+}
+
 func repoFiles(t *testing.T, glob string) map[string]string {
 	t.Helper()
 	paths, err := filepath.Glob(filepath.Join(repoRoot, glob))
@@ -175,14 +196,13 @@ func frontmatter(text string) string {
 func TestDevFleetScriptsNameOnlyLabelsTheFleetShows(t *testing.T) {
 	t.Parallel()
 	ctx, conn, _ := seededFleet(t)
-	rows, err := conn.Query(context.Background(), `
+	rows, err := conn.Query(ctx, `
 		select c.label, coalesce(l.name, ''), coalesce(s.name, ''), c.name
 		from component c
 		left join location l on l.id = c.location_id
 		left join system_slot_assignment a on a.component_id = c.id
 		left join system s on s.id = a.system_id
 		where c.label is not null`)
-	_ = ctx
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,6 +218,22 @@ func TestDevFleetScriptsNameOnlyLabelsTheFleetShows(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
+	srows, err := conn.Query(ctx, `select label from system`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	systems := map[string]bool{}
+	for srows.Next() {
+		var l string
+		if err := srows.Scan(&l); err != nil {
+			t.Fatal(err)
+		}
+		systems[l] = true
+	}
+	srows.Close()
+	if err := srows.Err(); err != nil {
+		t.Fatal(err)
+	}
 	re := componentLabelPattern()
 	files := repoFiles(t, "web/e2e/walkthroughs/*.yaml")
 	for p, text := range repoFiles(t, "docs/src/content/docs/*/*.md*") {
@@ -206,6 +242,15 @@ func TestDevFleetScriptsNameOnlyLabelsTheFleetShows(t *testing.T) {
 	checked := 0
 	for p, text := range files {
 		checked += checkScript(t, re, "dev", f, p, text)
+		for label, line := range namedSystems(text) {
+			checked++
+			if !systems[label] {
+				t.Errorf("%s:%d names the system %q, which the dev fleet does not show", p, line, label)
+			}
+		}
+	}
+	if len(namedSystems(files["web/e2e/walkthroughs/watch-a-rule-raise-an-alarm.yaml"])) == 0 {
+		t.Fatal("the guard reads no system a walkthrough names")
 	}
 	if checked == 0 {
 		t.Fatal("no component label was named in any dev script: the guard reads nothing")
