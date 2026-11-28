@@ -10,6 +10,7 @@ import (
 	fam_borealedge "github.com/hyperscaleav/omniglass/sim/device/borealedge"
 	fam_ferritepdu "github.com/hyperscaleav/omniglass/sim/device/ferritepdu"
 	fam_genericdevice "github.com/hyperscaleav/omniglass/sim/device/genericdevice"
+	fam_schedulingservice "github.com/hyperscaleav/omniglass/sim/device/schedulingservice"
 	fam_tessellatecensus "github.com/hyperscaleav/omniglass/sim/device/tessellatecensus"
 )
 
@@ -21,6 +22,7 @@ func families() []spec.Spec {
 		fam_borealedge.Spec(),
 		fam_ferritepdu.Spec(),
 		fam_genericdevice.Spec(),
+		fam_schedulingservice.Spec(),
 		fam_tessellatecensus.Spec(),
 	}
 }
