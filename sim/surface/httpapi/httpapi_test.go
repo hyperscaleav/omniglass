@@ -43,3 +43,15 @@ func TestStatusRouteReadsStateWhenAsked(t *testing.T) {
 		t.Fatalf("route %s %s serves a stale document", r.Method, r.Path)
 	}
 }
+
+func TestSectionsLaysOutTopLevelKeysAsStatusLaysOutWhatFollowsItsIdentity(t *testing.T) {
+	type pair struct {
+		A int  `json:"a"`
+		B bool `json:"b"`
+	}
+	got := string(Sections(Inline("count", 8), Block("pair", pair{1, true}), Inline("list", []pair{{2, false}})))
+	want := "{\n  \"count\": 8,\n  \"pair\": {\n    \"a\": 1,\n    \"b\": true\n  },\n  \"list\": [{\"a\":2,\"b\":false}]\n}\n"
+	if got != want {
+		t.Fatalf("Sections = %q, want %q", got, want)
+	}
+}
