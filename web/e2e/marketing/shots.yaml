@@ -329,9 +329,9 @@ shots:
         focus: out
       - click: 'aside[data-blade] button[aria-label=Expand]'
       # Beat 2: the room's system, its components as a table.
-      - wait: { text: Scheduling Panel 1 }
-        focus: '[data-testid=overview-tab] section:has(:text-is("Scheduling Panel 1"))'
-        expect: ["Display 1", "Scheduling Panel 1", "Touch Panel 1", "Video Bar 1"]
+      - wait: { text: Scheduling Panel }
+        focus: '[data-testid=overview-tab] section:has(:text-is("Scheduling Panel"))'
+        expect: ["Display", "Scheduling Panel", "Touch Panel", "Video Bar"]
         zoom: 1.4
         hold: 1300
       # Beat 3: each product in its slot.
@@ -420,11 +420,11 @@ shots:
         body: { inputs: { login: retired-video-bar-login } }
       - wait: { get: '/components/{hq.hq-annex.hq-annex-1.hq-annex-1-04.$comp.hq-mr65-59-video-bar-1}/reachability', field: endpoints.0.session.state, equals: rejected, timeout: 180000 }
     start: /systems/hq-mr65-59
-    ready: { text: Video Bar 1 }
+    ready: { text: Video Bar }
     # Off camera: open the video bar to its own page, then its endpoint, where
     # the refusal reads in full.
     prep:
-      - click: 'button:has([data-label]:text-is("Video Bar 1"))'
+      - click: 'button:has([data-label]:text-is("Video Bar"))'
       - click: 'aside[data-blade] button[aria-label=Expand]'
       - wait: { selector: '[data-testid=session-notice][data-state=rejected]' }
       - click: { role: button, name: Open endpoint }

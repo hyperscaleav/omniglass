@@ -10,7 +10,7 @@ description: Tell a video bar its volume from its Activity tab, watch the toast 
 steps:
   - goto: /locations/briefing
     caption: The Briefing Room's system. Its video bar is collected by an outpost over https.
-  - click: 'button:has([data-label]:text-is("Video Bar 1"))'
+  - click: 'button:has([data-label]:text-is("Video Bar"))'
     caption: Open the video bar.
   - click: 'aside[data-blade] button[aria-label=Expand]'
     caption: Expand it to the component's view.
